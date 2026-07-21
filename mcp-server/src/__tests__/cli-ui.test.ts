@@ -9,10 +9,10 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import { ICON, nextStepLines, tildify, unityConnectionHint } from "../loomtide/cli-ui.js";
+import { ICON, nextStepLines, tildify, unityConnectionHint } from "../loombridge/cli-ui.js";
 
 test("tildify: shortens a $HOME path to ~/…, leaves others untouched", () => {
-  assert.equal(tildify(path.join(os.homedir(), ".loomtide", "x", "y.png")), "~/.loomtide/x/y.png");
+  assert.equal(tildify(path.join(os.homedir(), ".loombridge", "x", "y.png")), "~/.loombridge/x/y.png");
   assert.equal(tildify(os.homedir()), "~");
   assert.equal(tildify("/var/tmp/z"), "/var/tmp/z");
   assert.equal(tildify("relative/path"), "relative/path");
@@ -38,15 +38,15 @@ test("unityConnectionHint: a UnityConnectionError → one clear actionable messa
   assert.doesNotMatch(out, /ECONNREFUSED/);
 });
 
-test("unityConnectionHint: LOOMTIDE_DEBUG=1 appends the full diagnostics", () => {
-  const prev = process.env.LOOMTIDE_DEBUG;
-  process.env.LOOMTIDE_DEBUG = "1";
+test("unityConnectionHint: LOOMBRIDGE_DEBUG=1 appends the full diagnostics", () => {
+  const prev = process.env.LOOMBRIDGE_DEBUG;
+  process.env.LOOMBRIDGE_DEBUG = "1";
   try {
     const out = unityConnectionHint(fakeConnError("…ECONNREFUSED wall…", [8200, 8210]))!.join("\n");
     assert.match(out, /ECONNREFUSED wall/, "debug appends the raw message");
   } finally {
-    if (prev === undefined) delete process.env.LOOMTIDE_DEBUG;
-    else process.env.LOOMTIDE_DEBUG = prev;
+    if (prev === undefined) delete process.env.LOOMBRIDGE_DEBUG;
+    else process.env.LOOMBRIDGE_DEBUG = prev;
   }
 });
 
@@ -58,9 +58,9 @@ test("unityConnectionHint: any OTHER error → null (caller keeps its normal han
 });
 
 test("nextStepLines: '👉 Next — <summary>' + the indented command", () => {
-  const lines = nextStepLines("Do the thing.", "loomtide do-thing");
+  const lines = nextStepLines("Do the thing.", "loombridge do-thing");
   assert.equal(lines[0], `${ICON.next} Next — Do the thing.`);
-  assert.equal(lines[1], "   loomtide do-thing");
+  assert.equal(lines[1], "   loombridge do-thing");
   // No command → just the summary line.
   assert.equal(nextStepLines("Done.").length, 1);
 });

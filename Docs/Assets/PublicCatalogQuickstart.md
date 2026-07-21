@@ -5,7 +5,7 @@ assets — with no private GitHub token and no checked-out private mirror.
 
 > **Live now:** the public catalog is published at scale (66,859 assets across sprite/audio/model/vector)
 > on R2, with a deployed read-only search API (`asset-api-production-59d9.up.railway.app/v1/assets/search`)
-> and a live Unity asset browser (`Window → Loomtide → Asset Browser`). Agent-side, source from the API
+> and a live Unity asset browser (`Window → Loombridge → Asset Browser`). Agent-side, source from the API
 > with the `--catalog-api <baseUrl>` flag on `browser-payload`/`prepare`. Full as-built state + how to
 > operate: [`HostedAssetRegistry.md` → "Live Status & Handoff"](HostedAssetRegistry.md).
 
@@ -33,7 +33,7 @@ https://catalog.loomtide.ai/v1/catalog/public/2d-platformer
 You can override the default in your environment:
 
 ```bash
-export LOOMTIDE_ASSET_CATALOG_URL="https://catalog.loomtide.ai/v1/catalog/public/2d-platformer"
+export LOOMBRIDGE_ASSET_CATALOG_URL="https://catalog.loomtide.ai/v1/catalog/public/2d-platformer"
 ```
 
 ## Do I need a token?
@@ -146,7 +146,7 @@ Each accepted asset in `assets.json` includes an `import` plan:
 }
 ```
 
-Through the Loomtide MCP bridge, call `unity_asset_create_sprite` with that asset's
+Through the Loombridge MCP bridge, call `unity_asset_create_sprite` with that asset's
 `import.toolArguments` (`source_path` = the prepared cache byte, `path` = the target `Assets/…`
 location). The sprite imports from the verified cache byte and is ready to place in a scene. After
 import, you can verify the imported file's checksum matches the cache and that the rendered sprite

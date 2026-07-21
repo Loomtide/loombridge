@@ -3,16 +3,16 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
 
-import { promoteGenreContract } from "../loomtide/genre-contract/promote.js";
-import { validateGenreContract } from "../loomtide/genre-contract/validator.js";
-import { assertValidSlicePlan } from "../loomtide/slices.js";
+import { promoteGenreContract } from "../loombridge/genre-contract/promote.js";
+import { validateGenreContract } from "../loombridge/genre-contract/validator.js";
+import { assertValidSlicePlan } from "../loombridge/slices.js";
 import { validateAcceptanceContract } from "../verification/validator.js";
-import type { GenreContract } from "../loomtide/genre-contract/types.js";
+import type { GenreContract } from "../loombridge/genre-contract/types.js";
 
 const shooterContractPath = path.join(
   process.cwd(),
   "src",
-  "loomtide",
+  "loombridge",
   "genre-contract",
   "examples",
   "2d-shooter.contract.json",

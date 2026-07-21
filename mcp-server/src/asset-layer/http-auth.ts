@@ -7,7 +7,7 @@ export interface FetchAuthOptions {
 const githubHosts = new Set(["github.com", "raw.githubusercontent.com", "api.github.com"]);
 
 function githubTokenFromEnv(env: NodeJS.ProcessEnv = process.env): string | undefined {
-  return env.LOOMTIDE_ASSET_REGISTRY_TOKEN ?? env.GITHUB_TOKEN ?? env.GH_TOKEN;
+  return env.LOOMBRIDGE_ASSET_REGISTRY_TOKEN ?? env.GITHUB_TOKEN ?? env.GH_TOKEN;
 }
 
 function isGitHubUrl(url: string): boolean {

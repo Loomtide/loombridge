@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 /**
- * `loomtide` — the command dispatcher (plan §3, §7 decision #1).
+ * `loombridge` — the command dispatcher (plan §3, §7 decision #1).
  *
- * `loomtide` is now the verb surface; the MCP stdio server moves to the `mcp`
+ * `loombridge` is now the verb surface; the MCP stdio server moves to the `mcp`
  * subcommand. This is non-breaking: every existing `.mcp.json` launches the
  * server by file path (`node mcp-server/dist/index.js`), not the bare bin name,
- * so repointing the `loomtide` bin to this dispatcher touches no current config.
+ * so repointing the `loombridge` bin to this dispatcher touches no current config.
  *
  * The dispatcher is deliberately dumb: it routes to a subcommand and gets out of
  * the way. All judgment (design-target generation, build routing) lives in the
@@ -17,11 +17,11 @@ import process from "node:process";
 import { realpathSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
-import { resolveBuildStamp, formatBuildStamp } from "./loomtide/build-stamp.js";
+import { resolveBuildStamp, formatBuildStamp } from "./loombridge/build-stamp.js";
 
 /**
  * Print the running build's version + stamp so a partner can detect a STALE frozen
- * runtime (the `loomtide` bin execs `~/.loomtide/runtime`, not the repo dist — a
+ * runtime (the `loombridge` bin execs `~/.loombridge/runtime`, not the repo dist — a
  * `git pull` + rebuild does NOT update it without re-running the install script).
  * The stamp (`commit` + `builtAt`) is written into `dist/build-info.json` by the
  * build (`scripts/write-build-info.mjs`) and frozen into the runtime at install. No
@@ -30,21 +30,21 @@ import { resolveBuildStamp, formatBuildStamp } from "./loomtide/build-stamp.js";
  */
 function printVersion(): void {
   // Single source of truth for the running build's identity — the same resolver
-  // a report stamps with (loomtide/build-stamp.ts), so `--version` and a report's
+  // a report stamps with (loombridge/build-stamp.ts), so `--version` and a report's
   // `producedBy` can never drift. `formatBuildStamp` renders the familiar
-  // `loomtide <version> (<commit>, built <ts>)` line.
+  // `loombridge <version> (<commit>, built <ts>)` line.
   console.log(formatBuildStamp(resolveBuildStamp()));
 }
 
 function printUsage(): void {
   console.log(
     [
-      "loomtide — gameplay intelligence layer for AI-built games",
+      "loombridge — gameplay intelligence layer for AI-built games",
       "",
-      "Usage: loomtide <command> [options]",
+      "Usage: loombridge <command> [options]",
       "",
       "Commands:",
-      "  plan      Scaffold .loomtide/ and seed the design target + acceptance contract",
+      "  plan      Scaffold .loombridge/ and seed the design target + acceptance contract",
       "              (`plan --brief <docs-dir|brief.json>` seeds from an existing design-doc",
       "               bundle instead of the interview)",
       "  adopt     Build-then-verify on-ramp: ingest an existing built project + design",
@@ -63,12 +63,12 @@ function printUsage(): void {
       "              capture pack), `minigame finalize` (fill real locators from captures),",
       "              `minigame declare-background` (mark report decoration into the contract),",
       "              `minigame baseline approve|status`",
-      "  mcp       Start the Loomtide MCP stdio server (the Unity bridge)",
+      "  mcp       Start the Loombridge MCP stdio server (the Unity bridge)",
       "",
       "Setup:",
       "  install-bridge  Install the Unity bridge into a consumer project (file: tarball",
       "                    dependency by default; --embedded fallback). No repo clone.",
-      "  install-agent   OPTIONAL: install Loomtide's agent commands + skills INTO the",
+      "  install-agent   OPTIONAL: install Loombridge's agent commands + skills INTO the",
       "                    project repo (.claude/ + .codex/, committed/team-wide). --remove",
       "                    opts out (remembered). Skipping is the default — do nothing.",
       "  doctor          Health-check the local install + a project's bridge wiring",
@@ -92,13 +92,13 @@ function printUsage(): void {
       "              payload: texture/audio/mesh weight + triangle_load offenders, shadow budget.",
       "              States sizes + findings only, always stamped hardware-unvalidated — no verdict.",
       "",
-      "Run 'loomtide <command> --help' for command options.",
-      "Run 'loomtide --version' to print the installed build (catches a stale frozen runtime).",
+      "Run 'loombridge <command> --help' for command options.",
+      "Run 'loombridge --version' to print the installed build (catches a stale frozen runtime).",
     ].join("\n"),
   );
 }
 
-export async function loomtideCli(argv: string[]): Promise<number> {
+export async function loombridgeCli(argv: string[]): Promise<number> {
   const sub = argv[2];
   const rest = argv.slice(3);
 
@@ -114,75 +114,75 @@ export async function loomtideCli(argv: string[]): Promise<number> {
 
   switch (sub) {
     case "plan": {
-      const { run } = await import("./loomtide/plan.js");
+      const { run } = await import("./loombridge/plan.js");
       return run(rest);
     }
     case "adopt": {
-      const { run } = await import("./loomtide/adopt.js");
+      const { run } = await import("./loombridge/adopt.js");
       return run(rest);
     }
     case "status": {
-      const { run } = await import("./loomtide/status.js");
+      const { run } = await import("./loombridge/status.js");
       return run(rest);
     }
     case "ask": {
-      const { run } = await import("./loomtide/ask.js");
+      const { run } = await import("./loombridge/ask.js");
       return run(rest);
     }
     case "verify": {
-      const { run } = await import("./loomtide/verify.js");
+      const { run } = await import("./loombridge/verify.js");
       return run(rest);
     }
     case "minigame": {
-      const { run } = await import("./loomtide/minigame.js");
+      const { run } = await import("./loombridge/minigame.js");
       return run(rest);
     }
     case "design": {
-      const { run } = await import("./loomtide/design.js");
+      const { run } = await import("./loombridge/design.js");
       return run(rest);
     }
     case "capture": {
-      const { run } = await import("./loomtide/capture.js");
+      const { run } = await import("./loombridge/capture.js");
       return run(rest);
     }
     case "doneness": {
-      const { run } = await import("./loomtide/doneness.js");
+      const { run } = await import("./loombridge/doneness.js");
       return run(rest);
     }
     case "trace": {
-      const { run } = await import("./loomtide/trace.js");
+      const { run } = await import("./loombridge/trace.js");
       return run(rest);
     }
     case "tuning-report": {
-      const { run } = await import("./loomtide/tuning-report.js");
+      const { run } = await import("./loombridge/tuning-report.js");
       return run(rest);
     }
     case "mobile-audit": {
-      const { run } = await import("./loomtide/mobile-audit.js");
+      const { run } = await import("./loombridge/mobile-audit.js");
       return run(rest);
     }
     case "build": {
-      const { run } = await import("./loomtide/build.js");
+      const { run } = await import("./loombridge/build.js");
       return run(rest);
     }
     case "assets": {
-      const { run } = await import("./loomtide/assets.js");
+      const { run } = await import("./loombridge/assets.js");
       return run(rest);
     }
     case "install-bridge": {
-      const { run } = await import("./loomtide/install-bridge.js");
+      const { run } = await import("./loombridge/install-bridge.js");
       return run(rest);
     }
     case "install-agent": {
-      const { run } = await import("./loomtide/install-agent.js");
+      const { run } = await import("./loombridge/install-agent.js");
       return run(rest);
     }
     case "doctor": {
-      const { run } = await import("./loomtide/doctor.js");
+      const { run } = await import("./loombridge/doctor.js");
       return run(rest);
     }
     case "update": {
-      const { run } = await import("./loomtide/update.js");
+      const { run } = await import("./loombridge/update.js");
       return run(rest);
     }
     case "mcp": {
@@ -193,7 +193,7 @@ export async function loomtideCli(argv: string[]): Promise<number> {
       return 0; // the server keeps the event loop alive until SIGINT/SIGTERM.
     }
     default:
-      console.error(`[loomtide] unknown command "${sub}".`);
+      console.error(`[loombridge] unknown command "${sub}".`);
       printUsage();
       return 2;
   }
@@ -203,7 +203,7 @@ export async function loomtideCli(argv: string[]): Promise<number> {
  * True when this file is the process entry point. The `cli.js`/`cli.ts` suffix
  * covers `node dist/cli.js` and the frozen-runtime wrapper (both exec by path); the
  * realpath comparison covers an INSTALLED bin — `npm link` / `npm i -g` / `npm pack`
- * symlink a bin named `loomtide`, so argv[1] ends in `loomtide`, not `cli.js`, and the
+ * symlink a bin named `loombridge`, so argv[1] ends in `loombridge`, not `cli.js`, and the
  * suffix check alone would silently no-op (the command would print nothing). Both
  * sides are realpath'd so a symlinked bin resolves to this module.
  */
@@ -219,7 +219,7 @@ function isMainModule(): boolean {
 }
 
 if (isMainModule()) {
-  loomtideCli(process.argv).then((code) => {
+  loombridgeCli(process.argv).then((code) => {
     process.exitCode = code;
   });
 }

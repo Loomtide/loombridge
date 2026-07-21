@@ -13,12 +13,12 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const CLI = path.resolve(__dirname, "../cli.js");
 const MCP_SERVER = path.resolve(__dirname, "../..");
 const REPO_ROOT = path.resolve(__dirname, "../../..");
-const PACK_SCRIPT = path.resolve(REPO_ROOT, "scripts/loomtide-pack-bridge.sh");
+const PACK_SCRIPT = path.resolve(REPO_ROOT, "scripts/loombridge-pack-bridge.sh");
 const BUILD_SURFACE = path.resolve(REPO_ROOT, "scripts/build-agent-surface.mjs");
 const SCRUB_LIB = path.resolve(REPO_ROOT, "scripts/agent-surface-lib.mjs");
-const INSTALL_LOCALLY = path.resolve(REPO_ROOT, "scripts/loomtide-install-locally.sh");
+const INSTALL_LOCALLY = path.resolve(REPO_ROOT, "scripts/loombridge-install-locally.sh");
 const PAYLOAD_DIR = path.join(MCP_SERVER, "agent-surface");
-const PKG_ID = "com.loomtide.unitybridge";
+const PKG_ID = "com.loomtide.loombridge";
 const HINT = "agent commands + skills available (optional)";
 
 let tempRoot = "";
@@ -27,7 +27,7 @@ let tarball = "";
 function cli(args: string[], env: Record<string, string> = {}) {
   return spawnSync("node", [CLI, ...args], {
     encoding: "utf-8",
-    env: { ...process.env, LOOMTIDE_BRIDGE_TARBALL: tarball, LOOMTIDE_AGENT_SURFACE_DIR: PAYLOAD_DIR, ...env },
+    env: { ...process.env, LOOMBRIDGE_BRIDGE_TARBALL: tarball, LOOMBRIDGE_AGENT_SURFACE_DIR: PAYLOAD_DIR, ...env },
   });
 }
 
@@ -45,7 +45,7 @@ async function makeProject(name: string): Promise<string> {
 }
 
 function readMeta(project: string) {
-  return JSON.parse(readFileSync(path.join(project, "ProjectSettings", "LoomtideInstall.json"), "utf8"));
+  return JSON.parse(readFileSync(path.join(project, "ProjectSettings", "LoombridgeInstall.json"), "utf8"));
 }
 
 /** Recursive {relPath -> sha256} of all files under dir, minus excluded rel paths. */
@@ -92,9 +92,9 @@ function managedFileCount(project: string): number {
   return n;
 }
 
-describe("loomtide install-agent (optional agent surface)", { timeout: 90000 }, () => {
+describe("loombridge install-agent (optional agent surface)", { timeout: 90000 }, () => {
   before(async () => {
-    tempRoot = await fsp.mkdtemp(path.join(os.tmpdir(), "loomtide-installagent-"));
+    tempRoot = await fsp.mkdtemp(path.join(os.tmpdir(), "loombridge-installagent-"));
     // A real bridge tarball, so install-bridge (needed for update/doctor) works.
     const outDir = path.join(tempRoot, "packed");
     execFileSync("bash", [PACK_SCRIPT, "--out-dir", outDir], { stdio: "ignore" });
@@ -147,7 +147,7 @@ describe("loomtide install-agent (optional agent surface)", { timeout: 90000 }, 
     const project = await makeProject("roundtrip");
     assert.equal(cli(["install-bridge", "--project", project]).status, 0);
     // Snapshot everything EXCEPT the record (which legitimately gains agentSurface).
-    const recordRel = path.join("ProjectSettings", "LoomtideInstall.json");
+    const recordRel = path.join("ProjectSettings", "LoombridgeInstall.json");
     const before = treeSha(project, [recordRel]);
     assert.equal(managedFileCount(project), 0, "no surface before install-agent");
 
@@ -199,14 +199,14 @@ describe("loomtide install-agent (optional agent surface)", { timeout: 90000 }, 
     const project = await makeProject("markers");
     assert.equal(cli(["install-bridge", "--project", project]).status, 0);
     assert.equal(cli(["install-agent", "--project", project]).status, 0);
-    const cmd = readFileSync(path.join(project, ".claude/commands/loomtide/plan.md"), "utf8");
-    assert.match(cmd, /^---\n[\s\S]*?\n---\n<!--\s*loomtide:agent-surface v1\b/, "marker sits just after frontmatter");
+    const cmd = readFileSync(path.join(project, ".claude/commands/loombridge/plan.md"), "utf8");
+    assert.match(cmd, /^---\n[\s\S]*?\n---\n<!--\s*loombridge:agent-surface v1\b/, "marker sits just after frontmatter");
     const skill = readFileSync(path.join(project, ".claude/skills/unity-2d-game/SKILL.md"), "utf8");
-    assert.match(skill, /<!--\s*loomtide:agent-surface v1\b/);
+    assert.match(skill, /<!--\s*loombridge:agent-surface v1\b/);
     // Codex skills are installed as real files too.
     assert.match(
       readFileSync(path.join(project, ".codex/skills/unity-2d-game/SKILL.md"), "utf8"),
-      /<!--\s*loomtide:agent-surface v1\b/,
+      /<!--\s*loombridge:agent-surface v1\b/,
     );
   });
 
@@ -221,7 +221,7 @@ describe("loomtide install-agent (optional agent surface)", { timeout: 90000 }, 
       const ledger = readMeta(project).agentSurface.files.map((f: { path: string }) => f.path);
       assert.ok(ledger.includes(rel), `${rel} is in the ledger`);
     }
-    // --remove cleans them too (they are Loomtide's, not the user's).
+    // --remove cleans them too (they are Loombridge's, not the user's).
     assert.equal(cli(["install-agent", "--project", project, "--remove"]).status, 0);
     await assert.rejects(fsp.access(path.join(project, ".claude/.gitattributes")));
     await assert.rejects(fsp.access(path.join(project, ".codex/.gitattributes")));
@@ -248,7 +248,7 @@ describe("loomtide install-agent (optional agent surface)", { timeout: 90000 }, 
     const project = await makeProject("handedit-refresh");
     assert.equal(cli(["install-bridge", "--project", project]).status, 0);
     assert.equal(cli(["install-agent", "--project", project]).status, 0);
-    const rel = ".claude/commands/loomtide/build.md";
+    const rel = ".claude/commands/loombridge/build.md";
     const mine = "# hand-edited command — do not touch\n";
     await fsp.writeFile(path.join(project, rel), mine, "utf8");
 
@@ -309,7 +309,7 @@ describe("loomtide install-agent (optional agent surface)", { timeout: 90000 }, 
     await fsp.rm(path.join(project, rel));
     const r = cli(["update", "--project", project]);
     assert.equal(r.status, 0, r.stderr);
-    assert.match(r.stdout, /Refreshing the Loomtide agent surface/);
+    assert.match(r.stdout, /Refreshing the Loombridge agent surface/);
     await fsp.access(path.join(project, rel)); // restored
     assert.equal(readMeta(project).agentSurface.state, "enabled");
   });
@@ -348,14 +348,14 @@ describe("loomtide install-agent (optional agent surface)", { timeout: 90000 }, 
     const project = await makeProject("doctor-stale");
     assert.equal(cli(["install-bridge", "--project", project]).status, 0);
     assert.equal(cli(["install-agent", "--project", project]).status, 0);
-    const metaPath = path.join(project, "ProjectSettings", "LoomtideInstall.json");
+    const metaPath = path.join(project, "ProjectSettings", "LoombridgeInstall.json");
     const meta = JSON.parse(readFileSync(metaPath, "utf8"));
     meta.agentSurface.cliVersion = "0.0.1"; // simulate an older install
     await fsp.writeFile(metaPath, `${JSON.stringify(meta, null, 2)}\n`);
     const r = cli(["doctor", "--project", project]);
     assert.equal(r.status, 0, "a stale optional surface is a warning, not a failure");
     assert.match(r.stdout, /⚠ Agent surface \(optional\).*stale/s);
-    assert.match(r.stdout, /loomtide install-agent --project/);
+    assert.match(r.stdout, /loombridge install-agent --project/);
   });
 
   test("doctor: declined → info row, exit 0", async () => {
@@ -380,7 +380,7 @@ describe("loomtide install-agent (optional agent surface)", { timeout: 90000 }, 
 
   function writeRawMeta(project: string, meta: Record<string, unknown>): Promise<void> {
     return fsp.writeFile(
-      path.join(project, "ProjectSettings", "LoomtideInstall.json"),
+      path.join(project, "ProjectSettings", "LoombridgeInstall.json"),
       `${JSON.stringify(meta, null, 2)}\n`,
     );
   }
@@ -395,7 +395,7 @@ describe("loomtide install-agent (optional agent surface)", { timeout: 90000 }, 
     await fsp.access(path.join(project, relCodex));
 
     const trimmed = await trimmedPayload("payload-drop-verif", "skills/parallax-2d/references/verification.md");
-    const r = cli(["install-agent", "--project", project], { LOOMTIDE_AGENT_SURFACE_DIR: trimmed });
+    const r = cli(["install-agent", "--project", project], { LOOMBRIDGE_AGENT_SURFACE_DIR: trimmed });
     assert.equal(r.status, 0, r.stderr);
     // The surface can SHRINK: both orphan copies gone from disk...
     await assert.rejects(fsp.access(path.join(project, relClaude)), "orphaned .claude copy deleted");
@@ -415,7 +415,7 @@ describe("loomtide install-agent (optional agent surface)", { timeout: 90000 }, 
     await fsp.writeFile(path.join(project, rel), mine, "utf8");
 
     const trimmed = await trimmedPayload("payload-drop-verif2", "skills/parallax-2d/references/verification.md");
-    const r = cli(["install-agent", "--project", project], { LOOMTIDE_AGENT_SURFACE_DIR: trimmed });
+    const r = cli(["install-agent", "--project", project], { LOOMBRIDGE_AGENT_SURFACE_DIR: trimmed });
     assert.equal(r.status, 0, r.stderr);
     assert.equal(readFileSync(path.join(project, rel), "utf8"), mine, "hand-edited orphan survives");
     assert.match(r.stdout, /no-longer-shipped file\(s\) LEFT/);
@@ -452,11 +452,11 @@ describe("loomtide install-agent (optional agent surface)", { timeout: 90000 }, 
   });
 
   test("#3 installTargets normalizes a Windows-style (backslash) payload rel to POSIX keys", async () => {
-    const mod = await import("../loomtide/install-agent.js");
+    const mod = await import("../loombridge/install-agent.js");
     const skill = mod._internals.installTargets("skills\\parallax-2d\\SKILL.md");
     assert.deepEqual(skill, [".claude/skills/parallax-2d/SKILL.md", ".codex/skills/parallax-2d/SKILL.md"]);
-    const cmd = mod._internals.installTargets("commands\\loomtide\\plan.md");
-    assert.deepEqual(cmd, [".claude/commands/loomtide/plan.md"]);
+    const cmd = mod._internals.installTargets("commands\\loombridge\\plan.md");
+    assert.deepEqual(cmd, [".claude/commands/loombridge/plan.md"]);
   });
 
   test("#4 a mid-loop write failure persists a partial ledger that --remove can clean", async () => {
@@ -464,17 +464,17 @@ describe("loomtide install-agent (optional agent surface)", { timeout: 90000 }, 
     assert.equal(cli(["install-bridge", "--project", project]).status, 0);
     // Pre-create a target path as a DIRECTORY → writing that file fails (EISDIR) mid-loop,
     // AFTER earlier command files were already written.
-    await fsp.mkdir(path.join(project, ".claude/commands/loomtide/verify.md"), { recursive: true });
+    await fsp.mkdir(path.join(project, ".claude/commands/loombridge/verify.md"), { recursive: true });
     const r = cli(["install-agent", "--project", project]);
     assert.equal(r.status, 1, "a filesystem failure is exit 1");
     const surface = readMeta(project).agentSurface;
     assert.equal(surface.state, "enabled");
     assert.ok(Array.isArray(surface.files) && surface.files.length > 0, "partial ledger persisted for recovery");
     // Files written before the failure must be reachable by --remove (no strand).
-    await fsp.access(path.join(project, ".claude/commands/loomtide/ask.md"));
+    await fsp.access(path.join(project, ".claude/commands/loombridge/ask.md"));
     const rm = cli(["install-agent", "--project", project, "--remove"]);
     assert.equal(rm.status, 0, rm.stderr);
-    await assert.rejects(fsp.access(path.join(project, ".claude/commands/loomtide/ask.md")), "partial install cleaned");
+    await assert.rejects(fsp.access(path.join(project, ".claude/commands/loombridge/ask.md")), "partial install cleaned");
   });
 
   test("#5 a corrupt ledger (files:null) self-heals: --remove exits 0 and sets declined; refresh does not throw", async () => {
@@ -505,7 +505,7 @@ describe("loomtide install-agent (optional agent surface)", { timeout: 90000 }, 
     assert.equal(meta.agentSurface.state, "enabled");
     const r = cli(["doctor", "--project", project]);
     assert.doesNotMatch(r.stdout, /✓ Bridge install/, "must NOT print a passing Bridge row for a bridge-less record");
-    assert.match(r.stdout, /bridge not installed by Loomtide/);
+    assert.match(r.stdout, /bridge not installed by Loombridge/);
     // The optional surface state is still surfaced (enabled), never a green bridge row.
     assert.match(r.stdout, /Agent surface \(optional\): enabled/);
   });
@@ -516,7 +516,7 @@ describe("loomtide install-agent (optional agent surface)", { timeout: 90000 }, 
     const buildSrc = readFileSync(BUILD_SURFACE, "utf8");
     const installLocallySrc = readFileSync(INSTALL_LOCALLY, "utf8");
     assert.match(buildSrc, /agent-surface-lib\.mjs/, "build-agent-surface must import the shared scrubber");
-    assert.match(installLocallySrc, /agent-surface-lib\.mjs/, "loomtide-install-locally must shell out to the shared scrubber");
+    assert.match(installLocallySrc, /agent-surface-lib\.mjs/, "loombridge-install-locally must shell out to the shared scrubber");
     // The bash script must no longer carry its own sed pipeline or skill list.
     assert.doesNotMatch(installLocallySrc, /sed\s+\\?\n?\s*-e/, "the bash sed scrubber must be gone (one scrubber)");
     assert.doesNotMatch(
@@ -532,7 +532,7 @@ describe("loomtide install-agent (optional agent surface)", { timeout: 90000 }, 
     // scripts/oss/export-allowlist.json — it feeds the scrubber's own internal-roadmap rule
     // and asserts the rule actually strips it.
     const scrubbed = mod.scrubContent(
-      "run node mcp-server/dist/cli.js verify\ncd /Users/x/Loomtide/mcp-server\nnpm run build\nsee ../../.planning/STATE.md\n",
+      "run node mcp-server/dist/cli.js verify\ncd /Users/x/Loombridge/mcp-server\nnpm run build\nsee ../../.planning/STATE.md\n",
     );
     assert.doesNotMatch(scrubbed, /node mcp-server\/dist\/cli\.js/);
     assert.doesNotMatch(scrubbed, /\/Users\//);

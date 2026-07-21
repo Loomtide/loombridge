@@ -31,14 +31,14 @@ import {
   renderMinigameReportHtml,
   renderMinigameReportMarkdown,
   whereCopy,
-} from "../loomtide/minigame-report-render.js";
+} from "../loombridge/minigame-report-render.js";
 import {
   buildCrGroups,
   type MinigameDeviceTag,
   type MinigameFinding,
   type MinigameFlatCheck,
   type MinigameVerifyReport,
-} from "../loomtide/verify-minigame.js";
+} from "../loombridge/verify-minigame.js";
 import { makeGateReport, type GateCheckAnnotation, type GateReport } from "../verification/gates/types.js";
 
 /** A fully-formed report with sane defaults; override only what a case needs. */
@@ -485,7 +485,7 @@ test("the report DECLARE panel emits a copyable declare-background command (cont
   assert.match(html, /class="bgcont" data-glob="\/Canvas\/Background" checked/, "a pre-ticked container checkbox emitting the glob");
   assert.match(html, /class="bgel" data-loc="\/Canvas\/Background\/Cloud1" checked/, "a per-element override checkbox carries the exact locator");
   // The command lives in a textarea, so its quotes are HTML-escaped (&quot;) — the browser shows real quotes.
-  assert.match(html, /loomtide minigame declare-background --id demo-game &quot;\/Canvas\/Background&quot;/, "the default command uses the container glob");
+  assert.match(html, /loombridge minigame declare-background --id demo-game &quot;\/Canvas\/Background&quot;/, "the default command uses the container glob");
   assert.match(html, /Copy declare command/, "the copy button");
 });
 
@@ -1008,12 +1008,12 @@ test("the HTML next-step renders scannable bullets, code-formats commands, and d
   const report = baseReport({
     status: "fail",
     nextAction:
-      "fix Home Button, Progress (see the report for the exact screen + check), then re-capture and re-run `loomtide verify --minigame`; Some of these may be background DECORATION (sky / clouds). If so, declare their container(s).",
+      "fix Home Button, Progress (see the report for the exact screen + check), then re-capture and re-run `loombridge verify --minigame`; Some of these may be background DECORATION (sky / clouds). If so, declare their container(s).",
   });
   const html = renderMinigameReportHtml(report, {});
   assert.match(html, /<ul class="nextlist">/, "the next steps render as a bullet list");
   assert.match(html, /<li>Fix Home Button, Progress[^<]*<\/li>/, "the fix is its own bullet, capitalized");
-  assert.match(html, /<li>Re-capture and re-run <code>loomtide verify --minigame<\/code><\/li>/, "the re-run is its own bullet; the command is <code>");
+  assert.match(html, /<li>Re-capture and re-run <code>loombridge verify --minigame<\/code><\/li>/, "the re-run is its own bullet; the command is <code>");
   assert.doesNotMatch(html, /background DECORATION/i, "the background clause is dropped from the next steps");
 });
 

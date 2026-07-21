@@ -16,7 +16,7 @@ describe("Scenario CLI integration", { timeout: 30000 }, () => {
   let tempDir = "";
 
   before(async () => {
-    tempDir = await fsp.mkdtemp(path.join(os.tmpdir(), "loomtide-scenario-cli-"));
+    tempDir = await fsp.mkdtemp(path.join(os.tmpdir(), "loombridge-scenario-cli-"));
   });
 
   after(async () => {

@@ -1,5 +1,5 @@
 /**
- * S8d — `loomtide minigame sync` structural drift proposal.
+ * S8d — `loombridge minigame sync` structural drift proposal.
  *
  * Pure tests only: scene/contract diff and contract migration application.
  * Live Unity wiring stays a thin IO shell.
@@ -12,10 +12,10 @@ import {
   applyContractDiff,
   diffContractVsScene,
   type ContractDiff,
-} from "../loomtide/minigame-sync.js";
-import { assertValidMinigameContract, validateMinigameContract } from "../loomtide/minigame-profiles/validator.js";
-import type { MinigameContract } from "../loomtide/minigame-profiles/types.js";
-import type { RoleCandidates } from "../loomtide/minigame-role-discover.js";
+} from "../loombridge/minigame-sync.js";
+import { assertValidMinigameContract, validateMinigameContract } from "../loombridge/minigame-profiles/validator.js";
+import type { MinigameContract } from "../loombridge/minigame-profiles/types.js";
+import type { RoleCandidates } from "../loombridge/minigame-role-discover.js";
 
 function baseContract(): MinigameContract {
   return assertValidMinigameContract({

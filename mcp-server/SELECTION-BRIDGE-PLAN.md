@@ -1,7 +1,7 @@
 # CLI Bridge — `registry-apply --from-selection` (web selection.json → project manifest)
 
 > Build the project-local CLI step that consumes the web asset browser's `selection.json` and applies
-> it to a project's `.loomtide/ASSET_MANIFEST.json`. Branch `feat/cli-registry-apply-from-selection`.
+> it to a project's `.loombridge/ASSET_MANIFEST.json`. Branch `feat/cli-registry-apply-from-selection`.
 > Do NOT push to main / open a PR — the driver reviews diff + CI.
 
 ## Why
@@ -9,12 +9,12 @@
 The web asset browser (`apps/asset-web`, already merged) is **read-only** — it exports a portable,
 role-keyed `selection.json` and **never writes project state** (that boundary is deliberate). This CLI
 is the **approved writer**: it takes that export and turns it into approved manifest entries. This
-closes the loop: browse → pick in the web UI → `loomtide assets registry-apply --from-selection …` →
+closes the loop: browse → pick in the web UI → `loombridge assets registry-apply --from-selection …` →
 approved assets in the project.
 
 ## Read first (existing code you extend — do NOT rewrite)
 
-- `mcp-server/src/loomtide/assets.ts` — the `registry-apply` verb. Today it takes
+- `mcp-server/src/loombridge/assets.ts` — the `registry-apply` verb. Today it takes
   `--selections <json>` where the JSON is a **flat `{ manifestAssetId: registryEntryId }` map** plus
   `--approved-at <iso>`, `--profile`, and a source (`--registry` | `--catalog` | `--catalog-api`).
   Find `runRegistryApply` and how it loads the manifest + registry and calls into selection apply.
@@ -32,7 +32,7 @@ Emitted by `apps/asset-web` (see its README / `src/lib/selection.ts`):
 ```jsonc
 {
   "schemaVersion": "1",
-  "kind": "loomtide-asset-selection",
+  "kind": "loombridge-asset-selection",
   "generatedBy": "asset-web",
   "items": [
     {
@@ -51,7 +51,7 @@ Emitted by `apps/asset-web` (see its README / `src/lib/selection.ts`):
   ]
 }
 ```
-Validate it: `kind === "loomtide-asset-selection"`, `schemaVersion === "1"`, `items` non-empty, each
+Validate it: `kind === "loombridge-asset-selection"`, `schemaVersion === "1"`, `items` non-empty, each
 item has a `registryId`. Reject loudly otherwise (this is untrusted input — a hand-authored or stale
 file). Do NOT trust the embedded `license`/trust fields for policy — re-derive from the loaded
 registry/catalog record (the existing apply path already does this; pass the registryId through).
@@ -59,7 +59,7 @@ registry/catalog record (the existing apply path already does this; pass the reg
 ## The command
 
 ```
-loomtide assets registry-apply --from-selection <web-selection.json> \
+loombridge assets registry-apply --from-selection <web-selection.json> \
   --profile <path-or-id> \
   (--catalog-api <baseUrl> | --catalog <path-or-url> | --registry <path>) \
   --approved-at <iso> \
@@ -76,7 +76,7 @@ loomtide assets registry-apply --from-selection <web-selection.json> \
 `applyRegistrySelectionsToManifest` needs `{ manifestAssetId: registryEntryId }`. The web export gives
 `{ role/primitive → registryId }`. So you must resolve each selection item to a **manifest asset id**:
 
-1. Load the project manifest (`.loomtide/ASSET_MANIFEST.json` under `--root`). Build the list of its
+1. Load the project manifest (`.loombridge/ASSET_MANIFEST.json` under `--root`). Build the list of its
    registry-sourced assets, each with `{ manifestAssetId, role, primitive-prefs }` (reuse
    `buildRegistrySelectionPlan` to get roles + candidate primitives per slot).
 2. For each `selection.json` item, find the manifest slot it satisfies:
@@ -100,7 +100,7 @@ loomtide assets registry-apply --from-selection <web-selection.json> \
 > "refuse-when-absent" gate discipline). Document the exact matching rules you implement.
 
 ## Safety / boundary
-- This CLI **is** allowed to write `.loomtide/ASSET_MANIFEST.json` (it's the approved project-local
+- This CLI **is** allowed to write `.loombridge/ASSET_MANIFEST.json` (it's the approved project-local
   writer — unlike the web UI). It still goes through `applyRegistrySelectionsToManifest` +
   `assertValidAssetManifest`, so policy/trust/attribution gates apply.
 - Attribution-required (CC-BY) selections must NOT be silently approved as trusted defaults — the apply
@@ -120,7 +120,7 @@ loomtide assets registry-apply --from-selection <web-selection.json> \
 
 ## Verify / handback
 - `cd mcp-server && npm run typecheck && npm test && npm run build` all green.
-- Update the command's `--help` and any `commands/loomtide/` prose for `assets registry-apply` to
+- Update the command's `--help` and any `commands/loombridge/` prose for `assets registry-apply` to
   document `--from-selection`.
 - Conventional commits (`feat(cli): …`). Summarize the matching rules you chose, the new flags, and
   test results. Flag any contract ambiguity in the web `selection.json` shape rather than guessing.

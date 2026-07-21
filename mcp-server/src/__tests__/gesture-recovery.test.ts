@@ -11,9 +11,9 @@ import {
   dispatchConditionWithGestureRecovery,
   isContinuousGesture,
   preservesPendingGesture,
-} from "../loomtide/replay/gesture-recovery.js";
-import type { Action } from "../loomtide/replay/types.js";
-import type { DispatchResult } from "../loomtide/replay/driver.js";
+} from "../loombridge/replay/gesture-recovery.js";
+import type { Action } from "../loombridge/replay/types.js";
+import type { DispatchResult } from "../loombridge/replay/driver.js";
 
 const GATE: Extract<Action, { do: "wait-for-condition" }> = {
   do: "wait-for-condition", locator: { path: "/Canvas/GM" }, component: "GM", property_path: "phase", operator: "equals", expected: "Cook",

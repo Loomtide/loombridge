@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { proposeFeelCaptureContract } from "../loomtide/feel-capture/setup.js";
+import { proposeFeelCaptureContract } from "../loombridge/feel-capture/setup.js";
 import {
   assertValidFeelCaptureContract,
   validateFeelCaptureContract,
-} from "../loomtide/feel-capture/validator.js";
+} from "../loombridge/feel-capture/validator.js";
 
 const player = { scene: "Scene_1", path: "/Player" };
 

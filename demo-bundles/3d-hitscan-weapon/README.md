@@ -64,4 +64,4 @@ raycast causally driving damage. It does **not** measure bullet penetration, spr
 ADS, tracer/decal rendering, body-part multipliers, or lag compensation — all explicit gaps. Projectile
 metrics (`fireIntervalMs`/`projectileSpeed`/`ttkMs`) are unchanged. Enemy AI, cover, waves/objectives,
 and Fusion/multiplayer remain explicit gaps. See
-`mcp-server/src/loomtide/genre-packs/3d-shooter/methodology-gaps.md`.
+`mcp-server/src/loombridge/genre-packs/3d-shooter/methodology-gaps.md`.

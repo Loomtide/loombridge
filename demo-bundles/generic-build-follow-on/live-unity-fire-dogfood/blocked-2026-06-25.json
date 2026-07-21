@@ -19,7 +19,7 @@
     {
       "name": "Unity editor registry",
       "status": "blocked",
-      "observed": "Only GameHub was registered with the Loomtide bridge; shooter-fire-dogfood was not open."
+      "observed": "Only GameHub was registered with the Loombridge bridge; shooter-fire-dogfood was not open."
     }
   ],
   "supersededBy": "demo-bundles/generic-build-follow-on/live-unity-fire-dogfood/live-fire-capture-2026-06-25.json",

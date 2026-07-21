@@ -1,7 +1,7 @@
 # Design Partner Protocol (S5e)
 
 **Status:** protocol v1 — S5e shipped 2026-06-04
-**Purpose:** a repeatable, low-trust, non-destructive way to run Loomtide **verify-first** on
+**Purpose:** a repeatable, low-trust, non-destructive way to run Loombridge **verify-first** on
 3–5 real Unity 2D platformers, learn whether the report is *useful*, and turn that learning into
 **reviewed** profile changes — never silent ones.
 **Reads with:** [VerifyFirstEntry.md](VerifyFirstEntry.md) (the run mechanics + non-mutation
@@ -16,7 +16,7 @@ the verify-first wedge with outside developers and how we decide what their resu
 ## 0. Principles (do not violate to "get a result")
 
 1. **Diagnose first; the developer stays in control.** We read and measure; we never edit their
-   game. The promise is *"let Loomtide diagnose first; you stay in control."*
+   game. The promise is *"let Loombridge diagnose first; you stay in control."*
 2. **No green if key measurements are missing or distrusted.** An unmeasured metric is reported
    `not measured`; a value that fails re-derivation is `rejected` (forced `fail`). We never fold
    either into a green summary.
@@ -124,7 +124,7 @@ S5cbLiveProof.md (the operator recipe). Do **not** duplicate them here. The prot
    anything that won't measure honestly — never param-read, never invent.
 5. **Assemble `feel.json`** with each value derived from raw evidence (trajectory sources carry
    `derivation:"trajectory"` + their raw `samples`).
-6. **Grade:** `loomtide verify --profile <id> --measurements <feel.json>`. Capture the JSON report
+6. **Grade:** `loombridge verify --profile <id> --measurements <feel.json>`. Capture the JSON report
    and the terminal output verbatim.
 7. **Confidence pass:** read the per-metric confidence — every band claim should be `verified`
    (re-derived) or honestly `reported`/`not measured`; investigate any `rejected`.
@@ -176,13 +176,13 @@ Collect all of these. Items marked *(share = opt-in)* leave the developer's mach
 explicit consent (§3).
 
 - [ ] **Project / environment metadata** — anon id, Unity version, input backend, fixed timestep
-      (50/60Hz), date, Loomtide version/commit.
+      (50/60Hz), date, Loombridge version/commit.
 - [ ] **Declared input map** — the keys used (and any metric marked `not measured` for a missing key).
 - [ ] **Raw captures** *(share = opt-in)* — the `runtime.capture_input_motion` / `measure_motion`
       outputs (aggregates + `{tMs,x,y}` samples + timestep provenance).
 - [ ] **`feel.json`** *(share = opt-in)* — the assembled measurements with provenance sources.
 - [ ] **Report JSON** *(share = opt-in)* —
-      `~/.loomtide/projects/<anon-id>/feel/reports/feel-profile.json` (status, per-metric
+      `~/.loombridge/projects/<anon-id>/feel/reports/feel-profile.json` (status, per-metric
       result + `confidence`, `rederivation`, `headline`, `nextAction`).
 - [ ] **Terminal output** — the rendered report (headline, per-metric lines, confidence roll-up,
       next action), verbatim.
@@ -201,7 +201,7 @@ explicit consent (§3).
 
 ## Environment
 - Unity: <version>   Input backend: <InputSystem|legacy>   Fixed timestep: <50|60>Hz
-- Loomtide: <version/commit>   Profile graded: <precision|classic|momentum>   Dev's guess: <…>
+- Loombridge: <version/commit>   Profile graded: <precision|classic|momentum>   Dev's guess: <…>
 
 ## Input map
 - jump=<key> moveLeft=<key> moveRight=<key> dash=<key|none> jumpCut=<key|none>
@@ -230,7 +230,7 @@ explicit consent (§3).
 
 ## 6. Developer feedback questionnaire (keep it short)
 
-Ask after the report is on screen. Plain language; no Loomtide jargon, no internal flags.
+Ask after the report is on screen. Plain language; no Loombridge jargon, no internal flags.
 
 1. **Did the report match your sense of how the game feels?** (yes / mostly / no — one sentence why.)
 2. **Did it surface anything you didn't already know,** or confirm something you suspected?
@@ -275,7 +275,7 @@ A finding from a precision project says nothing about the momentum band.
 3. **More than one signal** — corroboration from **≥2 projects of the same archetype**, *or* an
    explicit maintainer decision with written rationale for why a single strong signal generalizes.
 4. **Reviewed PR** — the change edits the profile JSON, passes the **S5a validator + tests**
-   (`platformer-profile.schema.json` / `validator.ts` / `loomtide-platformer-profiles.test.ts`), and
+   (`platformer-profile.schema.json` / `validator.ts` / `loombridge-platformer-profiles.test.ts`), and
    is reviewed by a maintainer.
 5. **Provenance** — the PR links the (anonymized, consented) run records that motivated it.
 
@@ -311,5 +311,5 @@ ledger drive any reviewed band changes.
   `[rejected]`). Target **byte-for-byte unmodified**. Findings F1–F4 classified per §7.1 as
   sample-only / measurement-caveat / process — **no band changed** (none met the §7.3 gate); F3 (a
   report-UX issue where a scratch `--root` headline buries a valid feel verdict) filed as a deferred
-  known issue. Artifacts + run record: `~/loomtide-runs/s5-run-2dcc/`. This is
+  known issue. Artifacts + run record: `~/loombridge-runs/s5-run-2dcc/`. This is
   the first end-to-end protocol run; the §7 ledger stays empty (no shipped-band evidence yet).

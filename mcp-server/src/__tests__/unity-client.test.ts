@@ -74,7 +74,7 @@ function discoveryFixture(overrides?: Partial<{
     {
       transport: "ipc",
       kind: "unix_domain_socket",
-      path: "/tmp/loomtide/bridge-test.sock",
+      path: "/tmp/loombridge/bridge-test.sock",
       supportsHandshake: true,
       supportsPing: true,
     },
@@ -226,14 +226,14 @@ import {
 test("ipcWebSocketUrl: emits the ws+unix form ws accepts, keeping native separators", () => {
   // A Windows named pipe must keep its backslashes; POSIX-ifying it yields ENOENT.
   assert.equal(
-    ipcWebSocketUrl("\\\\.\\pipe\\loomtide-bridge-abc"),
-    "ws+unix:\\\\.\\pipe\\loomtide-bridge-abc:/",
+    ipcWebSocketUrl("\\\\.\\pipe\\loombridge-bridge-abc"),
+    "ws+unix:\\\\.\\pipe\\loombridge-bridge-abc:/",
   );
-  assert.equal(ipcWebSocketUrl("/tmp/loomtide.sock"), "ws+unix:/tmp/loomtide.sock:/");
+  assert.equal(ipcWebSocketUrl("/tmp/loombridge.sock"), "ws+unix:/tmp/loombridge.sock:/");
 });
 
 test("ipcWebSocketUrl: single colon separator, never the invalid ws+unix:// form", () => {
-  const url = ipcWebSocketUrl("/tmp/loomtide.sock");
+  const url = ipcWebSocketUrl("/tmp/loombridge.sock");
   assert.ok(!url.startsWith("ws+unix://"), "ws+unix:// is not a parseable URL");
   assert.ok(url.endsWith(":/"), "ws expects <path>:<httpPath>");
 });
@@ -257,37 +257,37 @@ test("isRouteMismatchError: detects ROUTE_MISMATCH and ignores other errors", ()
   assert.equal(isRouteMismatchError("nope"), false);
 });
 
-test("UnityClient: pins to LOOMTIDE_TARGET_PROJECT_PATH when no explicit targetIdentity is given", () => {
-  const prev = process.env.LOOMTIDE_TARGET_PROJECT_PATH;
+test("UnityClient: pins to LOOMBRIDGE_TARGET_PROJECT_PATH when no explicit targetIdentity is given", () => {
+  const prev = process.env.LOOMBRIDGE_TARGET_PROJECT_PATH;
   try {
-    process.env.LOOMTIDE_TARGET_PROJECT_PATH = "/Users/dev/GameA/";
+    process.env.LOOMBRIDGE_TARGET_PROJECT_PATH = "/Users/dev/GameA/";
     // Trailing slash is normalized away by normalizeProjectPathCanonical.
     assert.equal(new UnityClient().pinnedProjectPathCanonical, "/Users/dev/GameA");
   } finally {
-    if (prev === undefined) delete process.env.LOOMTIDE_TARGET_PROJECT_PATH;
-    else process.env.LOOMTIDE_TARGET_PROJECT_PATH = prev;
+    if (prev === undefined) delete process.env.LOOMBRIDGE_TARGET_PROJECT_PATH;
+    else process.env.LOOMBRIDGE_TARGET_PROJECT_PATH = prev;
   }
 });
 
 test("UnityClient: an explicit targetIdentity wins over the env pin", () => {
-  const prev = process.env.LOOMTIDE_TARGET_PROJECT_PATH;
+  const prev = process.env.LOOMBRIDGE_TARGET_PROJECT_PATH;
   try {
-    process.env.LOOMTIDE_TARGET_PROJECT_PATH = "/Users/dev/GameA";
+    process.env.LOOMBRIDGE_TARGET_PROJECT_PATH = "/Users/dev/GameA";
     const client = new UnityClient({ targetIdentity: { projectPathCanonical: "/Users/dev/GameB" } });
     assert.equal(client.pinnedProjectPathCanonical, "/Users/dev/GameB");
   } finally {
-    if (prev === undefined) delete process.env.LOOMTIDE_TARGET_PROJECT_PATH;
-    else process.env.LOOMTIDE_TARGET_PROJECT_PATH = prev;
+    if (prev === undefined) delete process.env.LOOMBRIDGE_TARGET_PROJECT_PATH;
+    else process.env.LOOMBRIDGE_TARGET_PROJECT_PATH = prev;
   }
 });
 
 test("UnityClient: no env pin and no targetIdentity → unpinned (back-compat)", () => {
-  const prev = process.env.LOOMTIDE_TARGET_PROJECT_PATH;
+  const prev = process.env.LOOMBRIDGE_TARGET_PROJECT_PATH;
   try {
-    delete process.env.LOOMTIDE_TARGET_PROJECT_PATH;
+    delete process.env.LOOMBRIDGE_TARGET_PROJECT_PATH;
     assert.equal(new UnityClient().pinnedProjectPathCanonical, null);
   } finally {
-    if (prev !== undefined) process.env.LOOMTIDE_TARGET_PROJECT_PATH = prev;
+    if (prev !== undefined) process.env.LOOMBRIDGE_TARGET_PROJECT_PATH = prev;
   }
 });
 
@@ -616,7 +616,7 @@ test("UnityClient: discovery candidates in auto mode prioritize ipc endpoints be
       {
         transport: "ipc",
         kind: "unix_domain_socket",
-        path: "/tmp/loomtide/bridge-priority.sock",
+        path: "/tmp/loombridge/bridge-priority.sock",
       },
     ],
   });
@@ -689,7 +689,7 @@ test("UnityClient: auto mode attempts discovery ipc endpoint before discovered t
       {
         transport: "ipc",
         kind: "unix_domain_socket",
-        path: "/tmp/loomtide/bridge-discovery.sock",
+        path: "/tmp/loombridge/bridge-discovery.sock",
       },
       {
         transport: "tcp",

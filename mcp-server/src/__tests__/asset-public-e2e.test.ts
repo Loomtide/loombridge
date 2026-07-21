@@ -54,7 +54,7 @@ test("public seed prepares OFFLINE (no network, no private mirror) with all 4 as
     expectedChecksumByPrimitive.set(record.primitive, value);
   }
 
-  const workDir = await fs.mkdtemp(path.join(os.tmpdir(), "loomtide-public-e2e-"));
+  const workDir = await fs.mkdtemp(path.join(os.tmpdir(), "loombridge-public-e2e-"));
   const outputPath = path.join(workDir, "assets.json");
   const cacheDir = path.join(workDir, "cache");
 
@@ -255,7 +255,7 @@ test("prepare via HTTP byte-download (no localPath): trusted-default assets down
     return { ...record, files: [{ ...fileRest, url }] };
   });
 
-  const workDir = await fs.mkdtemp(path.join(os.tmpdir(), "loomtide-public-http-e2e-"));
+  const workDir = await fs.mkdtemp(path.join(os.tmpdir(), "loombridge-public-http-e2e-"));
   const httpCatalogPath = path.join(workDir, "catalog/2d-platformer/part-00000.jsonl");
   await fs.mkdir(path.dirname(httpCatalogPath), { recursive: true });
   await fs.writeFile(httpCatalogPath, `${httpRecords.map((r) => JSON.stringify(r)).join("\n")}\n`);
@@ -389,7 +389,7 @@ test("trust boundary: select/prepare admit ONLY trusted-default; attribution/unv
       trustCatalogPath,
       `${[...seedRecordObjs, ...fixtureRecordObjs].map((r) => JSON.stringify(r)).join("\n")}\n`,
     );
-    const workDir = await fs.mkdtemp(path.join(os.tmpdir(), "loomtide-trust-boundary-e2e-"));
+    const workDir = await fs.mkdtemp(path.join(os.tmpdir(), "loombridge-trust-boundary-e2e-"));
     const realFetch = globalThis.fetch;
     globalThis.fetch = (async () => {
       throw new Error("network access is forbidden in the trust-boundary prepare e2e");

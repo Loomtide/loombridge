@@ -1,5 +1,5 @@
 /**
- * S6c-3 — `loomtide verify --minigame` CLI + exit-code contract.
+ * S6c-3 — `loombridge verify --minigame` CLI + exit-code contract.
  *
  * The verify-FIRST loop made real: contract + per-state captures → CLI verify →
  * JSON report + exit code. Coverage:
@@ -39,11 +39,11 @@ import {
   type MinigameFinding,
   type MinigameFlatCheck,
   type MinigameVerifyReport,
-} from "../loomtide/verify-minigame.js";
-import type { FlowReport } from "../loomtide/minigame-gates/interaction-flow.js";
-import { run as verifyRun } from "../loomtide/verify.js";
-import { assertValidMinigameContract } from "../loomtide/minigame-profiles/validator.js";
-import type { MinigameContract } from "../loomtide/minigame-profiles/types.js";
+} from "../loombridge/verify-minigame.js";
+import type { FlowReport } from "../loombridge/minigame-gates/interaction-flow.js";
+import { run as verifyRun } from "../loombridge/verify.js";
+import { assertValidMinigameContract } from "../loombridge/minigame-profiles/validator.js";
+import type { MinigameContract } from "../loombridge/minigame-profiles/types.js";
 import { makeGateReport, type GateReport } from "../verification/gates/types.js";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -515,8 +515,8 @@ test("verify --minigame: full CLI path writes the default report and exits 1 on 
       root,
     ]);
     assert.equal(code, 1);
-    // Default report location under .loomtide/reports/.
-    const report = await readReport(path.join(root, ".loomtide", "reports", "minigame-verification.json"));
+    // Default report location under .loombridge/reports/.
+    const report = await readReport(path.join(root, ".loombridge", "reports", "minigame-verification.json"));
     assert.equal(report.status, "fail");
   } finally {
     await fs.rm(root, { recursive: true, force: true });
@@ -542,7 +542,7 @@ test("verify --minigame: --output forwards through the real CLI to a custom repo
     const report = await readReport(custom);
     assert.equal(report.status, "fail");
     // The default location must NOT be written when --output is explicit.
-    await assert.rejects(fs.access(path.join(root, ".loomtide", "reports", "minigame-verification.json")));
+    await assert.rejects(fs.access(path.join(root, ".loombridge", "reports", "minigame-verification.json")));
   } finally {
     await fs.rm(root, { recursive: true, force: true });
   }
@@ -1147,7 +1147,7 @@ test("verify --minigame: the terminal render is partner-clean (S7b) — no dev p
   // …and the raw check id is DEMOTED to a trailing detail, not the headline.
   assert.match(out, /\[active, check: required-in-frame\.targetButton\]/);
   // The dev prefix is gone.
-  assert.doesNotMatch(out, /\[loomtide verify\]/);
+  assert.doesNotMatch(out, /\[loombridge verify\]/);
   // The Next line speaks in product names — the raw `<screen>/<gate>.<id>` slash form
   // is gone (the demoted bracket detail above is the only place the id appears).
   assert.match(out, /👉 Next: fix Target Button/);

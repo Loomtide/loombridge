@@ -147,7 +147,7 @@ function sendCommand(
 // ─────────────────────────────────────────────
 
 async function runTests(): Promise<void> {
-  console.log("\n=== Loomtide WebSocket Spike Test ===\n");
+  console.log("\n=== Loombridge WebSocket Spike Test ===\n");
 
   // Step 1: Find the server port
   console.log("Scanning for Unity WebSocket server...");
@@ -158,7 +158,7 @@ async function runTests(): Promise<void> {
   } catch (err) {
     fail("Port scan", (err as Error).message);
     console.log(
-      "\nMake sure Unity is open with the Loomtide UnityBridge plugin loaded.\n"
+      "\nMake sure Unity is open with the Loombridge UnityBridge plugin loaded.\n"
     );
     return;
   }

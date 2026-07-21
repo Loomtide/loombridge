@@ -11,7 +11,7 @@
  * `PixelPerfectCamera` settings (via `component.get_properties`) so the framing
  * gate's camera check can verify the pixel grid / upscaleRT, and stamps a
  * `_provenance` block recording the exact ops that produced the file. The CLI
- * surface is `loomtide capture` (see loomtide/capture.ts); this module composes
+ * surface is `loombridge capture` (see loombridge/capture.ts); this module composes
  * existing bridge ops and defines no command UX.
  */
 
@@ -38,7 +38,7 @@ export interface CaptureFramingArgs {
   runId?: string;
   /** Console log count to pull (default 200). */
   consoleCount?: number;
-  /** Optional multi-editor routing target. Falls back to LOOMTIDE_UNITY_PROJECT. */
+  /** Optional multi-editor routing target. Falls back to LOOMBRIDGE_UNITY_PROJECT. */
   project?: string;
 }
 
@@ -242,7 +242,7 @@ export async function captureFramingEvidence(args: CaptureFramingArgs): Promise<
   };
 
   const provenance = {
-    writer: "loomtide capture (framing)",
+    writer: "loombridge capture (framing)",
     capturedAt,
     capturedInPlayMode: true,
     unityRouting,

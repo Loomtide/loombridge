@@ -1,12 +1,12 @@
-import { createDraftAssetManifest, writeAssetManifest, type AssetManifestMode } from "../../loomtide/asset-manifest.js";
-import { designStatus } from "../../loomtide/design.js";
-import { loomtidePaths } from "../../loomtide/state.js";
+import { createDraftAssetManifest, writeAssetManifest, type AssetManifestMode } from "../../loombridge/asset-manifest.js";
+import { designStatus } from "../../loombridge/design.js";
+import { loombridgePaths } from "../../loombridge/state.js";
 
 export async function writeApprovedAssetManifestForDesign(
   root: string,
   mode: AssetManifestMode = "hybrid",
 ): Promise<void> {
-  const paths = loomtidePaths(root);
+  const paths = loombridgePaths(root);
   const design = await designStatus(paths);
   if (design.status !== "approved" || !design.frozenMatches || !design.pngSha256) {
     throw new Error("writeApprovedAssetManifestForDesign requires an approved + frozen Design Target.");
@@ -15,7 +15,7 @@ export async function writeApprovedAssetManifestForDesign(
 
   const manifest = createDraftAssetManifest({
     mode,
-    heroShot: { path: ".loomtide/design/hero-shot.png", sha256: design.pngSha256 },
+    heroShot: { path: ".loombridge/design/hero-shot.png", sha256: design.pngSha256 },
   });
   manifest.status = "approved";
   manifest.approvedAt = "2026-06-05T00:00:00.000Z";

@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://loomtide.local/schemas/asset-ingest-candidate.schema.json",
-  "title": "Loomtide Asset Ingest Candidate",
+  "$id": "https://loombridge.local/schemas/asset-ingest-candidate.schema.json",
+  "title": "Loombridge Asset Ingest Candidate",
   "type": "object",
   "required": [
     "schemaVersion",
@@ -124,7 +124,7 @@
       "additionalProperties": false,
       "properties": {
         "status": { "type": "string", "enum": ["unreviewed", "needs-review", "verified", "rejected"] },
-        "verifiedBy": { "type": "string", "enum": ["developer", "loomtide", "source-owner"] },
+        "verifiedBy": { "type": "string", "enum": ["developer", "loombridge", "source-owner"] },
         "verifiedAt": { "type": "string", "minLength": 1 },
         "reviewer": { "type": "string", "minLength": 1 },
         "notes": { "type": "string" },

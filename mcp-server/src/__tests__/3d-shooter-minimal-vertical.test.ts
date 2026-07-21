@@ -52,7 +52,7 @@ const seriesOf = (raw: RawTranscript, id: string): FieldSeries => {
 };
 
 function runGenerator(): { manifest: unknown; report: unknown; derived: unknown } {
-  const tempDir = mkdtempSync(join(tmpdir(), "loomtide-3d-vertical-"));
+  const tempDir = mkdtempSync(join(tmpdir(), "loombridge-3d-vertical-"));
   const derivedOut = join(tempDir, "derived.json");
   const manifestOut = join(tempDir, "manifest.json");
   const reportOut = join(tempDir, "report.json");

@@ -40,7 +40,7 @@ test("editor list tool has stable MCP shape", () => {
 
 test("editor use tool has stable MCP shape", () => {
   assert.equal(EDITOR_USE_TOOL.name, EDITOR_USE_TOOL_NAME);
-  assert.equal(EDITOR_USE_TOOL_NAME, "loomtide_editor_use");
+  assert.equal(EDITOR_USE_TOOL_NAME, "loombridge_editor_use");
   assert.equal(EDITOR_USE_TOOL.inputSchema.type, "object");
   assert.deepEqual(EDITOR_USE_TOOL.inputSchema.required, ["project"]);
 });

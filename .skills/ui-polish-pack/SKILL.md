@@ -12,7 +12,7 @@ The magenta chroma-key extraction recipe, one-element-per-image rule, review-eve
 runtime-driven-restyle rule, and the 9-slice clean-center rule are **canonical in
 `Docs/Assets/GeneratedArtWorkflow.md` → "UI Skin Passes"** — read that once and follow it; this skill
 adds only the delta (uGUI/import gotchas, the state matrix, safe-area, honest store shots, text-fit /
-AI-tell copy review) plus the DO/DO-NOT framing. Loomtide never deterministically approves UI taste;
+AI-tell copy review) plus the DO/DO-NOT framing. Loombridge never deterministically approves UI taste;
 readability, layout beauty, and copy quality are HUMAN gates.
 
 Provenance tags below: **VALIDATED** = seen across ≥2 sources (a ledger + a planning/workflow doc, a

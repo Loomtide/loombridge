@@ -1,5 +1,5 @@
 #!/bin/sh
-# Loomtide installer + updater — ONE command for install AND update.
+# Loombridge installer + updater — ONE command for install AND update.
 #
 #   curl -fsSL https://get.loomtide.ai | sh
 #   curl -fsSL https://get.loomtide.ai | sh -s -- --project /path/to/UnityProject
@@ -9,41 +9,41 @@
 # same command installs on a fresh machine and updates on an existing one.
 #
 # WINDOWS: run this in Git Bash (bundled with Git for Windows) or WSL — it is a POSIX
-# shell script and will NOT run in cmd.exe or PowerShell. Once installed, the `loomtide`
-# command itself works in ANY Windows shell (npm installs a `loomtide.cmd` shim).
+# shell script and will NOT run in cmd.exe or PowerShell. Once installed, the `loombridge`
+# command itself works in ANY Windows shell (npm installs a `loombridge.cmd` shim).
 #
-# --with-agent (only meaningful with --project) ALSO opts the project in to Loomtide's
-# agent commands + skills (`loomtide install-agent`) — committed into the project repo so
+# --with-agent (only meaningful with --project) ALSO opts the project in to Loombridge's
+# agent commands + skills (`loombridge install-agent`) — committed into the project repo so
 # teammates get them via git pull. Omit it to skip (the default); opt out later with
-# `loomtide install-agent --project <dir> --remove`.
+# `loombridge install-agent --project <dir> --remove`.
 #
 # Releases are published as GitHub Release assets on the release repo (see
-# LOOMTIDE_REPO below). If that repo is private for you, fetching the asset
+# LOOMBRIDGE_REPO below). If that repo is private for you, fetching the asset
 # needs auth. Either:
 #   - log in once with the GitHub CLI:  gh auth login        (recommended)
-#   - or export a GitHub token:         LOOMTIDE_TOKEN=<pat>  (CI / no gh CLI)
+#   - or export a GitHub token:         LOOMBRIDGE_TOKEN=<pat>  (CI / no gh CLI)
 # No npm account is required; a public release repo needs no auth at all.
 #
 # RELEASE CANDIDATES: point the installer at a locally built asset instead of a published
 # release, so an RC can be smoke-tested through THIS script before it is cut. Needs no auth
 # and touches no network:
-#   LOOMTIDE_CLI_TARBALL=mcp-server/loomtide-cli-0.2.0.tgz sh scripts/install.sh
-#   sh scripts/install.sh --tarball mcp-server/loomtide-cli-0.2.0.tgz
+#   LOOMBRIDGE_CLI_TARBALL=mcp-server/loombridge-cli-0.2.0.tgz sh scripts/install.sh
+#   sh scripts/install.sh --tarball mcp-server/loombridge-cli-0.2.0.tgz
 #
 # Env overrides:
-#   LOOMTIDE_VERSION      pin a release tag (default: latest)
-#   LOOMTIDE_REPO         release repo (default: Loomtide/loombridge)
-#   LOOMTIDE_TOKEN        GitHub token with read access (CI / no gh CLI)
-#   LOOMTIDE_PROJECT      Unity project to also install/update the bridge into
-#   LOOMTIDE_CLI_TARBALL  install this local loomtide-cli-*.tgz; skips the release fetch
+#   LOOMBRIDGE_VERSION      pin a release tag (default: latest)
+#   LOOMBRIDGE_REPO         release repo (default: Loomtide/loombridge)
+#   LOOMBRIDGE_TOKEN        GitHub token with read access (CI / no gh CLI)
+#   LOOMBRIDGE_PROJECT      Unity project to also install/update the bridge into
+#   LOOMBRIDGE_CLI_TARBALL  install this local loombridge-cli-*.tgz; skips the release fetch
 set -eu
 
-REPO="${LOOMTIDE_REPO:-Loomtide/loombridge}"
-VERSION="${LOOMTIDE_VERSION:-latest}"
-PROJECT="${LOOMTIDE_PROJECT:-}"
-WITH_AGENT="${LOOMTIDE_WITH_AGENT:-0}"
-CLI_TARBALL="${LOOMTIDE_CLI_TARBALL:-}"
-ASSET_GLOB='loomtide-cli-*.tgz'
+REPO="${LOOMBRIDGE_REPO:-Loomtide/loombridge}"
+VERSION="${LOOMBRIDGE_VERSION:-latest}"
+PROJECT="${LOOMBRIDGE_PROJECT:-}"
+WITH_AGENT="${LOOMBRIDGE_WITH_AGENT:-0}"
+CLI_TARBALL="${LOOMBRIDGE_CLI_TARBALL:-}"
+ASSET_GLOB='loombridge-cli-*.tgz'
 
 usage() {
   # Print the header comment (everything between the shebang and `set -eu`).
@@ -57,11 +57,11 @@ while [ $# -gt 0 ]; do
     --tarball) CLI_TARBALL="${2:-}"; shift 2 ;;
     --with-agent) WITH_AGENT=1; shift ;;
     -h|--help) usage; exit 0 ;;
-    *) echo "loomtide install: unknown argument '$1'" >&2; exit 2 ;;
+    *) echo "loombridge install: unknown argument '$1'" >&2; exit 2 ;;
   esac
 done
 
-err() { echo "loomtide install: $*" >&2; exit 1; }
+err() { echo "loombridge install: $*" >&2; exit 1; }
 
 command -v node >/dev/null 2>&1 || err "Node.js >= 18 is required (not found)."
 command -v npm  >/dev/null 2>&1 || err "npm is required (not found)."
@@ -77,12 +77,12 @@ if [ -n "$CLI_TARBALL" ]; then
   # Absolutize before handing it to npm — the caller's relative path is not ours to trust.
   tgz="$(cd "$(dirname "$CLI_TARBALL")" && pwd)/$(basename "$CLI_TARBALL")"
   case "$(basename "$tgz")" in
-    loomtide-cli-*.tgz) ;;
+    loombridge-cli-*.tgz) ;;
     *) echo "!!  $(basename "$tgz") does not match $ASSET_GLOB — installing it anyway." >&2 ;;
   esac
   echo "==> Using LOCAL CLI tarball (release channel bypassed): $tgz"
 elif command -v gh >/dev/null 2>&1 && gh auth status >/dev/null 2>&1; then
-  echo "==> Fetching Loomtide CLI ($VERSION) from $REPO"
+  echo "==> Fetching Loombridge CLI ($VERSION) from $REPO"
   # GitHub CLI path — uses the developer's existing `gh auth login`.
   if [ "$VERSION" = latest ]; then
     gh release download -R "$REPO" -p "$ASSET_GLOB" -D "$tmp" \
@@ -91,32 +91,32 @@ elif command -v gh >/dev/null 2>&1 && gh auth status >/dev/null 2>&1; then
     gh release download "$VERSION" -R "$REPO" -p "$ASSET_GLOB" -D "$tmp" \
       || err "could not download release $VERSION (check the tag and your access)."
   fi
-  tgz="$(ls "$tmp"/loomtide-cli-*.tgz 2>/dev/null | head -1 || true)"
-elif [ -n "${LOOMTIDE_TOKEN:-}" ]; then
-  echo "==> Fetching Loomtide CLI ($VERSION) from $REPO"
+  tgz="$(ls "$tmp"/loombridge-cli-*.tgz 2>/dev/null | head -1 || true)"
+elif [ -n "${LOOMBRIDGE_TOKEN:-}" ]; then
+  echo "==> Fetching Loombridge CLI ($VERSION) from $REPO"
   # Token path — CI or machines without the gh CLI. Needs curl.
-  command -v curl >/dev/null 2>&1 || err "curl is required for the LOOMTIDE_TOKEN path."
+  command -v curl >/dev/null 2>&1 || err "curl is required for the LOOMBRIDGE_TOKEN path."
   if [ "$VERSION" = latest ]; then
     rel="https://api.github.com/repos/$REPO/releases/latest"
   else
     rel="https://api.github.com/repos/$REPO/releases/tags/$VERSION"
   fi
-  meta="$(curl -fsSL -H "Authorization: Bearer $LOOMTIDE_TOKEN" \
+  meta="$(curl -fsSL -H "Authorization: Bearer $LOOMBRIDGE_TOKEN" \
                      -H "Accept: application/vnd.github+json" "$rel")" \
-    || err "could not read release metadata (check LOOMTIDE_TOKEN / repo access)."
+    || err "could not read release metadata (check LOOMBRIDGE_TOKEN / repo access)."
   # Resolve the asset's API URL with node (a hard dependency anyway — no jq needed).
   asset_url="$(printf '%s' "$meta" | node -e '
     let s = ""; process.stdin.on("data", (d) => (s += d)).on("end", () => {
       const rel = JSON.parse(s);
-      const a = (rel.assets || []).find((a) => /^loomtide-cli-.*\.tgz$/.test(a.name));
+      const a = (rel.assets || []).find((a) => /^loombridge-cli-.*\.tgz$/.test(a.name));
       if (!a) process.exit(3);
       process.stdout.write(a.url);
     });')" || err "no $ASSET_GLOB asset found in release $VERSION."
-  curl -fsSL -H "Authorization: Bearer $LOOMTIDE_TOKEN" -H "Accept: application/octet-stream" \
+  curl -fsSL -H "Authorization: Bearer $LOOMBRIDGE_TOKEN" -H "Accept: application/octet-stream" \
        -o "$tmp/cli.tgz" "$asset_url" || err "release asset download failed."
   tgz="$tmp/cli.tgz"
 else
-  err "no auth available. Run 'gh auth login' (GitHub CLI), set LOOMTIDE_TOKEN=<github token>, or install a local build with LOOMTIDE_CLI_TARBALL=<path>."
+  err "no auth available. Run 'gh auth login' (GitHub CLI), set LOOMBRIDGE_TOKEN=<github token>, or install a local build with LOOMBRIDGE_CLI_TARBALL=<path>."
 fi
 
 [ -n "$tgz" ] && [ -f "$tgz" ] || err "release asset $ASSET_GLOB was not found."
@@ -124,8 +124,8 @@ fi
 echo "==> Installing globally: npm install -g $(basename "$tgz")"
 npm install -g "$tgz" || err "'npm install -g' failed (is your npm global bin writable / on PATH?)."
 
-if command -v loomtide >/dev/null 2>&1; then
-  echo "==> Installed: $(loomtide --version 2>/dev/null || echo loomtide)"
+if command -v loombridge >/dev/null 2>&1; then
+  echo "==> Installed: $(loombridge --version 2>/dev/null || echo loombridge)"
 else
   # npm puts global bins in <prefix>/bin on POSIX but directly in <prefix> on Windows,
   # so print the directory that actually holds the shim rather than a wrong guess.
@@ -134,16 +134,16 @@ else
     MINGW*|MSYS*|CYGWIN*) bindir="$prefix" ;;
     *)                    bindir="$prefix/bin" ;;
   esac
-  echo "!!  Installed, but 'loomtide' is not on your PATH."
+  echo "!!  Installed, but 'loombridge' is not on your PATH."
   echo "    Add your npm global bin to PATH:  export PATH=\"$bindir:\$PATH\""
 fi
 
 if [ -n "$PROJECT" ]; then
   echo "==> Installing/updating the Unity bridge into $PROJECT"
-  loomtide install-bridge --project "$PROJECT"
+  loombridge install-bridge --project "$PROJECT"
   if [ "$WITH_AGENT" = 1 ]; then
     echo "==> Installing the optional agent surface (commands + skills) into $PROJECT"
-    loomtide install-agent --project "$PROJECT"
+    loombridge install-agent --project "$PROJECT"
   fi
 elif [ "$WITH_AGENT" = 1 ]; then
   echo "!!  --with-agent needs --project <UnityProject>; nothing to opt in (skipped)." >&2

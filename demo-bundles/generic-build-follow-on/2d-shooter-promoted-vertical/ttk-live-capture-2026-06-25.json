@@ -563,7 +563,7 @@
     "deathMs": 516.67
   },
   "honesty": {
-    "measures": "LIVE first-hit edge to explicit reference-enemy death edge, sampled in Play Mode through the real Loomtide bridge (both rising edges; death causal on HitCount reaching MaxHits)",
+    "measures": "LIVE first-hit edge to explicit reference-enemy death edge, sampled in Play Mode through the real Loombridge bridge (both rising edges; death causal on HitCount reaching MaxHits)",
     "doesNotMeasure": "player aim time, damage delivered by live projectile collisions, or a full shooter combat loop in a shipped 2D-shooter build (the host project is a fixture host of convenience)"
   }
 }

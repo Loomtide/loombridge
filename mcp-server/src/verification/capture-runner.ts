@@ -4,7 +4,7 @@
  *
  * Backend-only script: it composes existing Unity bridge operations,
  * runtime.capture_sequence, frame analysis, and run-gates. It deliberately does
- * not define any /loomtide command UX.
+ * not define any /loombridge command UX.
  */
 
 import fs from "node:fs/promises";
@@ -24,7 +24,7 @@ import type { RenderFrameInput, RenderFrameSample } from "./gates/render-frame.j
 import { runGates } from "./run-gates.js";
 import { assertValidAcceptanceContract } from "./validator.js";
 import type { AcceptanceContract } from "./types.js";
-import { scenarioPacks } from "../loomtide/genre-registry.js";
+import { scenarioPacks } from "../loombridge/genre-registry.js";
 import {
   assertValidVerificationScenario,
   getVerificationResetPolicy,
@@ -702,7 +702,7 @@ function inferGateForCheck(checkId: string): string {
 function suggestNextAction(detail: string): string | undefined {
   const lower = detail.toLowerCase();
   if (lower.includes("no \"") && lower.includes(" in --inputs")) {
-    return "Capture the missing gate input under the runner's --out directory (.loomtide/verify/<state>/ in the canonical flow) and rerun.";
+    return "Capture the missing gate input under the runner's --out directory (.loombridge/verify/<state>/ in the canonical flow) and rerun.";
   }
   if (lower.includes("boxed") || lower.includes("letterbox") || lower.includes("black margins")) {
     return "Fix the camera/Game-view viewport fill, or declare intentional letterbox in the contract.";

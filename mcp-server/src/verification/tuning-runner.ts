@@ -2,7 +2,7 @@
 /**
  * Backend-only live Play Mode tuning runner.
  *
- * This is not a /loomtide command. It is a reusable verification primitive that
+ * This is not a /loombridge command. It is a reusable verification primitive that
  * tries serialized candidate values while Unity stays in Play Mode, measures
  * each trial, and emits a compact report the caller can use before persisting
  * the chosen value in Edit Mode.

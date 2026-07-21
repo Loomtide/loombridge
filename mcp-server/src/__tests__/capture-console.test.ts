@@ -48,7 +48,7 @@ test("partitionConsolePhases: a play-enter STARTUP error is preserved (not dropp
   // This is the regression for the false-green: the OLD capture cleared the
   // console after settle, dropping startup errors. Now startup logs are kept.
   const startup: ConsoleEntry[] = [
-    { type: "warning", message: "[UnityBridge] IPC transport unavailable; fallback to tcp" },
+    { type: "warning", message: "[Loombridge] IPC transport unavailable; fallback to tcp" },
     { type: "error", message: "NullReferenceException in PlayerController.Awake" },
   ];
   const full: ConsoleEntry[] = [

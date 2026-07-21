@@ -3,16 +3,16 @@
  *
  * For every command in `.claude-plugin/plugin.json`, we require:
  *   1. the canonical Claude command markdown exists,
- *   2. a Codex wrapper `scripts/loomtide-<name>` exists, is executable, and
+ *   2. a Codex wrapper `scripts/loombridge-<name>` exists, is executable, and
  *      points its PROMPT at the SAME command markdown (one source of truth),
  *   3. the wrapper uses `codex exec --ephemeral` (the §3b fresh-process pattern),
  *   4. the wrapper carries its approval/sandbox policy INLINE
  *      (`--ask-for-approval` + `--sandbox`), NOT via a project-local profile.
  *
  * Note (a7baf5b): Codex warns on a project-local `.codex/config.toml`, so the old
- * `[profiles.loomtide-<name>]` mechanism was removed — the wrappers now carry their
+ * `[profiles.loombridge-<name>]` mechanism was removed — the wrappers now carry their
  * policy inline and no `.codex/config.toml` is committed/generated (the
- * `sync-loomtide-artifacts` generator + test enforce its ABSENCE). This parity test
+ * `sync-loombridge-artifacts` generator + test enforce its ABSENCE). This parity test
  * checks the committed wrappers against that same invariant.
  */
 
@@ -40,7 +40,7 @@ async function loadPlugin(): Promise<PluginManifest> {
 }
 
 function commandNameFromPath(commandPath: string): string {
-  // "./commands/loomtide/plan.md" → "plan"
+  // "./commands/loombridge/plan.md" → "plan"
   return path.basename(commandPath, ".md");
 }
 
@@ -50,10 +50,10 @@ test("T0 shim parity — plugin manifest declares at least one command", async (
 });
 
 test("T0 shim parity — `build` wrapper joins ALL positional args (not just $1)", async () => {
-  // `loomtide build` is the primary slice-loop entry point, but optional
-  // multi-word intents (`loomtide-build add coin pickup`) remain supported.
+  // `loombridge build` is the primary slice-loop entry point, but optional
+  // multi-word intents (`loombridge-build add coin pickup`) remain supported.
   // Dropping everything after $1 would route/build the wrong thing.
-  const wrapperPath = path.join(repoRoot, "scripts", "loomtide-build");
+  const wrapperPath = path.join(repoRoot, "scripts", "loombridge-build");
   let body: string;
   try {
     body = await fs.readFile(wrapperPath, "utf-8");
@@ -63,19 +63,19 @@ test("T0 shim parity — `build` wrapper joins ALL positional args (not just $1)
   }
   // Anchor at line start to skip comment-line examples (`# … INTENT="…" …`).
   const intentAssignment = body.match(/^INTENT=("([^"\n]*)")/m);
-  assert.ok(intentAssignment, "loomtide-build must define a top-level INTENT=…");
+  assert.ok(intentAssignment, "loombridge-build must define a top-level INTENT=…");
   const rhs = intentAssignment![2];
   // Accept any form that uses $* / $@ / ${*…} / ${@…} (the "all positional
   // args" expansions). Reject $1 / ${1:-…} (drops args 2+).
   assert.match(
     rhs,
     /\$\{?[*@]/,
-    `loomtide-build INTENT must use $* or $@ to capture every positional arg; got "${rhs}"`,
+    `loombridge-build INTENT must use $* or $@ to capture every positional arg; got "${rhs}"`,
   );
   assert.doesNotMatch(
     rhs,
     /^\$\{?1[^*@]/,
-    `loomtide-build INTENT must NOT be a bare $1 / \${1…} (drops args 2+); got "${rhs}"`,
+    `loombridge-build INTENT must NOT be a bare $1 / \${1…} (drops args 2+); got "${rhs}"`,
   );
 });
 
@@ -83,20 +83,20 @@ test("command currency — e2e.md drives the independent hero-shot review so a d
   // After the §P0 moat, a design-targeted flow MUST run the independent consolidated VLM
   // (--vlm) before doneness, else doneness refuses (no reviewFindings). e2e approves a hero
   // shot, so without the VLM step the whole e2e flow dead-ends at doneness. Guard the fix.
-  const e2e = await fs.readFile(path.join(repoRoot, "commands", "loomtide", "e2e.md"), "utf-8");
+  const e2e = await fs.readFile(path.join(repoRoot, "commands", "loombridge", "e2e.md"), "utf-8");
   assert.match(e2e, /--vlm/, "e2e.md must pass --vlm so doneness can read reviewFindings");
   assert.match(e2e, /independent/i, "e2e.md must instruct the independent hero-shot review");
   assert.match(
     e2e,
-    /loomtide-embed-bridge/,
+    /loombridge-embed-bridge/,
     "e2e.md must include the consumer bridge-embed pre-step (Tests/-excluded embed)",
   );
 });
 
 test("command currency — the verify-2d-game skill uses the consolidated ROOT review, not a per-state path (P1.3)", async () => {
-  // P1.3 moved the VLM review to ONE consolidated `.loomtide/verify/vlm-review.json`
+  // P1.3 moved the VLM review to ONE consolidated `.loombridge/verify/vlm-review.json`
   // (root), so frame-integrity spans every state. A per-state `--vlm
-  // .loomtide/verify/<state>/vlm-review.json` is spawn-scoped and misses that. Guard
+  // .loombridge/verify/<state>/vlm-review.json` is spawn-scoped and misses that. Guard
   // the skill docs (an agent can invoke verify-2d-game directly, bypassing build/e2e).
   const docs = ["SKILL.md", path.join("references", "vlm-review.md")];
   const perStateReviewFile = /verify\/[^/"\s]+\/vlm-review\.json/; // verify/<segment>/vlm-review.json
@@ -108,12 +108,12 @@ test("command currency — the verify-2d-game skill uses the consolidated ROOT r
     assert.doesNotMatch(
       body,
       perStateReviewFile,
-      `${rel}: the VLM review file must be the consolidated root .loomtide/verify/vlm-review.json, not a per-state path`,
+      `${rel}: the VLM review file must be the consolidated root .loombridge/verify/vlm-review.json, not a per-state path`,
     );
     assert.match(
       body,
       /verify\/vlm-review\.json/,
-      `${rel}: must reference the consolidated root review .loomtide/verify/vlm-review.json`,
+      `${rel}: must reference the consolidated root review .loombridge/verify/vlm-review.json`,
     );
   }
 });
@@ -132,7 +132,7 @@ test("T0 shim parity — every Claude command has a Codex wrapper pointing at th
     assert.ok(mdStat?.isFile(), `Claude command md missing: ${commandPath}`);
 
     // 2. The Codex wrapper exists and is executable.
-    const wrapperRel = `scripts/loomtide-${name}`;
+    const wrapperRel = `scripts/loombridge-${name}`;
     const wrapperAbs = path.join(repoRoot, wrapperRel);
     const wrapperStat = await fs.stat(wrapperAbs).catch(() => null);
     assert.ok(wrapperStat?.isFile(), `Codex wrapper missing: ${wrapperRel}`);
@@ -144,7 +144,7 @@ test("T0 shim parity — every Claude command has a Codex wrapper pointing at th
     const wrapperBody = await fs.readFile(wrapperAbs, "utf-8");
 
     // 3. Wrapper's PROMPT references the SAME command markdown (no drift).
-    const expectedRef = `commands/loomtide/${name}.md`;
+    const expectedRef = `commands/loombridge/${name}.md`;
     assert.ok(
       wrapperBody.includes(expectedRef),
       `${wrapperRel} must reference ${expectedRef} in its PROMPT (single source of truth).`,

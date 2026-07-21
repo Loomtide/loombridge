@@ -195,7 +195,7 @@ test("capture-runner: builds optional screen rect params from scenario collectio
 });
 
 test("capture-runner: decodes returned frame base64 into namespaced png files", async () => {
-  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "loomtide-capture-runner-"));
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "loombridge-capture-runner-"));
   try {
     const written = await decodeCapturedFrames({
       sequenceId: "jump-burst",
@@ -302,7 +302,7 @@ function writeTestPng(
 }
 
 test("capture-runner: analyzes captured PNGs into render-frame gate input", async () => {
-  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "loomtide-render-frame-"));
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "loombridge-render-frame-"));
   const framePath = path.join(dir, "boxed.png");
   try {
     await fs.writeFile(
@@ -356,7 +356,7 @@ test("capture-runner: builds concise fail-first fix-list items from build verdic
   assert.equal(fixList.items[1]!.status, "warn");
   assert.equal(
     fixList.items[1]!.suggestedNextAction,
-    "Capture the missing gate input under the runner's --out directory (.loomtide/verify/<state>/ in the canonical flow) and rerun.",
+    "Capture the missing gate input under the runner's --out directory (.loombridge/verify/<state>/ in the canonical flow) and rerun.",
   );
 });
 

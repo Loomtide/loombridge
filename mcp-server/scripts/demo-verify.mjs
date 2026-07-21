@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Loomtide Demo Verification — Step 6 play mode test.
+ * Loombridge Demo Verification — Step 6 play mode test.
  * Enter play, test jump + movement, capture game screenshot, exit.
  */
 import { fileURLToPath } from "node:url";
@@ -91,8 +91,8 @@ async function main() {
     const screenshot = await call("unity_editor_screenshot", { view: "game" });
     const img = screenshot.raw?.content?.find(c => c.type === "image");
     if (img) {
-      writeFileSync("/tmp/loomtide-playtest.jpg", Buffer.from(img.data, "base64"));
-      console.log("  Screenshot saved to /tmp/loomtide-playtest.jpg");
+      writeFileSync("/tmp/loombridge-playtest.jpg", Buffer.from(img.data, "base64"));
+      console.log("  Screenshot saved to /tmp/loombridge-playtest.jpg");
     }
 
     // 9. Check console logs

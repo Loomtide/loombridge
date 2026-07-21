@@ -105,7 +105,7 @@ test("formatToolResult: screenshot op without image_base64 returns text/json", (
 });
 
 test("writeScreenshotOutputPath: writes screenshot bytes and returns deterministic JSON metadata", async () => {
-  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "loomtide-screenshot-output-"));
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "loombridge-screenshot-output-"));
   try {
     const bytes = Buffer.from("fake-png-data");
     const outputPath = path.join(tmpDir, "captures", "start.png");
@@ -147,8 +147,8 @@ test("resolveSafeScreenshotOutputPath: allows relative artifact roots only", () 
     path.join(cwd, "captures/start.png"),
   );
   assert.equal(
-    resolveSafeScreenshotOutputPath(".loomtide/captures/start.png", cwd),
-    path.join(cwd, ".loomtide/captures/start.png"),
+    resolveSafeScreenshotOutputPath(".loombridge/captures/start.png", cwd),
+    path.join(cwd, ".loombridge/captures/start.png"),
   );
   assert.throws(
     () => resolveSafeScreenshotOutputPath("Assets/Scenes/Game.unity", cwd),
@@ -169,7 +169,7 @@ test("resolveSafeScreenshotOutputPath: refuses prefix traversal that escapes int
   // The artifact-prefix check must not whitelist the whole cwd: a `..` after the
   // prefix would otherwise overwrite arbitrary files under the project root.
   assert.throws(
-    () => resolveSafeScreenshotOutputPath(".loomtide/../mcp-server/src/index.ts", cwd),
+    () => resolveSafeScreenshotOutputPath(".loombridge/../mcp-server/src/index.ts", cwd),
     /outputPath must stay under/,
   );
   assert.throws(
@@ -253,14 +253,14 @@ test("index routing surface: unity_input_key_tap is discoverable in OpRegistry",
   assert.equal(op!.command, "input.key_tap");
 });
 
-test("index routing surface: editor list tool is registered as a Loomtide MCP tool", () => {
+test("index routing surface: editor list tool is registered as a Loombridge MCP tool", () => {
   assert.equal(EDITOR_LIST_TOOL.name, EDITOR_LIST_TOOL_NAME);
-  assert.equal(EDITOR_LIST_TOOL_NAME, "loomtide_editor_list");
+  assert.equal(EDITOR_LIST_TOOL_NAME, "loombridge_editor_list");
 });
 
-test("index routing surface: editor use tool is registered as a Loomtide MCP tool", () => {
+test("index routing surface: editor use tool is registered as a Loombridge MCP tool", () => {
   assert.equal(EDITOR_USE_TOOL.name, EDITOR_USE_TOOL_NAME);
-  assert.equal(EDITOR_USE_TOOL_NAME, "loomtide_editor_use");
+  assert.equal(EDITOR_USE_TOOL_NAME, "loombridge_editor_use");
 });
 
 test("index routing surface: Unity tools advertise project routing parameter", () => {
@@ -303,7 +303,7 @@ test("formatEditorRoutingError: embeds the active editor in the peer payload (m3
 
 test("startup binding: strict env target is resolved as main() wires it", () => {
   const binding = resolveMcpStartupProjectBinding({
-    env: { LOOMTIDE_UNITY_PROJECT: "/Users/dev/GameA" },
+    env: { LOOMBRIDGE_UNITY_PROJECT: "/Users/dev/GameA" },
     cwd: "/tmp/not-a-unity-project",
   });
   assert.deepEqual(binding, { kind: "strict", target: "/Users/dev/GameA" });

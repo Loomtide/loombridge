@@ -12,7 +12,7 @@ import type { FeelMeasurements, FeelMeasurementSource } from "./feel.js";
 import {
   SHORT_HOP_CANONICAL_TAP_TICKS,
   SHORT_HOP_TAP_TICK_TOLERANCE,
-} from "../../loomtide/feel-primitives.js";
+} from "../../loombridge/feel-primitives.js";
 
 export const GATE_NAME = "feel-provenance";
 

@@ -8,8 +8,8 @@ import {
 /**
  * The bridge protocol version this CLI/server build expects. Advertised by the
  * Unity bridge in `bridge.initialize` (`Handshake.cs#ProtocolVersion`) and gated
- * here at preflight. Exported so `loomtide install-bridge` can stamp the SAME
- * expectation into a project's `LoomtideInstall.json` — one source of truth, so
+ * here at preflight. Exported so `loombridge install-bridge` can stamp the SAME
+ * expectation into a project's `LoombridgeInstall.json` — one source of truth, so
  * install metadata and the live preflight can never disagree.
  */
 export const REQUIRED_PROTOCOL_VERSION = 1;

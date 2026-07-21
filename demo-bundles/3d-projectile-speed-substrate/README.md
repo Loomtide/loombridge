@@ -6,7 +6,7 @@ First live, true-**3D** `projectileSpeed` capture, taken in the repo-owned
 
 ## What this proves
 
-The Loomtide bridge now samples a true `{x,y,z}` trajectory (previously `z` was read from
+The Loombridge bridge now samples a true `{x,y,z}` trajectory (previously `z` was read from
 `transform.position` but dropped at serialization), and `deriveProjectileSpeed` is
 dimension-agnostic (`hypot(Δx,Δy,Δz)`, with a missing `z` treated as 0 so 2D results are unchanged).
 
@@ -41,4 +41,4 @@ refuse).
 Rotation-dependent 3D metrics — look responsiveness, recoil, ADS — remain explicit gaps; they need a
 rotation/aim sampler (**substrate v2**). Hitscan, 3D hit-stop/screen-shake, AI/cover/waves, and
 Fusion/multiplayer also remain gaps. See
-`mcp-server/src/loomtide/genre-packs/3d-shooter/methodology-gaps.md`.
+`mcp-server/src/loombridge/genre-packs/3d-shooter/methodology-gaps.md`.

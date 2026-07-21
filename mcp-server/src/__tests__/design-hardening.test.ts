@@ -13,8 +13,8 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { validateGenreContract } from "../loomtide/genre-contract/validator.js";
-import type { GenreContract, ProductThesis } from "../loomtide/genre-contract/types.js";
+import { validateGenreContract } from "../loombridge/genre-contract/validator.js";
+import type { GenreContract, ProductThesis } from "../loombridge/genre-contract/types.js";
 import { EVIDENCE_CLASSES } from "../verification/gates/evidence-classes.js";
 import {
   checkScaleSanity,
@@ -24,13 +24,13 @@ import {
   formatDesignHardeningAdvisory,
   MAX_PLAUSIBLE_CROSSINGS_PER_RUN,
   MIN_PLAUSIBLE_CROSSINGS_PER_RUN,
-} from "../loomtide/genre-contract/design-hardening.js";
+} from "../loombridge/genre-contract/design-hardening.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PKG_ROOT = path.resolve(__dirname, "..", "..");
-const EXAMPLES = path.join(PKG_ROOT, "src", "loomtide", "genre-contract", "examples");
+const EXAMPLES = path.join(PKG_ROOT, "src", "loombridge", "genre-contract", "examples");
 
-/** A minimal valid twitch contract — mirrors the base in loomtide-genre-contract.test.ts. */
+/** A minimal valid twitch contract — mirrors the base in loombridge-genre-contract.test.ts. */
 function validBase(): GenreContract {
   return {
     schemaVersion: "0.1.0",

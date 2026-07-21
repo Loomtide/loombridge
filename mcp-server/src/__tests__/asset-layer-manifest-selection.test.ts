@@ -10,7 +10,7 @@ import {
   buildRegistrySelectionPlan,
 } from "../asset-layer/manifest-selection.js";
 import { loadAssetProfile, loadRegistryPack } from "../asset-layer/registry.js";
-import { createDraftAssetManifest, validateAssetManifest } from "../loomtide/asset-manifest.js";
+import { createDraftAssetManifest, validateAssetManifest } from "../loombridge/asset-manifest.js";
 import { evaluateAssetSourceFidelity } from "../verification/gates/asset-source-fidelity.js";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -24,7 +24,7 @@ async function fixture() {
   const manifest = createDraftAssetManifest({
     mode: "registry",
     heroShot: {
-      path: ".loomtide/design/hero-shot.png",
+      path: ".loombridge/design/hero-shot.png",
       sha256: HASH,
     },
     registry: registry.packId,
@@ -37,7 +37,7 @@ async function fixture3dShooter() {
   const profile = await loadAssetProfile(path.join(repoRoot, "asset-layer/profiles/3d-shooter.json"));
   const manifest = createDraftAssetManifest({
     mode: "registry",
-    heroShot: { path: ".loomtide/design/hero-shot.png", sha256: HASH },
+    heroShot: { path: ".loombridge/design/hero-shot.png", sha256: HASH },
     registry: registry.packId,
     genre: "3d-shooter",
   });
@@ -104,7 +104,7 @@ test("3d-shooter primitive fallback is recorded as a placeholder, never approved
   const plan = buildRegistrySelectionPlan(manifest, registry, profile, { preferredLicense: "CC0-1.0" });
   const selections = Object.fromEntries(plan.slots.map((slot) => [slot.assetId, slot.selectedId ?? slot.candidates[0]!.id]));
   // Deliberately pick the honest capsule fallback for the player model.
-  selections.player_model = "loomtide.fallback.player.capsule";
+  selections.player_model = "loombridge.fallback.player.capsule";
 
   const result = applyRegistrySelectionsToManifest({
     manifest,
@@ -279,7 +279,7 @@ test("applying registry selections to a hybrid manifest keeps it draft until gen
   const manifest = createDraftAssetManifest({
     mode: "hybrid",
     heroShot: {
-      path: ".loomtide/design/hero-shot.png",
+      path: ".loombridge/design/hero-shot.png",
       sha256: HASH,
     },
     registry: registry.packId,

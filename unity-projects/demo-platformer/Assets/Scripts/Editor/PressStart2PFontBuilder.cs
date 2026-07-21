@@ -24,7 +24,7 @@ public static class PressStart2PFontBuilder
         BuildIfMissing();
     }
 
-    [MenuItem("Loomtide/Build Press Start 2P TMP Font")]
+    [MenuItem("Loombridge/Build Press Start 2P TMP Font")]
     public static void BuildMenu() => Build(force: true);
 
     private static void BuildIfMissing()

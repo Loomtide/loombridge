@@ -80,7 +80,7 @@ function kenneyHostedRecord(overrides: Partial<AssetCatalogRecord> = {}): unknow
       status: "verified",
       verifiedBy: "developer",
       verifiedAt: "2026-06-05T00:00:00.000Z",
-      reviewer: "Loomtide",
+      reviewer: "Loombridge",
     },
     pack: {
       packId: "kenney-all-in-one-3.5.0",
@@ -111,13 +111,13 @@ test("legacy registry packs adapt into verified catalog records without losing r
   const registry = readJson<AssetRegistryPack>("asset-layer/registry/platformer-2d.json");
   const catalog = adaptRegistryPackToCatalog(registry, {
     reviewedAt: "2026-06-05T00:00:00.000Z",
-    reviewer: "Loomtide",
+    reviewer: "Loombridge",
   });
 
   assert.equal(catalog.length, registry.entries.length);
   assert.equal(catalog[0]?.review.status, "verified");
   assert.equal(catalog[0]?.review.verifiedBy, "developer");
-  assert.equal(catalog[0]?.review.reviewer, "Loomtide");
+  assert.equal(catalog[0]?.review.reviewer, "Loombridge");
   assert.equal(catalog[0]?.pack?.packId, registry.packId);
 
   const validation = validateCatalogRecord(catalog[0]!);
@@ -151,9 +151,9 @@ test("source.verified is legacy metadata and review.status is the authoritative 
     ...first,
     review: {
       status: "verified",
-      verifiedBy: "loomtide",
+      verifiedBy: "loombridge",
       verifiedAt: "2026-06-05T00:00:00.000Z",
-      reviewer: "loomtide-core",
+      reviewer: "loombridge-core",
     },
   });
   const validation = validateCatalogRecord(manuallyVerified);
@@ -255,7 +255,7 @@ test("compact Kenney seed records backfill source, provider, license, and generi
       status: "verified",
       verifiedBy: "developer",
       verifiedAt: "2026-06-05T00:00:00.000Z",
-      reviewer: "Loomtide",
+      reviewer: "Loombridge",
     },
     tags: ["2d-assets", "cc0", "kenney", "preview", "sprite", "verified"],
     unity: {
@@ -414,7 +414,7 @@ test("compact Kenney seed records infer profile primitives from path and tags", 
       status: "verified",
       verifiedBy: "developer",
       verifiedAt: "2026-06-05T00:00:00.000Z",
-      reviewer: "Loomtide",
+      reviewer: "Loombridge",
     },
     tags: ["2d-assets", "cc0", "kenney", "sprite", "verified"],
     unity: {

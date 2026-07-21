@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 #
-# Prepare curated Loomtide asset-registry entries into a clean Unity project.
+# Prepare curated Loombridge asset-registry entries into a clean Unity project.
 #
 # Usage:
 #   scripts/prepare-project-assets.sh --project PATH --profile asset-layer/profiles/2d-topdown-arena.json \
-#     --registry asset-layer/registry/switchyard-2d.json [--name switchyard] [--handoff-dir .loomtide/handoff]
+#     --registry asset-layer/registry/switchyard-2d.json [--name switchyard] [--handoff-dir .loombridge/handoff]
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -33,7 +33,7 @@ while [ "$#" -gt 0 ]; do
 done
 
 if [ -z "$PROJECT" ] || [ -z "$PROFILE" ] || [ -z "$REGISTRY" ]; then
-  echo "Usage: scripts/prepare-project-assets.sh --project=PATH --profile=PATH --registry=PATH [--name=assets] [--handoff-dir=.loomtide/handoff]" >&2
+  echo "Usage: scripts/prepare-project-assets.sh --project=PATH --profile=PATH --registry=PATH [--name=assets] [--handoff-dir=.loombridge/handoff]" >&2
   exit 2
 fi
 
@@ -41,7 +41,7 @@ case "$PROJECT" in /*) ;; *) PROJECT="$PWD/$PROJECT" ;; esac
 case "$PROFILE" in /*) ;; *) PROFILE="$REPO_ROOT/$PROFILE" ;; esac
 case "$REGISTRY" in /*) ;; *) REGISTRY="$REPO_ROOT/$REGISTRY" ;; esac
 if [ -z "$HANDOFF_DIR" ]; then
-  HANDOFF_DIR="$PROJECT/.loomtide/handoff"
+  HANDOFF_DIR="$PROJECT/.loombridge/handoff"
 else
   case "$HANDOFF_DIR" in /*) ;; *) HANDOFF_DIR="$PROJECT/$HANDOFF_DIR" ;; esac
 fi

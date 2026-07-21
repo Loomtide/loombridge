@@ -1466,7 +1466,7 @@
     "shakeOnsetMs": 516.67
   },
   "honesty": {
-    "measures": "the LIVE peak camera displacement (world units) after a projectile impact, derived from the sampled Main Camera transform trajectory through the Loomtide bridge against the repo-owned shooter fixture.",
+    "measures": "the LIVE peak camera displacement (world units) after a projectile impact, derived from the sampled Main Camera transform trajectory through the Loombridge bridge against the repo-owned shooter fixture.",
     "doesNotMeasure": "a pixel-space shake amplitude (this is world-unit camera displacement; a px figure would depend on the camera's orthographic size and the screen resolution), nor production-tuned shake balance."
   }
 }

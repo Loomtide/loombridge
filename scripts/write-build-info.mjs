@@ -1,6 +1,6 @@
-// Stamp the current build into mcp-server/dist/build-info.json so `loomtide --version`
+// Stamp the current build into mcp-server/dist/build-info.json so `loombridge --version`
 // reports WHICH build is running — the signal that catches a stale frozen runtime
-// (the `loomtide` bin execs ~/.loomtide/runtime, frozen at install time; a repo
+// (the `loombridge` bin execs ~/.loombridge/runtime, frozen at install time; a repo
 // rebuild does not update it). Run as the `postbuild` step (cwd = mcp-server).
 //
 // `commit` = git HEAD at build time (short sha, "+dirty" if the tree is modified),

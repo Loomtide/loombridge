@@ -1,6 +1,6 @@
 ---
 name: game-polish-2d
-description: Reusable presentation/polish components for 2D games built through Loomtide — locked player feel, camera/background, HUD, animation, juice, end-state, and audio. Use when a 2D game needs verified feel or presentable polish.
+description: Reusable presentation/polish components for 2D games built through Loombridge — locked player feel, camera/background, HUD, animation, juice, end-state, and audio. Use when a 2D game needs verified feel or presentable polish.
 ---
 
 Use this skill to turn a working 2D game into a polished slice. Prefer locked components over prose and
@@ -8,7 +8,7 @@ verify each slice with deterministic captures.
 
 ## Manifest Asset Bindings
 
-Before adding polish assets, read `.loomtide/ASSET_MANIFEST.json` and the current slice's
+Before adding polish assets, read `.loombridge/ASSET_MANIFEST.json` and the current slice's
 `sliceBindings` entry. Use each bound asset's `resolvedPaths`; do not search the registry or replace a
 generated/manual asset inside the slice.
 
@@ -25,9 +25,9 @@ For a platformer `player-feel` slice:
 
 Starting params come from the **feel identity**, not hand-picked numbers. Pick a profile
 (`precision` / `classic` / `momentum`,
-`mcp-server/src/loomtide/genre-packs/platformer-2d/profiles/*.profile.json`) and resolve its starting
+`mcp-server/src/loombridge/genre-packs/platformer-2d/profiles/*.profile.json`) and resolve its starting
 params with `resolveStartingParams(profile)`
-(`mcp-server/src/loomtide/genre-packs/platformer-2d/solve-params.ts`): it derives `jumpSpeed`,
+(`mcp-server/src/loombridge/genre-packs/platformer-2d/solve-params.ts`): it derives `jumpSpeed`,
 `gravityScale`, and `moveSpeed` from the profile's band targets and reads `jumpCutMultiplier` /
 `fixedTimestep` from the profile's `build` block. The resolved per-profile values are tabulated in
 `unity-2d-game/references/feel-presets.md` §2 (generated from the profiles). Then measure → compare →
@@ -45,7 +45,7 @@ tune toward the profile's bands.
    - `references/tuning-run-speed.md`
    - `references/tuning-jump-apex.md`
    - `references/tuning-dash-distance.md`
-7. Run `loomtide verify --slice player-feel`.
+7. Run `loombridge verify --slice player-feel`.
 
 The player-feel proof is not just numbers. It must pass `feel`, `feel-provenance`,
 `physics-timestep`, `playability`, `manifest`, and `console-clean`.
@@ -68,8 +68,8 @@ The player-feel proof is not just numbers. It must pass `feel`, `feel-provenance
 - Keep components reusable. Gameplay-specific scoring, hazards, pickups, and win logic belong in their
   own slice scripts or event hooks, not inside the player controller.
 - Use the new Unity Input System for gameplay input. Do not add `UnityEngine.Input.GetAxis*`,
-  `GetButton*`, `GetKey*`, or `GetMouseButton*` to reusable components; Loomtide cannot input-drive
+  `GetButton*`, `GetKey*`, or `GetMouseButton*` to reusable components; Loombridge cannot input-drive
   legacy polling and will classify legacy-only projects as not input-measurable.
-- Use generic Loomtide MCP tools only. Do not introduce game-specific bridge operations.
-- After changing feel, remeasure and rerun `loomtide verify --slice player-feel`.
+- Use generic Loombridge MCP tools only. Do not introduce game-specific bridge operations.
+- After changing feel, remeasure and rerun `loombridge verify --slice player-feel`.
 - Capture provenance honestly. A numbers-only `feel.json` is refused by `feel-provenance`.

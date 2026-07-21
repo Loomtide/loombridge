@@ -20,8 +20,8 @@ import {
   safeAreaOverflow,
   type MinigameCaptureObject,
   type MinigameCaptureState,
-} from "../loomtide/minigame-gates/index.js";
-import type { MinigameContract, MinigameState } from "../loomtide/minigame-profiles/types.js";
+} from "../loombridge/minigame-gates/index.js";
+import type { MinigameContract, MinigameState } from "../loombridge/minigame-profiles/types.js";
 
 // CountFruits-shaped safe area: 5% top/bottom, 4% left/right, zero tolerance.
 const INSETS = { top: 0.05, bottom: 0.05, left: 0.04, right: 0.04 };

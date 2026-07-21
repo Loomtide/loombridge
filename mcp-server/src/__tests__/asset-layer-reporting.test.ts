@@ -61,7 +61,7 @@ test("buildPrepareDiagnostics returns stable ordering and counts", () => {
 });
 
 test("prepareAssets rejects files whose sha256 does not match registry checksum", async () => {
-  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "loomtide-reporting-checksum-"));
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "loombridge-reporting-checksum-"));
   const registry = JSON.parse(await fs.readFile(registryPath, "utf-8")) as {
     entries: Array<{ files: Array<{ localPath?: string; checksum?: { algorithm: "sha256"; value: string } }> }>;
   };
@@ -97,7 +97,7 @@ test("prepareAssets rejects files whose sha256 does not match registry checksum"
 });
 
 test("writeAttributionMarkdown renders source, provider, license, and attribution fields", async () => {
-  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "loomtide-reporting-attribution-"));
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "loombridge-reporting-attribution-"));
   const reportPath = path.join(tempDir, "report.json");
   const outputPath = path.join(tempDir, "attribution.md");
   const report: AssetPrepareReport = {

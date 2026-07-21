@@ -15,8 +15,8 @@ import {
   crossCheckGenreCueEvents,
   requiredCueIds,
   noRepeatCues,
-} from "../loomtide/sfx/cue-map.js";
-import { validateTelemetrySchema } from "../loomtide/telemetry/schema.js";
+} from "../loombridge/sfx/cue-map.js";
+import { validateTelemetrySchema } from "../loombridge/telemetry/schema.js";
 
 /** A minimal VALID cue map (one frequent cue with a compliant variant policy). */
 function baseCueMap(): Record<string, unknown> {

@@ -1,5 +1,5 @@
 /**
- * S7b — `loomtide minigame init` contract scaffold.
+ * S7b — `loombridge minigame init` contract scaffold.
  *
  * The scaffold must ALWAYS validate (a partner never starts from a broken contract),
  * carry the requested id, and the CLI must write it safely (no silent clobber).
@@ -11,9 +11,9 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import { buildScaffoldContract } from "../loomtide/minigame-scaffold.js";
-import { validateMinigameContract } from "../loomtide/minigame-profiles/validator.js";
-import { run as minigameRun } from "../loomtide/minigame.js";
+import { buildScaffoldContract } from "../loombridge/minigame-scaffold.js";
+import { validateMinigameContract } from "../loombridge/minigame-profiles/validator.js";
+import { run as minigameRun } from "../loombridge/minigame.js";
 
 async function tmpDir(): Promise<string> {
   return fs.mkdtemp(path.join(os.tmpdir(), "minigame-init-"));

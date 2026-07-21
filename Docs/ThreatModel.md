@@ -1,8 +1,8 @@
 # Loombridge Threat Model
 
 This document describes the security posture of Loombridge — the
-`com.loomtide.unitybridge` Unity package (`packages/com.loomtide.unitybridge/`) and
-the `@loomtide/cli` MCP server + `loomtide` CLI (`mcp-server/`). It is written for public consumption: what the attack surface is, what
+`com.loomtide.loombridge` Unity package (`packages/com.loomtide.loombridge/`) and
+the `@loomtide/loombridge` MCP server + `loombridge` CLI (`mcp-server/`). It is written for public consumption: what the attack surface is, what
 the design deliberately refuses to offer an attacker, and what is explicitly out of
 scope. Statements below are grounded in the shipped code; file references point at the
 enforcing implementation.
@@ -18,7 +18,7 @@ and refusable.
 ## Trust boundaries
 
 ```
- AI agent (MCP client)  ──stdio──►  MCP server / loomtide CLI  ──loopback ws/ipc──►  Unity Editor bridge plugin
+ AI agent (MCP client)  ──stdio──►  MCP server / loombridge CLI  ──loopback ws/ipc──►  Unity Editor bridge plugin
         [semi-trusted]                     [trusted, local]                           [trusted, local]
 ```
 
@@ -48,12 +48,12 @@ The bridge listens **only on loopback** (`Editor/Core/BridgeServer.cs`):
   IPv4 loopback (`IPAddress.Loopback`) fallback — never `IPAddress.Any`. Ports are
   scanned in the fixed range **8200–8210**; the last good port is cached in
   `EditorPrefs`.
-- **IPC:** on Windows, a named pipe (`\\.\pipe\loomtide-bridge-<sessionId>`). A Unix
+- **IPC:** on Windows, a named pipe (`\\.\pipe\loombridge-bridge-<sessionId>`). A Unix
   domain socket code path exists for macOS/Linux, but Unity's Mono editor runtime
   does not expose the required socket API, so in practice **IPC is Windows-only and
   macOS/Linux runs TCP loopback today** (matching `Docs/Install.md`). Both branches
   are loopback-local, so the security posture is unchanged either way. In `auto` mode
-  (`LOOMTIDE_UNITY_TRANSPORT_MODE`) the editor attempts IPC then TCP; the client
+  (`LOOMBRIDGE_UNITY_TRANSPORT_MODE`) the editor attempts IPC then TCP; the client
   discovers endpoints via the discovery file, falling back to probing the loopback
   port range.
 
@@ -72,7 +72,7 @@ runs bridge code off the command path.
 
 Each editor session publishes `endpoint-discovery-<sessionId>.json` (plus a
 `endpoint-discovery-latest.json` pointer) under a per-user temp directory
-(`<temp>/loomtide/unitybridge/`, overridable via `LOOMTIDE_ENDPOINT_DISCOVERY_DIR` /
+(`<temp>/loombridge/unitybridge/`, overridable via `LOOMBRIDGE_ENDPOINT_DISCOVERY_DIR` /
 `_FILE`). The file contains endpoint and session/project metadata so the MCP server
 can find the right editor among several — it contains **no credentials**, because the
 protocol has none to leak. Stale files are swept best-effort.
@@ -81,7 +81,7 @@ Threat to be aware of: the discovery file is *trust-on-read*. A local same-user
 attacker who can write to that temp directory could point a client at a different
 local endpoint. This is within the accepted same-user local risk (Non-goals), but it
 is why the discovery path is overridable — CI and multi-editor setups should pin
-`LOOMTIDE_ENDPOINT_DISCOVERY_FILE` explicitly.
+`LOOMBRIDGE_ENDPOINT_DISCOVERY_FILE` explicitly.
 
 ### Enforced handshake (connect and reconnect)
 
@@ -93,7 +93,7 @@ re-handshake** — this is enforced in code, not convention. The handshake carri
 side, the deterministic preflight (`preflight/prerequisite-checks.ts`) refuses a
 `PROTOCOL_MISMATCH` for the ops it gates — `runtime.*`, `input.*`, and the
 capture-critical editor ops (`editor.get_state`/`play`/`wait_for`/`screenshot`) —
-and `loomtide doctor --live` runs the same check.
+and `loombridge doctor --live` runs the same check.
 
 Honest scoping: the handshake is a **protocol and session-integrity gate, not
 authentication**. It prevents version-skewed or half-connected clients from issuing
@@ -122,7 +122,7 @@ Three surfaces deserve honest qualification:
    **`editor.execute_menu_item`** (run an editor menu item) are the bridge's two
    guarded code-execution surfaces. Both are gated by a **refuse-by-default,
    project-owner-vetted allowlist** (`Editor/Core/EditorInvokeAllowlist.cs`):
-   built-in defaults ∪ `<project>/.loomtide/editor-allowlist.json`, re-read on every
+   built-in defaults ∪ `<project>/.loombridge/editor-allowlist.json`, re-read on every
    invocation. Menu items have *no* built-in defaults — every menu item must be opted
    in explicitly; the only built-in static method is a single capture entry point.
    Anything not listed is refused with an error telling the human what to vet.
@@ -148,7 +148,7 @@ invokes its statics.
 
 ## What the CLI supervisor defends against
 
-The `loomtide` CLI's verification layer treats the driving agent as an adversary for
+The `loombridge` CLI's verification layer treats the driving agent as an adversary for
 one specific goal: **claiming "done" without earning it.** The threat model is a
 self-graded or hand-crafted verdict. Defenses (all code, not prose; see
 `ARCHITECTURE.md` §"The §3a Supervisor"):
@@ -184,7 +184,7 @@ Explicitly out of scope. These are accepted limitations, not oversights:
 
 - **Multi-tenant / shared-machine isolation.** Everything assumes one developer, one
   user account, one machine. Any process running as the same OS user can connect to
-  the loopback listener, read the discovery file, or edit `.loomtide/` state. There is
+  the loopback listener, read the discovery file, or edit `.loombridge/` state. There is
   no per-client authentication or authorization.
 - **Network-exposed bridge.** The protocol has no TLS and no auth tokens because it is
   never meant to leave loopback. Port-forwarding, tunneling, or containerizing the
@@ -207,11 +207,11 @@ Explicitly out of scope. These are accepted limitations, not oversights:
   compiled and executed by the Unity Editor. Treat a Loombridge session's file changes
   like any contributor's PR: diff, review, then commit.
 - **Keep the editor allowlist minimal.** Every entry in
-  `.loomtide/editor-allowlist.json` (static methods and menu items) is vetted code
+  `.loombridge/editor-allowlist.json` (static methods and menu items) is vetted code
   execution. Add entries deliberately; remember menu items have no defaults.
 - **Run on version-controlled projects.** Ops mutate scenes, assets, settings, and
   packages. Git is your undo and your audit log.
-- **Pin discovery in shared/CI environments.** Use `LOOMTIDE_ENDPOINT_DISCOVERY_FILE`
+- **Pin discovery in shared/CI environments.** Use `LOOMBRIDGE_ENDPOINT_DISCOVERY_FILE`
   (or `_DIR`) to bind a client to a specific editor session instead of trusting the
   "latest" pointer in a shared temp directory.
 - **Treat `package.add` like a dependency change** — it pulls third-party code into

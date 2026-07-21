@@ -4,7 +4,7 @@ import test from "node:test";
 import {
   distinctEditorProjects,
   resolveSingleEditorTarget,
-} from "../loomtide/minigame-scene-endpoint.js";
+} from "../loombridge/minigame-scene-endpoint.js";
 import type { UnityEndpointDiscoveryRecord } from "../types.js";
 
 /** A minimal live, routable discovery record for a project (one IPC endpoint, distinct pid). */
@@ -27,8 +27,8 @@ function record(
   };
 }
 
-const KIDS = "/Users/x/LoomtideGames/GameHub";
-const SHOOTER = "/Users/x/Loomtide/unity-projects/shooter-combat-dogfood";
+const KIDS = "/Users/x/LoombridgeGames/GameHub";
+const SHOOTER = "/Users/x/Loombridge/unity-projects/shooter-combat-dogfood";
 
 test("resolveSingleEditorTarget: exactly one editor → that's the target", () => {
   const r = resolveSingleEditorTarget([record(KIDS, { projectName: "GameHub" })]);
@@ -55,7 +55,7 @@ test("resolveSingleEditorTarget: two distinct projects → ambiguous, both liste
   assert.equal(!r.ok && r.projects.length, 2);
   assert.match((!r.ok && r.message) || "", /GameHub/);
   assert.match((!r.ok && r.message) || "", /shooter-combat-dogfood/);
-  assert.match((!r.ok && r.message) || "", /LOOMTIDE_TARGET_PROJECT_PATH/);
+  assert.match((!r.ok && r.message) || "", /LOOMBRIDGE_TARGET_PROJECT_PATH/);
 });
 
 test("resolveSingleEditorTarget: two editors of the SAME project → not ambiguous (same scenes)", () => {

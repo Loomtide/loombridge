@@ -3,7 +3,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { promoteGenreContract } from "../../../mcp-server/dist/loomtide/genre-contract/promote.js";
+import { promoteGenreContract } from "../../../mcp-server/dist/loombridge/genre-contract/promote.js";
 import {
   deriveTimeToKill,
   firstRisingEdge,
@@ -15,7 +15,7 @@ import {
 
 const bundleDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(bundleDir, "../../..");
-const contractPath = path.join(repoRoot, "mcp-server/src/loomtide/genre-contract/examples/2d-shooter.contract.json");
+const contractPath = path.join(repoRoot, "mcp-server/src/loombridge/genre-contract/examples/2d-shooter.contract.json");
 
 // The CANONICAL live shooter-combat-loop TTK artifact. Every other TTK artifact in this bundle is
 // superseded BY it; the promoted proof cites only this one for ttkMs.
@@ -178,7 +178,7 @@ const ttkHostLiveArtifact = {
   honesty: {
     measures:
       "LIVE first-hit edge to explicit reference-enemy death edge, sampled in Play Mode through the real " +
-      "Loomtide bridge (both rising edges; death causal on HitCount reaching MaxHits)",
+      "Loombridge bridge (both rising edges; death causal on HitCount reaching MaxHits)",
     doesNotMeasure:
       "player aim time, damage delivered by live projectile collisions, or a full shooter combat loop in a " +
       "shipped 2D-shooter build (the host project is a fixture host of convenience)"
@@ -311,7 +311,7 @@ const ttkShooterArtifact = {
   honesty: {
     measures:
       "LIVE first projectile-collision hit edge to enemy death edge in a real shooter-combat loop, sampled in " +
-      "Play Mode through the Loomtide bridge against the repo-owned shooter-combat-dogfood fixture (enemy HitCount " +
+      "Play Mode through the Loombridge bridge against the repo-owned shooter-combat-dogfood fixture (enemy HitCount " +
       "rises on DogfoodProjectile trigger collisions; IsDead is the causal consequence of Health reaching 0).",
     doesNotMeasure:
       "player aim time, or production-tuned combat balance — the fixture is a minimal, deterministic combat loop " +
@@ -433,7 +433,7 @@ const hitstopArtifact = {
     note:
       "hitstopMs is the duration of the FIRST impact hit-stop window — the rising edge (window opens on a " +
       "registered projectile hit) to the following falling edge (window closes) of the IsHitStopped signal. " +
-      "The window advances on Time.deltaTime (the fixture never alters Time.timeScale), so a pinned Loomtide " +
+      "The window advances on Time.deltaTime (the fixture never alters Time.timeScale), so a pinned Loombridge " +
       "capture gives it a deterministic, capture-clock-aligned duration. Series copied verbatim from the raw " +
       "bridge transcript; not synthesized."
   },
@@ -454,7 +454,7 @@ const hitstopArtifact = {
   honesty: {
     measures:
       "the LIVE duration of the impact hit-stop WINDOW signal (the impact-freeze interval a renderer would " +
-      "consume), sampled in Play Mode through the Loomtide bridge against the repo-owned shooter fixture.",
+      "consume), sampled in Play Mode through the Loombridge bridge against the repo-owned shooter fixture.",
     doesNotMeasure:
       "an actual rendered freeze of the editor timeline (the fixture exposes the deterministic window rather " +
       "than stalling time), nor production-tuned hit-stop balance."
@@ -499,7 +499,7 @@ const screenShakeArtifact = {
   honesty: {
     measures:
       "the LIVE peak camera displacement (world units) after a projectile impact, derived from the sampled " +
-      "Main Camera transform trajectory through the Loomtide bridge against the repo-owned shooter fixture.",
+      "Main Camera transform trajectory through the Loombridge bridge against the repo-owned shooter fixture.",
     doesNotMeasure:
       "a pixel-space shake amplitude (this is world-unit camera displacement; a px figure would depend on the " +
       "camera's orthographic size and the screen resolution), nor production-tuned shake balance."

@@ -52,7 +52,7 @@ import {
   type VerifyManifestResult,
 } from "../verification/gates/index.js";
 import type { AcceptanceContract } from "../verification/types.js";
-import { createDraftAssetManifest, type AssetManifest } from "../loomtide/asset-manifest.js";
+import { createDraftAssetManifest, type AssetManifest } from "../loombridge/asset-manifest.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -78,7 +78,7 @@ function approvedGeneratedAssetManifest(): AssetManifest {
   const heroHash = "e".repeat(64);
   const manifest = createDraftAssetManifest({
     mode: "generated",
-    heroShot: { path: ".loomtide/design/hero-shot.png", sha256: heroHash },
+    heroShot: { path: ".loombridge/design/hero-shot.png", sha256: heroHash },
   });
   manifest.status = "approved";
   manifest.approvedAt = "2026-06-05T00:00:00.000Z";
@@ -360,7 +360,7 @@ test("ui.hudCrispness: no canvas captured -> WARN (back-compat for callers witho
 // ---------------------------------------------------------------------------
 
 // A camera block that reproduces tiderunner.acceptance.json's framing.camera —
-// the raw capture writer (`loomtide capture`) enriches screen-rects.json with this.
+// the raw capture writer (`loombridge capture`) enriches screen-rects.json with this.
 const liveCamera = {
   name: "Main Camera",
   orthographic: true,
@@ -548,7 +548,7 @@ test("framing camera (no camera block): degrades to WARN, not a false green", ()
   const r = evaluateFraming({ objects: liveScreenRects.objects }, acceptance);
   const c = checkById(r, "camera.capture");
   assert.equal(c.status, "warn");
-  assert.match(c.detail, /loomtide capture/i);
+  assert.match(c.detail, /loombridge capture/i);
   assert.equal(r.verdict, "warn");
 });
 
@@ -1171,7 +1171,7 @@ test("console-clean: the IPC-fallback infra warning is allowlisted → PASS (nev
       {
         type: "warning",
         message:
-          "[UnityBridge] IPC transport unavailable in auto mode; fallback to tcp. reason: Unix domain socket API is unavailable on this runtime",
+          "[Loombridge] IPC transport unavailable in auto mode; fallback to tcp. reason: Unix domain socket API is unavailable on this runtime",
       },
     ],
   };

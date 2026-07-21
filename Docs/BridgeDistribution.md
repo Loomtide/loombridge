@@ -1,6 +1,6 @@
-# Distributing & Installing the Loomtide Unity Bridge
+# Distributing & Installing the Loombridge Unity Bridge
 
-`com.loomtide.unitybridge` is the C# half of Loomtide — the "Playwright for Unity"
+`com.loomtide.loombridge` is the C# half of Loombridge — the "Playwright for Unity"
 package that lets an AI agent see, control, and verify a Unity project over MCP.
 
 This page documents how an **external** Unity project (one that is NOT a sibling
@@ -10,7 +10,7 @@ relative path**:
 
 ```jsonc
 // unity-projects/<fixture>/Packages/manifest.json — DEV-ONLY, do not copy
-"com.loomtide.unitybridge": "file:../../../packages/com.loomtide.unitybridge"
+"com.loomtide.loombridge": "file:../../../packages/com.loomtide.loombridge"
 ```
 
 That `file:` reference is intentional for fixtures (they track the package source
@@ -20,25 +20,25 @@ that relative location**. An external clone gets a broken package ref
 the distributable options below instead.
 
 > **Just want the steps?** See [`Install.md`](Install.md) for the simplest new-machine flow.
-> The recommended path is Option A below (`loomtide install-bridge`) — the other options are for
+> The recommended path is Option A below (`loombridge install-bridge`) — the other options are for
 > specific situations.
 
 ---
 
-## Option A — Bundled tarball via `loomtide install-bridge` (recommended)
+## Option A — Bundled tarball via `loombridge install-bridge` (recommended)
 
-The `loomtide` CLI carries a versioned bridge `.tgz` and installs it into your
+The `loombridge` CLI carries a versioned bridge `.tgz` and installs it into your
 project as a **`file:` immutable dependency** — no git, no registry, no repo clone:
 
 ```bash
-loomtide install-bridge --project <unity-project-dir>
+loombridge install-bridge --project <unity-project-dir>
 ```
 
 This writes the tarball to `<project>/Packages/tarballs/` and adds:
 
 ```jsonc
 { "dependencies": {
-    "com.loomtide.unitybridge": "file:tarballs/com.loomtide.unitybridge-<ver>.tgz"
+    "com.loomtide.loombridge": "file:tarballs/com.loomtide.loombridge-<ver>.tgz"
 } }
 ```
 
@@ -47,9 +47,9 @@ This writes the tarball to `<project>/Packages/tarballs/` and adds:
   "testable", so `UNITY_INCLUDE_TESTS` stays undefined and the `nunit`-referencing
   test asmdef never compiles into the consumer (proven live — see the decision doc).
 - **Keeps the (private) monorepo private** — only the packaged bridge bytes ship,
-  inside `@loomtide/cli`. No consumer git credentials.
+  inside `@loomtide/loombridge`. No consumer git credentials.
 - **Read-only** ⇒ no "developer edited the embedded bridge" drift.
-- `loomtide update --project <p>` swaps the tarball and re-runs `doctor`.
+- `loombridge update --project <p>` swaps the tarball and re-runs `doctor`.
 - Transitive UPM deps (`com.unity.ugui`, `com.unity.2d.sprite`,
   `com.unity.nuget.newtonsoft-json`) resolve from the bridge `package.json`.
 
@@ -72,7 +72,7 @@ Add this to the consumer project's `Packages/manifest.json`:
 ```jsonc
 {
   "dependencies": {
-    "com.loomtide.unitybridge": "https://github.com/Loomtide/loombridge.git?path=/packages/com.loomtide.unitybridge#main"
+    "com.loomtide.loombridge": "https://github.com/Loomtide/loombridge.git?path=/packages/com.loomtide.loombridge#main"
   }
 }
 ```
@@ -80,7 +80,7 @@ Add this to the consumer project's `Packages/manifest.json`:
 > **Pick a ref that actually resolves.** The `#<ref>` must exist on the remote. As
 > of this writing **no `v0.2.0` release tag has been published**, so `#v0.2.0` would
 > FAIL package resolution — do not pin a tag that isn't pushed.
-> - `#main` (used above and by the `create-loomtide-game` template) resolves today
+> - `#main` (used above and by the `create-loombridge-game` template) resolves today
 >   and tracks the latest merged bridge — convenient, but **non-reproducible**.
 > - For a **reproducible** pin, use a **commit SHA** (`#<40-char-sha>`), or a
 >   **release tag once one is published**: `git tag v0.2.0 <commit> && git push origin v0.2.0`
@@ -99,7 +99,7 @@ The bridge's own UPM dependencies (`com.unity.ugui`, `com.unity.2d.sprite`,
 `com.unity.nuget.newtonsoft-json`) are declared in its `package.json` and resolve
 transitively.
 
-## Option C — Scoped registry (OpenUPM / a Loomtide registry)
+## Option C — Scoped registry (OpenUPM / a Loombridge registry)
 
 Once the package is **published** to a scoped registry, a consumer adds the
 registry + dependency:
@@ -108,30 +108,30 @@ registry + dependency:
 {
   "scopedRegistries": [
     {
-      "name": "Loomtide",
+      "name": "Loombridge",
       "url": "https://registry.loomtide.ai",
-      "scopes": ["com.loomtide"]
+      "scopes": ["com.loombridge"]
     }
   ],
   "dependencies": {
-    "com.loomtide.unitybridge": "0.2.0"
+    "com.loomtide.loombridge": "0.2.0"
   }
 }
 ```
 
 > **Status: needs a publish step.** No public scoped registry hosts the package
-> yet, so this path is documented but not usable until `com.loomtide.unitybridge`
+> yet, so this path is documented but not usable until `com.loomtide.loombridge`
 > is published (OpenUPM build pipeline, or a self-hosted Verdaccio/registry at the
 > URL above). Until then, use Option A (git-URL) — it requires no registry.
 
 ## Option D — Vendored / embedded copy (offline, no git/registry)
 
 Physically copy the package into the consumer's `Packages/` directory —
-`loomtide install-bridge --project <p> --embedded` (or the older
-`scripts/loomtide-embed-bridge.sh`):
+`loombridge install-bridge --project <p> --embedded` (or the older
+`scripts/loombridge-embed-bridge.sh`):
 
 ```bash
-loomtide install-bridge --project <unity-project-dir> --embedded
+loombridge install-bridge --project <unity-project-dir> --embedded
 ```
 
 The embed step **excludes `Tests/`** on purpose: an *embedded* (mutable) package's
@@ -147,12 +147,12 @@ Use this when the editor cannot reach git or a registry (air-gapped CI, etc.).
 
 | Situation | Use |
 |-----------|-----|
-| **Any external project (default)** | **A — `loomtide install-bridge`** (bundled tarball) |
+| **Any external project (default)** | **A — `loombridge install-bridge`** (bundled tarball) |
 | Public bridge / native UPM-git workflow | **B — git-URL** (pin a tag/SHA) |
 | Org with a published registry | **C — scoped registry** |
 | Air-gapped / vendored snapshot | **D — `install-bridge --embedded`** |
 | In-repo fixture under `unity-projects/*` | the `file:` ref (dev-only) |
 
-For a brand-new project pre-wired with Option A plus a `.loomtide/` skeleton and
-`.mcp.json`, see the template at `templates/create-loomtide-game/`
+For a brand-new project pre-wired with Option A plus a `.loombridge/` skeleton and
+`.mcp.json`, see the template at `templates/create-loombridge-game/`
 (`Docs/GettingStarted.md` links it).

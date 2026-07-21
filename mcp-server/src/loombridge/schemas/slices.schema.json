@@ -1,0 +1,130 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://loombridge.dev/schemas/slices.schema.json",
+  "title": "Loombridge Slice Plan — .loombridge/SLICES.json",
+  "description": "The slice contract (plan §'The slice contract'). PRODUCT-OWNED: the product (mcp-server) is the source of truth; individual projects do not author or version this schema. `plan` emits an ordered, dependency-aware DAG of slices for a genre; each slice is built one polished part at a time, verified, and human-approved before the next. The per-slice `proof` block is minted by that slice's `build` (plan §'Per-slice proof model') and never shares a single slot, so prior approvals stay auditable.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "genre", "slices"],
+  "properties": {
+    "schemaVersion": { "const": "1" },
+    "genre": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The genre this slice DAG was instantiated from (e.g. 'platformer-2d')."
+    },
+    "slices": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/slice" }
+    }
+  },
+  "$defs": {
+    "sliceState": {
+      "title": "Per-slice lifecycle state",
+      "description": "pending → built → verified → approved; `stale` marks a previously-approved slice invalidated by an upstream rebuild (plan §'Dependency invalidation').",
+      "enum": ["pending", "built", "verified", "approved", "stale"]
+    },
+    "proof": {
+      "title": "Per-slice proof block (minted by that slice's build)",
+      "description": "All fields optional until the slice is built; lives PER SLICE, never in a shared single slot (plan §'Per-slice proof model').",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "runId": {
+          "type": "string",
+          "description": "Slice-scoped run id, minted at build start (run-<sliceId>-<ts>-<rand>)."
+        },
+        "startedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO timestamp when the slice build was minted."
+        },
+        "verdictPath": {
+          "type": "string",
+          "description": "Per-slice verdict path, never overwritten: .loombridge/reports/slices/<sliceId>.verdict.json."
+        },
+        "captureManifest": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Paths under .loombridge/verify/<sliceId>/ that MUST exist to certify the slice."
+        },
+        "checkpointId": {
+          "type": ["string", "null"],
+          "description": "The .loombridge-fixtures/<sliceId>/ snapshot id this slice can be re-run from; null until verified."
+        },
+        "approvedAt": {
+          "type": ["string", "null"],
+          "format": "date-time",
+          "description": "Set at the human checkpoint; null until approved."
+        },
+        "approvalNote": {
+          "type": "string",
+          "description": "Optional human/operator approval note recorded at the approval seam."
+        },
+        "signoffArtifact": {
+          "type": "string",
+          "description": "Durable root-relative sign-off artifact copied under .loombridge/reports/slices/<sliceId>/."
+        },
+        "signoffSha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$",
+          "description": "sha256 of the durable sign-off artifact bytes."
+        }
+      }
+    },
+    "acceptance": {
+      "title": "Slice acceptance — which gates apply to this slice",
+      "description": "The source `verify --slice` reads (plan §'Slice scoping vs --stage'): data-driven gate selection, NOT the hardcoded --stage phase enum.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["gates"],
+      "properties": {
+        "gates": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "description": "Gate ids this slice's verify must run/pass."
+        },
+        "criteria": {
+          "type": "object",
+          "description": "Optional per-slice criteria refinements; deliberately unconstrained here.",
+          "additionalProperties": true
+        }
+      }
+    },
+    "slice": {
+      "title": "One slice entry",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "title", "dependsOn", "skill", "feelIntent", "acceptance", "state"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Unique slice id; also names the per-slice verdict/capture/fixture paths."
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1
+        },
+        "dependsOn": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "description": "Build order — `plan` walks the DAG to pick the next unblocked slice."
+        },
+        "skill": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Which skill pack/component builds this slice."
+        },
+        "feelIntent": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Genre/animation/feel notes for this slice."
+        },
+        "acceptance": { "$ref": "#/$defs/acceptance" },
+        "state": { "$ref": "#/$defs/sliceState" },
+        "proof": { "$ref": "#/$defs/proof" }
+      }
+    }
+  }
+}

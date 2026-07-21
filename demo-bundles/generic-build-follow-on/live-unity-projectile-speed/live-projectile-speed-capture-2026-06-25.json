@@ -6,7 +6,7 @@
   "source": "runtime.capture_input_motion",
   "project": {
     "projectName": "shooter-projectile-dogfood",
-    "projectPath": "/redacted/Projects/AI/Loomtide-shooter-projectile-speed/unity-projects/shooter-projectile-dogfood",
+    "projectPath": "/redacted/Projects/AI/Loombridge-shooter-projectile-speed/unity-projects/shooter-projectile-dogfood",
     "unityVersion": "6000.3.9f1"
   },
   "capture": {

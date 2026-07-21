@@ -1,4 +1,4 @@
-# Unity 2D Default Values (Loomtide)
+# Unity 2D Default Values (Loombridge)
 
 Use these as safe baseline values for demo scenes.
 

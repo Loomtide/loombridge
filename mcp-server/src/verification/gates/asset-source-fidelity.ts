@@ -3,7 +3,7 @@ import {
   validateAssetManifest,
   type AssetManifest,
   type AssetSourceType,
-} from "../../loomtide/asset-manifest.js";
+} from "../../loombridge/asset-manifest.js";
 import { makeGateReport, type GateCheck, type GateReport } from "./types.js";
 
 export const GATE_NAME = "asset-source-fidelity";

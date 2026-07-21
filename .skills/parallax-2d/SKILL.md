@@ -11,7 +11,7 @@ description: >-
   texture-offset scrolling on a STATIC frame-covering quad (the quad never
   moves, so a texture start/end edge is never exposed and the loop is perfectly
   seamless), authored as a drop-in `ParallaxLayer` C# component and wired via
-  generic Loomtide MCP tools. Supersedes the transform-translation
+  generic Loombridge MCP tools. Supersedes the transform-translation
   `BackdropDrift` approach (which snapped the backdrop sideways and exposed a
   gap of bare camera background).
 ---
@@ -20,7 +20,7 @@ Use this skill to add a scrolling or parallax background to any 2D game and have
 
 ## Manifest Asset Bindings
 
-Before importing or assigning background art, read `.loomtide/ASSET_MANIFEST.json` and the current
+Before importing or assigning background art, read `.loombridge/ASSET_MANIFEST.json` and the current
 slice's `sliceBindings` entry. The `parallax` slice uses `parallax_background` and `foreground_prop`;
 the `framing` slice may also reference those IDs for composition. Use each bound asset's
 `resolvedPaths` and provenance exactly as recorded. Do not search the registry or swap in a different
@@ -63,7 +63,7 @@ The robust fix the user chose: **texture-offset scrolling on a static quad.** A 
 - `references/parallax-layer.md` — **`ParallaxLayer`**: the full C# component source (texture-offset scroll on a static quad), all three modes (`AmbientDrift` / `TargetFollow` / `CameraFollow`), the TargetFollow world→texture-offset mapping, and *why* it is edge-safe and seamless. Start here.
 - `references/setup-recipe.md` — the MCP build recipe: create the quad + material per layer, import the texture with **wrapMode = Repeat / filterMode = Point**, set `mainTextureScale` to tile it, **size the quad to cover the camera frame**, and place it on a back sorting order / z.
 - `references/multi-layer.md` — stacking several `ParallaxLayer` quads for depth: far/slow → near/fast factors (per-layer, both axes), distinct sortingOrder/z (far behind near). Static-camera **player-driven** (TargetFollow) vs ambient drift vs camera-follow.
-- `references/verification.md` — verify it deterministically: the Loomtide **coverage** gate is unaffected (static quad → constant bounds). The **parallax-motion** gate verifies TargetFollow depth by driving the player with `runtime.probe` and checking each layer's `mainTextureOffset` changes proportionally to player displacement × its factor (far layer least), is constant when the player is idle, and has distinct active-axis motion across layers.
+- `references/verification.md` — verify it deterministically: the Loombridge **coverage** gate is unaffected (static quad → constant bounds). The **parallax-motion** gate verifies TargetFollow depth by driving the player with `runtime.probe` and checking each layer's `mainTextureOffset` changes proportionally to player displacement × its factor (far layer least), is constant when the player is idle, and has distinct active-axis motion across layers.
 
 ## Workflow
 

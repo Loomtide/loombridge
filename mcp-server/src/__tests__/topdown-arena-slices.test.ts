@@ -1,7 +1,7 @@
 /**
  * The seed `3d-topdown-arena` slice grammar loads clean and holds its provenance
  * discipline. Mirrors `telemetry-schema.test.ts` (a pack artifact self-validates)
- * and `loomtide-slices.test.ts` (the shipped template is schema-valid). The pack
+ * and `loombridge-slices.test.ts` (the shipped template is schema-valid). The pack
  * is a GATED CANDIDATE — it is deliberately NOT registered in `genre-registry`, so
  * this pack-level test is how its `slices.json` is consumed + guarded, the same way
  * `telemetry-schema.test.ts` guards its `telemetry.json`.
@@ -12,12 +12,12 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
 
-import { assertValidSlicePlan, SLICES_SCHEMA_VERSION } from "../loomtide/slices.js";
+import { assertValidSlicePlan, SLICES_SCHEMA_VERSION } from "../loombridge/slices.js";
 
 const SLICES_PATH = path.join(
   process.cwd(),
   "src",
-  "loomtide",
+  "loombridge",
   "genre-packs",
   "3d-topdown-arena",
   "slices.json",
@@ -197,7 +197,7 @@ test("3d-topdown-arena — every derive* calculator named in a binding is a real
 });
 
 test("3d-topdown-arena — every telemetry name in a binding exists in the shipped telemetry.json seed", async () => {
-  const { telemetrySchemaPathForGenre } = await import("../loomtide/telemetry/schema.js");
+  const { telemetrySchemaPathForGenre } = await import("../loombridge/telemetry/schema.js");
   const telemetryPath = telemetrySchemaPathForGenre("3d-topdown-arena");
   assert.ok(telemetryPath, "telemetry.json resolves for the pack");
   const telemetry = JSON.parse(await fs.readFile(telemetryPath!, "utf8")) as {

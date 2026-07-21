@@ -33,15 +33,15 @@ import {
   runDoneness,
   wholeGameDonenessReasons,
   type VerdictLike,
-} from "../loomtide/doneness.js";
+} from "../loombridge/doneness.js";
 import { validateAcceptanceContract } from "../verification/validator.js";
-import { runPlan } from "../loomtide/plan.js";
-import { runVerify } from "../loomtide/verify.js";
-import { loomtidePaths } from "../loomtide/state.js";
+import { runPlan } from "../loombridge/plan.js";
+import { runVerify } from "../loombridge/verify.js";
+import { loombridgePaths } from "../loombridge/state.js";
 import type { GateCheck, CheckStatus } from "../verification/gates/types.js";
 
 async function tmpRoot(): Promise<string> {
-  return fs.mkdtemp(path.join(os.tmpdir(), "loomtide-evidence-"));
+  return fs.mkdtemp(path.join(os.tmpdir(), "loombridge-evidence-"));
 }
 
 /** Build a minimal verdict view: a real check per gate + a status map. */
@@ -227,7 +227,7 @@ test("a stored `present` that AGREES with re-derivation earns no refusal (strict
 // ── 2c. fail-closed contract read (D2): malformed contract cannot disarm ─────
 
 test("readRequiredEvidenceClasses: ENOENT ⇒ [] (absent contract stays other layers' refusal, no gate here)", async () => {
-  const read = await readRequiredEvidenceClasses(path.join(os.tmpdir(), "loomtide-evidence-nonexistent", "ACCEPTANCE.json"));
+  const read = await readRequiredEvidenceClasses(path.join(os.tmpdir(), "loombridge-evidence-nonexistent", "ACCEPTANCE.json"));
   assert.deepEqual(read, []);
 });
 
@@ -338,7 +338,7 @@ test("validator: absent requiredEvidenceClasses is fine (backward compat)", () =
 
 /** Inject requiredEvidenceClasses into the runPlan-seeded ACCEPTANCE.json. */
 async function injectRequired(root: string, classes: string[]): Promise<void> {
-  const paths = loomtidePaths(root);
+  const paths = loombridgePaths(root);
   const contract = JSON.parse(await fs.readFile(paths.acceptance, "utf-8")) as Record<string, unknown>;
   const verification = (contract.verification as Record<string, unknown> | undefined) ?? {};
   verification.requiredEvidenceClasses = classes;
@@ -350,7 +350,7 @@ test("runVerify writes the evidenceClasses block into build-verdict.json (all cl
   const root = await tmpRoot();
   try {
     await runPlan({ root, genre: "platformer-2d", engine: "unity", force: false, allowMissingDesignTarget: true });
-    const paths = loomtidePaths(root);
+    const paths = loombridgePaths(root);
     // Stage a CLEAN console capture so console_clean reads present.
     await fs.mkdir(paths.verifyInputs, { recursive: true });
     await fs.writeFile(path.join(paths.verifyInputs, "console.json"), JSON.stringify({ logs: [] }), "utf-8");
@@ -383,7 +383,7 @@ test("doneness REFUSES when the contract requires an ABSENT evidence class, PASS
   const root = await tmpRoot();
   try {
     await runPlan({ root, genre: "platformer-2d", engine: "unity", force: false, allowMissingDesignTarget: true });
-    const paths = loomtidePaths(root);
+    const paths = loombridgePaths(root);
     await fs.mkdir(paths.verifyInputs, { recursive: true });
     await fs.writeFile(path.join(paths.verifyInputs, "console.json"), JSON.stringify({ logs: [] }), "utf-8");
     await runVerify({
@@ -426,7 +426,7 @@ test("doneness REFUSES a real verdict whose evidenceClasses block was hand-edite
   const root = await tmpRoot();
   try {
     await runPlan({ root, genre: "platformer-2d", engine: "unity", force: false, allowMissingDesignTarget: true });
-    const paths = loomtidePaths(root);
+    const paths = loombridgePaths(root);
     await fs.mkdir(paths.verifyInputs, { recursive: true });
     await fs.writeFile(path.join(paths.verifyInputs, "console.json"), JSON.stringify({ logs: [] }), "utf-8");
     await runVerify({
@@ -457,7 +457,7 @@ test("a truncated ACCEPTANCE.json refuses on BOTH doneness surfaces (runDoneness
   const root = await tmpRoot();
   try {
     await runPlan({ root, genre: "platformer-2d", engine: "unity", force: false, allowMissingDesignTarget: true });
-    const paths = loomtidePaths(root);
+    const paths = loombridgePaths(root);
     await injectRequired(root, ["console_clean"]);
     // Corrupt the contract AFTER the gate was declared — this must not disarm it.
     await fs.writeFile(paths.acceptance, "{ \"schemaVersion\": 1, \"game\": \"trunc", "utf-8");

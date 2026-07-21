@@ -5,7 +5,7 @@ import type {
   NumericTarget,
 } from "./types.js";
 import { ACCEPTANCE_SCHEMA_VERSION } from "./types.js";
-import { isSafeCapturePath } from "../loomtide/capture-paths.js";
+import { isSafeCapturePath } from "../loombridge/capture-paths.js";
 import { EVIDENCE_CLASS_SET, EVIDENCE_CLASSES } from "./gates/evidence-classes.js";
 
 const HEX_PATTERN = /^#[0-9a-fA-F]{6}$/;
@@ -586,7 +586,7 @@ export function validateAcceptanceContract(input: unknown): AcceptanceValidation
           stateEntry.name === ".."
         ) {
           // The state name is concatenated into capture paths under
-          // `.loomtide/verify/<name>/`; a `/`, `\`, `.`, or `..` here would
+          // `.loombridge/verify/<name>/`; a `/`, `\`, `.`, or `..` here would
           // let the contract escape that directory at mint time.
           push(
             issues,

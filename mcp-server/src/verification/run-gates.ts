@@ -82,12 +82,12 @@ import {
 import type { BuildVerdict, CheckStatus } from "./gates/types.js";
 import { assertValidAcceptanceContract } from "./validator.js";
 import type { AcceptanceContract, SfxVerificationSection } from "./types.js";
-import { validateCueMapSchema, type CueMapSchema } from "../loomtide/sfx/cue-map.js";
+import { validateCueMapSchema, type CueMapSchema } from "../loombridge/sfx/cue-map.js";
 import type {
   SfxAssetBindingCapture,
   SfxLatencyCapture,
   SfxSequenceCapture,
-} from "../loomtide/sfx/capture-shapes.js";
+} from "../loombridge/sfx/capture-shapes.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Input-file → evaluator map (the captured-op-output contract)
@@ -295,7 +295,7 @@ export interface ReviewCriterion {
 /** The advisory review-findings block, merged under `reviewFindings`. */
 export interface ReviewFindings {
   /**
-   * What the review compared against (plan §P0.1). `loomtide doneness` requires
+   * What the review compared against (plan §P0.1). `loombridge doneness` requires
    * `reference.heroShotSha256` to equal the verdict's `designTarget.pngSha256`
    * before it certifies a design-targeted build — proof the review judged the
    * hero-shot IMAGE, not contract attributes.

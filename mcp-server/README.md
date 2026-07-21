@@ -1,12 +1,12 @@
-# Loomtide MCP Server
+# Loombridge MCP Server
 
-Loomtide is game-feel engineering for AI-built games ([loomtide.ai](https://loomtide.ai)). This package is its Unity bridge — the "Playwright for Unity" mechanism: an MCP server that exposes Unity editor operations as tools over stdio, enabling Claude Code (or any MCP-compatible client) to create objects, write scripts, capture screenshots, drive input, and verify running games without touching the Unity GUI.
+Loombridge is game-feel engineering for AI-built games, by [Loomtide](https://loomtide.ai). This package is its Unity bridge — the "Playwright for Unity" mechanism: an MCP server that exposes Unity editor operations as tools over stdio, enabling Claude Code (or any MCP-compatible client) to create objects, write scripts, capture screenshots, drive input, and verify running games without touching the Unity GUI.
 
 ## Prerequisites
 
 - **Node.js** >= 18
-- **Unity 6000.3 LTS (primary target)** with Loomtide package project(s):  
-  `unity-projects/loomtide-dev` for package validation and `unity-projects/demo-platformer` for demo playtesting  
+- **Unity 6000.3 LTS (primary target)** with Loombridge package project(s):  
+  `unity-projects/loombridge-dev` for package validation and `unity-projects/demo-platformer` for demo playtesting  
   (Unity 2022.3 LTS is also supported as a compatibility target)
 - **Claude Code** (or any MCP-compatible client)
 
@@ -20,7 +20,7 @@ Loomtide is game-feel engineering for AI-built games ([loomtide.ai](https://loom
 2. **Configure Claude Code** -- add the MCP server to your settings (see below).
 
 3. **Open your Unity project**:
-   - `unity-projects/loomtide-dev` for package/EditMode validation
+   - `unity-projects/loombridge-dev` for package/EditMode validation
    - `unity-projects/demo-platformer` for demo playtesting
    The bridge starts a WebSocket server on ports 8200-8210.
 
@@ -30,27 +30,27 @@ Loomtide is game-feel engineering for AI-built games ([loomtide.ai](https://loom
 
 The Unity client uses transport-aware discovery before legacy port probing.
 
-- `LOOMTIDE_UNITY_TRANSPORT_MODE=auto|ipc|tcp`
+- `LOOMBRIDGE_UNITY_TRANSPORT_MODE=auto|ipc|tcp`
   - `auto` (default): endpoint discovery (`ipc` first, then discovered `tcp`), then legacy TCP probe (`8200-8210`)
   - `ipc`: requires endpoint discovery with IPC endpoint(s); fails fast if missing
   - `tcp`: discovered TCP endpoints first, then legacy TCP probe fallback
-- `LOOMTIDE_ENDPOINT_DISCOVERY_DIR`: override directory for discovery files
-- `LOOMTIDE_ENDPOINT_DISCOVERY_FILE`: override explicit discovery file path
+- `LOOMBRIDGE_ENDPOINT_DISCOVERY_DIR`: override directory for discovery files
+- `LOOMBRIDGE_ENDPOINT_DISCOVERY_FILE`: override explicit discovery file path
 
 Default discovery location:
-- `<os-temp>/loomtide/unitybridge/endpoint-discovery-latest.json`
+- `<os-temp>/loombridge/unitybridge/endpoint-discovery-latest.json`
 
-Unity writes this file from BridgeServer and logs `[UnityBridge] Published endpoint discovery (...)`.
+Unity writes this file from BridgeServer and logs `[Loombridge] Published endpoint discovery (...)`.
 
 ## Bridge Startup Checklist
 
 Use this same checklist on both Unity `6000.3 LTS` (primary) and `2022.3 LTS` (compatibility):
 
 1. Open the Unity project and wait for bridge startup logs:
-   - `[UnityBridge] Bootstrap initializing`
-   - `[UnityBridge] Server started on ws://localhost:82xx`
-   - `[UnityBridge] Network intent: loopback only via ws://localhost:82xx, ws://127.0.0.1:82xx, ws://[::1]:82xx`
-   - `[UnityBridge] Published endpoint discovery (sessionId: ..., expiresAtUnixMs: ...)`
+   - `[Loombridge] Bootstrap initializing`
+   - `[Loombridge] Server started on ws://localhost:82xx`
+   - `[Loombridge] Network intent: loopback only via ws://localhost:82xx, ws://127.0.0.1:82xx, ws://[::1]:82xx`
+   - `[Loombridge] Published endpoint discovery (sessionId: ..., expiresAtUnixMs: ...)`
 2. Run a disconnected baseline first when validating reliability:
    ```bash
    npm run smoke:phase3:disconnected
@@ -88,7 +88,7 @@ Add this to your Claude Code MCP settings (replace the path with your actual ins
 ```json
 {
   "mcpServers": {
-    "loomtide": {
+    "loombridge": {
       "command": "node",
       "args": ["/absolute/path/to/mcp-server/dist/index.js"]
     }
@@ -115,7 +115,7 @@ Add this to your Claude Code MCP settings (replace the path with your actual ins
 | Capture   | 1  | static-method capture invocation (gate evidence) |
 | Ops       | 1  | `unity_ops_batch` — batch multiple ops in one round-trip |
 
-All op tool names are prefixed with `unity_` (e.g., `unity_scene_create_object`). Two additional session-routing tools sit outside the op registry: `loomtide_editor_list` / `loomtide_editor_use` (multi-editor targeting; auto-binding via `LOOMTIDE_UNITY_PROJECT`).
+All op tool names are prefixed with `unity_` (e.g., `unity_scene_create_object`). Two additional session-routing tools sit outside the op registry: `loombridge_editor_list` / `loombridge_editor_use` (multi-editor targeting; auto-binding via `LOOMBRIDGE_UNITY_PROJECT`).
 
 ## Input Playtesting Flow
 
@@ -188,7 +188,7 @@ Report contract highlights:
 
 ## Asset Layer Platformer Scenario
 
-The v0.11.0 asset layer prepares curated CC0 platformer sprites into a local cache and generates a scenario that imports them with generic Loomtide tools.
+The v0.11.0 asset layer prepares curated CC0 platformer sprites into a local cache and generates a scenario that imports them with generic Loombridge tools.
 
 From `mcp-server/`:
 
@@ -250,15 +250,15 @@ Local command support:
 ```bash
 node dist/asset-layer/browser-payload.js --profile ../asset-layer/profiles/2d-platformer.json --catalog ../asset-layer/catalog-fixtures/platformer-catalog.json --output ../demo/.artifacts/asset-browser-payload.json
 node dist/asset-layer/prepare-cli.js --profile ../asset-layer/profiles/2d-platformer.json --catalog ../asset-layer/catalog-fixtures/platformer-catalog.json --output ../demo/.artifacts/platformer-assets.json --cache ../demo/.artifacts/asset-cache
-node dist/loomtide/assets.js registry-plan --catalog ../asset-layer/catalog-fixtures/platformer-catalog.json --profile ../asset-layer/profiles/2d-platformer.json
-node dist/loomtide/assets.js registry-apply --catalog ../asset-layer/catalog-fixtures/platformer-catalog.json --profile ../asset-layer/profiles/2d-platformer.json --selections <json> --approved-at <iso>
-node dist/loomtide/assets.js registry-apply --catalog-api <hosted-catalog-url> --profile ../asset-layer/profiles/2d-platformer.json --from-selection <web-selection.json> --approved-at <iso>
+node dist/loombridge/assets.js registry-plan --catalog ../asset-layer/catalog-fixtures/platformer-catalog.json --profile ../asset-layer/profiles/2d-platformer.json
+node dist/loombridge/assets.js registry-apply --catalog ../asset-layer/catalog-fixtures/platformer-catalog.json --profile ../asset-layer/profiles/2d-platformer.json --selections <json> --approved-at <iso>
+node dist/loombridge/assets.js registry-apply --catalog-api <hosted-catalog-url> --profile ../asset-layer/profiles/2d-platformer.json --from-selection <web-selection.json> --approved-at <iso>
 ```
 
 Implementation rules:
 
 - Keep tests deterministic and offline by using fixture JSON/JSONL shards or stubbed fetch.
-- Query the registry/backend, present choices to the user, and write `.loomtide/ASSET_MANIFEST.json`
+- Query the registry/backend, present choices to the user, and write `.loombridge/ASSET_MANIFEST.json`
   only through project-local approval flow.
 - Web asset-browser exports are read-only inputs. `registry-apply --from-selection` maps them to
   manifest slots by exact role first, then primitive fallback; it refuses ambiguous mappings,
@@ -267,10 +267,10 @@ Implementation rules:
 - Do not let slices silently search the registry or substitute assets outside the approved manifest.
 - Prefer GitHub raw/local cache for the current private seed; later hosted storage/CDN URLs can be added
   without changing asset ids or checksums.
-- Use `LOOMTIDE_ASSET_CATALOG_URL` to point hosted catalog reads at a private GitHub raw shard or
+- Use `LOOMBRIDGE_ASSET_CATALOG_URL` to point hosted catalog reads at a private GitHub raw shard or
   later backend endpoint without changing deterministic fixture tests.
-- Use `LOOMTIDE_ASSET_REGISTRY_TOKEN`, `GITHUB_TOKEN`, or `GH_TOKEN` for private GitHub catalog/file
-  reads. Loomtide attaches the bearer token only to GitHub hosts, not arbitrary provider downloads.
+- Use `LOOMBRIDGE_ASSET_REGISTRY_TOKEN`, `GITHUB_TOKEN`, or `GH_TOKEN` for private GitHub catalog/file
+  reads. Loombridge attaches the bearer token only to GitHub hosts, not arbitrary provider downloads.
 
 ## Cross-Project Scenario Matrix
 
@@ -280,20 +280,20 @@ Profile registry:
 - `demo/scenarios/cross-project/profiles.json`
 
 Project profiles:
-- `loomtide-dev` -> `unity-projects/loomtide-dev`
+- `loombridge-dev` -> `unity-projects/loombridge-dev`
 - `demo-platformer` -> `unity-projects/demo-platformer`
 
 Commands from `mcp-server/`:
 
 ```bash
-npm run matrix:cross-project:loomtide-dev
+npm run matrix:cross-project:loombridge-dev
 npm run matrix:cross-project:demo-platformer
 ```
 
 Direct script form:
 
 ```bash
-node ../scripts/phase3-cross-project-matrix.mjs --mode both --unity-version 6000.3 --profile loomtide-dev --output ../demo/.artifacts/03-matrix-loomtide-dev.json
+node ../scripts/phase3-cross-project-matrix.mjs --mode both --unity-version 6000.3 --profile loombridge-dev --output ../demo/.artifacts/03-matrix-loombridge-dev.json
 node ../scripts/phase3-cross-project-matrix.mjs --mode both --unity-version 6000.3 --profile demo-platformer --output ../demo/.artifacts/03-matrix-demo-platformer.json
 ```
 
@@ -318,7 +318,7 @@ npm run smoke:phase3:disconnected  # MCP smoke check without Unity
 npm run smoke:phase3:connected     # MCP smoke check with Unity running
 npm run matrix:phase3:6000.3       # disconnected+connected reliability matrix for Unity 6000.3
 npm run matrix:phase3:2022.3       # disconnected+connected reliability matrix for Unity 2022.3
-npm run matrix:cross-project:loomtide-dev  # profile-based cross-project matrix (package-dev project)
+npm run matrix:cross-project:loombridge-dev  # profile-based cross-project matrix (package-dev project)
 npm run matrix:cross-project:demo-platformer   # profile-based cross-project matrix (demo consumer project)
 npm run verify:phase3:asset-layer     # v0.11.0 build + tests + asset-layer offline gate
 npm run asset:platformer:prepare          # prepare/cache curated platformer assets
@@ -334,13 +334,13 @@ Matrix status interpretation:
 - `fail`: unexpected runtime/tooling failure that must be investigated before closeout.
 
 Connected blocker interpretation:
-- `ECONNREFUSED_NO_LISTENER`: UnityBridge listener is not running/reachable (open Unity and wait for `[UnityBridge] Server started ...`).
+- `ECONNREFUSED_NO_LISTENER`: UnityBridge listener is not running/reachable (open Unity and wait for `[Loombridge] Server started ...`).
 - `EPERM_LOOPBACK`: host policy blocks loopback sockets; rerun on a host where loopback probing is allowed.
 
 ## Troubleshooting
 
 - **CONNECTION_ERROR**: run `npm run verify:phase3:baseline`, then run `npm run matrix:phase3:6000.3` and `npm run matrix:phase3:2022.3` to capture blocker signatures/remediation hints (`EPERM_LOOPBACK`, `ECONNREFUSED_NO_LISTENER`, `TIMEOUT_CONNECT`) for both `6000.3` and `2022.3`.
-- **Bridge startup logs missing**: verify Unity console shows `[UnityBridge] Bootstrap initializing` and `[UnityBridge] Server started on ws://...`.
+- **Bridge startup logs missing**: verify Unity console shows `[Loombridge] Bootstrap initializing` and `[Loombridge] Server started on ws://...`.
 - **Port conflicts**: the plugin scans ports 8200-8210. Ensure no other process is bound to those ports.
 - **Build errors**: Verify Node.js >= 18 with `node --version`.
 - **Compilation wait**: After creating/modifying scripts, use `unity_editor_wait_for` with `compiling: false` before attaching or testing.

@@ -1,5 +1,5 @@
 /**
- * `loomtide minigame setup` — guided onboarding wrapper.
+ * `loombridge minigame setup` — guided onboarding wrapper.
  *
  * It must: lay out the external workspace, scaffold a VALID contract pointed at the
  * supplied scene/visual-profile, refuse to clobber a contract without
@@ -13,7 +13,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import { run as minigameRun } from "../loomtide/minigame.js";
+import { run as minigameRun } from "../loombridge/minigame.js";
 import {
   WORKSPACE_SUBDIRS,
   buildNextStepsChecklist,
@@ -22,8 +22,8 @@ import {
   resolveSetupConfig,
   runSetup,
   sanitizeToId,
-} from "../loomtide/minigame-setup.js";
-import { validateMinigameContract } from "../loomtide/minigame-profiles/validator.js";
+} from "../loombridge/minigame-setup.js";
+import { validateMinigameContract } from "../loombridge/minigame-profiles/validator.js";
 
 async function tmpDir(): Promise<string> {
   return fs.mkdtemp(path.join(os.tmpdir(), "minigame-setup-"));
@@ -190,15 +190,15 @@ test("setup prints just the FIRST command (record) + the guided-next pointer, no
   // The single first step: record (flat workspace layout).
   assert.ok(
     out.includes(
-      `loomtide trace record --observe --flat --id count-the-fruits-happy-path --scene Assets/Scenes/count-the-fruits.unity --root ${ws}`,
+      `loombridge trace record --observe --flat --id count-the-fruits-happy-path --scene Assets/Scenes/count-the-fruits.unity --root ${ws}`,
     ),
     `record line missing:\n${out}`,
   );
   // ...and a pointer to the guided resolver for every later step.
-  assert.ok(out.includes("loomtide minigame next --id count-the-fruits"), `next pointer missing:\n${out}`);
+  assert.ok(out.includes("loombridge minigame next --id count-the-fruits"), `next pointer missing:\n${out}`);
   // NOT a static dump of the downstream steps (those are resolved one at a time now).
-  assert.equal(out.includes("loomtide minigame capture"), false, `must not dump the capture step up front:\n${out}`);
-  assert.equal(out.includes("loomtide minigame finalize"), false, out);
+  assert.equal(out.includes("loombridge minigame capture"), false, `must not dump the capture step up front:\n${out}`);
+  assert.equal(out.includes("loombridge minigame finalize"), false, out);
   assert.equal(out.includes("baseline approve"), false, out);
 
   await fs.rm(root, { recursive: true, force: true });
@@ -247,7 +247,7 @@ test("sanitizeToId / defaultWorkspace helpers", () => {
   // Unity project can't drop artifacts into the game repo.
   assert.equal(
     defaultWorkspace("g"),
-    path.join(os.homedir(), ".loomtide", "projects", "g"),
+    path.join(os.homedir(), ".loombridge", "projects", "g"),
   );
 });
 
@@ -259,17 +259,17 @@ test("setup refuses a workspace inside the Unity project (exit 2, keeps repo cle
   const code = await runSetup(
     ["--id", "g", "--project", project, "--scene", "Assets/Scenes/g.unity",
      "--visual-profile", "phone-portrait",
-     "--workspace", path.join(project, ".loomtide", "g")],
+     "--workspace", path.join(project, ".loombridge", "g")],
     root,
   );
   assert.equal(code, 2);
   // Nothing scaffolded under the project.
-  await assert.rejects(fs.stat(path.join(project, ".loomtide", "g", "g.minigame.json")));
+  await assert.rejects(fs.stat(path.join(project, ".loombridge", "g", "g.minigame.json")));
   await fs.rm(root, { recursive: true, force: true });
 });
 
 test("isInside detects project containment (incl. exact match)", () => {
-  assert.equal(isInside("/proj/.loomtide/g", "/proj"), true);
+  assert.equal(isInside("/proj/.loombridge/g", "/proj"), true);
   assert.equal(isInside("/proj", "/proj"), true);
   assert.equal(isInside("/elsewhere/ws", "/proj"), false);
   assert.equal(isInside("/proj-sibling", "/proj"), false); // prefix, not contained
@@ -288,8 +288,8 @@ test("buildNextStepsChecklist prints only the first command (record) + the guide
     "/root",
   );
   const joined = lines.join("\n");
-  assert.match(joined, /loomtide trace record .*--root \/root\/ws/);
-  assert.match(joined, /loomtide minigame next --id g/);
+  assert.match(joined, /loombridge trace record .*--root \/root\/ws/);
+  assert.match(joined, /loombridge minigame next --id g/);
   // Single first step — the downstream commands are resolved one at a time, not dumped here.
-  assert.equal(joined.includes("loomtide minigame capture"), false, joined);
+  assert.equal(joined.includes("loombridge minigame capture"), false, joined);
 });

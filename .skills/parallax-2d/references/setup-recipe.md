@@ -1,6 +1,6 @@
 # Setup recipe: build a parallax layer over MCP
 
-How to assemble one `ParallaxLayer` quad through Loomtide MCP. Repeat this per depth layer (see
+How to assemble one `ParallaxLayer` quad through Loombridge MCP. Repeat this per depth layer (see
 `multi-layer.md` for stacking). The load-bearing rule: the quad must **cover the whole camera frame**
 and the texture must be a **Repeat** wrap, so the scroll is edge-safe and seamless.
 

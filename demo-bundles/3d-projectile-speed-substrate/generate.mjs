@@ -161,7 +161,7 @@ const artifact = {
   honesty: {
     measures:
       "the LIVE speed of a measurement projectile flying purely along +Z, derived from the true {x,y,z} trajectory " +
-      "the Loomtide bridge samples, in the repo-owned 3D shooter fixture.",
+      "the Loombridge bridge samples, in the repo-owned 3D shooter fixture.",
     doesNotMeasure:
       "projectile drop/gravity, real combat-projectile collision speed (the measurement projectile is a separate, " +
       "non-damaging tracer), look/recoil/ADS rotation, or production-tuned ballistics. Rotation-dependent 3D metrics " +

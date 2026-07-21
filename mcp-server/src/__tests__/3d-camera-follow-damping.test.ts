@@ -229,7 +229,7 @@ test("(e) 3d-topdown-arena framing profile validates and declares TOP-DOWN (not 
   const repoRoot = path.resolve(__dirname, "../../..");
   const acceptancePath = path.join(
     repoRoot,
-    "mcp-server/src/loomtide/genre-packs/3d-topdown-arena/acceptance.json",
+    "mcp-server/src/loombridge/genre-packs/3d-topdown-arena/acceptance.json",
   );
   const text = await fs.readFile(acceptancePath, "utf-8");
   const contract = JSON.parse(text) as AcceptanceContract & Record<string, unknown>;

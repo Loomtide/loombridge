@@ -1,20 +1,20 @@
 #!/usr/bin/env bash
 #
-# new-raw-project.sh — scaffold a NO-LOOMTIDE Unity project for the A/B value
+# new-raw-project.sh — scaffold a NO-LOOMBRIDGE Unity project for the A/B value
 # experiment: a "raw" Claude Code session gets the SAME design brief + the SAME
-# an identical Unity starting project, but NO Loomtide bridge, NO MCP
+# an identical Unity starting project, but NO Loombridge bridge, NO MCP
 # server, NO skills. It is the honest "vanilla Claude Code given the spec"
 # counterfactual — the agent can edit files but cannot see, drive, or verify Unity.
 #
 # Created OUTSIDE the repo by default so the session gets an empty memory namespace
 # (no run-learnings priming) and physically cannot read demo-platformer / the skills
 # / the acceptance contract. For Switchyard, the raw arm also does not get the curated
-# Loomtide registry files; it must source, draw, or generate assets itself from the brief.
+# Loombridge registry files; it must source, draw, or generate assets itself from the brief.
 #
 # Usage:
 #   scripts/new-raw-project.sh [name] [--dest=PATH] [--force] [--brief=PATH] [--no-assets]
 #     name         project folder name (default: tiderunner-raw)
-#     --dest=PATH  where to create it (default: $HOME/loomtide-raw-experiment/<name>)
+#     --dest=PATH  where to create it (default: $HOME/loombridge-raw-experiment/<name>)
 #     --force      delete and recreate if it already exists
 #     --brief=PATH design brief to copy in as BUILD-BRIEF.md
 #                  (no default shipped in this repo; relative paths resolve from repo root — omit
@@ -47,7 +47,7 @@ for arg in "$@"; do
   esac
 done
 
-PROJ="${DEST:-$HOME/loomtide-raw-experiment/$NAME}"
+PROJ="${DEST:-$HOME/loombridge-raw-experiment/$NAME}"
 
 if [ ! -d "$TEMPLATE/ProjectSettings" ]; then
   echo "ERROR: template ProjectSettings not found at $TEMPLATE/ProjectSettings" >&2
@@ -64,11 +64,11 @@ if [ -d "$PROJ" ]; then
   fi
 fi
 
-echo "Scaffolding RAW (no-Loomtide) project -> $PROJ ..."
+echo "Scaffolding RAW (no-Loombridge) project -> $PROJ ..."
 mkdir -p "$PROJ/Assets" "$PROJ/Packages" "$PROJ/ProjectSettings" "$PROJ/_Design"
 : > "$PROJ/Assets/.gitkeep"
 
-# Identical standard 2D package set to the Loomtide arm, MINUS com.loomtide.unitybridge.
+# Identical standard 2D package set to the Loombridge arm, MINUS com.loomtide.loombridge.
 cat > "$PROJ/Packages/manifest.json" <<'JSON'
 {
   "dependencies": {
@@ -83,15 +83,15 @@ cat > "$PROJ/Packages/manifest.json" <<'JSON'
 }
 JSON
 
-# Same editor config as the Loomtide arm (Input System, 2D physics, built-in RP, ProjectVersion).
-# Skip EditorBuildSettings (empty scene list) and packages-lock (it pins the loomtide file: dep).
+# Same editor config as the Loombridge arm (Input System, 2D physics, built-in RP, ProjectVersion).
+# Skip EditorBuildSettings (empty scene list) and packages-lock (it pins the loombridge file: dep).
 cp -R "$TEMPLATE/ProjectSettings/." "$PROJ/ProjectSettings/"
 rm -f "$PROJ/ProjectSettings/EditorBuildSettings.asset"
 if [ -f "$PROJ/ProjectSettings/ProjectSettings.asset" ]; then
   perl -0pi -e "s/productName: demo-platformer/productName: $NAME/g; s/metroPackageName: demo-platformer/metroPackageName: $NAME/g; s/metroApplicationDescription: demo-platformer/metroApplicationDescription: $NAME/g" "$PROJ/ProjectSettings/ProjectSettings.asset"
 fi
 
-# Same provided font input as the Loomtide arm when the brief permits it. For
+# Same provided font input as the Loombridge arm when the brief permits it. For
 # non-platformer proof briefs, skip Press Start 2P so the raw arm is not tempted
 # into the same forbidden taste leak.
 STAGE_PRESSSTART=1
@@ -110,12 +110,12 @@ elif [ "$STAGE_PRESSSTART" = "0" ]; then
 fi
 
 if [ "$STAGE_ASSETS" = "0" ]; then
-  # Raw discovery arm: do NOT stage Loomtide registry fixtures, Pixel Adventure art,
+  # Raw discovery arm: do NOT stage Loombridge registry fixtures, Pixel Adventure art,
   # provided font, or the polished mock. Asset discovery/sourcing and feel/camera
   # choices are part of the comparison.
   :
 elif [ -f "$BRIEF" ] && grep -qi "Switchyard Courier" "$BRIEF"; then
-  # Switchyard raw arm: do NOT stage Loomtide registry fixtures. Asset discovery/sourcing is part
+  # Switchyard raw arm: do NOT stage Loombridge registry fixtures. Asset discovery/sourcing is part
   # of the comparison, so the raw agent starts with an empty Assets folder and the qualitative brief.
   :
 else
@@ -137,7 +137,7 @@ else
   fi
 fi
 
-# The design brief (Loomtide-tooling stripped).
+# The design brief (Loombridge-tooling stripped).
 if [ -f "$BRIEF" ]; then
   cp "$BRIEF" "$PROJ/BUILD-BRIEF.md"
 else
@@ -145,28 +145,28 @@ else
 fi
 
 if [ "$STAGE_ASSETS" = "0" ]; then
-  STAGED_NOTE="Staged: ProjectSettings (Input System / 2D / built-in RP), empty Assets folder, BUILD-BRIEF.md. No Loomtide art pack, font, mock, registry fixtures, skills, bridge, or MCP config are preloaded."
-  COMPARE_NOTE="and compare against the Loomtide arm with the same final scrutiny."
+  STAGED_NOTE="Staged: ProjectSettings (Input System / 2D / built-in RP), empty Assets folder, BUILD-BRIEF.md. No Loombridge art pack, font, mock, registry fixtures, skills, bridge, or MCP config are preloaded."
+  COMPARE_NOTE="and compare against the Loombridge arm with the same final scrutiny."
 elif [ -f "$BRIEF" ] && grep -qi "Switchyard Courier" "$BRIEF"; then
-  STAGED_NOTE="Staged: ProjectSettings (Input System / 2D / built-in RP), empty Assets folder, BUILD-BRIEF.md. No Loomtide registry fixtures are preloaded."
-  COMPARE_NOTE="and compare against the Loomtide arm (switchyard-courier-clean) + the same Switchyard gates."
+  STAGED_NOTE="Staged: ProjectSettings (Input System / 2D / built-in RP), empty Assets folder, BUILD-BRIEF.md. No Loombridge registry fixtures are preloaded."
+  COMPARE_NOTE="and compare against the Loombridge arm (switchyard-courier-clean) + the same Switchyard gates."
 else
   STAGED_NOTE="Staged: ProjectSettings (Input System / 2D / built-in RP), optional Press Start 2P font, art pack -> Assets/_Art/Free, mock -> _Design/mock, BUILD-BRIEF.md."
-  COMPARE_NOTE="and compare against the Loomtide arm (tiderunner-clean) + the mock."
+  COMPARE_NOTE="and compare against the Loombridge arm (tiderunner-clean) + the mock."
 fi
 
 cat <<EOF
 
-Done -> $PROJ  (RAW: no Loomtide bridge, no .mcp.json, no skills)
+Done -> $PROJ  (RAW: no Loombridge bridge, no .mcp.json, no skills)
 
 $STAGED_NOTE
 
-Next steps (the no-Loomtide arm):
+Next steps (the no-Loombridge arm):
   1. Optionally open the project in Unity 6000.3 to confirm it imports (the agent can't drive it).
   2. Start a fresh raw session FROM the project folder:
        cd "$PROJ" && claude
      This folder is OUTSIDE the repo -> empty memory namespace, no access to the skills/contract/demo.
-     There is NO loomtide MCP server here (by design). Then hand it:
+     There is NO loombridge MCP server here (by design). Then hand it:
        @BUILD-BRIEF.md
   3. Record what it can produce WITHOUT seeing/driving/verifying Unity, then open its output in Unity
      $COMPARE_NOTE

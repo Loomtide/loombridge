@@ -688,7 +688,7 @@ export async function buildAssetBrowserPayload(options: BuildAssetBrowserPayload
   }));
 
   return {
-    title: "Loomtide Asset Browser",
+    title: "Loombridge Asset Browser",
     registry: {
       name: registry.name,
       status: "loaded",
@@ -721,7 +721,7 @@ export async function buildAssetBrowserPayloadFromPrepareReport(
   }));
 
   return {
-    title: "Loomtide Asset Confirmation",
+    title: "Loombridge Asset Confirmation",
     registry: {
       name: report.registry.packId,
       status: report.status === "pass" ? "prepared" : report.status,

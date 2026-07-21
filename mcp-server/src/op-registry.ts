@@ -98,7 +98,7 @@ const colorSchema = {
 const routingProjectSchema = {
   type: "string" as const,
   description:
-    "Optional Loomtide routing target. Use a projectPathCanonical/full project path or unique projectName from loomtide_editor_list. This field is consumed by the MCP server and is not sent to Unity.",
+    "Optional Loombridge routing target. Use a projectPathCanonical/full project path or unique projectName from loombridge_editor_list. This field is consumed by the MCP server and is not sent to Unity.",
 };
 
 function withInputCapabilityGateNote(description: string): string {
@@ -395,7 +395,7 @@ function buildOps(): OpDef[] {
     description:
       "Take a screenshot of the Scene or Game view. Returns base64-encoded image. " +
       "For named artifacts, pass outputPath (for example captures/start.png or " +
-      ".loomtide/captures/start.png); the server writes the screenshot there and returns " +
+      ".loombridge/captures/start.png); the server writes the screenshot there and returns " +
       "JSON with path/width/height/format/sizeBytes/sha256. Do not scrape trace/artifacts " +
       "for agent-facing screenshots. " +
       "For debugging: pass focusLocator to render a deterministic close-up framed on one " +
@@ -417,8 +417,8 @@ function buildOps(): OpDef[] {
           type: "string",
           description:
             "Optional server-side file path for a named screenshot artifact. Relative paths must be under " +
-            ".loomtide/ or captures/ from the MCP server cwd; absolute paths must stay under " +
-            "~/loomtide-runs or /tmp.",
+            ".loombridge/ or captures/ from the MCP server cwd; absolute paths must stay under " +
+            "~/loombridge-runs or /tmp.",
         },
         focusLocator: {
           ...locatorSchema,
@@ -757,7 +757,7 @@ function buildOps(): OpDef[] {
         output_path: {
           type: "string",
           description:
-            "Project-relative path for the snapshot JSON (e.g. '.loomtide/art/gameplay-geometry.json'). " +
+            "Project-relative path for the snapshot JSON (e.g. '.loombridge/art/gameplay-geometry.json'). " +
             "Absolute paths or paths escaping the project root are refused. Alias: outputPath.",
         },
         outputPath: { type: "string", description: "Alias for output_path." },
@@ -875,7 +875,7 @@ function buildOps(): OpDef[] {
       "where a 30.7k-tri T-wall mesh instanced 57× was the real per-frame cost, not the textures that took " +
       "the blame). Walks the CURRENTLY-LOADED scenes (NOT a full-project AssetDatabase scan — the honest, " +
       "bounded gameplay working set) and returns: { payload_kind: 'mobile_asset_audit', payload_version: 1 " +
-      "(the discriminator `loomtide mobile-audit` requires — save this response verbatim), textures: { " +
+      "(the discriminator `loombridge mobile-audit` requires — save this response verbatim), textures: { " +
       "entries:[{ path, name, width, height, format, " +
       "compression, estimated_bytes }] (shared-material + SpriteRenderer textures, deduped, sorted by estimated " +
       "bytes desc), total_count, truncated }, audio: { entries:[{ path, name, length_seconds, channels, frequency, " +
@@ -894,7 +894,7 @@ function buildOps(): OpDef[] {
       "pipeline is active or it is not URP — reflection-safe, never throws), build_scenes:[{ path, enabled }], " +
       "loaded_scene_count, loaded_scenes:[path] }. BOUNDED: each category is truncated to max_entries (default 50) " +
       "with total_count + truncated flags. Read-only (no AssetDatabase.Refresh, no scene mutation). Feed the output " +
-      "to `loomtide mobile-audit` for advisory findings — always stamped hardware_unvalidated until a device build " +
+      "to `loombridge mobile-audit` for advisory findings — always stamped hardware_unvalidated until a device build " +
       "proves frame rate/memory/post-processing cost.",
     inputSchema: {
       type: "object",
@@ -914,7 +914,7 @@ function buildOps(): OpDef[] {
     command: "editor.set_show_work",
     toolName: "unity_editor_set_show_work",
     description:
-      "Enable or disable Loomtide Show Work Mode for demo recordings. When enabled, high-signal " +
+      "Enable or disable Loombridge Show Work Mode for demo recordings. When enabled, high-signal " +
       "bridge ops select/ping the GameObject or asset they just changed so the Unity Hierarchy, " +
       "Project window, Inspector, and Scene view visibly follow the agent's work. Disabled by default.",
     inputSchema: {
@@ -1010,7 +1010,7 @@ function buildOps(): OpDef[] {
       "Editor-builder-script pattern (a [MenuItem] that regenerates a blockout / runs a project tool), " +
       "without the ops.batch round-trip fragility. SECURITY: STRICTLY gated by the project-configurable " +
       "allowlist; menu items have NO built-in default, so a path must be opted in via menuItems[] in the " +
-      "project's .loomtide/editor-allowlist.json or the call is REFUSED (INVALID_PARAMS) — never invoked. " +
+      "project's .loombridge/editor-allowlist.json or the call is REFUSED (INVALID_PARAMS) — never invoked. " +
       "Returns { menuPath, executed }: executed=false means the gate passed but Unity found no enabled " +
       "menu item at that path (wrong path, or disabled by its validate function) — distinct from a refusal. " +
       "LONG BUILDS: this op runs SYNCHRONOUSLY and defaults to the generic 10s wire timeout, but a menu " +
@@ -1021,7 +1021,7 @@ function buildOps(): OpDef[] {
     inputSchema: {
       type: "object",
       properties: {
-        menuPath: { type: "string", description: "Menu item path to execute (e.g. 'Tools/MyGame/Generate Blockout'); must be listed in menuItems[] of .loomtide/editor-allowlist.json." },
+        menuPath: { type: "string", description: "Menu item path to execute (e.g. 'Tools/MyGame/Generate Blockout'); must be listed in menuItems[] of .loombridge/editor-allowlist.json." },
         timeoutMs: { type: "number", description: "Max time to wait in milliseconds (default: 10000). A menu item that triggers a PLAYER BUILD (BuildPipeline.BuildPlayer) runs for minutes — raise this well above the default (e.g. 600000 for a full iOS/Android/standalone build) or the call times out mid-build." },
       },
       required: ["menuPath"],
@@ -2844,7 +2844,7 @@ function buildOps(): OpDef[] {
     command: "asset.picker_open",
     toolName: "unity_asset_picker_open",
     description:
-      "Open (or refresh) the Loomtide asset picker — a human-in-the-loop EditorWindow that proposes options with thumbnails for the user to confirm or swap. The agent supplies slots of candidate options with its pre-selected pick; the user single-selects per slot and clicks Confirm or Cancel. Resets picker state to 'pending'. This is a generic options-with-thumbnails surface (the agent assembles slots/options); poll unity_asset_picker_state for the outcome. Note: opening does not block — use the poll handshake.",
+      "Open (or refresh) the Loombridge asset picker — a human-in-the-loop EditorWindow that proposes options with thumbnails for the user to confirm or swap. The agent supplies slots of candidate options with its pre-selected pick; the user single-selects per slot and clicks Confirm or Cancel. Resets picker state to 'pending'. This is a generic options-with-thumbnails surface (the agent assembles slots/options); poll unity_asset_picker_state for the outcome. Note: opening does not block — use the poll handshake.",
     inputSchema: {
       type: "object",
       properties: {
@@ -2889,7 +2889,7 @@ function buildOps(): OpDef[] {
     command: "asset.picker_state",
     toolName: "unity_asset_picker_state",
     description:
-      "Poll the Loomtide asset picker handshake state. Returns { status: 'none'|'pending'|'confirmed'|'cancelled', selection: { <slot>: <optionId> } }. 'none' before opening or after close, 'pending' while the user is choosing, 'confirmed' with the chosen ids after the user clicks Confirm, 'cancelled' if the user clicks Cancel or closes the window. The agent polls this (with its own timeout) until confirmed/cancelled.",
+      "Poll the Loombridge asset picker handshake state. Returns { status: 'none'|'pending'|'confirmed'|'cancelled', selection: { <slot>: <optionId> } }. 'none' before opening or after close, 'pending' while the user is choosing, 'confirmed' with the chosen ids after the user clicks Confirm, 'cancelled' if the user clicks Cancel or closes the window. The agent polls this (with its own timeout) until confirmed/cancelled.",
     inputSchema: {
       type: "object",
       properties: {},
@@ -2900,7 +2900,7 @@ function buildOps(): OpDef[] {
     command: "asset.picker_close",
     toolName: "unity_asset_picker_close",
     description:
-      "Close the Loomtide asset picker window and reset state to 'none'. Use after reading a confirmed/cancelled outcome, or to dismiss the picker.",
+      "Close the Loombridge asset picker window and reset state to 'none'. Use after reading a confirmed/cancelled outcome, or to dismiss the picker.",
     inputSchema: {
       type: "object",
       properties: {},
@@ -2911,7 +2911,7 @@ function buildOps(): OpDef[] {
     command: "asset.browser_open",
     toolName: "unity_asset_browser_open",
     description:
-      "Open (or refresh) the Loomtide registry Asset Browser EditorWindow. The agent supplies a generic library payload assembled from the registry/profile (categories, assets, local thumbnail paths, metadata, and seeded inventory/default selections). The browser supports search, category and metadata filters, grid cards, inventory add/remove/swap, and a preview modal. It reuses the existing asset picker poll handshake: this call resets state to 'pending', and unity_asset_picker_state returns the confirmed/cancelled outcome.",
+      "Open (or refresh) the Loombridge registry Asset Browser EditorWindow. The agent supplies a generic library payload assembled from the registry/profile (categories, assets, local thumbnail paths, metadata, and seeded inventory/default selections). The browser supports search, category and metadata filters, grid cards, inventory add/remove/swap, and a preview modal. It reuses the existing asset picker poll handshake: this call resets state to 'pending', and unity_asset_picker_state returns the confirmed/cancelled outcome.",
     inputSchema: {
       type: "object",
       properties: {
@@ -3041,17 +3041,17 @@ function buildOps(): OpDef[] {
       "own gate JSON into outDir from RAW in-editor sampling — never hand-authored. Generic in shape but " +
       "LOCKED to the project-configurable allowlist (only vetted entry points run): the built-in default is " +
       "'GroundTiling.WriteTileCaptures' (writes platform-tiles.json + tile-render.json); add more via " +
-      "staticMethods[] in the project's .loomtide/editor-allowlist.json. The static method must have " +
+      "staticMethods[] in the project's .loombridge/editor-allowlist.json. The static method must have " +
       "signature (string outDir). Refuses a non-allowlisted method or a component type not found in any " +
-      "loaded assembly. outDir must resolve under the Unity project's .loomtide/verify/ subtree. " +
+      "loaded assembly. outDir must resolve under the Unity project's .loombridge/verify/ subtree. " +
       "Returns { component, method, outDir (absolute), wrote[] (fresh expected filenames only), playMode }. " +
-      "Used by `loomtide capture --slice <id>` for the platformer tiling slice.",
+      "Used by `loombridge capture --slice <id>` for the platformer tiling slice.",
     inputSchema: {
       type: "object",
       properties: {
         component: { type: "string", description: "Short type name of the component declaring the static method (e.g. 'GroundTiling')." },
         method: { type: "string", description: "Public static method name to invoke; must be (string outDir) and on the allowlist (e.g. 'WriteTileCaptures')." },
-        outDir: { type: "string", description: "Directory the method writes its capture JSON into; must resolve under .loomtide/verify/ (absolute, or relative to the Unity project root)." },
+        outDir: { type: "string", description: "Directory the method writes its capture JSON into; must resolve under .loombridge/verify/ (absolute, or relative to the Unity project root)." },
       },
       required: ["component", "method", "outDir"],
     },
@@ -3093,7 +3093,7 @@ function buildOps(): OpDef[] {
     command: "ops.batch",
     toolName: "unity_ops_batch",
     description:
-      "Execute a list of existing Loomtide ops sequentially on Unity's main thread in ONE round-trip, " +
+      "Execute a list of existing Loombridge ops sequentially on Unity's main thread in ONE round-trip, " +
       "wrapped in a single undo group. Each item is { command, params } using normal op command names " +
       "(e.g. 'scene.create_object', 'component.set_property'). Returns per-op results. Use for bulk " +
       "construction (placing/wiring many objects) to collapse many round-trips into one. Only ops that " +
@@ -3129,7 +3129,7 @@ function buildOps(): OpDef[] {
           description: "Ops to run in order, as a native array of { command, params? } (preferred) or a JSON string of that array.",
         },
         stopOnError: { type: "boolean", description: "Stop at the first failing op (default true). If false, continue and report each failure with partial-progress results." },
-        undoGroupName: { type: "string", description: "Name for the single undo group wrapping the batch (default 'Loomtide Batch')." },
+        undoGroupName: { type: "string", description: "Name for the single undo group wrapping the batch (default 'Loombridge Batch')." },
       },
       required: ["operations"],
     },
@@ -3143,7 +3143,7 @@ function buildOps(): OpDef[] {
     command: "ops.list",
     toolName: "unity_ops_list",
     description:
-      "Discover every Loomtide op WITHOUT touching Unity: returns the full catalog grouped by " +
+      "Discover every Loombridge op WITHOUT touching Unity: returns the full catalog grouped by " +
       "category — each entry is { command, toolName, isAsync, summary } — plus totalOps/totalCategories. " +
       "Use this FIRST to find the right op instead of guessing tool names (RCL-T07). Pass 'category' " +
       "(e.g. 'scene', 'runtime', 'editor') to list just that group. Pair with ops.describe for full schemas.",
@@ -3159,7 +3159,7 @@ function buildOps(): OpDef[] {
     command: "ops.describe",
     toolName: "unity_ops_describe",
     description:
-      "Full input schema for one or more Loomtide ops WITHOUT touching Unity (RCL-T07). Filter by exact " +
+      "Full input schema for one or more Loombridge ops WITHOUT touching Unity (RCL-T07). Filter by exact " +
       "'command' ('scene.create_object'), exact 'toolName' ('unity_scene_create_object'), or 'category'; " +
       "with no filter it returns every op's schema. Returns { matched:[{command,toolName,category,isAsync," +
       "defaultTimeoutMs,description,inputSchema}], suggestions? }. When a specific command/toolName is " +

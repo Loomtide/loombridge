@@ -6,7 +6,7 @@ export type AssetFileFormat = "png" | "jpg" | "jpeg" | "wav" | "ogg" | "glb" | "
 export type AssetAcquisitionLane = "api" | "mirror-index" | "scraped-discovery";
 export type AssetTrustTier = "trusted-default" | "attribution-required" | "unverified-discovery" | "blocked";
 export type AssetReviewStatus = "unreviewed" | "needs-review" | "verified" | "rejected";
-export type AssetReviewVerifierKind = "developer" | "loomtide" | "source-owner";
+export type AssetReviewVerifierKind = "developer" | "loombridge" | "source-owner";
 export type AssetIngestProvenanceMethod = "api" | "crawler" | "mirror-index";
 export type AssetIngestPromotionRejectionReason =
   | "NON_COMMERCIAL"

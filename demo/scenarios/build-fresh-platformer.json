@@ -1,7 +1,7 @@
 {
   "schemaVersion": "1",
   "name": "build-fresh-platformer",
-  "description": "End-to-end scenario that builds a playable 2D demo scene from scratch using generic Loomtide MCP primitives only. Re-runnable via if_exists:skip on script creation. Saves to Assets/FreshPlatformer.unity.",
+  "description": "End-to-end scenario that builds a playable 2D demo scene from scratch using generic Loombridge MCP primitives only. Re-runnable via if_exists:skip on script creation. Saves to Assets/FreshPlatformer.unity.",
   "steps": [
     { "id": "preflight-editor-state", "name": "Preflight: read editor state", "kind": "tool_call", "tool": "unity_editor_get_state", "arguments": {} },
     { "id": "preflight-capabilities", "name": "Preflight: input capabilities", "kind": "tool_call", "tool": "unity_input_get_capabilities", "arguments": {} },

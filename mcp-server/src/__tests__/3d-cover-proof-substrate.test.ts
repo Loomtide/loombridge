@@ -52,7 +52,7 @@ function captureFrom(raw: RawTranscript) {
 }
 
 function runGenerator(): unknown {
-  const tempDir = mkdtempSync(join(tmpdir(), "loomtide-3d-cover-"));
+  const tempDir = mkdtempSync(join(tmpdir(), "loombridge-3d-cover-"));
   const out = join(tempDir, "derived.json");
   try {
     const result = spawnSync(process.execPath, [join(bundleRoot, "generate.mjs"), "--output", out], {

@@ -1,5 +1,5 @@
 /**
- * `loomtide minigame declare-background` — the report→contract loop closer.
+ * `loombridge minigame declare-background` — the report→contract loop closer.
  *
  * Guarantees under test:
  *   - merge + segment-safe minimal-fold (a container swallows its declared children; two unrelated
@@ -16,7 +16,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-import { computeDeclaration, runDeclareBackground } from "../loomtide/minigame-declare-background.js";
+import { computeDeclaration, runDeclareBackground } from "../loombridge/minigame-declare-background.js";
 
 // ── pure core: computeDeclaration ──────────────────────────────────────────────
 
@@ -108,10 +108,10 @@ test("runDeclareBackground: prints the EXACT copy-pasteable verify command (cont
   }
   const out = logs.join("\n");
   // The next step must be a runnable command (contract/captures/output resolved next to the contract),
-  // not a bare `loomtide verify --minigame` the dev has to fill in.
+  // not a bare `loombridge verify --minigame` the dev has to fill in.
   assert.match(
     out,
-    /loomtide verify --minigame --contract \S*game\.minigame\.json --captures \S*\/captures --output \S*\/reports\/minigame-verification\.json --strict/,
+    /loombridge verify --minigame --contract \S*game\.minigame\.json --captures \S*\/captures --output \S*\/reports\/minigame-verification\.json --strict/,
     "the exact verify command is printed for copy-paste",
   );
 });

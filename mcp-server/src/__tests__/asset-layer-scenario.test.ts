@@ -57,7 +57,7 @@ function asset(id: string, primitive: string, unityPath: string, defaultSpriteNa
 }
 
 test("generatePlatformerAssetScenario builds a generic asset-backed scenario and dry-run validates", async () => {
-  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "loomtide-asset-scenario-"));
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "loombridge-asset-scenario-"));
   const reportPath = path.join(tempDir, "platformer-assets.json");
   const outputPath = path.join(tempDir, "build-platformer-with-assets.json");
   const report: AssetPrepareReport = {

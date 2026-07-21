@@ -1,10 +1,10 @@
-# Example: run the Loomtide mini-game release check in GitHub Actions.
+# Example: run the Loombridge mini-game release check in GitHub Actions.
 #
 # This is a REFERENCE file (it lives under Docs/, not .github/workflows/, so it does
-# not run in the Loomtide repo). Copy it into YOUR game repo's .github/workflows/ and
+# not run in the Loombridge repo). Copy it into YOUR game repo's .github/workflows/ and
 # adjust the marked spots. See Docs/Profiles/MiniGameVerifyCI.md for the full guide.
 #
-# What it does: install loomtide (no ~/.claude) -> print the build (stale-runtime
+# What it does: install loombridge (no ~/.claude) -> print the build (stale-runtime
 # guard) -> produce/restore the capture pack -> verify --minigame --strict -> upload
 # the report -> a job summary that distinguishes exit 1 (fix the game) from exit 2
 # (fix the test setup).
@@ -16,13 +16,13 @@ on:
   pull_request:
     paths:
       - "Assets/**"          # adjust to your game's source paths
-      - ".loomtide/minigame/**"
+      - ".loombridge/minigame/**"
 
 env:
   # The mini-game contract + the per-state capture pack (see MiniGameVerifyCI.md §3).
-  CONTRACT: .loomtide/minigame/contracts/shape-match.minigame.json
-  CAPTURES: .loomtide/minigame/captures/shape-match
-  LOOMTIDE_REF: main        # PIN to a SHA/tag for reproducible runs
+  CONTRACT: .loombridge/minigame/contracts/shape-match.minigame.json
+  CAPTURES: .loombridge/minigame/captures/shape-match
+  LOOMBRIDGE_REF: main        # PIN to a SHA/tag for reproducible runs
 
 jobs:
   release-check:
@@ -31,27 +31,27 @@ jobs:
       - name: Checkout the game
         uses: actions/checkout@v4
 
-      # --- install loomtide (CLI only — no ~/.claude) ---
+      # --- install loombridge (CLI only — no ~/.claude) ---
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
-      - name: Install loomtide
+      - name: Install loombridge
         run: |
           # Clone into a SRC dir (distinct name) so it can't collide with the wrapper.
-          git clone https://github.com/Loomtide/loombridge "$RUNNER_TEMP/loomtide-src"
-          cd "$RUNNER_TEMP/loomtide-src" && git checkout "$LOOMTIDE_REF"
+          git clone https://github.com/Loomtide/loombridge "$RUNNER_TEMP/loombridge-src"
+          cd "$RUNNER_TEMP/loombridge-src" && git checkout "$LOOMBRIDGE_REF"
           cd mcp-server && npm ci && npm run build
-          # Expose a `loomtide` command (a bin dir added to PATH for later steps).
+          # Expose a `loombridge` command (a bin dir added to PATH for later steps).
           mkdir -p "$RUNNER_TEMP/bin"
-          cat > "$RUNNER_TEMP/bin/loomtide" <<EOF
+          cat > "$RUNNER_TEMP/bin/loombridge" <<EOF
           #!/usr/bin/env bash
-          exec node "$RUNNER_TEMP/loomtide-src/mcp-server/dist/cli.js" "\$@"
+          exec node "$RUNNER_TEMP/loombridge-src/mcp-server/dist/cli.js" "\$@"
           EOF
-          chmod +x "$RUNNER_TEMP/bin/loomtide"
+          chmod +x "$RUNNER_TEMP/bin/loombridge"
           echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
 
-      - name: Print the loomtide build (stale-runtime guard)
-        run: loomtide --version
+      - name: Print the loombridge build (stale-runtime guard)
+        run: loombridge --version
 
       # --- produce the capture pack (§3) ---
       # OPTION A (shown): re-grade a capture pack committed to the repo.
@@ -69,7 +69,7 @@ jobs:
         id: verify
         run: |
           set +e
-          loomtide verify --minigame --contract "$CONTRACT" --captures "$CAPTURES" --strict \
+          loombridge verify --minigame --contract "$CONTRACT" --captures "$CAPTURES" --strict \
             --output "$RUNNER_TEMP/minigame-verification.json"
           CODE=$?
           set -e

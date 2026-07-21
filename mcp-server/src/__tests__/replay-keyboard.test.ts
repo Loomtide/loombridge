@@ -20,7 +20,7 @@ import {
   type BridgeSend,
   type ReplayDriver,
   type ReplayTrace,
-} from "../loomtide/replay/index.js";
+} from "../loombridge/replay/index.js";
 
 // ───────────────────────── parse ─────────────────────────
 
@@ -196,7 +196,7 @@ const inputSystemOk: Record<string, Handler> = {
   "input.begin_session": () => ({ data: { backend: "InputSystem", sessionId: "s", created: true } }),
 };
 
-const driverOpts = { captureDir: ".loomtide/replays/test/actual", pollIntervalMs: 1 };
+const driverOpts = { captureDir: ".loombridge/replays/test/actual", pollIntervalMs: 1 };
 
 test("driver.capabilityCheck: input-system is supported", async () => {
   const driver = new UnityDriver(fakeBridge().send, driverOpts);

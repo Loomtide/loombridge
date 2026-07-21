@@ -11,7 +11,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 // dist/__tests__ -> repo root is three levels up (dist -> mcp-server -> repo).
 const REPO_ROOT = resolve(__dirname, "../../..");
-const EMBED_SCRIPT = resolve(REPO_ROOT, "scripts/loomtide-embed-bridge.sh");
+const EMBED_SCRIPT = resolve(REPO_ROOT, "scripts/loombridge-embed-bridge.sh");
 
 async function exists(p: string): Promise<boolean> {
   try {
@@ -22,11 +22,11 @@ async function exists(p: string): Promise<boolean> {
   }
 }
 
-describe("loomtide-embed-bridge (P2.1 — codifies the #62 Tests/ strip)", { timeout: 30000 }, () => {
+describe("loombridge-embed-bridge (P2.1 — codifies the #62 Tests/ strip)", { timeout: 30000 }, () => {
   let tempDir = "";
 
   before(async () => {
-    tempDir = await fsp.mkdtemp(path.join(os.tmpdir(), "loomtide-embed-bridge-"));
+    tempDir = await fsp.mkdtemp(path.join(os.tmpdir(), "loombridge-embed-bridge-"));
   });
 
   after(async () => {
@@ -40,7 +40,7 @@ describe("loomtide-embed-bridge (P2.1 — codifies the #62 Tests/ strip)", { tim
     const result = spawnSync("bash", [EMBED_SCRIPT, "--project", project], { encoding: "utf-8" });
     assert.equal(result.status, 0, `embed failed: ${result.stderr}\n${result.stdout}`);
 
-    const dest = path.join(project, "Packages", "com.loomtide.unitybridge");
+    const dest = path.join(project, "Packages", "com.loomtide.loombridge");
     // The validated fix: Editor + Runtime ship, Tests/ does NOT.
     assert.ok(await exists(path.join(dest, "package.json")), "package.json must ship");
     assert.ok(await exists(path.join(dest, "Editor")), "Editor/ must ship");
@@ -61,7 +61,7 @@ describe("loomtide-embed-bridge (P2.1 — codifies the #62 Tests/ strip)", { tim
       const r = spawnSync("bash", [EMBED_SCRIPT, "--project", project], { encoding: "utf-8" });
       assert.equal(r.status, 0, `embed pass ${i} failed: ${r.stderr}`);
     }
-    const dest = path.join(project, "Packages", "com.loomtide.unitybridge");
+    const dest = path.join(project, "Packages", "com.loomtide.loombridge");
     assert.ok(await exists(path.join(dest, "Editor")));
     assert.equal(await exists(path.join(dest, "Tests")), false);
   });
@@ -72,7 +72,7 @@ describe("loomtide-embed-bridge (P2.1 — codifies the #62 Tests/ strip)", { tim
     await fsp.writeFile(
       path.join(project, "Packages", "manifest.json"),
       JSON.stringify(
-        { dependencies: { "com.loomtide.unitybridge": "file:../../../packages/com.loomtide.unitybridge" } },
+        { dependencies: { "com.loomtide.loombridge": "file:../../../packages/com.loomtide.loombridge" } },
         null,
         2,
       ),

@@ -12,8 +12,8 @@ import {
   mergeSceneContracts,
   validateContractReferentialIntegrity,
   type ScenePart,
-} from "../loomtide/minigame-scene-merge.js";
-import type { MinigameContract } from "../loomtide/minigame-profiles/types.js";
+} from "../loombridge/minigame-scene-merge.js";
+import type { MinigameContract } from "../loombridge/minigame-profiles/types.js";
 
 /** A minimal-but-valid contract with a `start`→`active` flow, one tap-target object, and an
  *  input-response binding — enough to exercise every id-reference field. */

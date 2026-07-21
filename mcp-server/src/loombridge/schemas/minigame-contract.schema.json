@@ -1,0 +1,379 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://loombridge.dev/schemas/minigame-contract.schema.json",
+  "title": "Loombridge 2D Kids Mini-Game Verification Contract",
+  "description": "PRODUCT-OWNED. A per-game description of the machine-checkable facts a 2D kids mini-game release must satisfy (required objects visible, UI inside the safe area, tap targets sized for the age band, a happy path that reaches a reward, clean frames). The S6 counterpart to a platformer feel profile. The runtime source of truth is `mcp-server/src/loombridge/minigame-profiles/validator.ts`; this JSON Schema documents the same contract. Key rules: states + requiredInFrame must be non-empty; checks.deterministic must enable >=1 CI-deciding check; gate/check names come from a closed vocabulary; a tap target below the age-band ergonomic floor is refused.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "id",
+    "type",
+    "scenes",
+    "ageBand",
+    "visualProfile",
+    "states",
+    "requiredInFrame",
+    "uiSafeAreas",
+    "tapTargets",
+    "interactionFlow",
+    "artifactThresholds",
+    "checks"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "1" },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]*$",
+      "description": "Stable mini-game id (lowercase kebab, starts with a letter), e.g. 'alphabet-pop'."
+    },
+    "type": { "const": "2d-kids-minigame" },
+    "title": { "type": "string", "minLength": 1 },
+    "description": { "type": "string" },
+    "scenes": {
+      "type": "array",
+      "minItems": 1,
+      "description": "Unity scenes this mini-game lives in. Each must be an Assets/**.unity path with no '..' traversal or backslashes.",
+      "items": { "type": "string", "pattern": "^Assets/(?!.*\\.\\.)[^\\\\]*[^\\\\/]\\.unity$" }
+    },
+    "ageBand": {
+      "type": "string",
+      "description": "Target age band; pins the ergonomic tap-target floor.",
+      "enum": ["2-4", "3-5", "5-7", "8-12"]
+    },
+    "visualProfile": {
+      "type": "string",
+      "description": "Target device aspect/orientation; drives safe-area and no-black-bars checks.",
+      "enum": ["phone-portrait", "phone-landscape", "tablet-portrait", "tablet-landscape"]
+    },
+    "devices": {
+      "type": "array",
+      "minItems": 1,
+      "description": "OPTIONAL device-set override: a non-empty bracket of real resolutions to verify across. Absent = the visual profile's default device set. Each id is filename-safe and unique; aspect is derived from width/height.",
+      "items": { "$ref": "#/definitions/deviceSpec" }
+    },
+    "requiredInFrame": {
+      "type": "array",
+      "minItems": 1,
+      "description": "Objects that MUST be visible (>=1). A contract that requires nothing visible verifies nothing.",
+      "items": { "$ref": "#/definitions/objectRef" }
+    },
+    "allowedOffscreen": {
+      "type": "array",
+      "description": "Objects explicitly allowed offscreen (must not also be requiredInFrame).",
+      "items": { "$ref": "#/definitions/objectRef" }
+    },
+    "states": {
+      "type": "array",
+      "minItems": 1,
+      "description": "Named capture states (>=1; ids unique).",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "kind"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^[a-z0-9][a-z0-9_-]*$",
+            "description": "Filename-safe state id (lowercase alnum + -/_, no '@'). Used as the <state>.png stem and the logical half of a <state>@<device> key."
+          },
+          "kind": {
+            "type": "string",
+            "enum": ["start", "active", "success_reward", "failure_timeout", "home_back"]
+          },
+          "scene": { "type": "string", "description": "If set, must be one of the declared scenes." },
+          "requiredInFrame": {
+            "type": "array",
+            "description": "requiredInFrame object ids that must be visible in THIS state.",
+            "items": { "type": "string", "minLength": 1 }
+          },
+          "description": { "type": "string" },
+          "outcomeGated": {
+            "type": "boolean",
+            "description": "The state is reached only by a game OUTCOME a read-only verifier can't drive (a win/reward on a re-randomizing game). NOT asserted; reported as outcome-gated, never a failure."
+          },
+          "reached": {
+            "$ref": "#/definitions/reachedCondition",
+            "description": "Optional capture-time state-reached signal. Capture waits for this condition before screenshotting the state; timeout means no artifacts for this state and a not-captured/harness result."
+          },
+          "inputResponse": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["tap", "observe"],
+            "description": "Liveness for the input-response check: tapping `tap` must observably change >=1 `observe` object (text/visibility/appears). Both reference ids declared in the top-level object list; observe ids need NOT be visible at the start (an element that appears on tap is valid). Pick an outcome-INDEPENDENT response so it stays RNG-invariant. Declaring this without enabling the input-response check (or vice-versa) is refused.",
+            "properties": {
+              "tap": { "type": "string", "minLength": 1 },
+              "observe": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } },
+              "expect": { "type": "string", "enum": ["changed"] }
+            }
+          }
+        }
+      }
+    },
+    "uiSafeAreas": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["maxOverflowFraction"],
+      "properties": {
+        "maxOverflowFraction": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "How far required UI may exceed the safe area (fraction). 0 = strict."
+        },
+        "insets": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "top": { "type": "number", "minimum": 0, "exclusiveMaximum": 1 },
+            "bottom": { "type": "number", "minimum": 0, "exclusiveMaximum": 1 },
+            "left": { "type": "number", "minimum": 0, "exclusiveMaximum": 1 },
+            "right": { "type": "number", "minimum": 0, "exclusiveMaximum": 1 }
+          }
+        }
+      }
+    },
+    "safeAreaExempt": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "description": "Object ids or scene paths the 'safe-area-sweep' check may leave outside the safe area (beyond the automatic full-frame-backdrop exemption). For the rare intentional edge element; the rule is 'only backgrounds may bleed'. A matched element that would fail is surfaced as a 'waived' note, never silent."
+    },
+    "safeAreaBackground": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "description": "uGUI decorative-background subtrees/patterns the 'safe-area-sweep' check exempts (sky/hill/cloud/sparkle Images that may sit outside the safe area). Each entry matches by exact path, ANCESTOR path ('/Canvas/Background' exempts all descendants), or trailing-'*' prefix glob ('/Canvas/Sparkle*'). Matched decoration is skipped silently (correctly-classified background, not a waived finding)."
+    },
+    "tapTargets": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["minSizeDp"],
+      "properties": {
+        "minSizeDp": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "description": "Declared minimum tap-target edge length in dp. Must be >= the age-band floor (validator-enforced: 2-4=100, 3-5=80, 5-7=64, 8-12=48)."
+        }
+      }
+    },
+    "interactionFlow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["happyPath"],
+      "properties": {
+        "happyPath": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 },
+          "description": "Ordered state ids the happy path visits; must reference declared states and include a success_reward state."
+        }
+      }
+    },
+    "artifactThresholds": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Tolerances for the frame/visual artifact checks; each value is a fraction in [0,1].",
+      "properties": {
+        "maxBorderFraction": { "type": "number", "minimum": 0, "maximum": 1 },
+        "maxUniformBorderFraction": { "type": "number", "minimum": 0, "maximum": 1 },
+        "minContentCoverage": { "type": "number", "minimum": 0, "maximum": 1 },
+        "maxArtifactSeverity": { "type": "number", "minimum": 0, "maximum": 1 }
+      }
+    },
+    "containers": {
+      "type": "array",
+      "description": "Background->content containment bindings for the 'background-fit' gate (required iff background-fit is enabled; a check that decides nothing is refused). A background card's rendered fill must cover >= minBgFillFraction of its layout rect; if any declared content is visible, the background must be present, visible, and pixel-graded.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["background"],
+        "properties": {
+          "background": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Declared object id of the background card/panel (its rect bounds the measured region)."
+          },
+          "content": {
+            "type": "array",
+            "description": "Declared object ids the background should envelop. If any is visible in a state, the background must be present, visible, and pixel-graded.",
+            "items": { "type": "string", "minLength": 1 }
+          },
+          "bgColor": {
+            "type": "string",
+            "pattern": "^#[0-9a-fA-F]{6}$",
+            "description": "Hex #RRGGBB of the background fill colour. Default #FFFFFF."
+          },
+          "minBgFillFraction": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "maximum": 1,
+            "description": "Min fraction of the background rect its fill must cover. Default 0.6. A value of 0 is refused (it would make background-fit always pass)."
+          }
+        }
+      }
+    },
+    "backgroundLayers": {
+      "type": "array",
+      "minItems": 1,
+      "description": "World-space background-layer object locators for the 'background-coverage' and 'background-seam' gates (the sky/hill/ground sprites that must cover the camera's view and bleed cut edges at every device aspect). Required (non-empty) iff either gate is enabled.",
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "backgroundCamera": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The rendering camera locator for the 'background-coverage' and 'background-seam' gates, e.g. 'Scene:/Main Camera'. Required iff either gate is enabled."
+    },
+    "checks": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["deterministic"],
+      "properties": {
+        "deterministic": {
+          "type": "array",
+          "minItems": 1,
+          "description": "CI-deciding checks. Must enable at least one. Names from the closed deterministic vocabulary.",
+          "items": {
+            "type": "string",
+            "enum": [
+              "safe-area",
+              "safe-area-sweep",
+              "required-in-frame",
+              "tap-target-size",
+              "text-clipping",
+              "control-overlap",
+              "background-fit",
+              "background-coverage",
+              "background-seam",
+              "no-black-bars",
+              "render-frame",
+              "console-clean",
+              "interaction-flow",
+              "input-response"
+            ]
+          }
+        },
+        "advisory": {
+          "type": "array",
+          "description": "Advisory/VLM checks; never hard-fail CI by default. Names from the closed advisory vocabulary.",
+          "items": {
+            "type": "string",
+            "enum": [
+              "vlm-readability",
+              "vlm-age-appropriateness",
+              "vlm-visual-polish",
+              "vlm-state-plausibility"
+            ]
+          }
+        }
+      }
+    },
+    "baseline": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ref"],
+      "description": "OPTIONAL approved baseline reference. Baseline regression is a later S6 slice; this is the shape only.",
+      "properties": {
+        "ref": { "type": "string", "minLength": 1 },
+        "capturedAt": { "type": "string" },
+        "masks": {
+          "type": "array",
+          "description": "Object ids whose region is masked from baseline diffing. Each must be a declared requiredInFrame/allowedOffscreen id (validator-enforced cross-reference).",
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "stateSignal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["locator", "property"],
+      "description": "OPTIONAL declared game state-signal that `minigame next` threads into the printed `trace record --observe` command (--state-signal <path>:<Component>:<property>) so a multi-screen/gesture game can phase-align each gesture on the game's phase. `locator` is a BARE hierarchy path: NO scene prefix and NO ':' (the CLI parses --state-signal on ':').",
+      "properties": {
+        "locator": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[^:]+$",
+          "description": "Bare hierarchy path, e.g. '/Canvas/GameManager' — no scene prefix, no ':' (the --state-signal delimiter)."
+        },
+        "component": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Optional component type name, e.g. 'GameManager'."
+        },
+        "property": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Property the phase is read from, e.g. 'phase'."
+        }
+      }
+    }
+  },
+  "definitions": {
+    "deviceSpec": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "label", "width", "height"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]*$",
+          "description": "Filename-safe device slug (used as <state>@<id>.png)."
+        },
+        "label": { "type": "string", "minLength": 1, "description": "Human-readable device label, e.g. 'iPhone (19.5:9)'." },
+        "width": { "type": "integer", "minimum": 16, "maximum": 8192 },
+        "height": { "type": "integer", "minimum": 16, "maximum": 8192 }
+      }
+    },
+    "objectRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "locator"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "description": "Stable handle used by states/reports." },
+        "locator": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Unity scene-object locator, e.g. 'Scene:/Canvas/Tile'."
+        },
+        "description": { "type": "string" }
+      }
+    },
+    "reachedCondition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["locator", "property_path", "operator", "expected"],
+      "properties": {
+        "locator": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Contract locator string, e.g. 'StarChef:/Canvas/ChefGameManager'."
+        },
+        "component": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Optional component type name, e.g. 'ChefGameManager'."
+        },
+        "property_path": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Runtime/component property path, e.g. 'phase'."
+        },
+        "operator": {
+          "type": "string",
+          "enum": ["equals", "not_equals", "greater_than", "less_than", "approx", "contains"]
+        },
+        "expected": {
+          "description": "Expected value; JSON shape is preserved and mapped 1:1 to runtime.wait_for_condition."
+        },
+        "tolerance": {
+          "type": "number",
+          "description": "Optional numeric tolerance for operator=approx."
+        },
+        "timeoutMs": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Optional bounded wait budget in milliseconds."
+        }
+      }
+    }
+  }
+}

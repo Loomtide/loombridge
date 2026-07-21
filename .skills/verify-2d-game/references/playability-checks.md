@@ -85,7 +85,7 @@ The reachability gate geometrically checks each collectible sits within the jump
 ## Modal end-state default
 
 Most polished games treat win/lose as a modal state: gameplay stops behind the end-card and only
-restart/continue/menu actions remain live. Loomtide therefore treats `acceptance.win.endStateMode` as
+restart/continue/menu actions remain live. Loombridge therefore treats `acceptance.win.endStateMode` as
 `"modal"` when omitted. If a game intentionally keeps simulation running during the result sequence,
 declare:
 

@@ -2,9 +2,9 @@
 
 **Status:** S6a — Visual/Mini-Game Contract (shipped 2026-06-05)
 **Type:** `2d-kids-minigame`
-**Runtime source of truth:** `mcp-server/src/loomtide/minigame-profiles/validator.ts`
-**JSON Schema (docs mirror):** `mcp-server/src/loomtide/schemas/minigame-contract.schema.json`
-**Example:** `mcp-server/src/loomtide/minigame-profiles/games/alphabet-pop.minigame.json`
+**Runtime source of truth:** `mcp-server/src/loombridge/minigame-profiles/validator.ts`
+**JSON Schema (docs mirror):** `mcp-server/src/loombridge/schemas/minigame-contract.schema.json`
+**Example:** `mcp-server/src/loombridge/minigame-profiles/games/alphabet-pop.minigame.json`
 
 A **mini-game contract** is a product-owned, per-game description of the
 machine-checkable facts a kids mini-game release must satisfy before it ships:
@@ -23,7 +23,7 @@ mini-game** against a named set of **deterministic** visual/UI/interaction check
 
 ## Position: deterministic decides CI, advisory advises
 
-Loomtide is a **low-trust release-verification layer**, not "AI infers your visual
+Loombridge is a **low-trust release-verification layer**, not "AI infers your visual
 intent from pixels." That principle is encoded directly in the contract through
 two separate check tiers (`checks.deterministic` and `checks.advisory`):
 
@@ -188,7 +188,7 @@ checked independently.
 
 ### Outcome taxonomy and exit codes
 
-| Outcome | Meaning | `loomtide verify --minigame` exit |
+| Outcome | Meaning | `loombridge verify --minigame` exit |
 |---|---|---|
 | `pass` | honest actuation + target state re-derived from the capture | `0` |
 | `game_fail` | honest actuation, but the target state was NOT reached (soft-lock / missing reward) | `1` |
@@ -207,13 +207,13 @@ block per transition and labels harness faults as NOT game defects.
 
 A *baseline* is an APPROVED snapshot of the per-state captures, frozen from a PASS run.
 When the contract declares `baseline.ref` and an approved bundle exists there, every
-`loomtide verify --minigame` compares the current captures to it.
+`loombridge verify --minigame` compares the current captures to it.
 
 **Approve (a dedicated, MUTATING subcommand — kept off the read-only `verify`):**
 
 ```
-loomtide minigame baseline approve --contract <c> --captures <dir> [--ref <bundle>] [--root <dir>]
-loomtide minigame baseline status  --contract <c> [--ref <bundle>]          # read-only summary
+loombridge minigame baseline approve --contract <c> --captures <dir> [--ref <bundle>] [--root <dir>]
+loombridge minigame baseline status  --contract <c> [--ref <bundle>]          # read-only summary
 ```
 
 `approve` refuses a non-pass run (you must never freeze a broken reference) and grades
@@ -252,13 +252,13 @@ advisory note (not enforced), not a failure.
 - **S6f** — producer/QA/engineer CR report UX. **(shipped)**
 
 For S6b named screenshots, agents must call `unity_editor_screenshot` with an explicit
-`outputPath` such as `.loomtide/captures/start.png` or `captures/start.png`. The tool
+`outputPath` such as `.loombridge/captures/start.png` or `captures/start.png`. The tool
 returns JSON with the written path and image metadata. Do not discover named captures by
 scraping `trace/artifacts`; trace artifacts are recorder internals, not the capture-pack API.
 
 ## Fixture readiness: Input System only
 
-For Loomtide-built S6 fixtures, use the new Unity Input System. This is not a preference; it is a
+For Loombridge-built S6 fixtures, use the new Unity Input System. This is not a preference; it is a
 verification prerequisite for input-driven capture.
 
 Before running S6b capture on a mini-game fixture:
@@ -271,5 +271,5 @@ Before running S6b capture on a mini-game fixture:
   small wrapper built on the Input System.
 - `unity_input_get_capabilities` should select `InputSystem` and report `requiresGameViewFocus: false`.
 
-Legacy `UnityEngine.Input` projects are not input-drivable by Loomtide. They must either be migrated by
+Legacy `UnityEngine.Input` projects are not input-drivable by Loombridge. They must either be migrated by
 the developer, verified through non-input visual/static checks only, or reported as not input-measurable.

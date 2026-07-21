@@ -17,7 +17,7 @@ import {
   AUDIT_PAYLOAD_KIND,
   DEFAULT_THRESHOLDS,
   type AuditPayload,
-} from "../loomtide/mobile-audit-report.js";
+} from "../loombridge/mobile-audit-report.js";
 
 // A representative payload: one oversize texture, one at-cap texture, one long
 // DecompressOnLoad clip, the §9 wall (30.7k tris × 57 instances) plus a light prop,

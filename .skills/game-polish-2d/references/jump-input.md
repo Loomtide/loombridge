@@ -37,7 +37,7 @@ private static bool RisingEdge(bool now, ref bool prev)
 }
 ```
 
-This pattern is Input-System-only. Do not add legacy `Input.GetButton` fallback code; Loomtide cannot
+This pattern is Input-System-only. Do not add legacy `Input.GetButton` fallback code; Loombridge cannot
 input-drive legacy polling.
 
 The controller queues the jump on edge and consumes it in `FixedUpdate` gated by `IsGrounded()`:

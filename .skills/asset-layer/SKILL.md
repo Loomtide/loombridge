@@ -1,11 +1,11 @@
 ---
 name: asset-layer
-description: Prepare curated art and audio for Loomtide demos through the asset-layer registry, including profile validation, provenance, deterministic project cache reports, attribution, and Unity import routing.
+description: Prepare curated art and audio for Loombridge demos through the asset-layer registry, including profile validation, provenance, deterministic project cache reports, attribution, and Unity import routing.
 ---
 
 # Asset Layer
 
-Use this skill when preparing curated art for Loomtide demos through the asset-layer registry.
+Use this skill when preparing curated art for Loombridge demos through the asset-layer registry.
 
 ## Asset priority — hosted registry first (canonical: `Docs/Assets/AssetPriority.md`)
 
@@ -28,26 +28,26 @@ Resolve every required role in this order, the same for 2D and 3D:
 The 3D flow is the same hosted-first order; only the profile/kind inputs differ.
 
 **Precondition:** `registry-plan`/`registry-apply` read an existing draft
-`.loomtide/ASSET_MANIFEST.json` and require `--profile`. Scaffold the draft manifest first
-(`loomtide plan --asset-mode registry` — or `hybrid`) or both commands error with
-`No .loomtide/ASSET_MANIFEST.json — run loomtide plan --asset-mode <mode> first.`
+`.loombridge/ASSET_MANIFEST.json` and require `--profile`. Scaffold the draft manifest first
+(`loombridge plan --asset-mode registry` — or `hybrid`) or both commands error with
+`No .loombridge/ASSET_MANIFEST.json — run loombridge plan --asset-mode <mode> first.`
 `registry-apply` also requires `--approved-at` and a `--selections` file you write after the
 developer picks from the candidate list.
 
 ```bash
 # 1. Browse the hosted catalog per 3D role (humans: https://assetstore.loomtide.ai/).
 #    CLI candidates (kind=model for glb):
-loomtide assets registry-plan \
+loombridge assets registry-plan \
   --catalog-api https://asset-api-production-59d9.up.railway.app \
   --profile <3d-profile.json> \
   --preferred-license CC0-1.0 \
-  --output .loomtide/reports/registry-selection-plan.json
+  --output .loombridge/reports/registry-selection-plan.json
 
 # 2. Show candidates grouped by role, recommend a cohesive kit, get approval, then apply:
-loomtide assets registry-apply \
+loombridge assets registry-apply \
   --catalog-api https://asset-api-production-59d9.up.railway.app \
   --profile <3d-profile.json> \
-  --selections .loomtide/reports/registry-selections.json \
+  --selections .loombridge/reports/registry-selections.json \
   --approved-at "<ISO timestamp>"
 ```
 
@@ -73,8 +73,8 @@ the manifest **only after** all of this is captured and shown to the developer f
   (the "registry-missing" rationale; the role's manifest `status` stays `needed`/`placeholder`
   until the asset is ingested + approved).
 
-Only `loomtide assets registry-apply` / `generated-apply` may write an approved manifest
-binding. Never hand-edit `.loomtide/ASSET_MANIFEST.json` to `approved`, and never use
+Only `loombridge assets registry-apply` / `generated-apply` may write an approved manifest
+binding. Never hand-edit `.loombridge/ASSET_MANIFEST.json` to `approved`, and never use
 `selectAssets` as the approval source (it is a silent best-match helper).
 
 ## Workflow
@@ -84,20 +84,20 @@ binding. Never hand-edit `.loomtide/ASSET_MANIFEST.json` to `approved`, and neve
 3. Validate license policy, source verification, provenance, checksum declarations, provider metadata, file format, technical metadata, and Unity path before writing a scenario.
 4. Prepare files through the provider adapter layer into a deterministic cache and emit a JSON report with source, license, provenance, cache path, cache status, sha256 checksum, provider diagnostics, and Unity destination.
 5. Generate attribution markdown from the prepare report and keep it with the run artifacts.
-6. Import prepared images with generic Loomtide tools. For sprites, use `unity_asset_create_sprite` with `source_path` and the organized Unity `path`; optional audio metadata is validation-only unless a future task wires it through generic Unity asset operations.
+6. Import prepared images with generic Loombridge tools. For sprites, use `unity_asset_create_sprite` with `source_path` and the organized Unity `path`; optional audio metadata is validation-only unless a future task wires it through generic Unity asset operations.
 7. After the game writes `build-verdict.json` / `final-verdict.json`, run the handoff consistency check so the reports cannot drift from the prepare report.
 
 For clean-room Unity projects, prefer the repo helper over ad-hoc copying:
 
 ```bash
-<loomtide-repo>/scripts/prepare-project-assets.sh \
+<loombridge-repo>/scripts/prepare-project-assets.sh \
   --project "$PWD" \
   --profile asset-layer/profiles/2d-topdown-arena.json \
   --registry asset-layer/registry/switchyard-2d.json \
   --name switchyard
 ```
 
-Then read `.loomtide/handoff/switchyard-asset-prepare-report.json` and import every accepted `sprite`
+Then read `.loombridge/handoff/switchyard-asset-prepare-report.json` and import every accepted `sprite`
 asset using its `import.toolArguments`. Audio assets in the report should be copied/imported to the
 reported Unity path and wired to gameplay. Do not ship procedural art/audio when the report contains
 accepted non-placeholder candidates for the same primitive.
@@ -105,11 +105,11 @@ accepted non-placeholder candidates for the same primitive.
 For human-visible demo runs, show the agent-selected prepared assets before importing them:
 
 ```bash
-cd <loomtide-repo>/mcp-server
+cd <loombridge-repo>/mcp-server
 npm run build
 node dist/asset-layer/browser-payload.js \
-  --prepare-report "$PROJECT/.loomtide/handoff/switchyard-asset-prepare-report.json" \
-  --output "$PROJECT/.loomtide/handoff/switchyard-asset-browser-payload.json"
+  --prepare-report "$PROJECT/.loombridge/handoff/switchyard-asset-prepare-report.json" \
+  --output "$PROJECT/.loombridge/handoff/switchyard-asset-browser-payload.json"
 ```
 
 Open the resulting JSON with `unity_asset_browser_open`, then poll `unity_asset_picker_state`.
@@ -120,13 +120,13 @@ renders browse/filter/inventory/confirm UI.
 Before final handoff, verify the registry accounting against the prepare report:
 
 ```bash
-cd <loomtide-repo>/mcp-server
+cd <loombridge-repo>/mcp-server
 npm run build
 npm run asset:handoff:check -- \
-  --prepare-report "$PROJECT/.loomtide/handoff/switchyard-asset-prepare-report.json" \
-  --verdict "$PROJECT/.loomtide/handoff/build-verdict.json,$PROJECT/.loomtide/handoff/final-verdict.json" \
-  --text "$PROJECT/.loomtide/handoff/SWITCHYARD_HANDOFF.md,$PROJECT/Assets/Scripts/Editor/SwitchyardSceneBuilder.cs" \
-  --output "$PROJECT/.loomtide/handoff/asset-handoff-consistency.json"
+  --prepare-report "$PROJECT/.loombridge/handoff/switchyard-asset-prepare-report.json" \
+  --verdict "$PROJECT/.loombridge/handoff/build-verdict.json,$PROJECT/.loombridge/handoff/final-verdict.json" \
+  --text "$PROJECT/.loombridge/handoff/SWITCHYARD_HANDOFF.md,$PROJECT/Assets/Scripts/Editor/SwitchyardSceneBuilder.cs" \
+  --output "$PROJECT/.loombridge/handoff/asset-handoff-consistency.json"
 ```
 
 This fails if a verdict says `registryAssets.used=false`, if a role lists an id that does not match

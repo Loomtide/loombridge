@@ -4,9 +4,9 @@
   "capturedAt": "2026-06-25T10:05:00.000Z",
   "host": {
     "projectName": "shooter-combat-dogfood",
-    "projectPathCanonical": "/redacted/Projects/AI/Loomtide/unity-projects/shooter-combat-dogfood",
+    "projectPathCanonical": "/redacted/Projects/AI/Loombridge/unity-projects/shooter-combat-dogfood",
     "scene": "ShooterCombatDogfood",
-    "note": "Repo-owned shooter-combat fixture (Assets/Scenes/ShooterCombatDogfood.unity), NOT a host-of-convenience. FireSource at x=0 fires DogfoodProjectile (speed 18u/s) at the Enemy (DogfoodReferenceEnemy, maxHealth=3) at x=6; each projectile trigger-collision applies 1 damage. /CombatController (DogfoodCombatReset) mirrors all six sampled fields. Captured in Play Mode through the local Loomtide bridge package; no console errors; nothing saved."
+    "note": "Repo-owned shooter-combat fixture (Assets/Scenes/ShooterCombatDogfood.unity), NOT a host-of-convenience. FireSource at x=0 fires DogfoodProjectile (speed 18u/s) at the Enemy (DogfoodReferenceEnemy, maxHealth=3) at x=6; each projectile trigger-collision applies 1 damage. /CombatController (DogfoodCombatReset) mirrors all six sampled fields. Captured in Play Mode through the local Loombridge bridge package; no console errors; nothing saved."
   },
   "request": {
     "measure": {

@@ -7,10 +7,10 @@ import {
   proposeAnimatorBool,
   proposeRoleControl,
   resolveDiscoveredRoles,
-} from "../loomtide/feel-capture/discover.js";
-import { discoverFeelSetup } from "../loomtide/feel-capture/discover-live.js";
-import { proposeFeelCaptureContract } from "../loomtide/feel-capture/setup.js";
-import { run as runVerifyCli } from "../loomtide/verify.js";
+} from "../loombridge/feel-capture/discover.js";
+import { discoverFeelSetup } from "../loombridge/feel-capture/discover-live.js";
+import { proposeFeelCaptureContract } from "../loombridge/feel-capture/setup.js";
+import { run as runVerifyCli } from "../loombridge/verify.js";
 import type { BridgeResponse } from "../types.js";
 
 /** Run the verify CLI with stderr usage noise suppressed. */

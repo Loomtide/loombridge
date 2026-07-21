@@ -775,16 +775,16 @@
       }
     },
     {
-      "id": "loomtide.switchyard.placeholder.player",
+      "id": "loombridge.switchyard.placeholder.player",
       "genre": "topdown-2d",
       "primitive": "player",
       "kind": "sprite",
       "priority": 10,
       "placeholder": true,
       "source": {
-        "title": "Loomtide procedural player fixture",
-        "url": "https://loomtide.local/assets/procedural-fixtures",
-        "author": "Loomtide",
+        "title": "Loombridge procedural player fixture",
+        "url": "https://loombridge.local/assets/procedural-fixtures",
+        "author": "Loombridge",
         "verified": true,
         "provenance": {
           "verifiedAt": "2026-05-26",
@@ -800,8 +800,8 @@
         "requiresAttribution": false
       },
       "provider": {
-        "name": "Loomtide",
-        "url": "https://loomtide.local/",
+        "name": "Loombridge",
+        "url": "https://loombridge.local/",
         "type": "local"
       },
       "files": [
@@ -832,16 +832,16 @@
       }
     },
     {
-      "id": "loomtide.switchyard.placeholder.battery",
+      "id": "loombridge.switchyard.placeholder.battery",
       "genre": "topdown-2d",
       "primitive": "battery",
       "kind": "sprite",
       "priority": 10,
       "placeholder": true,
       "source": {
-        "title": "Loomtide procedural pickup fixture",
-        "url": "https://loomtide.local/assets/procedural-fixtures",
-        "author": "Loomtide",
+        "title": "Loombridge procedural pickup fixture",
+        "url": "https://loombridge.local/assets/procedural-fixtures",
+        "author": "Loombridge",
         "verified": true,
         "provenance": {
           "verifiedAt": "2026-05-26",
@@ -857,8 +857,8 @@
         "requiresAttribution": false
       },
       "provider": {
-        "name": "Loomtide",
-        "url": "https://loomtide.local/",
+        "name": "Loombridge",
+        "url": "https://loombridge.local/",
         "type": "local"
       },
       "files": [
@@ -889,16 +889,16 @@
       }
     },
     {
-      "id": "loomtide.switchyard.placeholder.arena",
+      "id": "loombridge.switchyard.placeholder.arena",
       "genre": "topdown-2d",
       "primitive": "arena",
       "kind": "sprite",
       "priority": 10,
       "placeholder": true,
       "source": {
-        "title": "Loomtide procedural arena fixture",
-        "url": "https://loomtide.local/assets/procedural-fixtures",
-        "author": "Loomtide",
+        "title": "Loombridge procedural arena fixture",
+        "url": "https://loombridge.local/assets/procedural-fixtures",
+        "author": "Loombridge",
         "verified": true,
         "provenance": {
           "verifiedAt": "2026-05-26",
@@ -914,8 +914,8 @@
         "requiresAttribution": false
       },
       "provider": {
-        "name": "Loomtide",
-        "url": "https://loomtide.local/",
+        "name": "Loombridge",
+        "url": "https://loombridge.local/",
         "type": "local"
       },
       "files": [
@@ -946,16 +946,16 @@
       }
     },
     {
-      "id": "loomtide.switchyard.placeholder.terminal",
+      "id": "loombridge.switchyard.placeholder.terminal",
       "genre": "topdown-2d",
       "primitive": "terminal",
       "kind": "sprite",
       "priority": 10,
       "placeholder": true,
       "source": {
-        "title": "Loomtide procedural terminal fixture",
-        "url": "https://loomtide.local/assets/procedural-fixtures",
-        "author": "Loomtide",
+        "title": "Loombridge procedural terminal fixture",
+        "url": "https://loombridge.local/assets/procedural-fixtures",
+        "author": "Loombridge",
         "verified": true,
         "provenance": {
           "verifiedAt": "2026-05-26",
@@ -971,8 +971,8 @@
         "requiresAttribution": false
       },
       "provider": {
-        "name": "Loomtide",
-        "url": "https://loomtide.local/",
+        "name": "Loombridge",
+        "url": "https://loombridge.local/",
         "type": "local"
       },
       "files": [
@@ -1003,7 +1003,7 @@
       }
     },
     {
-      "id": "loomtide.switchyard.placeholder.hazard",
+      "id": "loombridge.switchyard.placeholder.hazard",
       "genre": "topdown-2d",
       "primitive": "hazard",
       "kind": "sprite",
@@ -1060,16 +1060,16 @@
       }
     },
     {
-      "id": "loomtide.switchyard.placeholder.pickup-sfx",
+      "id": "loombridge.switchyard.placeholder.pickup-sfx",
       "genre": "topdown-2d",
       "primitive": "sfx_pickup",
       "kind": "audio",
       "priority": 10,
       "placeholder": true,
       "source": {
-        "title": "Loomtide pickup SFX fixture",
-        "url": "https://loomtide.local/assets/procedural-fixtures",
-        "author": "Loomtide",
+        "title": "Loombridge pickup SFX fixture",
+        "url": "https://loombridge.local/assets/procedural-fixtures",
+        "author": "Loombridge",
         "verified": true,
         "provenance": {
           "verifiedAt": "2026-05-26",
@@ -1085,8 +1085,8 @@
         "requiresAttribution": false
       },
       "provider": {
-        "name": "Loomtide",
-        "url": "https://loomtide.local/",
+        "name": "Loombridge",
+        "url": "https://loombridge.local/",
         "type": "local"
       },
       "files": [
@@ -1115,16 +1115,16 @@
       }
     },
     {
-      "id": "loomtide.switchyard.placeholder.deposit-sfx",
+      "id": "loombridge.switchyard.placeholder.deposit-sfx",
       "genre": "topdown-2d",
       "primitive": "sfx_deposit",
       "kind": "audio",
       "priority": 10,
       "placeholder": true,
       "source": {
-        "title": "Loomtide deposit SFX fixture",
-        "url": "https://loomtide.local/assets/procedural-fixtures",
-        "author": "Loomtide",
+        "title": "Loombridge deposit SFX fixture",
+        "url": "https://loombridge.local/assets/procedural-fixtures",
+        "author": "Loombridge",
         "verified": true,
         "provenance": {
           "verifiedAt": "2026-05-26",
@@ -1140,8 +1140,8 @@
         "requiresAttribution": false
       },
       "provider": {
-        "name": "Loomtide",
-        "url": "https://loomtide.local/",
+        "name": "Loombridge",
+        "url": "https://loombridge.local/",
         "type": "local"
       },
       "files": [
@@ -1170,7 +1170,7 @@
       }
     },
     {
-      "id": "loomtide.switchyard.placeholder.dodge-sfx",
+      "id": "loombridge.switchyard.placeholder.dodge-sfx",
       "genre": "topdown-2d",
       "primitive": "sfx_dodge",
       "kind": "audio",
@@ -1226,7 +1226,7 @@
       }
     },
     {
-      "id": "loomtide.switchyard.placeholder.hit-sfx",
+      "id": "loombridge.switchyard.placeholder.hit-sfx",
       "genre": "topdown-2d",
       "primitive": "sfx_hit",
       "kind": "audio",
@@ -1282,7 +1282,7 @@
       }
     },
     {
-      "id": "loomtide.switchyard.placeholder-win-sfx",
+      "id": "loombridge.switchyard.placeholder-win-sfx",
       "genre": "topdown-2d",
       "primitive": "sfx_win",
       "kind": "audio",
@@ -1338,16 +1338,16 @@
       }
     },
     {
-      "id": "loomtide.switchyard.placeholder.lose-sfx",
+      "id": "loombridge.switchyard.placeholder.lose-sfx",
       "genre": "topdown-2d",
       "primitive": "sfx_lose",
       "kind": "audio",
       "priority": 10,
       "placeholder": true,
       "source": {
-        "title": "Loomtide lose SFX fixture",
-        "url": "https://loomtide.local/assets/procedural-fixtures",
-        "author": "Loomtide",
+        "title": "Loombridge lose SFX fixture",
+        "url": "https://loombridge.local/assets/procedural-fixtures",
+        "author": "Loombridge",
         "verified": true,
         "provenance": {
           "verifiedAt": "2026-05-26",
@@ -1363,8 +1363,8 @@
         "requiresAttribution": false
       },
       "provider": {
-        "name": "Loomtide",
-        "url": "https://loomtide.local/",
+        "name": "Loombridge",
+        "url": "https://loombridge.local/",
         "type": "local"
       },
       "files": [

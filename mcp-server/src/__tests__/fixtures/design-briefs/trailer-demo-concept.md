@@ -1,11 +1,11 @@
 # Trailer Demo: "Tiderunner" — a pixel precision dash-platformer
 
 Working title: **Tiderunner** (ties to the Loomtide brand). A short, hand-crafted vertical slice whose
-job is to make a **45-second trailer** that shows Loomtide building a *high-quality platformer with
+job is to make a **45-second trailer** that shows Loombridge building a *high-quality platformer with
 feel* — end to end, with the things no other AI-game tool shows.
 
 ## Why this game (trailer logic)
-The trailer's hero is Loomtide's differentiators, not "an AI made a game":
+The trailer's hero is Loombridge's differentiators, not "an AI made a game":
 1. **Feel, measured** — the FeelHarness tunes jump/dash to numeric targets *on screen* ("apex 2.2u,
    time-to-apex 330ms ✓"). Unique.
 2. **The verify loop** — the green/yellow collider-vs-feet overlays + the symmetric-camera probe: "the

@@ -7,9 +7,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { driveSceneAgnosticScan, type SceneScanDeps } from "../loomtide/minigame-scene-scan.js";
-import type { SceneAgnosticPlan } from "../loomtide/minigame-scene-plan.js";
-import type { MinigameContract } from "../loomtide/minigame-profiles/types.js";
+import { driveSceneAgnosticScan, type SceneScanDeps } from "../loombridge/minigame-scene-scan.js";
+import type { SceneAgnosticPlan } from "../loombridge/minigame-scene-plan.js";
+import type { MinigameContract } from "../loombridge/minigame-profiles/types.js";
 
 /** A minimal per-scene contract a fake `scanScene` returns. */
 function sceneContract(idHint: string): MinigameContract {

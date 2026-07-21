@@ -49,7 +49,7 @@
       }
     },
     {
-      "id": "loomtide.fallback.player.capsule",
+      "id": "loombridge.fallback.player.capsule",
       "genre": "3d-shooter",
       "primitive": "player_model",
       "kind": "model",
@@ -58,7 +58,7 @@
       "source": {
         "title": "Primitive Capsule (Player Fallback)",
         "url": "https://docs.unity3d.com/Manual/PrimitiveObjects.html",
-        "author": "Loomtide",
+        "author": "Loombridge",
         "verified": true,
         "provenance": {
           "verifiedAt": "2026-06-26",
@@ -73,7 +73,7 @@
         "requiresAttribution": false
       },
       "provider": {
-        "name": "Loomtide",
+        "name": "Loombridge",
         "url": "https://loomtide.ai/",
         "type": "generation"
       },
@@ -225,7 +225,7 @@
       }
     },
     {
-      "id": "loomtide.fallback.cover.cube",
+      "id": "loombridge.fallback.cover.cube",
       "genre": "3d-shooter",
       "primitive": "cover_prop",
       "kind": "model",
@@ -234,7 +234,7 @@
       "source": {
         "title": "Primitive Cube (Cover Fallback)",
         "url": "https://docs.unity3d.com/Manual/PrimitiveObjects.html",
-        "author": "Loomtide",
+        "author": "Loombridge",
         "verified": true,
         "provenance": {
           "verifiedAt": "2026-06-26",
@@ -249,7 +249,7 @@
         "requiresAttribution": false
       },
       "provider": {
-        "name": "Loomtide",
+        "name": "Loombridge",
         "url": "https://loomtide.ai/",
         "type": "generation"
       },

@@ -12,5 +12,5 @@ no `GameManager`, pickup, enemy, or dust dependencies; gameplay integration happ
 events and companion slice scripts.
 
 Verification lives in `verify-2d-game/references/feel-checks.md`: final `feel.json` must include
-`provenance.sources[]`, and `loomtide verify --slice player-feel` must pass `feel`,
+`provenance.sources[]`, and `loombridge verify --slice player-feel` must pass `feel`,
 `feel-provenance`, `physics-timestep`, `playability`, `manifest`, and `console-clean`.

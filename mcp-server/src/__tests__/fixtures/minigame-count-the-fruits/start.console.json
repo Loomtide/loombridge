@@ -1,1 +1,1 @@
-{ "state": "start", "method": "unity_editor_clear_console before Play; unity_editor_get_state.error_count", "errorCount": 0, "gameWarningsOrErrors": [], "note": "console-clean would PASS; only [UnityBridge] infra logs present" }
+{ "state": "start", "method": "unity_editor_clear_console before Play; unity_editor_get_state.error_count", "errorCount": 0, "gameWarningsOrErrors": [], "note": "console-clean would PASS; only [Loombridge] infra logs present" }

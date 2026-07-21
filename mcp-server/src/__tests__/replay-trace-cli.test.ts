@@ -4,8 +4,8 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import { discoverTraces, parseStateSignal, readEnter, replayExitCode, run } from "../loomtide/trace.js";
-import { flatReplayLayout, standardReplayLayout } from "../loomtide/state.js";
+import { discoverTraces, parseStateSignal, readEnter, replayExitCode, run } from "../loombridge/trace.js";
+import { flatReplayLayout, standardReplayLayout } from "../loombridge/state.js";
 
 test("parseStateSignal: <path>:<Component>:<property> → meta shape", () => {
   assert.deepEqual(parseStateSignal("/Canvas/GM:ChefGameManager:phase"), {
@@ -28,11 +28,11 @@ test("trace record: a malformed --state-signal (no colons) is a usage error (exi
   );
 });
 
-test("replay layouts: standard nests under .loomtide/replays/, flat sits directly under root", () => {
+test("replay layouts: standard nests under .loombridge/replays/, flat sits directly under root", () => {
   const std = standardReplayLayout("/proj");
-  assert.equal(std.replayTraces, path.join("/proj", ".loomtide", "replays", "traces"));
-  assert.equal(std.replayReports, path.join("/proj", ".loomtide", "replays", "reports"));
-  assert.equal(std.replayBaselines, path.join("/proj", ".loomtide", "replays", "baselines"));
+  assert.equal(std.replayTraces, path.join("/proj", ".loombridge", "replays", "traces"));
+  assert.equal(std.replayReports, path.join("/proj", ".loombridge", "replays", "reports"));
+  assert.equal(std.replayBaselines, path.join("/proj", ".loombridge", "replays", "baselines"));
 
   const flat = flatReplayLayout("/ws");
   assert.equal(flat.replays, "/ws");
@@ -46,7 +46,7 @@ async function writeReport(
   id: string,
   captures: Array<{ id: string; artifact: string }>,
 ): Promise<void> {
-  const reports = path.join(root, ".loomtide", "replays", "reports");
+  const reports = path.join(root, ".loombridge", "replays", "reports");
   await fs.mkdir(reports, { recursive: true });
   const artifact = {
     traceId: id,
@@ -106,14 +106,14 @@ test("trace replay-all: a bad trace does NOT abort the fleet — the roll-up is 
   // and exit 1 — not abort on the first and discard the roll-up (review F1).
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "trace-fleet-"));
   try {
-    const traces = path.join(root, ".loomtide", "replays", "traces");
+    const traces = path.join(root, ".loombridge", "replays", "traces");
     await fs.mkdir(traces, { recursive: true });
     await fs.writeFile(path.join(traces, "a.trace.json"), "this is not json{");
     await fs.writeFile(path.join(traces, "b.trace.json"), "{}"); // valid json, invalid trace
 
     assert.equal(await run(["replay-all", "--root", root]), 1);
 
-    const fleetJson = path.join(root, ".loomtide", "replays", "fleet.report.json");
+    const fleetJson = path.join(root, ".loombridge", "replays", "fleet.report.json");
     const fleet = JSON.parse(await fs.readFile(fleetJson, "utf8"));
     assert.equal(fleet.status, "fail");
     assert.equal(fleet.counts.total, 2, "both traces are recorded, not dropped");
@@ -179,7 +179,7 @@ test("trace report: a missing report is a friendly failure (exit 1)", async () =
 test("trace report: invalid report JSON is a friendly failure (exit 1)", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "trace-report-"));
   try {
-    const reports = path.join(root, ".loomtide", "replays", "reports");
+    const reports = path.join(root, ".loombridge", "replays", "reports");
     await fs.mkdir(reports, { recursive: true });
     await fs.writeFile(path.join(reports, "bad.report.json"), '{"not":"a report"}');
     assert.equal(await run(["report", "--id", "bad", "--root", root]), 1);
@@ -191,7 +191,7 @@ test("trace report: invalid report JSON is a friendly failure (exit 1)", async (
 test("trace approve: copies the run's captures to the baseline dir (exit 0)", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "trace-approve-"));
   try {
-    const reports = path.join(root, ".loomtide", "replays", "reports");
+    const reports = path.join(root, ".loombridge", "replays", "reports");
     await fs.mkdir(path.join(reports, "demo", "actual"), { recursive: true });
     const actualPng = path.join(reports, "demo", "actual", "cap.png");
     await fs.writeFile(actualPng, Buffer.from("png-bytes"));
@@ -211,7 +211,7 @@ test("trace approve: copies the run's captures to the baseline dir (exit 0)", as
     await fs.writeFile(path.join(reports, "demo.report.json"), JSON.stringify(artifact));
 
     assert.equal(await run(["approve", "--id", "demo", "--root", root]), 0);
-    const baseline = path.join(root, ".loomtide", "replays", "baselines", "demo", "cap.png");
+    const baseline = path.join(root, ".loombridge", "replays", "baselines", "demo", "cap.png");
     assert.deepEqual(await fs.readFile(baseline), Buffer.from("png-bytes"));
   } finally {
     await fs.rm(root, { recursive: true, force: true });
@@ -230,14 +230,14 @@ test("trace approve: a missing report is a friendly failure (exit 1)", async () 
 test("trace approve: an unsafe capture.id is skipped — no traversal write (exit 1)", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "trace-approve-"));
   try {
-    const actual = path.join(root, ".loomtide", "replays", "reports", "demo", "actual", "cap.png");
+    const actual = path.join(root, ".loombridge", "replays", "reports", "demo", "actual", "cap.png");
     await fs.mkdir(path.dirname(actual), { recursive: true });
     await fs.writeFile(actual, Buffer.from("png-bytes"));
     await writeReport(root, "demo", [{ id: "../../EVIL", artifact: actual }]);
 
     assert.equal(await run(["approve", "--id", "demo", "--root", root]), 1, "nothing approved");
     await assert.rejects(
-      fs.access(path.join(root, ".loomtide", "replays", "EVIL.png")),
+      fs.access(path.join(root, ".loombridge", "replays", "EVIL.png")),
       "the traversal target must not be written",
     );
   } finally {
@@ -245,7 +245,7 @@ test("trace approve: an unsafe capture.id is skipped — no traversal write (exi
   }
 });
 
-test("trace approve: a capture.artifact outside .loomtide/replays is not copied (exit 1)", async () => {
+test("trace approve: a capture.artifact outside .loombridge/replays is not copied (exit 1)", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "trace-approve-"));
   const secret = path.join(os.tmpdir(), `secret-${process.pid}-${Date.now()}.txt`);
   try {
@@ -254,7 +254,7 @@ test("trace approve: a capture.artifact outside .loomtide/replays is not copied 
 
     assert.equal(await run(["approve", "--id", "demo", "--root", root]), 1, "nothing approved");
     await assert.rejects(
-      fs.access(path.join(root, ".loomtide", "replays", "baselines", "demo", "cap.png")),
+      fs.access(path.join(root, ".loombridge", "replays", "baselines", "demo", "cap.png")),
       "an out-of-tree source must not be copied into baselines",
     );
   } finally {
@@ -271,11 +271,11 @@ test("replayExitCode: pass→0, pass+drift→0 (warn) unless --strict-visual, no
   assert.equal(replayExitCode({ status: "blocked" }, true), 1);
 });
 
-test("trace report --flat: reads/writes the FLAT workspace layout (no nested .loomtide/)", async () => {
+test("trace report --flat: reads/writes the FLAT workspace layout (no nested .loombridge/)", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "trace-flat-"));
   try {
     // Flat layout: reports live directly under <root>/reports, captures under
-    // <root>/reports/<id>/actual — NOT <root>/.loomtide/replays/...
+    // <root>/reports/<id>/actual — NOT <root>/.loombridge/replays/...
     const reports = path.join(root, "reports");
     await fs.mkdir(path.join(reports, "demo", "actual"), { recursive: true });
     const pngPath = path.join(reports, "demo", "actual", "cap.png");
@@ -299,8 +299,8 @@ test("trace report --flat: reads/writes the FLAT workspace layout (no nested .lo
     // HTML written to the flat location, and the capture (under <root>/reports) inlined.
     const html = await fs.readFile(path.join(reports, "demo.report.html"), "utf8");
     assert.match(html, /data:image\/png;base64,/, "flat-layout capture is inlined");
-    // The nested .loomtide/ layout must NOT be created under --flat.
-    await assert.rejects(fs.access(path.join(root, ".loomtide")));
+    // The nested .loombridge/ layout must NOT be created under --flat.
+    await assert.rejects(fs.access(path.join(root, ".loombridge")));
   } finally {
     await fs.rm(root, { recursive: true, force: true });
   }
@@ -344,7 +344,7 @@ test("trace report --flat: a report PNG OUTSIDE reports/ (but inside the workspa
 test("trace report: renders self-contained HTML from a valid report (exit 0)", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "trace-report-"));
   try {
-    const reports = path.join(root, ".loomtide", "replays", "reports");
+    const reports = path.join(root, ".loombridge", "replays", "reports");
     await fs.mkdir(path.join(reports, "demo", "actual"), { recursive: true });
     const pngPath = path.join(reports, "demo", "actual", "cap.png");
     await fs.writeFile(pngPath, Buffer.from("png-bytes"));

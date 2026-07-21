@@ -6,7 +6,7 @@
  * HAND-AUTHORS it (a curated console.json can hide runtime errors).
  *
  * Some slices (e.g. `parallax`) require `console-clean` but have NO `framing`
- * rects to project and NO `GroundTiling` tiles to write — `loomtide capture`
+ * rects to project and NO `GroundTiling` tiles to write — `loombridge capture`
  * otherwise had no recipe for them and refused.
  *
  * This module captures BOTH the play-enter STARTUP logs and the STEADY-state
@@ -44,7 +44,7 @@ export interface CaptureConsoleArgs {
   settleFrames?: number;
   /** Frames of steady-state gameplay to soak after the startup snapshot (default 30). */
   soakFrames?: number;
-  /** Optional multi-editor routing target. Falls back to LOOMTIDE_UNITY_PROJECT. */
+  /** Optional multi-editor routing target. Falls back to LOOMBRIDGE_UNITY_PROJECT. */
   project?: string;
 }
 
@@ -204,7 +204,7 @@ export async function captureConsoleEvidence(args: CaptureConsoleArgs): Promise<
   const phased = partitionConsolePhases(startupSnapshot, fullSnapshot);
 
   const provenance = {
-    writer: "loomtide capture (console)",
+    writer: "loombridge capture (console)",
     capturedAt,
     capturedInPlayMode: true,
     note:

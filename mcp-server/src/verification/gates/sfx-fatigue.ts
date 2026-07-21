@@ -43,9 +43,9 @@
  */
 
 import { makeGateReport, type GateCheck, type GateReport } from "./types.js";
-import { noRepeatCues, type CueMapSchema } from "../../loomtide/sfx/cue-map.js";
-import type { SfxSequenceCapture, SfxSequenceEvent } from "../../loomtide/sfx/capture-shapes.js";
-import { validateSfxProbeSnapshot, type SfxProbeSnapshot } from "../../loomtide/sfx/probe-contract.js";
+import { noRepeatCues, type CueMapSchema } from "../../loombridge/sfx/cue-map.js";
+import type { SfxSequenceCapture, SfxSequenceEvent } from "../../loombridge/sfx/capture-shapes.js";
+import { validateSfxProbeSnapshot, type SfxProbeSnapshot } from "../../loombridge/sfx/probe-contract.js";
 
 export const GATE_NAME = "sfx-fatigue";
 

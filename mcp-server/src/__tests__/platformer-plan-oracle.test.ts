@@ -5,8 +5,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 
-import { runPlan } from "../loomtide/plan.js";
-import { loomtidePaths } from "../loomtide/state.js";
+import { runPlan } from "../loombridge/plan.js";
+import { loombridgePaths } from "../loombridge/state.js";
 
 /**
  * Platformer REGRESSION ORACLE (slice-2 of genre-pack decoupling). Freezes the deterministic platformer
@@ -35,7 +35,7 @@ const GOLDEN_PATH = path.join(
 );
 
 async function seededPlatformerAcceptance(): Promise<unknown> {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), "loomtide-oracle-"));
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "loombridge-oracle-"));
   try {
     const code = await runPlan({
       root,
@@ -45,7 +45,7 @@ async function seededPlatformerAcceptance(): Promise<unknown> {
       allowMissingDesignTarget: true,
     });
     assert.equal(code, 0, "runPlan --genre platformer-2d must succeed");
-    const contract = JSON.parse(await fs.readFile(loomtidePaths(root).acceptance, "utf-8"));
+    const contract = JSON.parse(await fs.readFile(loombridgePaths(root).acceptance, "utf-8"));
     // `game` is the only run-varying field (random temp basename) — normalize it for a stable snapshot.
     contract.game = GOLDEN_GAME;
     return contract;

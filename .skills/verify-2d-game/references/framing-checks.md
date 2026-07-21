@@ -16,13 +16,13 @@ Pass the player + every object you require in-frame (goal, hazards, key collecti
 
 Save the returned object verbatim to `screen-rects.json`.
 
-**Write it with the raw capture writer, not by hand — `loomtide capture`.** A hand-authored `screen-rects.json` can claim any camera (so the camera check below grades fiction), and a hand-curated `console.json` can hide errors. Use:
+**Write it with the raw capture writer, not by hand — `loombridge capture`.** A hand-authored `screen-rects.json` can claim any camera (so the camera check below grades fiction), and a hand-curated `console.json` can hide errors. Use:
 
 ```
-loomtide capture --slice <id> --root . [--locators /Player,/Level/Flag,...]
+loombridge capture --slice <id> --root . [--locators /Player,/Level/Flag,...]
 ```
 
-It reads the **authored** Camera `orthographicSize` in **EDIT mode** first (`camera.authoredOrthographicSize` — before PixelPerfect's runtime overscan), then enters Play Mode, runs `unity_scene_get_screen_rects`, reads the live `PixelPerfectCamera` via `unity_component_get_properties` and **merges its settings into the returned `camera` block** (`camera.pixelPerfect = { assetsPPU, refResolutionX, refResolutionY, upscaleRT, pixelSnapping }`), pulls `unity_editor_console_logs`, restores Edit Mode, and stamps a `_provenance` block into both `screen-rects.json` and `console.json` under `.loomtide/verify/<id>/`. The window-dependent **runtime** `orthographicSize`/`viewport.aspect` are recorded but **not** hard-checked (a non-16:9 Game view overscans when `cropFrame` is off — e.g. authored 4.5 reads ~5.85 at runtime); the gate enforces the **authored** value instead.
+It reads the **authored** Camera `orthographicSize` in **EDIT mode** first (`camera.authoredOrthographicSize` — before PixelPerfect's runtime overscan), then enters Play Mode, runs `unity_scene_get_screen_rects`, reads the live `PixelPerfectCamera` via `unity_component_get_properties` and **merges its settings into the returned `camera` block** (`camera.pixelPerfect = { assetsPPU, refResolutionX, refResolutionY, upscaleRT, pixelSnapping }`), pulls `unity_editor_console_logs`, restores Edit Mode, and stamps a `_provenance` block into both `screen-rects.json` and `console.json` under `.loombridge/verify/<id>/`. The window-dependent **runtime** `orthographicSize`/`viewport.aspect` are recorded but **not** hard-checked (a non-16:9 Game view overscans when `cropFrame` is off — e.g. authored 4.5 reads ~5.85 at runtime); the gate enforces the **authored** value instead.
 
 ## Render-frame capture (actual Game-view fill)
 
@@ -62,18 +62,18 @@ Default capture + analyzer:
    at `trigger:"apexY"`. The op drives the jump phases, samples motion, and captures screenshots
    inside the same pinned runtime loop, so no separate screenshot call can miss an airborne state.
    Do not rely on apex alone: some seams only appear while the camera is moving.
-3. Decode the returned `frames[].image_base64` values into `.loomtide/verify/<state>/frames/<id>.png` (per-state — matches where the speed runner writes that state's frames, and where `loomtide verify --inputs .loomtide/verify/<state>` reads from).
+3. Decode the returned `frames[].image_base64` values into `.loombridge/verify/<state>/frames/<id>.png` (per-state — matches where the speed runner writes that state's frames, and where `loombridge verify --inputs .loombridge/verify/<state>` reads from).
 4. Run the analyzer from the repo root (writes the per-state `visual-artifacts.json` the gate consumes):
 
 ```bash
 node mcp-server/dist/verification/analyze-frames.js \
   --baseline-id spawn \
-  --baseline .loomtide/verify/<state>/frames/spawn.png \
+  --baseline .loombridge/verify/<state>/frames/spawn.png \
   --stress-id jump-rise \
-  --stress .loomtide/verify/<state>/frames/jump-rise.png \
+  --stress .loombridge/verify/<state>/frames/jump-rise.png \
   --stress-id jump-apex \
-  --stress .loomtide/verify/<state>/frames/jump-apex.png \
-  --output .loomtide/verify/<state>/visual-artifacts.json
+  --stress .loombridge/verify/<state>/frames/jump-apex.png \
+  --output .loombridge/verify/<state>/visual-artifacts.json
 ```
 
 The analyzer compares the baseline against action/stress frames and scans only the stable background
@@ -206,7 +206,7 @@ through that camera (`renderMode == "ScreenSpaceCamera"` referencing it) — the
   - **camera.position** — `camera.position` within ±0.05 world units of `framing.camera.worldPosition` ⇒ pass; off ⇒ **fail** (a static camera transform is deterministic).
   - **camera.orthographicSize** — the AUTHORED half-height (`camera.authoredOrthographicSize`, captured in edit mode) within ±0.01 of `framing.camera.orthographicSize` ⇒ pass; off ⇒ **fail**. The **runtime** `camera.orthographicSize` is recorded but NOT enforced (PixelPerfect overscans it off-16:9).
   - **camera.pixelPerfect.assetsPPU / .refResolution / .upscaleRT** — must equal `framing.camera.pixelPerfect`; mismatch ⇒ **fail**. `upscaleRT` is the blurry-HUD pin (usually `false`). **camera.pixelPerfect.pixelSnapping** mismatch ⇒ **warn**.
-  - **Degraded captures** — a `screen-rects.json` with no `camera` block (`camera.capture`), no `authoredOrthographicSize` (`camera.orthographicSize`), or no `pixelPerfect` block (`camera.pixelPerfect`) ⇒ **warn** ("re-capture with `loomtide capture`"), not a false green.
+  - **Degraded captures** — a `screen-rects.json` with no `camera` block (`camera.capture`), no `authoredOrthographicSize` (`camera.orthographicSize`), or no `pixelPerfect` block (`camera.pixelPerfect`) ⇒ **warn** ("re-capture with `loombridge capture`"), not a false green.
 
 Player matched by name containing `player`/`ninja`/`frog`, or a `playerNameHint` option.
 

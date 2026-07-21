@@ -33,12 +33,12 @@ Produced by `run-gates.js` (aggregates the per-gate `GateReport`s). This is what
   running the consistency checker with its required flags from the repo root:
   ```bash
   node mcp-server/dist/asset-layer/handoff-consistency.js \
-    --prepare-report .loomtide/handoff/<genre>-asset-prepare-report.json \
-    --verdict .loomtide/reports/build-verdict.json \
-    --output .loomtide/handoff/asset-handoff-consistency.json
+    --prepare-report .loombridge/handoff/<genre>-asset-prepare-report.json \
+    --verdict .loombridge/reports/build-verdict.json \
+    --output .loombridge/handoff/asset-handoff-consistency.json
   ```
   (The bare `npm run asset:handoff:check` script omits `--prepare-report` and exits 1 — see the canonical
-  command in SKILL.md §6 and `commands/loomtide/build.md` §7.)
+  command in SKILL.md §6 and `commands/loombridge/build.md` §7.)
 
 ### Captured inputs → gate map
 

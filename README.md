@@ -1,25 +1,25 @@
-# Loomtide
+# Loombridge
 
 **Game-feel engineering for AI-built games** — [loomtide.ai](https://loomtide.ai)
 
-Loomtide helps AI agents build games with feel and polish: a production-grade pipeline that turns an idea into measurable slices with feel targets and gates (**plan**), authors gameplay in-engine with reusable, genre-aware skills (**build**), and measures the running game against its targets — proof, not vibes (**verify**). Unity is the first supported engine; the deterministic CLI core is engine-agnostic.
+Loombridge helps AI agents build games with feel and polish: a production-grade pipeline that turns an idea into measurable slices with feel targets and gates (**plan**), authors gameplay in-engine with reusable, genre-aware skills (**build**), and measures the running game against its targets — proof, not vibes (**verify**). Unity is the first supported engine; the deterministic CLI core is engine-agnostic.
 
 The mechanism is two layers:
 
-- **The bridge** — Loomtide's "Playwright for Unity" layer: an MCP (stdio) server + a C# Unity Editor plugin, exposing 121 generic `unity_*` tools (scene, editor, component, code, animator, UI, asset, input, runtime, package, capture, batch).
-- **The `loomtide` CLI**: a deterministic, agent-agnostic command set (`plan` / `build` / `verify` / `doneness`, plus `minigame`, `trace`, `design`, `assets`, `status`, `ask`) that owns project state in `.loomtide/` and enforces verification contracts so a "done" claim can never be self-graded.
+- **The bridge** — Loombridge's "Playwright for Unity" layer: an MCP (stdio) server + a C# Unity Editor plugin, exposing 121 generic `unity_*` tools (scene, editor, component, code, animator, UI, asset, input, runtime, package, capture, batch).
+- **The `loombridge` CLI**: a deterministic, agent-agnostic command set (`plan` / `build` / `verify` / `doneness`, plus `minigame`, `trace`, `design`, `assets`, `status`, `ask`) that owns project state in `.loombridge/` and enforces verification contracts so a "done" claim can never be self-graded.
 
 See [`ARCHITECTURE.md`](ARCHITECTURE.md) for the full system design.
 
 ## Repository Layout
 
-- `packages/com.loomtide.unitybridge/`: canonical UPM package source (Editor, Runtime, Tests).
-- `mcp-server/`: TypeScript MCP server (stdio) **and** the `loomtide` CLI (`src/cli.ts`, `src/loomtide/`).
-- `unity-projects/loomtide-dev/`: primary Unity project for package development and EditMode tests.
+- `packages/com.loomtide.loombridge/`: canonical UPM package source (Editor, Runtime, Tests).
+- `mcp-server/`: TypeScript MCP server (stdio) **and** the `loombridge` CLI (`src/cli.ts`, `src/loombridge/`).
+- `unity-projects/loombridge-dev/`: primary Unity project for package development and EditMode tests.
 - `unity-projects/demo-platformer/`: demo Unity project consuming the package via local `file:` dependency.
 - `apps/asset-api/`: read-only hosted asset search API (Railway-deployed).
 - `asset-layer/`: curated registry, profiles, public catalog seed, license/provenance metadata.
-- `commands/loomtide/`: agent-facing slash-command prose (Codex wrappers are generator-emitted).
+- `commands/loombridge/`: agent-facing slash-command prose (Codex wrappers are generator-emitted).
 - `scripts/`: install/freeze, build stamping, smoke and reliability scripts.
 - `Docs/`: product docs — `Profiles/` (verify contracts + partner guides), `Assets/` (hosted asset registry), `FutureIdeas/ReplayVerification.md` (replay design + status).
 - `demo/`: demo playbook content.
@@ -44,22 +44,22 @@ npm run build
 ```
 
 2. Open a Unity project based on your workflow:
-   - package tests/development: `unity-projects/loomtide-dev`
+   - package tests/development: `unity-projects/loombridge-dev`
    - demo playtesting: `unity-projects/demo-platformer`
-3. Wait for Unity console logs with the `[UnityBridge]` prefix:
-   - `[UnityBridge] Bootstrap initializing`
-   - `[UnityBridge] Server started on ws://localhost:82xx`
+3. Wait for Unity console logs with the `[Loombridge]` prefix:
+   - `[Loombridge] Bootstrap initializing`
+   - `[Loombridge] Server started on ws://localhost:82xx`
 4. Configure your MCP client to run the server. With the installed CLI (the usual way):
-   - command: `loomtide`, args: `["mcp"]`
+   - command: `loombridge`, args: `["mcp"]`
 
    or straight from this repo's build:
    - command: `node`, args: `["/absolute/path/to/mcp-server/dist/index.js"]`
 
-For multi-project workflows, configure each MCP session with `LOOMTIDE_UNITY_PROJECT` so it binds
+For multi-project workflows, configure each MCP session with `LOOMBRIDGE_UNITY_PROJECT` so it binds
 strictly to the intended Unity project and never falls through to another open editor. Sessions can
-also switch targets at runtime via the `loomtide_editor_list` / `loomtide_editor_use` tools.
+also switch targets at runtime via the `loombridge_editor_list` / `loombridge_editor_use` tools.
 
-## The `loomtide` CLI
+## The `loombridge` CLI
 
 The CLI is delivered through GitHub Releases on the private **distribution repo**
 (`Loomtide/loombridge` — release assets only, so partners never need access to this source
@@ -85,49 +85,49 @@ present, the bootstrap needs no elevation and is safe to re-run as an updater.
 ```bash
 gh auth login                                             # one-time (GitHub account you already have)
 curl -fsSL https://get.loomtide.ai | sh                   # install the CLI; re-run to update
-loomtide --version                                        # loomtide <version> (<commit>, built <iso>)
+loombridge --version                                        # loombridge <version> (<commit>, built <iso>)
 ```
 
 Then wire and health-check any Unity project (no repo clone):
 
 ```bash
-loomtide install-bridge --project /path/to/UnityProject   # adds the bridge as a file: tarball dependency
-loomtide install-agent  --project /path/to/UnityProject   # OPTIONAL: commit the agent commands + skills into the repo (team-wide; --remove opts out)
-loomtide doctor         --project /path/to/UnityProject   # health check (--live also probes the running bridge)
-loomtide update         --project /path/to/UnityProject   # swap in this CLI's bundled bridge, then re-check
+loombridge install-bridge --project /path/to/UnityProject   # adds the bridge as a file: tarball dependency
+loombridge install-agent  --project /path/to/UnityProject   # OPTIONAL: commit the agent commands + skills into the repo (team-wide; --remove opts out)
+loombridge doctor         --project /path/to/UnityProject   # health check (--live also probes the running bridge)
+loombridge update         --project /path/to/UnityProject   # swap in this CLI's bundled bridge, then re-check
 ```
 
 Working **from this repo** (contributor paths):
 
 ```bash
-# agent surface (slash commands, skills, aux harness wrappers -> ~/.local/bin/loomtide-*):
-./scripts/loomtide-install-locally.sh     # deliberately does NOT install a `loomtide` bin —
+# agent surface (slash commands, skills, aux harness wrappers -> ~/.local/bin/loombridge-*):
+./scripts/loombridge-install-locally.sh     # deliberately does NOT install a `loombridge` bin —
                                           # that would shadow the released CLI on PATH
 
 # test UNRELEASED CLI changes: link the dev bin (follows every `npm run build`):
-cd mcp-server && npm link                 # `loomtide --version` shows your local commit (+dirty)
+cd mcp-server && npm link                 # `loombridge --version` shows your local commit (+dirty)
 
 # push THIS checkout's bridge into a consumer project without cutting a release:
-scripts/loomtide-dev-update.sh --project /path/to/UnityProject
+scripts/loombridge-dev-update.sh --project /path/to/UnityProject
 
 # cut a release (maintainers) — partners pick it up via the same curl one-liner:
-scripts/loomtide-release.sh
+scripts/loombridge-release.sh
 ```
 
-Main verbs (see `ARCHITECTURE.md` § "The `loomtide` CLI Product Layer"):
+Main verbs (see `ARCHITECTURE.md` § "The `loombridge` CLI Product Layer"):
 
-- `loomtide plan` / `build` / `verify` / `doneness` — the supervised build loop (slice roadmap → Tier-1 deterministic gates → runId-bound doneness with hero-shot fidelity).
-- `loomtide verify --profile <precision|classic|momentum>` — verify-first feel grading of an existing 2D platformer ([`Docs/Profiles/VerifyFirstEntry.md`](Docs/Profiles/VerifyFirstEntry.md)).
-- `loomtide verify --minigame` + `loomtide minigame <init|setup|capture|finalize|baseline …>` — release verification for 2D mini-games with a partner-clean HTML/MD report and a frozen `0/1/2` exit contract ([`Docs/Profiles/MiniGameVerifyQuickstart.md`](Docs/Profiles/MiniGameVerifyQuickstart.md), CI guide: [`Docs/Profiles/MiniGameVerifyCI.md`](Docs/Profiles/MiniGameVerifyCI.md)).
-- `loomtide trace <record --observe|replay|replay-all|approve|report>` — replay verification: record a human demonstration once, replay it deterministically with perceptual baseline diffs ([`Docs/FutureIdeas/ReplayVerification.md`](Docs/FutureIdeas/ReplayVerification.md)).
-- `loomtide assets <registry-plan|registry-apply|generated-plan|generated-apply>` — deterministic Asset Manifest approval, including `registry-apply --from-selection <web-selection.json>` for asset-web exports.
-- `loomtide mcp` — runs the MCP stdio server (same dist as the `loomtide-mcp` bin).
+- `loombridge plan` / `build` / `verify` / `doneness` — the supervised build loop (slice roadmap → Tier-1 deterministic gates → runId-bound doneness with hero-shot fidelity).
+- `loombridge verify --profile <precision|classic|momentum>` — verify-first feel grading of an existing 2D platformer ([`Docs/Profiles/VerifyFirstEntry.md`](Docs/Profiles/VerifyFirstEntry.md)).
+- `loombridge verify --minigame` + `loombridge minigame <init|setup|capture|finalize|baseline …>` — release verification for 2D mini-games with a partner-clean HTML/MD report and a frozen `0/1/2` exit contract ([`Docs/Profiles/MiniGameVerifyQuickstart.md`](Docs/Profiles/MiniGameVerifyQuickstart.md), CI guide: [`Docs/Profiles/MiniGameVerifyCI.md`](Docs/Profiles/MiniGameVerifyCI.md)).
+- `loombridge trace <record --observe|replay|replay-all|approve|report>` — replay verification: record a human demonstration once, replay it deterministically with perceptual baseline diffs ([`Docs/FutureIdeas/ReplayVerification.md`](Docs/FutureIdeas/ReplayVerification.md)).
+- `loombridge assets <registry-plan|registry-apply|generated-plan|generated-apply>` — deterministic Asset Manifest approval, including `registry-apply --from-selection <web-selection.json>` for asset-web exports.
+- `loombridge mcp` — runs the MCP stdio server (same dist as the `loombridge-mcp` bin).
 
 ## Asset Layer & Hosted Catalog
 
 The local asset layer prepares curated, license/provenance-enforced art before Unity import; registry/profile data is genre-specific but import happens only through generic `unity_*` tools.
 
-A **public hosted asset catalog is live**: 66,859 records (PNG sprites, OGG audio, self-contained GLB models, SVG vectors) on Cloudflare R2 + Railway Postgres behind a read-only search API, browsable inside Unity via **Window → Loomtide → Asset Browser**. As-built state and operations: [`Docs/Assets/HostedAssetRegistry.md`](Docs/Assets/HostedAssetRegistry.md); external quickstart: [`Docs/Assets/PublicCatalogQuickstart.md`](Docs/Assets/PublicCatalogQuickstart.md).
+A **public hosted asset catalog is live**: 66,859 records (PNG sprites, OGG audio, self-contained GLB models, SVG vectors) on Cloudflare R2 + Railway Postgres behind a read-only search API, browsable inside Unity via **Window → Loombridge → Asset Browser**. As-built state and operations: [`Docs/Assets/HostedAssetRegistry.md`](Docs/Assets/HostedAssetRegistry.md); external quickstart: [`Docs/Assets/PublicCatalogQuickstart.md`](Docs/Assets/PublicCatalogQuickstart.md).
 
 From `mcp-server/`:
 
@@ -156,17 +156,17 @@ npm run verify:phase3:baseline    # full baseline verification
 Cross-project matrix runs (profile-driven, both Unity projects):
 
 ```bash
-npm run matrix:cross-project:loomtide-dev      # with unity-projects/loomtide-dev open
+npm run matrix:cross-project:loombridge-dev      # with unity-projects/loombridge-dev open
 npm run matrix:cross-project:demo-platformer   # with unity-projects/demo-platformer open
 ```
 
 Status interpretation: `pass` = baseline + connected scenario succeeded; `blocked` = deterministic environment blocker (e.g. `EPERM_LOOPBACK`, `TIMEOUT_CONNECT`) preserved as evidence, not a product pass; `fail` = real regression.
 
-EditMode tests run headless from `unity-projects/loomtide-dev` (see `TESTING.md` for the batchmode command and gotchas).
+EditMode tests run headless from `unity-projects/loombridge-dev` (see `TESTING.md` for the batchmode command and gotchas).
 
 ## Transport Modes and Endpoint Discovery
 
-- `LOOMTIDE_UNITY_TRANSPORT_MODE`:
+- `LOOMBRIDGE_UNITY_TRANSPORT_MODE`:
   - `auto` (default): endpoint discovery (`ipc` first, then discovered `tcp`), then legacy TCP port probe (`8200-8210`).
   - `ipc`: require endpoint discovery with an IPC endpoint; no TCP fallback.
   - `tcp`: discovered TCP endpoints first, then legacy port probe.
@@ -174,7 +174,7 @@ EditMode tests run headless from `unity-projects/loomtide-dev` (see `TESTING.md`
   `ws+unix:<path>:/` URL (ws ignores a `socketPath` option, so that URL form is the only one that works).
 - `doctor --live` reports the transport it settled on (`live.transport`, also in `--ci` JSON) — an
   `auto` run that silently degrades from `ipc` to `tcp` is therefore visible rather than invisible.
-- `LOOMTIDE_ENDPOINT_DISCOVERY_DIR` / `LOOMTIDE_ENDPOINT_DISCOVERY_FILE`: optional overrides for where Unity publishes / MCP reads `endpoint-discovery-latest.json` (default: `<temp>/loomtide/unitybridge/`).
+- `LOOMBRIDGE_ENDPOINT_DISCOVERY_DIR` / `LOOMBRIDGE_ENDPOINT_DISCOVERY_FILE`: optional overrides for where Unity publishes / MCP reads `endpoint-discovery-latest.json` (default: `<temp>/loombridge/unitybridge/`).
 
 ## Notes
 

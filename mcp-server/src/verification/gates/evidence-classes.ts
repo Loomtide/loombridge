@@ -12,7 +12,7 @@
  * from an already-assembled Tier-1 verdict's gate statuses + checks. The block is
  * ALWAYS emitted — a class with no producing gate wired today is reported
  * `"absent"` with source `"no-producer"`, NEVER omitted (refuse-not-skip: an
- * absent signal must be VISIBLE, not missing). `loomtide doneness` can then refuse
+ * absent signal must be VISIBLE, not missing). `loombridge doneness` can then refuse
  * a build whose contract declares `requiredEvidenceClasses` that are not all
  * `"present"` (see `doneness.ts`).
  *

@@ -1,5 +1,5 @@
 /**
- * S8e — `loomtide minigame check` orchestration core.
+ * S8e — `loombridge minigame check` orchestration core.
  *
  * Tests the injected decision loop only. The real command composes scan/sync/run;
  * those pieces are tested separately and are deliberately not reimplemented here.
@@ -8,8 +8,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { continueThroughRecordFor, driveCheck, parseArgs, scenesConflict, type CheckDeps } from "../loomtide/minigame-check.js";
-import type { ContractDiff } from "../loomtide/minigame-sync.js";
+import { continueThroughRecordFor, driveCheck, parseArgs, scenesConflict, type CheckDeps } from "../loombridge/minigame-check.js";
+import type { ContractDiff } from "../loombridge/minigame-sync.js";
 
 test("parseArgs (Phase 0): --record-scene is parsed + validated as an asset path; --id normalizes; --scene stays the contract scene", () => {
   const ok = parseArgs(["--scene", "Assets/Scenes/StarChef.unity", "--id", "StarChef", "--record-scene", "Assets/Scenes/Home.unity"]);
@@ -64,7 +64,7 @@ function deps(overrides: Partial<CheckDeps> = {}) {
     runScanStep: async () => { calls.push("scan"); return 0; },
     syncDiff: async () => { calls.push("sync"); return emptyDiff(); },
     delegateToRun: async () => { calls.push("run"); return 0; },
-    nextSteps: async () => { calls.push("nextSteps"); return ["👉 Next — Record your happy path…", "   loomtide trace record --observe …"]; },
+    nextSteps: async () => { calls.push("nextSteps"); return ["👉 Next — Record your happy path…", "   loombridge trace record --observe …"]; },
     continueThroughRecord: false, // default to the non-TTY/stop behavior; the flow-through test opts in
     log: (line) => logs.push(line),
     ...overrides,
@@ -83,13 +83,13 @@ test("driveCheck: no contract runs scan, stops, and does not delegate to run", a
 test("driveCheck: bootstrap footer routes through the resolver (exact record command) + keeps the re-run-check loop", async () => {
   // G6: the bootstrap "next" must surface the SAME resolved record step `minigame next` gives
   // (with --state-signal threaded), not generic prose — AND keep the front-door re-run-check loop.
-  const resolved = ["👉 Next — Record your happy path…", "   loomtide trace record --observe … --state-signal /Canvas/GM:GM:phase"];
+  const resolved = ["👉 Next — Record your happy path…", "   loombridge trace record --observe … --state-signal /Canvas/GM:GM:phase"];
   const h = deps({ hasContract: async () => false, nextSteps: async () => { h.calls.push("nextSteps"); return resolved; } });
 
   assert.equal(await driveCheck(h.d), 0);
   const log = h.logs.join("\n");
-  assert.match(log, /loomtide trace record --observe … --state-signal \/Canvas\/GM:GM:phase/);
-  assert.match(log, /After recording, re-run `loomtide minigame check`\./);
+  assert.match(log, /loombridge trace record --observe … --state-signal \/Canvas\/GM:GM:phase/);
+  assert.match(log, /After recording, re-run `loombridge minigame check`\./);
 });
 
 test("driveCheck (one-command): with continueThroughRecord, bootstrap flows STRAIGHT INTO run (no stop, no re-run-check prompt)", async () => {
@@ -100,7 +100,7 @@ test("driveCheck (one-command): with continueThroughRecord, bootstrap flows STRA
   assert.deepEqual(h.calls, ["scan", "run"]);
   const log = h.logs.join("\n");
   assert.match(log, /running the full flow .*one go/i);
-  assert.doesNotMatch(log, /re-run `loomtide minigame check`/);
+  assert.doesNotMatch(log, /re-run `loombridge minigame check`/);
 });
 
 test("driveCheck: relocation drift stops for review and does not delegate", async () => {
@@ -120,7 +120,7 @@ test("driveCheck: relocation drift stops for review and does not delegate", asyn
   const log = h.logs.join("\n");
   assert.match(log, /relocated: homeButton/);
   assert.match(log, /\/Old\/HomeButton -> \/Canvas\/HomeButton/);
-  assert.match(log, /loomtide minigame sync --scene/);
+  assert.match(log, /loombridge minigame sync --scene/);
 });
 
 test("driveCheck: removed drift (a bound object vanished) stops without delegating", async () => {
@@ -137,7 +137,7 @@ test("driveCheck: removed drift (a bound object vanished) stops without delegati
   const log = h.logs.join("\n");
   assert.match(log, /scene changed/);
   assert.match(log, /oldButton/);
-  assert.match(log, /loomtide minigame sync --scene/);
+  assert.match(log, /loombridge minigame sync --scene/);
 });
 
 test("driveCheck: added-only (new unbound controls) is informational and STILL delegates", async () => {

@@ -5,7 +5,7 @@ import {
   renderReplayReportHtml,
   type CaptureImage,
   type ReplayRunArtifact,
-} from "../loomtide/replay/index.js";
+} from "../loombridge/replay/index.js";
 
 function artifact(overrides: Partial<ReplayRunArtifact> = {}): ReplayRunArtifact {
   return {

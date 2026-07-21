@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# new-test-project.sh — scaffold a throwaway Unity project wired to the Loomtide bridge,
+# new-test-project.sh — scaffold a throwaway Unity project wired to the Loombridge bridge,
 # so a fresh agent can build/verify a demo from scratch quickly.
 #
 # Usage:
@@ -10,7 +10,7 @@
 #     --brief=PATH build brief to copy in as BUILD-BRIEF.md (no default shipped in this repo;
 #                  relative paths resolve from repo root — omit to skip the brief copy)
 #     --output=PATH absolute or relative Unity project folder. Use this for true clean-room
-#                  runs outside the Loomtide repo so parent repo state/memory is not inherited.
+#                  runs outside the Loombridge repo so parent repo state/memory is not inherited.
 #
 # Produces unity-projects/<name>/ with:
 #   - Packages/manifest.json   bridge (relative file: ref) + the known-good dependency set
@@ -67,13 +67,13 @@ mkdir -p "$PROJ/Assets" "$PROJ/Packages" "$PROJ/ProjectSettings"
 # ref; external clean-room projects use an absolute file: ref so they cannot inherit parent repo
 # instructions just to resolve the bridge package.
 case "$PROJ" in
-  "$REPO_ROOT"/unity-projects/*) BRIDGE_PACKAGE_REF="file:../../../packages/com.loomtide.unitybridge" ;;
-  *) BRIDGE_PACKAGE_REF="file:$REPO_ROOT/packages/com.loomtide.unitybridge" ;;
+  "$REPO_ROOT"/unity-projects/*) BRIDGE_PACKAGE_REF="file:../../../packages/com.loomtide.loombridge" ;;
+  *) BRIDGE_PACKAGE_REF="file:$REPO_ROOT/packages/com.loomtide.loombridge" ;;
 esac
 cat > "$PROJ/Packages/manifest.json" <<JSON
 {
   "dependencies": {
-    "com.loomtide.unitybridge": "$BRIDGE_PACKAGE_REF",
+    "com.loomtide.loombridge": "$BRIDGE_PACKAGE_REF",
     "com.unity.2d.pixel-perfect": "5.0.3",
     "com.unity.2d.sprite": "1.0.0",
     "com.unity.inputsystem": "1.7.0",
@@ -124,7 +124,7 @@ SERVER_JS="$REPO_ROOT/mcp-server/dist/index.js"
 cat > "$PROJ/.mcp.json" <<EOF
 {
   "mcpServers": {
-    "loomtide": {
+    "loombridge": {
       "type": "stdio",
       "command": "${NODE_BIN:-node}",
       "args": ["$SERVER_JS"]
@@ -136,18 +136,18 @@ EOF
 mkdir -p "$PROJ/.claude"
 cat > "$PROJ/.claude/settings.local.json" <<'JSON'
 {
-  "enabledMcpjsonServers": ["loomtide"]
+  "enabledMcpjsonServers": ["loombridge"]
 }
 JSON
 
 cat > "$PROJ/AGENTS.md" <<EOF
-# Clean-Room Loomtide Build
+# Clean-Room Loombridge Build
 
-This folder is a clean Unity project for a recorded Loomtide build.
+This folder is a clean Unity project for a recorded Loombridge build.
 
 Source of truth, in order:
 1. \`BUILD-BRIEF.md\`
-2. \`LOOMTIDE-ASSETS.md\`
+2. \`LOOMBRIDGE-ASSETS.md\`
 3. The local linked skills under \`.claude/skills\` / \`.codex/skills\`
 
 Do not read or use parent-repo planning/roadmap state, old run logs, archived
@@ -177,10 +177,10 @@ for s in "${SKILLS[@]}"; do
   fi
 done
 
-cat > "$PROJ/LOOMTIDE-ASSETS.md" <<EOF
-# Loomtide Asset Registry Quickstart
+cat > "$PROJ/LOOMBRIDGE-ASSETS.md" <<EOF
+# Loombridge Asset Registry Quickstart
 
-This project was scaffolded by Loomtide. Before final art/audio, prepare curated registry assets and
+This project was scaffolded by Loombridge. Before final art/audio, prepare curated registry assets and
 use them as the default source for polished roles.
 
 For the Switchyard/top-down proof:
@@ -193,10 +193,10 @@ $REPO_ROOT/scripts/prepare-project-assets.sh \\
   --name=switchyard
 \`\`\`
 
-Then read \`.loomtide/handoff/switchyard-asset-prepare-report.json\`. Import each accepted sprite using
+Then read \`.loombridge/handoff/switchyard-asset-prepare-report.json\`. Import each accepted sprite using
 its \`import.toolArguments.source_path\` and \`import.toolArguments.path\`; copy/import accepted WAV
 assets to their reported Unity paths and wire them to gameplay. Preserve
-\`.loomtide/handoff/switchyard-asset-attribution.md\` in the final handoff.
+\`.loombridge/handoff/switchyard-asset-attribution.md\` in the final handoff.
 
 Do not ship procedural placeholders when the report contains accepted \`placeholder:false\` candidates
 for the same primitive.
@@ -211,35 +211,35 @@ fi
 
 cat <<EOF
 
-Done -> $PROJ  (carries its own .mcp.json -> loomtide bridge, absolute paths)
+Done -> $PROJ  (carries its own .mcp.json -> loombridge bridge, absolute paths)
 
 Next steps:
   1. Open the project through the autonomous launcher:
        $REPO_ROOT/scripts/unity/open-project.sh $PROJ
      Import "TMP Essentials" when prompted if Unity asks. Keep ONLY this editor open unless a command pins
-     LOOMTIDE_UNITY_PROJECT or LOOMTIDE_TARGET_PROJECT_PATH.
+     LOOMBRIDGE_UNITY_PROJECT or LOOMBRIDGE_TARGET_PROJECT_PATH.
   2. Optional preflight from repo root:
        $REPO_ROOT/scripts/check-agent-surface.sh $PROJ
   3. Start the build session FROM the project folder.
 
      Claude Code:
        cd $PROJ && claude
-     Accept the one-time "trust this folder" prompt; loomtide is pre-approved and auto-loads.
+     Accept the one-time "trust this folder" prompt; loombridge is pre-approved and auto-loads.
 
      Codex:
        cd $PROJ && codex
-     Run /mcp. If loomtide is not listed, register it with:
-       codex mcp add loomtide -- ${NODE_BIN:-node} $SERVER_JS
+     Run /mcp. If loombridge is not listed, register it with:
+       codex mcp add loombridge -- ${NODE_BIN:-node} $SERVER_JS
 
   4. Verify the bridge. MCP tools are deferred and carry the server-name prefix, so load with the
      FULL name (not the bare op):
-       ToolSearch "select:mcp__loomtide__unity_editor_get_state"
-     then call mcp__loomtide__unity_editor_get_state — it should return live editor state
+       ToolSearch "select:mcp__loombridge__unity_editor_get_state"
+     then call mcp__loombridge__unity_editor_get_state — it should return live editor state
      (play_mode, error_count, ...). If it times out, the Unity editor isn't open on THIS project
      (or another editor grabbed the bridge — keep only this one open). Then hand it:
        @BUILD-BRIEF.md
      The agent builds with the linked local skills appropriate for this brief, then self-checks
      with /verify-2d-game until build-verdict.json is green.
-     For Loomtide runs, also hand it:
-       @LOOMTIDE-ASSETS.md
+     For Loombridge runs, also hand it:
+       @LOOMBRIDGE-ASSETS.md
 EOF

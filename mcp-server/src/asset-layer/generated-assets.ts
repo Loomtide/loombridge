@@ -5,7 +5,7 @@ import {
   type HeroRegion,
   type ManifestGeneratedExport,
   type RequiredAssetRole,
-} from "../loomtide/asset-manifest.js";
+} from "../loombridge/asset-manifest.js";
 import { createHash } from "node:crypto";
 
 export interface GeneratedAssetAnnotation {

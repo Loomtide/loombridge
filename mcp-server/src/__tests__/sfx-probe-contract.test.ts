@@ -6,7 +6,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { validateSfxProbeSnapshot } from "../loomtide/sfx/probe-contract.js";
+import { validateSfxProbeSnapshot } from "../loombridge/sfx/probe-contract.js";
 
 test("a consistent snapshot with plays validates", () => {
   const r = validateSfxProbeSnapshot({

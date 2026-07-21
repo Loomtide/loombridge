@@ -4,7 +4,7 @@ import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
-import { DEFAULT_SLICE_ASSET_BINDINGS } from "../loomtide/asset-manifest.js";
+import { DEFAULT_SLICE_ASSET_BINDINGS } from "../loombridge/asset-manifest.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -15,7 +15,7 @@ function read(relativePath: string): string {
 }
 
 test("build command documents every manifest slice asset binding and forbids registry fallback", () => {
-  const build = read("commands/loomtide/build.md");
+  const build = read("commands/loombridge/build.md");
 
   assert.match(build, /ASSET_MANIFEST\.json/);
   assert.match(build, /sliceBindings/);

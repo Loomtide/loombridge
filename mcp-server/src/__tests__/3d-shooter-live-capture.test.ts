@@ -30,7 +30,7 @@ function risingEdges(samples: Timeline["samples"]): number[] {
 }
 
 function runGenerator(): unknown {
-  const tempDir = mkdtempSync(join(tmpdir(), "loomtide-3d-shooter-capture-"));
+  const tempDir = mkdtempSync(join(tmpdir(), "loombridge-3d-shooter-capture-"));
   const generatedPath = join(tempDir, "derived.json");
   try {
     const result = spawnSync(

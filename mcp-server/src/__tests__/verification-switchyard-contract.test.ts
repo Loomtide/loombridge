@@ -75,5 +75,5 @@ test("switchyard brief requires tool-neutral handoff evidence", async () => {
   assert.match(brief, /spawn, pickup, delivery, damage\/dodge, and win/i);
   assert.doesNotMatch(brief, /mcp-server\/dist\/verification\/run-gates\.js/);
   assert.doesNotMatch(brief, /switchyard-courier\.acceptance\.json/);
-  assert.doesNotMatch(brief, /Loomtide proof|acceptance contract|contract-defined|asset registry/i);
+  assert.doesNotMatch(brief, /Loombridge proof|acceptance contract|contract-defined|asset registry/i);
 });

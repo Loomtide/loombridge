@@ -16,7 +16,7 @@ import {
   nextStepLinesFor,
   resolveNextStep,
   type WorkspaceFacts,
-} from "../loomtide/minigame-next.js";
+} from "../loombridge/minigame-next.js";
 
 const base: WorkspaceFacts = {
   id: "g",
@@ -67,7 +67,7 @@ test("resolveNextStep: stale background candidates recapture instead of suggesti
   const step = resolveNextStep(atFinalize);
   assert.equal(step.at, "capture");
   assert.match(step.summary, /Re-capture with the current bridge/);
-  assert.match(step.command, /^loomtide minigame capture /);
+  assert.match(step.command, /^loombridge minigame capture /);
   assert.doesNotMatch(step.command, /--background auto/);
 });
 
@@ -82,14 +82,14 @@ test("resolveNextStep: a STALE verify (captures newer than the report) → re-ve
 
 test("resolveNextStep: each non-done step is a runnable command; done is empty", () => {
   const record = resolveNextStep(base);
-  assert.match(record.command, /^loomtide trace record .*--root \/ws$/);
+  assert.match(record.command, /^loombridge trace record .*--root \/ws$/);
   assert.equal(resolveNextStep({ ...reached, verify: { status: "READY", stale: false }, baselineApproved: true }).command, "");
 });
 
 test("formatNextStep: '👉 Next — <summary>' then the command", () => {
   const lines = formatNextStep(resolveNextStep(base));
   assert.match(lines[0], /^👉 Next — /);
-  assert.match(lines[1], /loomtide trace record/);
+  assert.match(lines[1], /loombridge trace record/);
 });
 
 test("resolveNextStep (G1): a declared stateSignal is threaded into the record command; absent → omitted + a note", () => {
@@ -133,7 +133,7 @@ test("nextStepLinesFor (G6): the shared footer used by check/scan matches `minig
     const lines = await nextStepLinesFor(withSig);
     const joined = lines.join("\n");
     assert.match(joined, /^👉 Next — /m);
-    assert.match(joined, /loomtide trace record --observe/);
+    assert.match(joined, /loombridge trace record --observe/);
     assert.match(joined, /--state-signal \/Canvas\/ChefGameManager:ChefGameManager:phase/);
   } finally {
     await fs.rm(withSig, { recursive: true, force: true });
@@ -151,7 +151,7 @@ test("nextStepLinesFor (G6): the shared footer used by check/scan matches `minig
       }),
     );
     const joined = (await nextStepLinesFor(noSig)).join("\n");
-    assert.match(joined, /loomtide trace record --observe/);
+    assert.match(joined, /loombridge trace record --observe/);
     assert.doesNotMatch(joined, /--state-signal/);
     assert.match(joined, /stateSignal/);
   } finally {

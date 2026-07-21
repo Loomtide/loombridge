@@ -701,7 +701,7 @@ test("EditorRegistry: runExclusive serializes work per editor", async () => {
 });
 
 test("EditorRegistry: symlink-skewed startup target resolves to the real-path record (no fail-closed)", () => {
-  const root = fsSync.mkdtempSync(path.join(os.tmpdir(), "loomtide-registry-symlink-"));
+  const root = fsSync.mkdtempSync(path.join(os.tmpdir(), "loombridge-registry-symlink-"));
   try {
     const realDir = path.join(root, "real-project");
     const linkDir = path.join(root, "linked-project");
@@ -729,7 +729,7 @@ test("EditorRegistry: a bare projectName target is never resolved as a cwd-relat
   // A bare name like "GameA" must NOT be treated as a filesystem path. If it were, a
   // ./GameA dir/symlink in the server's cwd could match a record by-path and bypass the
   // duplicate-projectName ambiguity check. Here only a (wrong) path resolution could match.
-  const root = fsSync.realpathSync(fsSync.mkdtempSync(path.join(os.tmpdir(), "loomtide-name-path-")));
+  const root = fsSync.realpathSync(fsSync.mkdtempSync(path.join(os.tmpdir(), "loombridge-name-path-")));
   const prevCwd = process.cwd();
   try {
     const realProj = path.join(root, "real-project");

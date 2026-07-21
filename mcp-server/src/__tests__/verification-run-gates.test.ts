@@ -16,7 +16,7 @@ import { fileURLToPath } from "node:url";
 
 import { runGates, isGateInStage, VERIFY_STAGES, type ReviewFindings } from "../verification/run-gates.js";
 import type { AcceptanceContract } from "../verification/types.js";
-import { createDraftAssetManifest, type AssetManifest } from "../loomtide/asset-manifest.js";
+import { createDraftAssetManifest, type AssetManifest } from "../loombridge/asset-manifest.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -196,14 +196,14 @@ async function writeCaptures(dir: string, files: Record<string, unknown>): Promi
 }
 
 async function mkTmpDir(): Promise<string> {
-  return fs.mkdtemp(path.join(os.tmpdir(), "loomtide-run-gates-"));
+  return fs.mkdtemp(path.join(os.tmpdir(), "loombridge-run-gates-"));
 }
 
 function approvedGeneratedManifest(): AssetManifest {
   const heroHash = "f".repeat(64);
   const manifest = createDraftAssetManifest({
     mode: "generated",
-    heroShot: { path: ".loomtide/design/hero-shot.png", sha256: heroHash },
+    heroShot: { path: ".loombridge/design/hero-shot.png", sha256: heroHash },
   });
   manifest.status = "approved";
   manifest.approvedAt = "2026-06-05T00:00:00.000Z";
@@ -683,7 +683,7 @@ test("run-gates: ONE consolidated review at the verify root resolves frames acro
     // The consolidated review lives at the verify ROOT and references each frame
     // by its state-relative path — exactly the default flow in vlm-review.md §5.
     const vlm: ReviewFindings = {
-      reference: { heroShot: ".loomtide/design/hero-shot.png", heroShotSha256: "a".repeat(64) },
+      reference: { heroShot: ".loombridge/design/hero-shot.png", heroShotSha256: "a".repeat(64) },
       independence: { independent: true, reviewerCount: 3 },
       frames: states.map((s) => ({ id: s, path: `${s}/frames/${s}.png` })),
       criteria: [

@@ -639,7 +639,7 @@ export interface VerificationSection {
   /**
    * Optional anti-compression gate (dogfood learnings §6 / High #7). Each named evidence
    * class (from the fixed `EVIDENCE_CLASSES` enum) MUST be `"present"` in the
-   * verdict's `evidenceClasses` block or `loomtide doneness` REFUSES — so
+   * verdict's `evidenceClasses` block or `loombridge doneness` REFUSES — so
    * "console clean" can never imply "playtest verified." Absent ⇒ no new gate
    * (backward compat); the verdict still always emits the `evidenceClasses` block.
    */
@@ -728,8 +728,8 @@ export interface CapturePackState {
   probe?: string;
   /**
    * Capture filenames the build must produce for this state. Conventionally
-   * stored under `.loomtide/verify/<name>/`, but doneness checks the
-   * captureManifest paths verbatim (resolved relative to `.loomtide/verify/`).
+   * stored under `.loombridge/verify/<name>/`, but doneness checks the
+   * captureManifest paths verbatim (resolved relative to `.loombridge/verify/`).
    */
   requiredCaptures: string[];
 }

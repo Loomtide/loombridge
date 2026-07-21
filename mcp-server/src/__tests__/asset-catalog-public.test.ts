@@ -253,7 +253,7 @@ test("REJECTS a CC-BY requiresAttribution=true record claiming trusted-default",
 // --- Fix 2: trailing-dot FQDN bypass --------------------------------------------------
 for (const host of [
   "https://raw.githubusercontent.com./x/y.png",
-  "https://github.com./Loomtide/x/y.png",
+  "https://github.com./Loombridge/x/y.png",
   "http://localhost./x/y.png",
 ]) {
   test(`REJECTS trailing-dot FQDN bypass for files[].url '${host}'`, async () => {
@@ -314,7 +314,7 @@ test("LocalCatalogSource(enforcePublicPolicy:true) THROWS on a hostile shard", a
   hostile.id = "hostile.private.tile";
   hostile.files[0].url = "https://raw.githubusercontent.com/Loomtide/LoomtideAssetRegistry/main/tile.png";
 
-  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "loomtide-hostile-shard-"));
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "loombridge-hostile-shard-"));
   const shardPath = path.join(dir, "part-00000.jsonl");
   await fs.writeFile(shardPath, `${JSON.stringify(hostile)}\n`, "utf-8");
   try {

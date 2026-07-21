@@ -6,7 +6,7 @@ metric to leave the `needs-new-bridge-capability` gap ledger.
 
 ## What this proves
 
-The Loomtide bridge now samples a true rotation trajectory (`transform.eulerAngles`, degrees)
+The Loombridge bridge now samples a true rotation trajectory (`transform.eulerAngles`, degrees)
 alongside position — every trajectory sample carries `rx` (pitch), `ry` (yaw), `rz` (roll) in
 addition to `{x,y,z}`. `deriveAimTurnRateDegPerSec` reads the yaw axis (`ry`) and reports the median
 moving per-interval angular speed, wrap-aware (the shortest signed angle delta, so a sweep across the
@@ -48,4 +48,4 @@ This bundle proves ONE conservative rotation metric — a constant yaw turn RATE
 look responsiveness/latency (no input-onset binding here), recoil kick/recovery, ADS transition, aim
 assist/fairness, or mouse-look acceleration. Hitscan, 3D hit-stop/screen-shake, AI/cover/waves, and
 Fusion/multiplayer also remain explicit gaps. See
-`mcp-server/src/loomtide/genre-packs/3d-shooter/methodology-gaps.md`.
+`mcp-server/src/loombridge/genre-packs/3d-shooter/methodology-gaps.md`.

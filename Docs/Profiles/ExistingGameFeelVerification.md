@@ -1,19 +1,19 @@
 # Existing-Game Feel Verification
 
-This flow is for games Loomtide did not build. The goal is to produce a deterministic feel
+This flow is for games Loombridge did not build. The goal is to produce a deterministic feel
 report while preserving evidence boundaries: missing capture glue is `not-measured`,
 `attempted-blocked`, or `unsupported`, never a pass.
 
 ## Artifact Workspace
 
 Use the same external verification workspace layout as mini-game verification:
-`~/.loomtide/projects/<game-id>/`. Generated verification artifacts should stay outside
+`~/.loombridge/projects/<game-id>/`. Generated verification artifacts should stay outside
 the Unity project by default, so a verification run does not dirty the game repo.
 
 For feel verification, the default files under that workspace are:
 
 ```text
-~/.loomtide/projects/<game-id>/
+~/.loombridge/projects/<game-id>/
   feel/
     capture-contract.json
     profile-measurements.json
@@ -25,7 +25,7 @@ For feel verification, the default files under that workspace are:
 ```
 
 Use `--id <game-id>` when the CLI can derive the workspace, or pass
-`--workspace ~/.loomtide/projects/<game-id>` explicitly. `Docs/Profiles/artifacts/`
+`--workspace ~/.loombridge/projects/<game-id>` explicitly. `Docs/Profiles/artifacts/`
 is for explicit, user-chosen archival bundles only; it is not the default output
 location for generated verification evidence.
 
@@ -34,7 +34,7 @@ location for generated verification evidence.
 1. Choose the profile:
 
    ```bash
-   loomtide verify --profile precision --id my-game
+   loombridge verify --profile precision --id my-game
    ```
 
    With no measurements this should be `incomplete`, which is the honest starting point.
@@ -68,15 +68,15 @@ location for generated verification evidence.
 4. Preview, then write a reviewed capture contract:
 
    ```bash
-   loomtide verify --profile precision --setup-capture --player /Player \
+   loombridge verify --profile precision --setup-capture --player /Player \
      --jump-button /Canvas/ButtonJump \
      --joystick "/Canvas/Fixed Joystick" \
      --id my-game
 
-   loomtide verify --profile precision --setup-capture --apply --player /Player \
+   loombridge verify --profile precision --setup-capture --apply --player /Player \
      --jump-button /Canvas/ButtonJump \
      --joystick "/Canvas/Fixed Joystick" \
-     --workspace ~/.loomtide/projects/my-game
+     --workspace ~/.loombridge/projects/my-game
    ```
 
    Without `--apply`, this is a dry run. Default output is
@@ -88,10 +88,10 @@ location for generated verification evidence.
 5. Run live capture and grade the resulting measurements in one command:
 
    ```bash
-   loomtide verify --profile precision \
-     --capture-contract ~/.loomtide/projects/my-game/feel/capture-contract.json \
+   loombridge verify --profile precision \
+     --capture-contract ~/.loombridge/projects/my-game/feel/capture-contract.json \
      --project MyUnityProject \
-     --workspace ~/.loomtide/projects/my-game
+     --workspace ~/.loombridge/projects/my-game
    ```
 
    The command writes `<workspace>/feel/profile-measurements.json`,
@@ -100,7 +100,7 @@ location for generated verification evidence.
    record; the HTML and Markdown are the developer-readable report. If the live
    capture verdict is incomplete, the command exits 2: a capture/harness gap is not a game pass.
    Add `--capture-only` when debugging capture separately; the follow-up grading command is then
-   `loomtide verify --profile precision --measurements ~/.loomtide/projects/my-game/feel/profile-measurements.json --workspace ~/.loomtide/projects/my-game`.
+   `loombridge verify --profile precision --measurements ~/.loombridge/projects/my-game/feel/profile-measurements.json --workspace ~/.loombridge/projects/my-game`.
 
 ## Contract Model
 
@@ -138,7 +138,7 @@ trials but reports coyote/buffer as `attempted-blocked` until anchor-observation
 ## Coverage Semantics
 
 - `measured`: raw evidence was captured and a metric was derived.
-- `attempted-blocked`: Loomtide tried a valid recipe, but the harness/setup did not produce usable
+- `attempted-blocked`: Loombridge tried a valid recipe, but the harness/setup did not produce usable
   evidence.
 - `unsupported`: Unity editor automation cannot drive this path generically.
 - `not-measured`: no recipe was run or no recipe exists.
@@ -263,4 +263,4 @@ uGUI short-hop validation note: a legacy-Input joystick-driven mobile title's li
 can actuate the inactive mobile jump button after a restorable `scene-set-active` precondition and
 report matching `requestedFixedTicks:6` / `actualFixedTicks:6` evidence. That game still reached a
 full-jump-scale apex because its controller appears to trigger jump on pointer-down rather than
-scale jump height by hold duration. This is a valid measured game result, not a Loomtide setup pass.
+scale jump height by hold duration. This is a valid measured game result, not a Loombridge setup pass.

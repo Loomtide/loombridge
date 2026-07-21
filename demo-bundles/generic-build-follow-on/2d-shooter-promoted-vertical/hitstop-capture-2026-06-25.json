@@ -12,7 +12,7 @@
     "scene": "ShooterCombatDogfood",
     "inputSystem": true,
     "hitStopSignal": "DogfoodCombatReset.IsHitStopped",
-    "note": "hitstopMs is the duration of the FIRST impact hit-stop window — the rising edge (window opens on a registered projectile hit) to the following falling edge (window closes) of the IsHitStopped signal. The window advances on Time.deltaTime (the fixture never alters Time.timeScale), so a pinned Loomtide capture gives it a deterministic, capture-clock-aligned duration. Series copied verbatim from the raw bridge transcript; not synthesized."
+    "note": "hitstopMs is the duration of the FIRST impact hit-stop window — the rising edge (window opens on a registered projectile hit) to the following falling edge (window closes) of the IsHitStopped signal. The window advances on Time.deltaTime (the fixture never alters Time.timeScale), so a pinned Loombridge capture gives it a deterministic, capture-clock-aligned duration. Series copied verbatim from the raw bridge transcript; not synthesized."
   },
   "causality": {
     "firstProjectileHitMs": 516.67,
@@ -1360,7 +1360,7 @@
     "windowOpenMs": 516.67
   },
   "honesty": {
-    "measures": "the LIVE duration of the impact hit-stop WINDOW signal (the impact-freeze interval a renderer would consume), sampled in Play Mode through the Loomtide bridge against the repo-owned shooter fixture.",
+    "measures": "the LIVE duration of the impact hit-stop WINDOW signal (the impact-freeze interval a renderer would consume), sampled in Play Mode through the Loombridge bridge against the repo-owned shooter fixture.",
     "doesNotMeasure": "an actual rendered freeze of the editor timeline (the fixture exposes the deterministic window rather than stalling time), nor production-tuned hit-stop balance."
   }
 }

@@ -12,8 +12,8 @@ per run. This is a distinct pipeline from UI (`ui-polish-pack`) and environment/
 The provider-key safety, provenance field list, cache key, cue-grammar shape, Unity import defaults, and
 the top-down audio rig are **canonical in `Docs/Assets/GeneratedSfxWorkflow.md`** — read it once, follow
 it, do not restate it. The per-genre cue map lives as a genre-pack artifact
-(`mcp-server/src/loomtide/genre-packs/<genre>/cue-map.json`), and the verification gates read it. This
-skill is the actionable runbook + the DO/DO-NOT framing. Loomtide gates technical audio health and cue
+(`mcp-server/src/loombridge/genre-packs/<genre>/cue-map.json`), and the verification gates read it. This
+skill is the actionable runbook + the DO/DO-NOT framing. Loombridge gates technical audio health and cue
 FIRING deterministically; "does it sound like the intended action?" stays a HUMAN gate.
 
 Provenance tags: **VALIDATED** = seen across ≥2 sources (SFX planning doc + the seeded cue-map/gates, or
@@ -26,7 +26,7 @@ Do not re-enumerate the cue taxonomy in prose. Read the genre-pack cue map
 top-down required set (`fire`, `hit`, `hurt`, `loot_open`, `loot_reward`, `extract_start`,
 `extract_complete`, `enemy_death`, `player_death`) plus optional cues, each with its `event`,
 `layerRoles`, `frequency`, `variantPolicy`, `priority`, `mixerBus`, `spatial`, and `meaning`. The schema
-type + self-validating parser live in `mcp-server/src/loomtide/sfx/cue-map.ts`. A malformed/hand-edited
+type + self-validating parser live in `mcp-server/src/loombridge/sfx/cue-map.ts`. A malformed/hand-edited
 cue map is refused, so it can never silently degrade the gates. If your genre has no cue map, author one
 following that shape; do not scatter ad-hoc cue names through the build. `[VALIDATED: sfx doc backlog #5 + seeded cue-map.json + cue-map.ts]`
 
@@ -79,7 +79,7 @@ Recipe canonical in `GeneratedSfxWorkflow.md` → "Top-Down Audio Rig". `[CANDID
 
 ## How the T2 SFX gates consume the declaration
 
-The gates (`mcp-server/src/loomtide/sfx/`) read the parsed cue map to know WHICH cues matter, then grade
+The gates (`mcp-server/src/loombridge/sfx/`) read the parsed cue map to know WHICH cues matter, then grade
 runtime evidence — they do not invent requirements:
 - **presence** — every `required` cue asset is imported as an `AudioClip` and bound on the SfxPlayer /
   event router; declared mixer buses exist.

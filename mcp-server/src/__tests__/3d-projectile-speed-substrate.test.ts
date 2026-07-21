@@ -36,7 +36,7 @@ interface DerivedArtifact {
 }
 
 function runGenerator(): unknown {
-  const tempDir = mkdtempSync(join(tmpdir(), "loomtide-3d-projspeed-"));
+  const tempDir = mkdtempSync(join(tmpdir(), "loombridge-3d-projspeed-"));
   const generatedPath = join(tempDir, "derived.json");
   try {
     const result = spawnSync(

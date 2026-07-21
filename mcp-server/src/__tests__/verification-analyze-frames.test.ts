@@ -74,7 +74,7 @@ function writeTestPng(width: number, height: number, pixel: (x: number, y: numbe
 }
 
 async function tempFrame(id: string, png: Buffer): Promise<NamedFrame> {
-  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "loomtide-analyze-frames-"));
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "loombridge-analyze-frames-"));
   const filename = path.join(dir, `${id}.png`);
   await fs.writeFile(filename, png);
   return { id, path: filename, image: await readPng(filename) };

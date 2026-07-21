@@ -1,7 +1,7 @@
 # Asset Priority (canonical)
 
 Asset selection is a **first-class pipeline stage**, not an afterthought during scene
-assembly. Every Loomtide build — 2D *and* 3D — resolves each required asset role through
+assembly. Every Loombridge build — 2D *and* 3D — resolves each required asset role through
 this priority order. The order is the same for every genre; only the profile/registry
 inputs differ.
 
@@ -17,8 +17,8 @@ inputs differ.
      so it is **not** the `--catalog-api` base — do not pass it there.
 
    Query the hosted catalog per role first, present candidates grouped by role, get
-   explicit approval, then bind them into `.loomtide/ASSET_MANIFEST.json` through the
-   deterministic `loomtide assets registry-plan` / `registry-apply` helpers.
+   explicit approval, then bind them into `.loombridge/ASSET_MANIFEST.json` through the
+   deterministic `loombridge assets registry-plan` / `registry-apply` helpers.
 
 2. **Local registry / profile fixtures (only when explicitly needed).**
    The checked-in `asset-layer/registry/*.json` + `asset-layer/profiles/*.json` packs are
@@ -61,8 +61,8 @@ and shown to the developer for approval:
   (the "registry-missing" rationale for that role; the manifest `status` stays
   `needed`/`placeholder` until the asset is ingested + approved).
 
-Only `loomtide assets registry-apply` / `generated-apply` may write an approved manifest
-binding. Never hand-edit `.loomtide/ASSET_MANIFEST.json` to `approved`, and never call
+Only `loombridge assets registry-apply` / `generated-apply` may write an approved manifest
+binding. Never hand-edit `.loombridge/ASSET_MANIFEST.json` to `approved`, and never call
 `selectAssets` as the approval source (it is a silent best-match helper).
 
 ## Why this order
@@ -75,6 +75,6 @@ one as final art certifies against a fiction.
 ## See also
 
 - `Docs/Assets/HostedAssetRegistry.md` — the hosted catalog architecture + API contract.
-- `commands/loomtide/plan.md` — the asset strategy stage (registry-plan / registry-apply).
-- `commands/loomtide/build.md` — manifest-driven scene assembly (read the manifest first).
+- `commands/loombridge/plan.md` — the asset strategy stage (registry-plan / registry-apply).
+- `commands/loombridge/build.md` — manifest-driven scene assembly (read the manifest first).
 - `.skills/asset-layer/SKILL.md` — the full prepare/validate/import flow incl. 3D path.

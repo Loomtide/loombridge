@@ -4,9 +4,9 @@
   "capturedAt": "2026-06-25T11:00:00.000Z",
   "host": {
     "projectName": "shooter-combat-dogfood",
-    "projectPathCanonical": "/redacted/Projects/AI/Loomtide/unity-projects/shooter-combat-dogfood",
+    "projectPathCanonical": "/redacted/Projects/AI/Loombridge/unity-projects/shooter-combat-dogfood",
     "scene": "ShooterCombatDogfood",
-    "note": "Repo-owned shooter-combat fixture (Assets/Scenes/ShooterCombatDogfood.unity), NOT a host-of-convenience. DogfoodImpactFeedback on the Main Camera watches the enemy's collision-driven HitCount rise and fires a deterministic hit-stop window (IsHitStopped) + a decaying camera shake (ShakeMagnitude + camera transform). Captured in Play Mode through the local Loomtide bridge package; no console errors; nothing saved."
+    "note": "Repo-owned shooter-combat fixture (Assets/Scenes/ShooterCombatDogfood.unity), NOT a host-of-convenience. DogfoodImpactFeedback on the Main Camera watches the enemy's collision-driven HitCount rise and fires a deterministic hit-stop window (IsHitStopped) + a decaying camera shake (ShakeMagnitude + camera transform). Captured in Play Mode through the local Loombridge bridge package; no console errors; nothing saved."
   },
   "request": {
     "measure": {

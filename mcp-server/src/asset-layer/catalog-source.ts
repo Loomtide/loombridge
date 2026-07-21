@@ -18,12 +18,12 @@ import type {
 
 /**
  * There is deliberately NO built-in default catalog URL. The historical default pointed at a
- * private GitHub mirror that 404s for anyone outside the Loomtide org, so a fresh install would
+ * private GitHub mirror that 404s for anyone outside the Loombridge org, so a fresh install would
  * silently fail. Until a stable public catalog endpoint ships (see
- * `Docs/Assets/PublicCatalogQuickstart.md`), callers must set `LOOMTIDE_ASSET_CATALOG_URL`
+ * `Docs/Assets/PublicCatalogQuickstart.md`), callers must set `LOOMBRIDGE_ASSET_CATALOG_URL`
  * (or pass an explicit `--catalog` / `--catalog-api` URL).
  */
-export const ASSET_CATALOG_URL_ENV_VAR = "LOOMTIDE_ASSET_CATALOG_URL";
+export const ASSET_CATALOG_URL_ENV_VAR = "LOOMBRIDGE_ASSET_CATALOG_URL";
 
 export interface CatalogSource {
   load(): Promise<AssetCatalogRecord[]>;
@@ -501,7 +501,7 @@ export class ApiCatalogSource implements CatalogSource {
 
 /**
  * Resolve the catalog URL from the environment. REFUSES (throws) when
- * `LOOMTIDE_ASSET_CATALOG_URL` is unset instead of falling back to a private mirror —
+ * `LOOMBRIDGE_ASSET_CATALOG_URL` is unset instead of falling back to a private mirror —
  * a clear error beats a default that 404s for every external developer.
  */
 export function catalogUrlFromEnv(env: NodeJS.ProcessEnv = process.env): string {

@@ -7,8 +7,8 @@ import type {
   UnityEndpointDiscoveryRecord,
 } from "./types.js";
 
-export const DISCOVERY_DIR_ENV_VAR = "LOOMTIDE_ENDPOINT_DISCOVERY_DIR";
-export const DISCOVERY_FILE_ENV_VAR = "LOOMTIDE_ENDPOINT_DISCOVERY_FILE";
+export const DISCOVERY_DIR_ENV_VAR = "LOOMBRIDGE_ENDPOINT_DISCOVERY_DIR";
+export const DISCOVERY_FILE_ENV_VAR = "LOOMBRIDGE_ENDPOINT_DISCOVERY_FILE";
 export const DISCOVERY_LATEST_FILE_NAME = "endpoint-discovery-latest.json";
 /**
  * Process-wide project pin: when set, an otherwise-untargeted `UnityClient` routes ONLY to the editor
@@ -17,7 +17,7 @@ export const DISCOVERY_LATEST_FILE_NAME = "endpoint-discovery-latest.json";
  * spawned CLI subprocess to the SAME editor, so record/scan can't diverge to different editors when
  * several are open. Unset ⇒ unchanged behaviour; an explicit `targetIdentity` still wins.
  */
-export const TARGET_PROJECT_ENV_VAR = "LOOMTIDE_TARGET_PROJECT_PATH";
+export const TARGET_PROJECT_ENV_VAR = "LOOMBRIDGE_TARGET_PROJECT_PATH";
 
 let cachedDarwinUserTempDirectory: string | null | undefined;
 
@@ -57,7 +57,7 @@ export function resolveDiscoveryDirectory(env: NodeJS.ProcessEnv = process.env):
   const discoveryDir = env[DISCOVERY_DIR_ENV_VAR];
   return typeof discoveryDir === "string" && discoveryDir.trim().length > 0
     ? discoveryDir
-    : path.join(resolveRuntimeTempDirectory(env), "loomtide", "unitybridge");
+    : path.join(resolveRuntimeTempDirectory(env), "loombridge", "unitybridge");
 }
 
 export function resolveDiscoveryLatestFilePath(env: NodeJS.ProcessEnv = process.env): string {

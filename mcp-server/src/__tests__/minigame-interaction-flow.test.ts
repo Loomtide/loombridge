@@ -27,10 +27,10 @@ import {
   type FlowEvidence,
   type FlowOutcome,
   type FlowReport,
-} from "../loomtide/minigame-gates/index.js";
-import { minigameReportStatus } from "../loomtide/verify-minigame.js";
-import type { MinigameContract } from "../loomtide/minigame-profiles/types.js";
-import type { MinigameCaptureObject, MinigameCaptureState } from "../loomtide/minigame-gates/types.js";
+} from "../loombridge/minigame-gates/index.js";
+import { minigameReportStatus } from "../loombridge/verify-minigame.js";
+import type { MinigameContract } from "../loombridge/minigame-profiles/types.js";
+import type { MinigameCaptureObject, MinigameCaptureState } from "../loombridge/minigame-gates/types.js";
 import { makeGateReport, type CheckStatus, type GateReport } from "../verification/gates/types.js";
 
 // ── builders ────────────────────────────────────────────────────────────────────

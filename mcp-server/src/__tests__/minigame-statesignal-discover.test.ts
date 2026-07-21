@@ -16,7 +16,7 @@ import {
   pickStateSignal,
   scoreStateSignalProperty,
   type StateSignalCandidate,
-} from "../loomtide/minigame-statesignal-discover.js";
+} from "../loombridge/minigame-statesignal-discover.js";
 import type { BridgeResponse } from "../types.js";
 
 const PHASES = ["Mix", "Cook", "Decorate", "Serve"];

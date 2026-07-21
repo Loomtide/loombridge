@@ -5,7 +5,7 @@ import {
   renderFleetReportHtml,
   summarizeFleet,
   type FleetTraceResult,
-} from "../loomtide/replay/index.js";
+} from "../loombridge/replay/index.js";
 
 function result(over: Partial<FleetTraceResult> = {}): FleetTraceResult {
   return { id: "x", status: "pass", visualDrift: false, durationMs: 10, report: "reports/x.report.html", ...over };

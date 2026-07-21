@@ -7,9 +7,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { buildContractFromTrace, type BuildContractDeps } from "../loomtide/minigame-scene-build.js";
-import type { ReplayTrace, Segment, Action } from "../loomtide/replay/types.js";
-import type { MinigameContract } from "../loomtide/minigame-profiles/types.js";
+import { buildContractFromTrace, type BuildContractDeps } from "../loombridge/minigame-scene-build.js";
+import type { ReplayTrace, Segment, Action } from "../loombridge/replay/types.js";
+import type { MinigameContract } from "../loombridge/minigame-profiles/types.js";
 
 const drag = (travelPx: number): Action => ({ do: "drag", from: { path: "/P" }, to: { path: "/P" }, travelPx });
 const tap = (): Action => ({ do: "tap", locator: { path: "/B" } });

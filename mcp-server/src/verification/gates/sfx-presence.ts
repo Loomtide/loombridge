@@ -19,8 +19,8 @@
  */
 
 import { makeGateReport, type GateCheck, type GateReport } from "./types.js";
-import type { CueMapSchema } from "../../loomtide/sfx/cue-map.js";
-import type { SfxAssetBindingCapture, SfxCueBinding } from "../../loomtide/sfx/capture-shapes.js";
+import type { CueMapSchema } from "../../loombridge/sfx/cue-map.js";
+import type { SfxAssetBindingCapture, SfxCueBinding } from "../../loombridge/sfx/capture-shapes.js";
 
 export const GATE_NAME = "sfx-presence";
 

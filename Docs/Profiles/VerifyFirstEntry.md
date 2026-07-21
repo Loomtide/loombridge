@@ -1,13 +1,13 @@
 # Verify-First Entry (S5b)
 
 **Status:** S5b — Verify-First Entry (shipped 2026-06-02)
-**CLI:** `loomtide verify --profile <precision|classic|momentum> [--measurements <path>]`
-**Setup:** `loomtide verify --profile <id> --setup-capture --player <path> [drive flags]`
-**Capture:** `loomtide verify --profile <id> --capture-contract <path> [--project <name>]`
-**Report:** `~/.loomtide/projects/<game-id>/feel/reports/feel-profile.json`
+**CLI:** `loombridge verify --profile <precision|classic|momentum> [--measurements <path>]`
+**Setup:** `loombridge verify --profile <id> --setup-capture --player <path> [drive flags]`
+**Capture:** `loombridge verify --profile <id> --capture-contract <path> [--project <name>]`
+**Report:** `~/.loombridge/projects/<game-id>/feel/reports/feel-profile.json`
 **Predecessor:** [PlatformerFeelProfiles.md](PlatformerFeelProfiles.md) (S5a profile contract)
 
-The verify-first wedge: point Loomtide at an **existing** Unity 2D platformer and get a
+The verify-first wedge: point Loombridge at an **existing** Unity 2D platformer and get a
 feel report against a chosen profile — **without** running `plan` or `build`, and **without
 mutating the project**. The deterministic CLI grades and reports. Existing-game capture is
 described by a separate generic capture contract so keyboard, mobile/uGUI, pointer, replay, and
@@ -15,7 +15,7 @@ unsupported legacy paths can be represented without pretending missing evidence 
 
 ## What the CLI does (deterministic profile grading)
 
-`loomtide verify --profile precision`:
+`loombridge verify --profile precision`:
 - detects the engine from the project root (`ProjectSettings/ProjectVersion.txt`);
 - loads the selected profile (S5a) and its measurable bands;
 - reads an **optional** `--measurements` file and compares measured-vs-band per metric;
@@ -74,7 +74,7 @@ name contains `player`/`ninja`/`frog` or a caller hint.
 capture session that reverts on Stop**, only to observe (never to edit the game), and never as
 free-standing input outside a capture. This is not project mutation: nothing persists past Stop.
 
-The product promise is **"let Loomtide diagnose first; you stay in control."**
+The product promise is **"let Loombridge diagnose first; you stay in control."**
 
 ### Ask points (only when ambiguous, one concise question each)
 
@@ -87,15 +87,15 @@ The product promise is **"let Loomtide diagnose first; you stay in control."**
    auto-discovery; a metric whose required key is undeclared is reported "not measured" with the
    missing key named (never silently skipped). See `planMeasurements` in `measure-recipe.ts`.
 
-Then the agent calls `loomtide verify --profile <id> [--measurements <path>]`.
+Then the agent calls `loombridge verify --profile <id> [--measurements <path>]`.
 
 ## Generic capture setup (existing games)
 
-`loomtide verify --profile <id> --setup-capture --player <path>` previews a proposed capture
+`loombridge verify --profile <id> --setup-capture --player <path>` previews a proposed capture
 contract instead of grading. Add `--apply` to write
 `<workspace>/feel/capture-contract.json`, where the standard workspace is
-`~/.loomtide/projects/<game-id>` from `--id <game-id>` or explicit
-`--workspace ~/.loomtide/projects/<game-id>`. The
+`~/.loombridge/projects/<game-id>` from `--id <game-id>` or explicit
+`--workspace ~/.loombridge/projects/<game-id>`. The
 setup surface is intentionally generic:
 
 - `--jump-button <path>` creates uGUI tap and multi-tap recipes for mobile/pointer games.
@@ -125,10 +125,10 @@ hook remains unsupported by editor automation. It should appear in coverage as `
 To run a reviewed contract against a live Unity editor:
 
 ```bash
-loomtide verify --profile precision \
-  --capture-contract ~/.loomtide/projects/mygame/feel/capture-contract.json \
+loombridge verify --profile precision \
+  --capture-contract ~/.loombridge/projects/mygame/feel/capture-contract.json \
   --project MyGame \
-  --workspace ~/.loomtide/projects/mygame
+  --workspace ~/.loombridge/projects/mygame
 ```
 
 The live capture path enters Play Mode through the routed Unity client, runs the contract, writes
@@ -140,7 +140,7 @@ pass. It records Unity routing and runtime guard metadata in measurement provena
 Generated verification artifacts stay outside the Unity repo by default:
 
 ```text
-~/.loomtide/projects/<game-id>/
+~/.loombridge/projects/<game-id>/
   feel/
     capture-contract.json
     profile-measurements.json
@@ -172,7 +172,7 @@ Keys are metric ids from the S5a vocabulary; only finite numbers are read. Unkno
 
 ## S5c — measuring an existing controller (black-box)
 
-The harness measures a controller Loomtide did NOT build by **driving the declared input keys** and
+The harness measures a controller Loombridge did NOT build by **driving the declared input keys** and
 **observing the player transform** — never by reading controller params. Metrics are then DERIVED
 from the raw trajectory (`feel-derive.ts`, semantics matched to C# `MotionMetrics.Compute`):
 
@@ -206,8 +206,8 @@ from the raw trajectory (`feel-derive.ts`, semantics matched to C# `MotionMetric
   **Honest-or-omit:** if `inputOnsetMs` is absent / out-of-window, or no motion is detected after onset,
   the metric is **omitted** ("not measured") — never a fabricated 0. It re-derives from `samples` +
   `inputOnsetMs`, so a tampered latency is **rejected** by §0 re-derivation. **No shipped profile bands
-  `inputLatency`** (the locked controller is instant — ~1 physics tick — so on Loomtide-built games this
-  is a regression guard; its load-bearing value is on games Loomtide did NOT build). Because no profile
+  `inputLatency`** (the locked controller is instant — ~1 physics tick — so on Loombridge-built games this
+  is a regression guard; its load-bearing value is on games Loombridge did NOT build). Because no profile
   grades it, `verify --profile` surfaces it under an **informational "also measured (unbanded)"** section
   in the report (separate from the graded metric list) — it is **never** part of pass/fail/`status`.
 

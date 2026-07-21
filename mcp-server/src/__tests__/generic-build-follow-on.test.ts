@@ -8,7 +8,7 @@ import {
   assertValidExperimentalBuildProof,
   validateExperimentalBuildProof,
   type ExperimentalBuildProof,
-} from "../loomtide/genre-contract/experimental-build-proof.js";
+} from "../loombridge/genre-contract/experimental-build-proof.js";
 import {
   deriveTimeToKill,
   firstRisingEdge,

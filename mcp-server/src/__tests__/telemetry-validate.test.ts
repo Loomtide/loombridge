@@ -10,8 +10,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { validateTelemetrySchema, type TelemetrySchema } from "../loomtide/telemetry/schema.js";
-import { validateTelemetryRun } from "../loomtide/telemetry/validate.js";
+import { validateTelemetrySchema, type TelemetrySchema } from "../loombridge/telemetry/schema.js";
+import { validateTelemetryRun } from "../loombridge/telemetry/validate.js";
 
 const SCHEMA: TelemetrySchema = validateTelemetrySchema({
   schemaVersion: "1",

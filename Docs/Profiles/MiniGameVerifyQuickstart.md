@@ -2,9 +2,9 @@
 
 **Status:** S8 — developer-owned setup flow (2026-06-17)
 **Audience:** a studio shipping 2D kids mini-games who wants an automated release check in CI.
-**You do not need to know Loomtide internals to use this.** This page is the whole contract.
+**You do not need to know Loombridge internals to use this.** This page is the whole contract.
 
-Loomtide gives you one command that looks at a mini-game build and answers a single question:
+Loombridge gives you one command that looks at a mini-game build and answers a single question:
 
 > **Is this screen-by-screen build safe to ship?** — are the controls on-screen, inside the safe area,
 > big enough to tap, the flow reaching its reward — and does it still match the version you approved?
@@ -17,18 +17,18 @@ reference snapshot into a folder you choose — never into your game.
 
 ## Start here: derive → demonstrate → check (recommended)
 
-**If you're setting up your own Unity mini-game for the first time, use this path.** It lets Loomtide
+**If you're setting up your own Unity mini-game for the first time, use this path.** It lets Loombridge
 *derive* the contract from your live scene instead of asking you to author it, establishes the flow from one
 demonstration, and runs the whole release check from one command. The older step-by-step flow further down
 (`setup → record → capture → finalize → verify`) still works and is good for inspecting each stage — but the
 three verbs here (`scan`, `sync`, `check`) are the developer-owned front door.
 
-Open your game in the Unity editor first, with the Loomtide bridge connected. Then:
+Open your game in the Unity editor first, with the Loombridge bridge connected. Then:
 
 ```bash
 # One drift-aware command. On the FIRST run (no contract yet) it scans the scene,
 # writes a DRAFT contract, and stops so you can review it + record a demonstration.
-loomtide minigame check --scene Assets/Scenes/MyGame.unity
+loombridge minigame check --scene Assets/Scenes/MyGame.unity
 ```
 
 What each verb does:
@@ -40,7 +40,7 @@ What each verb does:
   draft that would verify *no* real objects. `check` runs this for you on the first run.
 
   ```bash
-  loomtide minigame scan --scene Assets/Scenes/MyGame.unity --id my-game -o my-game.minigame.json
+  loombridge minigame scan --scene Assets/Scenes/MyGame.unity --id my-game -o my-game.minigame.json
   # add --trace <demo-id> to order the proposed screens from a recorded demonstration
   ```
 
@@ -48,18 +48,18 @@ What each verb does:
   record it. The demonstration is what fixes the *order* of screens (and feeds capture + role binding later):
 
   ```bash
-  loomtide trace record --observe --flat \
+  loombridge trace record --observe --flat \
     --id my-game-happy-path \
     --scene Assets/Scenes/MyGame.unity \
-    --root ~/.loomtide/projects/my-game
+    --root ~/.loombridge/projects/my-game
   ```
 
   Re-running `scan` with `--trace` (pointed at the workspace where you recorded) will order the proposed
   states from this demonstration:
 
   ```bash
-  loomtide minigame scan --scene Assets/Scenes/MyGame.unity --id my-game \
-    --trace my-game-happy-path --trace-root ~/.loomtide/projects/my-game \
+  loombridge minigame scan --scene Assets/Scenes/MyGame.unity --id my-game \
+    --trace my-game-happy-path --trace-root ~/.loombridge/projects/my-game \
     -o my-game.minigame.json
   ```
 
@@ -75,7 +75,7 @@ What each verb does:
   `READY` / `NOT READY` / `CAN'T VERIFY` result and exit code.
 
   ```bash
-  loomtide minigame check --scene Assets/Scenes/MyGame.unity --id my-game
+  loombridge minigame check --scene Assets/Scenes/MyGame.unity --id my-game
   ```
 
 - **`minigame sync` — handle scene drift over time.** When your scene changes (objects renamed, moved, added,
@@ -84,8 +84,8 @@ What each verb does:
   default** — it prints the proposal and changes nothing. Apply only what you confirm:
 
   ```bash
-  loomtide minigame sync --scene Assets/Scenes/MyGame.unity --id my-game          # show the diff
-  loomtide minigame sync --scene Assets/Scenes/MyGame.unity --id my-game --apply  # write safe relocations
+  loombridge minigame sync --scene Assets/Scenes/MyGame.unity --id my-game          # show the diff
+  loombridge minigame sync --scene Assets/Scenes/MyGame.unity --id my-game --apply  # write safe relocations
   #   add --add to adopt new controls, --remove to drop missing refs (both opt-in)
   ```
 
@@ -132,13 +132,13 @@ You don't need to know the flags. Run it bare and it **asks for each value, one 
 same prompts as `minigame setup` — game id, Unity project, scene, device shape, gated outcome):
 
 ```bash
-loomtide minigame run
+loombridge minigame run
 ```
 
 Or pass what you already know as flags (anything omitted is still prompted on the first run):
 
 ```bash
-loomtide minigame run \
+loombridge minigame run \
   --id my-game \
   --project /path/to/UnityProject \
   --scene Assets/Scenes/MyGame.unity \
@@ -162,7 +162,7 @@ below is the same flow run one command at a time — use it when you want to ins
 
 This is the lower-level flow that `minigame check` and `minigame run` drive for you. Use it when you want to
 inspect or run each stage yourself, or to understand what the one-command path does. It keeps the Unity
-project clean by putting all generated Loomtide files under `~/.loomtide/projects/<game-id>`.
+project clean by putting all generated Loombridge files under `~/.loombridge/projects/<game-id>`.
 
 > Authoring the contract by hand with `minigame setup` / `minigame init` still works, but for a new game the
 > recommended start is `minigame scan` (derive a draft from the scene) — see
@@ -171,19 +171,19 @@ project clean by putting all generated Loomtide files under `~/.loomtide/project
 ### 0. Confirm the CLI
 
 ```bash
-loomtide --version
+loombridge --version
 ```
 
 If this says `unknown command "--version"` or shows an old commit, rebuild/reinstall the CLI before continuing
 (see [MiniGameVerifyCI.md](MiniGameVerifyCI.md) for packaging details):
 
 ```bash
-cd /path/to/Loomtide/mcp-server
+cd /path/to/Loombridge/mcp-server
 npm ci
 npm run build
-alias loomtide="node /path/to/Loomtide/mcp-server/dist/cli.js"
+alias loombridge="node /path/to/Loombridge/mcp-server/dist/cli.js"
 hash -r
-loomtide --version
+loombridge --version
 ```
 
 ### 1. Run guided setup
@@ -191,18 +191,18 @@ loomtide --version
 Interactive:
 
 ```bash
-loomtide minigame setup
+loombridge minigame setup
 ```
 
 Scriptable:
 
 ```bash
-loomtide minigame setup \
+loombridge minigame setup \
   --id count-the-fruits \
   --project /path/to/UnityProject \
   --scene Assets/Scenes/CountTheFruits.unity \
   --visual-profile phone-portrait \
-  --workspace ~/.loomtide/projects/count-the-fruits \
+  --workspace ~/.loombridge/projects/count-the-fruits \
   --gated-outcome   # the win is behind correct answers / RNG a replay can't drive
 ```
 
@@ -217,7 +217,7 @@ still graded fully. CountTheFruits re-randomizes the answer each round, so it's 
 It creates:
 
 ```text
-~/.loomtide/projects/<game-id>/
+~/.loombridge/projects/<game-id>/
   <game-id>.minigame.json
   traces/      the recorded happy-path trace
   captures/    the capture pack (per-screen PNG + ui-rects + console)
@@ -226,18 +226,18 @@ It creates:
   raw/
 ```
 
-Everything for a game lives **flat under one project folder** — no nested `.loomtide/`, no separate replay
+Everything for a game lives **flat under one project folder** — no nested `.loombridge/`, no separate replay
 root. The trace verbs use `--flat --root <workspace>` so their artifacts land in `traces/` and `reports/`
 alongside the rest.
 
 ### Shared verification workspace
 
-`~/.loomtide/projects/<game-id>/` is the standard external workspace for generated Loomtide verification
+`~/.loombridge/projects/<game-id>/` is the standard external workspace for generated Loombridge verification
 artifacts. Mini-game visual/release verification uses the flat files above; existing-game feel verification
 uses a `feel/` subtree in the same workspace:
 
 ```text
-~/.loomtide/projects/<game-id>/
+~/.loombridge/projects/<game-id>/
   <game-id>.minigame.json
   traces/
   captures/
@@ -262,39 +262,39 @@ Then it prints the next commands with your chosen paths.
 Run the two commands printed by setup. They will look like:
 
 ```bash
-loomtide trace record \
+loombridge trace record \
   --observe --flat \
   --id count-the-fruits-happy-path \
   --scene Assets/Scenes/CountTheFruits.unity \
-  --root ~/.loomtide/projects/count-the-fruits
+  --root ~/.loombridge/projects/count-the-fruits
 
-loomtide trace replay \
+loombridge trace replay \
   --flat \
   --id count-the-fruits-happy-path \
-  --root ~/.loomtide/projects/count-the-fruits
+  --root ~/.loombridge/projects/count-the-fruits
 ```
 
 The `--flat` flag writes the trace to `…/count-the-fruits/traces/` and the replay report to
 `…/count-the-fruits/reports/` — directly under the project folder.
 
 During `trace record`, play the flow normally in Unity, then press Enter in the terminal. `trace replay`
-confirms Loomtide can drive the recorded flow again. This is a sanity check before capture; it does not
+confirms Loombridge can drive the recorded flow again. This is a sanity check before capture; it does not
 replace the capture pack.
 
 ### 3. Capture the screens
 
-Drive your recorded happy-path trace through the live bridge and let Loomtide write the capture pack for you
+Drive your recorded happy-path trace through the live bridge and let Loombridge write the capture pack for you
 (the Unity editor must be open on the game, with the bridge connected):
 
 ```bash
-loomtide minigame capture \
-  --contract ~/.loomtide/projects/count-the-fruits/count-the-fruits.minigame.json \
-  --trace-root ~/.loomtide/projects/count-the-fruits \
-  --captures ~/.loomtide/projects/count-the-fruits/captures
+loombridge minigame capture \
+  --contract ~/.loombridge/projects/count-the-fruits/count-the-fruits.minigame.json \
+  --trace-root ~/.loombridge/projects/count-the-fruits \
+  --captures ~/.loombridge/projects/count-the-fruits/captures
 ```
 
 It replays the trace (reset → taps/drags/world-taps → waits) and, at trace-anchored checkpoints, snapshots
-each named screen's triple plus the flow evidence, into `~/.loomtide/projects/<game-id>/captures/`:
+each named screen's triple plus the flow evidence, into `~/.loombridge/projects/<game-id>/captures/`:
 
 ```text
 start.png   start.ui-rects.json   start.console.json
@@ -320,10 +320,10 @@ The contract `setup` generated is a **draft** with placeholder locators. Don't h
 to replace the placeholders with the **real** scene objects observed in the capture pack:
 
 ```bash
-loomtide minigame finalize \
-  --contract ~/.loomtide/projects/count-the-fruits/count-the-fruits.minigame.json \
-  --captures ~/.loomtide/projects/count-the-fruits/captures \
-  --trace-root ~/.loomtide/projects/count-the-fruits
+loombridge minigame finalize \
+  --contract ~/.loombridge/projects/count-the-fruits/count-the-fruits.minigame.json \
+  --captures ~/.loombridge/projects/count-the-fruits/captures \
+  --trace-root ~/.loombridge/projects/count-the-fruits
 ```
 
 `finalize` reads each screen's `ui-rects.json` (real object paths / roles / text / visibility) — and, when
@@ -346,17 +346,17 @@ the draft carries advanced contract fields it doesn't infer (`allowedOffscreen`,
 Run the verify command printed by setup. It will look like:
 
 ```bash
-loomtide verify --minigame \
-  --contract ~/.loomtide/projects/count-the-fruits/count-the-fruits.minigame.json \
-  --captures ~/.loomtide/projects/count-the-fruits/captures \
-  --output ~/.loomtide/projects/count-the-fruits/reports/minigame-verification.json \
+loombridge verify --minigame \
+  --contract ~/.loombridge/projects/count-the-fruits/count-the-fruits.minigame.json \
+  --captures ~/.loombridge/projects/count-the-fruits/captures \
+  --output ~/.loombridge/projects/count-the-fruits/reports/minigame-verification.json \
   --strict
 ```
 
 Open the generated report:
 
 ```text
-~/.loomtide/projects/<game-id>/reports/minigame-verification.html
+~/.loombridge/projects/<game-id>/reports/minigame-verification.html
 ```
 
 ### 6. Approve the baseline once green
@@ -364,17 +364,17 @@ Open the generated report:
 Only approve after verify exits `0` / `READY`:
 
 ```bash
-loomtide minigame baseline approve \
-  --contract ~/.loomtide/projects/count-the-fruits/count-the-fruits.minigame.json \
-  --captures ~/.loomtide/projects/count-the-fruits/captures \
-  --ref ~/.loomtide/projects/count-the-fruits/baseline
+loombridge minigame baseline approve \
+  --contract ~/.loombridge/projects/count-the-fruits/count-the-fruits.minigame.json \
+  --captures ~/.loombridge/projects/count-the-fruits/captures \
+  --ref ~/.loombridge/projects/count-the-fruits/baseline
 ```
 
 Then re-run `verify --minigame` once. Future runs will report visual/layout drift separately from game bugs.
 
 ### Setup behavior worth knowing
 
-- **Workspace default** is `~/.loomtide/projects/<id>` — under your home, **never inside the Unity
+- **Workspace default** is `~/.loombridge/projects/<id>` — under your home, **never inside the Unity
   project**, so running `setup` from the project folder can't drop artifacts into the game repo.
   Override with `--workspace`; a `--workspace` that points *inside* the Unity project is refused.
 - **Interactive only on a TTY.** In CI / non-interactive shells, any missing required value
@@ -394,17 +394,17 @@ not touch the verifier engine.
 
 ```bash
 # 1. Advanced/manual path — scaffold a contract file directly.
-loomtide minigame init --id count-the-fruits --output count-the-fruits.minigame.json
+loombridge minigame init --id count-the-fruits --output count-the-fruits.minigame.json
 
 # 2. Capture the game's screens (start / active / reward / home) into a folder.
-#    `loomtide minigame capture` drives the running game once (replaying your demonstration)
+#    `loombridge minigame capture` drives the running game once (replaying your demonstration)
 #    and saves a screenshot + layout for each screen. See step 3 of the guided flow above.
 
 # 3. Run the release check. Read-only. Writes a report you can open.
-loomtide verify --minigame --contract count-the-fruits.minigame.json --captures ./captures/count-the-fruits
+loombridge verify --minigame --contract count-the-fruits.minigame.json --captures ./captures/count-the-fruits
 
 # 4. The FIRST time it's green — freeze this as the approved look, so future runs catch drift.
-loomtide minigame baseline approve --contract count-the-fruits.minigame.json --captures ./captures/count-the-fruits
+loombridge minigame baseline approve --contract count-the-fruits.minigame.json --captures ./captures/count-the-fruits
 ```
 
 Power users and CI can run the underlying commands directly. They are the same commands that `setup` prints.
@@ -416,7 +416,7 @@ approved — kept separate from real bugs, so an intended redesign is never repo
 ## Advanced Step 1 — describe your game (`minigame init`)
 
 ```bash
-loomtide minigame init --id <kebab-case-id> --output <path>.minigame.json
+loombridge minigame init --id <kebab-case-id> --output <path>.minigame.json
 ```
 
 This is the low-level path behind `minigame setup`. Most first-time users should run `setup` and follow the
@@ -433,7 +433,7 @@ contract fields:
 - **`interactionFlow.happyPath`** — the order a player moves through those screens.
 
 The starter is already valid, but its locators are placeholders. Rather than hand-editing them, capture the
-screens and run **`loomtide minigame finalize`** (see the guided flow above) to fill in real locators from the
+screens and run **`loombridge minigame finalize`** (see the guided flow above) to fill in real locators from the
 observed scene. If you do edit by hand and get a field wrong, `verify` tells you exactly which field and why —
 it never guesses.
 
@@ -454,7 +454,7 @@ captures/count-the-fruits/
   flow.json            # records that each screen was reached by a real tap (for the flow check)
 ```
 
-**`loomtide minigame capture` produces this pack for you** (see [step 3](#3-capture-the-screens) of the
+**`loombridge minigame capture` produces this pack for you** (see [step 3](#3-capture-the-screens) of the
 guided flow): with the Unity editor open on your game and the bridge connected, it replays your recorded
 demonstration and snapshots each named screen (screenshot + UI layout + console + `flow.json`). The
 `minigame check` / `minigame run` front doors call it as part of the pipeline. (You can still build a pack
@@ -467,7 +467,7 @@ or a failing game.** A missing screenshot never silently becomes a green.
 ## Step 3 — run the check (`verify --minigame`)
 
 ```bash
-loomtide verify --minigame --contract <contract>.minigame.json --captures <captures-dir> [--strict]
+loombridge verify --minigame --contract <contract>.minigame.json --captures <captures-dir> [--strict]
 ```
 
 It writes, next to the report, three files:
@@ -482,14 +482,14 @@ your game.
 ## Step 4 — approve the baseline (once green)
 
 ```bash
-loomtide minigame baseline approve --contract <contract>.minigame.json --captures <captures-dir> [--ref <dir>]
+loombridge minigame baseline approve --contract <contract>.minigame.json --captures <captures-dir> [--ref <dir>]
 ```
 
 This freezes the current (passing) capture pack as the approved reference. It **refuses to approve a run that
 isn't green** — you can't bless a broken build. From then on, `verify` also flags any **visual drift** from
 this reference. When you *intend* a redesign, just run `baseline approve` again to re-bless it.
 
-`loomtide minigame baseline status --contract <c>` prints what's currently approved (read-only).
+`loombridge minigame baseline status --contract <c>` prints what's currently approved (read-only).
 
 ---
 
@@ -540,7 +540,7 @@ Next: move the "Start" button back on-screen, then re-run.
 One job, exit-code driven:
 
 ```bash
-loomtide verify --minigame \
+loombridge verify --minigame \
   --contract "$CONTRACT" \
   --captures "$CAPTURES" \
   --strict
@@ -551,7 +551,7 @@ Upload `minigame-verification.html` + `minigame-verification.json` as build arti
 the report. Surface the 1-vs-2 distinction in the job summary so a "couldn't test" never reads as a game bug.
 
 **Full CI guide + a copy-paste GitHub Actions workflow:** [`MiniGameVerifyCI.md`](MiniGameVerifyCI.md) — how
-to install `loomtide` on a runner (no `~/.claude`), `loomtide --version` to catch a stale runtime, artifact
+to install `loombridge` on a runner (no `~/.claude`), `loombridge --version` to catch a stale runtime, artifact
 upload, and the exit-code handling.
 
 ---

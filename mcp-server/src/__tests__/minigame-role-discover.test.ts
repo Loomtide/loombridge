@@ -18,15 +18,15 @@ import {
   panelVisitOrder,
   segmentStates,
   type RoleCandidates,
-} from "../loomtide/minigame-role-discover.js";
-import { validateMinigameContract } from "../loomtide/minigame-profiles/validator.js";
-import { buildScaffoldContract } from "../loomtide/minigame-scaffold.js";
-import type { RawScreenRects } from "../loomtide/minigame-capture-plan.js";
-import type { MinigameContract } from "../loomtide/minigame-profiles/types.js";
-import type { ReplayTrace } from "../loomtide/replay/types.js";
-import { parseScanArgs, idFromScene } from "../loomtide/minigame-scan.js";
-import { normalizeWorkspaceId } from "../loomtide/workspace-paths.js";
-import { run as minigameRun } from "../loomtide/minigame.js";
+} from "../loombridge/minigame-role-discover.js";
+import { validateMinigameContract } from "../loombridge/minigame-profiles/validator.js";
+import { buildScaffoldContract } from "../loombridge/minigame-scaffold.js";
+import type { RawScreenRects } from "../loombridge/minigame-capture-plan.js";
+import type { MinigameContract } from "../loombridge/minigame-profiles/types.js";
+import type { ReplayTrace } from "../loombridge/replay/types.js";
+import { parseScanArgs, idFromScene } from "../loombridge/minigame-scan.js";
+import { normalizeWorkspaceId } from "../loombridge/workspace-paths.js";
+import { run as minigameRun } from "../loombridge/minigame.js";
 
 function fixtureRects(): RawScreenRects {
   return {

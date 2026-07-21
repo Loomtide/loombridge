@@ -42,7 +42,7 @@ const BASE_BACKOFF_MS = 500;
 const MAX_ROUTE_MISMATCH_RECONNECTS = 5;
 const DEFAULT_OP_TIMEOUT_MS = 10000;
 const LOOPBACK_PROBE_HOSTS = ["localhost", "127.0.0.1", "[::1]"] as const;
-const TRANSPORT_MODE_ENV_VAR = "LOOMTIDE_UNITY_TRANSPORT_MODE";
+const TRANSPORT_MODE_ENV_VAR = "LOOMBRIDGE_UNITY_TRANSPORT_MODE";
 type LoopbackProbeHost = (typeof LOOPBACK_PROBE_HOSTS)[number];
 
 // ─────────────────────────────────────────────

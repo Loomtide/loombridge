@@ -5,8 +5,8 @@
  * the allowlisted `capture.invoke_static` bridge op so `platform-tiles.json` and
  * `tile-render.json` are produced from RAW in-editor sprite sampling — never
  * hand-authored — then stamps a `_provenance` block onto each, and writes a
- * provenanced `console.json`. The CLI surface is `loomtide capture --slice
- * <ground-tiling>` (see loomtide/capture.ts); this module composes bridge ops
+ * provenanced `console.json`. The CLI surface is `loombridge capture --slice
+ * <ground-tiling>` (see loombridge/capture.ts); this module composes bridge ops
  * and defines no command UX.
  */
 
@@ -34,7 +34,7 @@ export interface CaptureTilesArgs {
   runId?: string;
   /** Console log count to pull (default 200). */
   consoleCount?: number;
-  /** Optional multi-editor routing target. Falls back to LOOMTIDE_UNITY_PROJECT. */
+  /** Optional multi-editor routing target. Falls back to LOOMBRIDGE_UNITY_PROJECT. */
   project?: string;
 }
 
@@ -169,7 +169,7 @@ export async function captureTileEvidence(args: CaptureTilesArgs): Promise<Captu
   const playMode = invokeResult.playMode === true;
   const editorMode = playMode ? "play-mode" : "edit-mode";
   const captureProvenance = {
-    writer: "loomtide capture (ground-tiling)",
+    writer: "loombridge capture (ground-tiling)",
     capturedAt,
     component,
     method,
@@ -193,7 +193,7 @@ export async function captureTileEvidence(args: CaptureTilesArgs): Promise<Captu
   await writeJson(consolePath, {
     logs: logsArray,
     _provenance: {
-      writer: "loomtide capture (ground-tiling)",
+      writer: "loombridge capture (ground-tiling)",
       capturedAt,
       ...(args.runId ? { runId: args.runId } : {}),
       editorMode,

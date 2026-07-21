@@ -1,0 +1,249 @@
+{
+  "schemaVersion": "1",
+  "id": "3d-topdown-arena.telemetry.v1",
+  "genre": "3d-topdown-arena",
+  "note": "Genre-pack-owned telemetry schema for the 3D top-down extraction-shooter / greed-loop quadrant (dogfood findings; plan §7 'Telemetry Is The Tuning Substrate', backlog High #3/#4/#6). It declares the per-run summary fields and the closed set of event-stream types that a build EMITS so the deterministic `loombridge tuning-report` can aggregate + compare cohorts. Seeded from the dogfood extraction-shooter telemetry set. This replaces ad-hoc debug output: field descriptions carry the naming-honesty rules the dogfood session learned the hard way (a proximity field masquerading as 'seen'; lost-vs-banked ambiguity; unescaped event JSON; stale-vs-fresh summary confusion).",
+  "honestyRules": [
+    {
+      "id": "proximity-is-not-seen",
+      "rule": "A field derived from DISTANCE/PROXIMITY must be named for what it measures (e.g. `firstEnemyNearMs`, `nearestEnemyDistanceM`) — NEVER `seen`/`spotted`/`detected`. Proximity is not line-of-sight visibility; naming a distance threshold 'seen' overstates what the telemetry knows (the exact dogfood bug)."
+    },
+    {
+      "id": "banked-vs-lost-distinct",
+      "rule": "Value SECURED by extraction (`bankedValue`) and value CARRIED-but-forfeited on death/cancel (`lostValue`) are SEPARATE fields. Never collapse them into one ambiguous `value` — the sign/meaning of a single 'value' field was unreadable in the dogfood project's summaries."
+    },
+    {
+      "id": "escape-event-json",
+      "rule": "Every event payload string (map tag, route id, reason, hold kind) MUST be emitted as properly-escaped JSON. The dogfood project emitted raw/unescaped strings that broke JSONL parsing; the loader refuses a line that does not parse as a JSON object."
+    },
+    {
+      "id": "fresh-not-stale",
+      "rule": "A run summary MUST carry `runId` and `producedAt`. `runId` binds the summary to its event stream: EVERY event must carry `runId` and it must match (a missing per-event `runId` is a refusal, not a skip — else a stale events file renamed onto a fresh summary's stem pairs cleanly). `producedAt` establishes the run is fresh, not a stale re-print, and must be parseable ISO-8601. A summary missing either is REFUSED, never graded (mirrors isFreshGreen's producedAt discipline). RESIDUAL LIMIT (honest): events carry no independent producedAt — freshness rides the summary's producedAt plus the required per-event binding, nothing more."
+    }
+  ],
+  "runSummary": {
+    "requiredFreshnessFields": ["runId", "producedAt"],
+    "fields": [
+      { "name": "runId", "type": "string", "required": true, "binding": "events-file", "description": "Unique id for this run; BINDS the summary to its `<stem>.events.jsonl`. EVERY event must carry `runId` and it must equal this value — a missing per-event `runId` is a refusal, not a skip. RESIDUAL LIMIT (honest): events carry no independent `producedAt`; freshness rides the summary's `producedAt` plus this required per-event binding, nothing more. Must be unique across a run-set: a duplicate runId refuses the WHOLE set (it would silently double-count the run in every aggregate)." },
+      { "name": "producedAt", "type": "string", "required": true, "format": "iso-8601", "description": "ISO-8601 timestamp the summary was WRITTEN. Freshness anchor — a missing/empty value is refused, and an unparseable value is refused (a timestamp that cannot be placed in time cannot establish freshness). Distinguishes fresh output from a stale re-print." },
+      { "name": "map", "type": "string", "required": true, "segmentable": true, "description": "Map tag (e.g. `map1-starter`, `map2-route`). Segmentation dimension; the dogfood project split a short starter map from a longer route-test map." },
+      { "name": "persona", "type": "string", "required": true, "segmentable": true, "description": "Scripted-bot persona intent for this run (e.g. `timid`/`balanced`/`greedy`/`reckless`). Segmentation dimension. Balance evidence, NOT a fun verdict." },
+      { "name": "route", "type": "string", "required": false, "segmentable": true, "description": "Route the run took through the arena (e.g. `north-loop`, `direct-extract`). Segmentation dimension for route-choice analysis." },
+      { "name": "outcome", "type": "string", "required": true, "segmentable": true, "description": "Terminal outcome: `extracted` (banked), `died` (lost), or `cancelled` (bailed the extraction). Segmentation dimension. Distinct from the value fields below." },
+      { "name": "runDurationMs", "type": "number", "unit": "ms", "required": true, "aggregate": "mean", "description": "Wall-clock length of the run, start to terminal outcome. Aggregated (mean/min/max) to sanity-check arena scale against target session duration." },
+      { "name": "firstPickupMs", "type": "number", "unit": "ms", "aggregate": "mean", "description": "Time from run start to FIRST loot pickup of any tier. Aggregated." },
+      { "name": "firstHighValueMs", "type": "number", "unit": "ms", "aggregate": "mean", "description": "Time from run start to the first HIGH-VALUE loot pickup — the greed-escalation moment. Aggregated." },
+      { "name": "firstEnemyNearMs", "type": "number", "unit": "ms", "aggregate": "mean", "description": "Time from run start to the first moment an enemy came within the danger-proximity threshold. PROXIMITY-DERIVED — honestly named 'near', NOT 'seen' (honesty rule proximity-is-not-seen). Aggregated." },
+      { "name": "extractionStartMs", "type": "number", "unit": "ms", "aggregate": "mean", "description": "Time from run start to when the player BEGAN the extraction hold. Aggregated (null/omitted on runs that never reached extraction)." },
+      { "name": "extractionCompleteMs", "type": "number", "unit": "ms", "aggregate": "mean", "description": "Time from run start to a COMPLETED extraction. Omitted on runs that died/cancelled before completing. Aggregated." },
+      { "name": "bankedValue", "type": "number", "unit": "pts", "required": true, "aggregate": "mean", "description": "Value SECURED via a completed extraction. HONEST: distinct from `lostValue`; do not merge (honesty rule banked-vs-lost-distinct). Aggregated." },
+      { "name": "lostValue", "type": "number", "unit": "pts", "required": true, "aggregate": "mean", "description": "Value the player was CARRYING but forfeited on death/cancel. HONEST: distinct from `bankedValue`. Aggregated — the greed-risk signal." },
+      { "name": "nearestEnemyDistanceMinM", "type": "number", "unit": "m", "aggregate": "mean", "description": "Closest an enemy got over the whole run, in metres. PROXIMITY, not visibility. Aggregated — a pressure proxy." }
+    ]
+  },
+  "eventStream": {
+    "timestampField": "t",
+    "timestampUnit": "s",
+    "monotonicity": "global",
+    "note": "GROUND-TRUTHED against the real dogfood-project TelemetryLogger event stream (PlaytestData/run_*_events.jsonl — 259 files, ~63k events, 17 types; T3-T). Corrections this ground-truthing applied to the pre-real model: (1) `t` is SECONDS (float, ~0.5s sampling step), NOT ms; (2) the stream is ONE globally time-sorted sequence — every one of the 259 real captures is globally monotonic non-decreasing, so `global` (not per-entity keyed by an `enemyId` that does not exist) is the honest ordering contract; (3) real type NAMES are `player_pos`/`enemy_pos`/… not `*_position_sample`, and combat/loot/extract/bot rows exist that the model omitted; (4) MERGED payloads — `player_pos` carries stash/heat/holdKind/holdProgress/nearestEnemyDist INLINE, not as separate sample events; (5) the arena is XZ-planar with NO `y` height field. RESIDUAL LIMIT (migration, see EMITTER-MIGRATION.md): the real emitter stamps NO per-event run-binding field, so a real events file still REFUSES the run-binding gate (`runId` MISSING on every event) until the game's emitter adds it — that refusal is the fresh-not-stale binding moat working, not a schema bug.",
+    "events": [
+      {
+        "type": "player_pos",
+        "description": "Periodic sample of the player's world position PLUS the merged greed-loop state the real emitter folds into the same row (stash carried, heat/pressure, current hold, nearest-enemy proximity). Top-down arena is XZ-planar — there is NO y height field.",
+        "payload": [
+          { "name": "t", "type": "number", "unit": "s", "required": true, "description": "Run-relative timestamp in SECONDS (~0.5s step); globally monotonic non-decreasing across the whole stream." },
+          { "name": "x", "type": "number", "unit": "m", "required": true },
+          { "name": "z", "type": "number", "unit": "m", "required": true },
+          { "name": "stash", "type": "integer", "unit": "pts", "required": true, "description": "Value CARRIED (not yet banked) at this sample. Merged inline by the real emitter." },
+          { "name": "heat", "type": "number", "required": true, "description": "Accumulated pressure/heat level at this sample. Merged inline." },
+          { "name": "holdKind", "type": "string", "required": true, "description": "Active hold at this sample (e.g. `none`/`loot`/`extract`). Must be escaped JSON (honesty rule escape-event-json)." },
+          { "name": "holdProgress", "type": "number", "required": true, "description": "Progress of the active hold in [0,1] (0 when holdKind is `none`)." },
+          { "name": "nearestEnemyDist", "type": "number", "unit": "m", "required": true, "description": "Distance to the nearest enemy in metres, or -1 when no enemy is present. PROXIMITY, not line-of-sight — honestly named `nearestEnemyDist`, NEVER `seen` (honesty rule proximity-is-not-seen)." }
+        ]
+      },
+      {
+        "type": "enemy_pos",
+        "description": "Periodic sample of one enemy's world position and its distance to the player.",
+        "payload": [
+          { "name": "t", "type": "number", "unit": "s", "required": true },
+          { "name": "id", "type": "integer", "required": true, "description": "Per-run enemy instance id (integer in the real emitter)." },
+          { "name": "kind", "type": "string", "required": true, "description": "Enemy archetype tag. Must be escaped JSON." },
+          { "name": "x", "type": "number", "unit": "m", "required": true },
+          { "name": "z", "type": "number", "unit": "m", "required": true },
+          { "name": "dist", "type": "number", "unit": "m", "required": true, "description": "This enemy's distance to the player in metres. PROXIMITY, not visibility (honesty rule proximity-is-not-seen)." }
+        ]
+      },
+      {
+        "type": "shot_fired",
+        "description": "Player fired a shot.",
+        "payload": [
+          { "name": "t", "type": "number", "unit": "s", "required": true },
+          { "name": "x", "type": "number", "unit": "m", "required": true },
+          { "name": "z", "type": "number", "unit": "m", "required": true }
+        ]
+      },
+      {
+        "type": "shot_hit",
+        "description": "A fired shot connected with a target.",
+        "payload": [
+          { "name": "t", "type": "number", "unit": "s", "required": true },
+          { "name": "target", "type": "string", "required": true, "description": "What was hit (e.g. enemy kind/id). Must be escaped JSON." },
+          { "name": "x", "type": "number", "unit": "m", "required": true },
+          { "name": "z", "type": "number", "unit": "m", "required": true }
+        ]
+      },
+      {
+        "type": "damage",
+        "description": "Player took damage. `duringHold` flags the greed-vs-risk moment (damage taken while in a loot/extract hold).",
+        "payload": [
+          { "name": "t", "type": "number", "unit": "s", "required": true },
+          { "name": "amount", "type": "number", "unit": "hp", "required": true },
+          { "name": "source", "type": "string", "required": true, "description": "What dealt the damage. Must be escaped JSON." },
+          { "name": "x", "type": "number", "unit": "m", "required": true },
+          { "name": "z", "type": "number", "unit": "m", "required": true },
+          { "name": "duringHold", "type": "boolean", "required": true, "description": "True when the damage landed WHILE the player was in a hold — the greed-vs-risk signal." }
+        ]
+      },
+      {
+        "type": "enemy_spawn",
+        "description": "An enemy spawned into the arena.",
+        "payload": [
+          { "name": "t", "type": "number", "unit": "s", "required": true },
+          { "name": "kind", "type": "string", "required": true },
+          { "name": "x", "type": "number", "unit": "m", "required": true },
+          { "name": "z", "type": "number", "unit": "m", "required": true }
+        ]
+      },
+      {
+        "type": "enemy_death",
+        "description": "An enemy was killed.",
+        "payload": [
+          { "name": "t", "type": "number", "unit": "s", "required": true },
+          { "name": "kind", "type": "string", "required": true },
+          { "name": "x", "type": "number", "unit": "m", "required": true },
+          { "name": "z", "type": "number", "unit": "m", "required": true }
+        ]
+      },
+      {
+        "type": "loot_start",
+        "description": "Player began a loot-secure hold at a container. `tier` drives loot-tier stats.",
+        "payload": [
+          { "name": "t", "type": "number", "unit": "s", "required": true },
+          { "name": "id", "type": "string", "required": true, "description": "Container id. Must be escaped JSON." },
+          { "name": "tier", "type": "string", "required": true, "description": "Loot tier (e.g. `low`/`mid`/`high`). Must be escaped JSON." },
+          { "name": "value", "type": "integer", "unit": "pts", "required": true, "description": "Point value on offer from this container." },
+          { "name": "x", "type": "number", "unit": "m", "required": true },
+          { "name": "z", "type": "number", "unit": "m", "required": true }
+        ]
+      },
+      {
+        "type": "loot_complete",
+        "description": "Player completed a loot-secure hold; `stash` is the resulting carried total.",
+        "payload": [
+          { "name": "t", "type": "number", "unit": "s", "required": true },
+          { "name": "id", "type": "string", "required": true },
+          { "name": "tier", "type": "string", "required": true },
+          { "name": "value", "type": "integer", "unit": "pts", "required": true, "description": "Value secured from this container." },
+          { "name": "stash", "type": "integer", "unit": "pts", "required": true, "description": "Total value now CARRIED (not yet banked) after this pickup." },
+          { "name": "x", "type": "number", "unit": "m", "required": true },
+          { "name": "z", "type": "number", "unit": "m", "required": true }
+        ]
+      },
+      {
+        "type": "loot_cancel",
+        "description": "A loot-secure hold was interrupted before completing.",
+        "payload": [
+          { "name": "t", "type": "number", "unit": "s", "required": true },
+          { "name": "id", "type": "string", "required": true },
+          { "name": "x", "type": "number", "unit": "m", "required": true },
+          { "name": "z", "type": "number", "unit": "m", "required": true }
+        ]
+      },
+      {
+        "type": "pressure_start",
+        "description": "Enemy pressure began (the first-enemy trigger). `reason` and `afterLootDelay` explain WHY/WHEN pressure arrived.",
+        "payload": [
+          { "name": "t", "type": "number", "unit": "s", "required": true },
+          { "name": "reason", "type": "string", "required": true, "description": "Why pressure triggered (e.g. `high_rush`, `after_first_loot`). Must be escaped JSON." },
+          { "name": "afterLootDelay", "type": "number", "unit": "s", "required": true, "description": "Seconds between the first loot and this pressure trigger (-1 when not loot-triggered)." }
+        ]
+      },
+      {
+        "type": "death",
+        "description": "Player died; carried value is FORFEITED (`lost`), never banked (honesty rule banked-vs-lost-distinct).",
+        "payload": [
+          { "name": "t", "type": "number", "unit": "s", "required": true },
+          { "name": "lost", "type": "integer", "unit": "pts", "required": true, "description": "Value the player was CARRYING and forfeited on death. Distinct from any banked value." },
+          { "name": "x", "type": "number", "unit": "m", "required": true },
+          { "name": "z", "type": "number", "unit": "m", "required": true }
+        ]
+      },
+      {
+        "type": "extract_hold_start",
+        "description": "Player began the extraction hold at a zone.",
+        "payload": [
+          { "name": "t", "type": "number", "unit": "s", "required": true },
+          { "name": "id", "type": "string", "required": true, "description": "Extraction zone id. Must be escaped JSON." },
+          { "name": "tier", "type": "string", "required": true },
+          { "name": "value", "type": "integer", "unit": "pts", "required": true, "description": "Value carried into the extraction hold." },
+          { "name": "x", "type": "number", "unit": "m", "required": true },
+          { "name": "z", "type": "number", "unit": "m", "required": true }
+        ]
+      },
+      {
+        "type": "extract_hold_cancel",
+        "description": "An extraction hold was interrupted before completing.",
+        "payload": [
+          { "name": "t", "type": "number", "unit": "s", "required": true },
+          { "name": "id", "type": "string", "required": true },
+          { "name": "x", "type": "number", "unit": "m", "required": true },
+          { "name": "z", "type": "number", "unit": "m", "required": true }
+        ]
+      },
+      {
+        "type": "extract_complete",
+        "description": "Extraction completed; carried value is BANKED (`banked`), distinct from any lost value (honesty rule banked-vs-lost-distinct).",
+        "payload": [
+          { "name": "t", "type": "number", "unit": "s", "required": true },
+          { "name": "banked", "type": "integer", "unit": "pts", "required": true, "description": "Value SECURED by this completed extraction. Distinct from `death.lost`." },
+          { "name": "x", "type": "number", "unit": "m", "required": true },
+          { "name": "z", "type": "number", "unit": "m", "required": true }
+        ]
+      },
+      {
+        "type": "bot_state",
+        "description": "Scripted-bot state transition (bot runs only). Adds bot intent/persona rows to the SAME stream (design doc §Telemetry requirements) — never replaces the player/combat/loot rows.",
+        "payload": [
+          { "name": "t", "type": "number", "unit": "s", "required": true },
+          { "name": "persona", "type": "string", "required": true, "description": "Bot persona id (e.g. `timid`/`balanced`/`greedy`/`reckless`). Must be escaped JSON." },
+          { "name": "from", "type": "string", "required": true, "description": "State transitioned FROM. Must be escaped JSON." },
+          { "name": "to", "type": "string", "required": true, "description": "State transitioned TO. Must be escaped JSON." },
+          { "name": "reason", "type": "string", "required": true, "description": "Why the transition fired. Must be escaped JSON." },
+          { "name": "x", "type": "number", "unit": "m", "required": true },
+          { "name": "z", "type": "number", "unit": "m", "required": true },
+          { "name": "stash", "type": "integer", "unit": "pts", "required": true },
+          { "name": "hp", "type": "number", "unit": "hp", "required": true },
+          { "name": "nearestEnemyDist", "type": "number", "unit": "m", "required": true, "description": "PROXIMITY to the nearest enemy at the transition, not visibility (honesty rule proximity-is-not-seen)." },
+          { "name": "targetKind", "type": "string", "required": true },
+          { "name": "targetId", "type": "string", "required": true }
+        ]
+      },
+      {
+        "type": "bot_target",
+        "description": "Scripted-bot target selection (bot runs only). Records WHICH target the bot chose and its scoring inputs.",
+        "payload": [
+          { "name": "t", "type": "number", "unit": "s", "required": true },
+          { "name": "persona", "type": "string", "required": true },
+          { "name": "targetKind", "type": "string", "required": true },
+          { "name": "targetId", "type": "string", "required": true },
+          { "name": "tier", "type": "string", "required": true },
+          { "name": "value", "type": "integer", "unit": "pts", "required": true },
+          { "name": "dist", "type": "number", "unit": "m", "required": true, "description": "Distance to the chosen target. PROXIMITY (honesty rule proximity-is-not-seen)." },
+          { "name": "score", "type": "number", "required": true, "description": "Heuristic score the bot assigned this target." },
+          { "name": "x", "type": "number", "unit": "m", "required": true },
+          { "name": "z", "type": "number", "unit": "m", "required": true }
+        ]
+      }
+    ]
+  }
+}

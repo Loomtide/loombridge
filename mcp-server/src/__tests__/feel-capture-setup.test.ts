@@ -4,12 +4,12 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import { proposeFeelCaptureContract, writeFeelCaptureContract } from "../loomtide/feel-capture/setup.js";
-import { SHORT_HOP_CANONICAL_TAP_TICKS } from "../loomtide/genre-packs/platformer-2d/measure-recipe.js";
+import { proposeFeelCaptureContract, writeFeelCaptureContract } from "../loombridge/feel-capture/setup.js";
+import { SHORT_HOP_CANONICAL_TAP_TICKS } from "../loombridge/genre-packs/platformer-2d/measure-recipe.js";
 
 test("setup proposal writes a generic uGUI capture contract for mobile/pointer games", async () => {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), "loomtide-feel-setup-"));
-  const outputPath = path.join(root, ".loomtide", "feel", "capture-contract.json");
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "loombridge-feel-setup-"));
+  const outputPath = path.join(root, ".loombridge", "feel", "capture-contract.json");
   const contract = proposeFeelCaptureContract({
     root,
     game: "MobilePointerFixture",
@@ -249,7 +249,7 @@ test("setup proposal includes coyote/jump-buffer only from explicit semantic pro
 });
 
 test("setup writer refuses to overwrite without --force", async () => {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), "loomtide-feel-setup-"));
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "loombridge-feel-setup-"));
   const outputPath = path.join(root, "capture-contract.json");
   const contract = proposeFeelCaptureContract({
     root,

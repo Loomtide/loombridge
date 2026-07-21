@@ -36,7 +36,7 @@ type UnknownRecord = Record<string, unknown>;
 const catalogIdPattern = /^[a-z0-9][a-z0-9._-]*$/;
 const sha256Pattern = /^[a-f0-9]{64}$/;
 const reviewStatuses = new Set<AssetReviewStatus>(["unreviewed", "needs-review", "verified", "rejected"]);
-const verifierKinds = new Set<AssetReviewVerifierKind>(["developer", "loomtide", "source-owner"]);
+const verifierKinds = new Set<AssetReviewVerifierKind>(["developer", "loombridge", "source-owner"]);
 const acquisitionLanes = new Set<AssetAcquisitionLane>(["api", "mirror-index", "scraped-discovery"]);
 const trustTiers = new Set<AssetTrustTier>(["trusted-default", "attribution-required", "unverified-discovery", "blocked"]);
 const fileFormats = new Set<AssetFileFormat>(["png", "jpg", "jpeg", "wav", "ogg", "glb", "svg"]);
@@ -302,7 +302,7 @@ function validateReview(review: AssetReview, path: string, issues: AssetCatalogV
   }
 
   if (review.verifiedBy && !verifierKinds.has(review.verifiedBy)) {
-    pushIssue(issues, "INVALID_REVIEW", `${path}.review.verifiedBy`, "review.verifiedBy must be developer, loomtide, or source-owner.");
+    pushIssue(issues, "INVALID_REVIEW", `${path}.review.verifiedBy`, "review.verifiedBy must be developer, loombridge, or source-owner.");
   }
 
   if (review.status === "verified") {

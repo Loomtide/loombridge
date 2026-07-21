@@ -8,13 +8,13 @@
 
 The whole point of verify-first is low-trust diagnosis: we **observe**, we never edit the project, and
 every reported number must **re-derive from its own raw samples** so a hand-authored / param-read value
-cannot pass. This run is the first end-to-end demonstration of that on a project Loomtide did not build.
+cannot pass. This run is the first end-to-end demonstration of that on a project Loombridge did not build.
 
 ---
 
 ## Sample under test
 
-`~/loomtide-runs/OnlineSamples/2d-platformer-controller`
+`~/loombridge-runs/OnlineSamples/2d-platformer-controller`
 
 - Unity **2019.4.17f1** project (closer to the 2022.3 compatibility target than the 5.3 sample).
 - Full game: scenes (`DemoScene`, `TestingRoom`, …), prefabs, player + camera.
@@ -44,10 +44,10 @@ measurementFixedTimestep)` (`Editor/Core/MotionMetrics.cs`), wired in `HandleMea
 (`Editor/Handlers/RuntimeHandler.cs`), advertised in `op-registry.ts`. EditMode coverage in
 `MotionMetricsTests.cs`.
 
-> **Before the live run:** `loomtide` execs the **frozen** runtime at `~/.loomtide/runtime`, NOT the
-> repo `dist`. After this code lands, re-run `scripts/loomtide-install-locally.sh` so the bridge the
-> editor loads (and the `loomtide` CLI) include these C# + server changes. See
-> [[loomtide-frozen-runtime-reinstall]].
+> **Before the live run:** `loombridge` execs the **frozen** runtime at `~/.loombridge/runtime`, NOT the
+> repo `dist`. After this code lands, re-run `scripts/loombridge-install-locally.sh` so the bridge the
+> editor loads (and the `loombridge` CLI) include these C# + server changes. See
+> [[loombridge-frozen-runtime-reinstall]].
 
 ---
 
@@ -57,7 +57,7 @@ All scene-shape reads use the verify-first **read-only** ops; the **mutation den
 `VerifyFirstEntry.md` applies unchanged. The only "writes" here are Play-Mode entry and transient input
 injection — both revert on exit Play Mode; nothing is saved to the scene or assets.
 
-1. **Connect + confirm context.** Open the sample (2022.3 upgrade copy), confirm `loomtide_editor_list`
+1. **Connect + confirm context.** Open the sample (2022.3 upgrade copy), confirm `loombridge_editor_list`
    shows it bound. `scene.open_scene DemoScene` (or `TestingRoom`); confirm it compiles + the player
    object resolves (`scene.find_object`, `component.list`). Read-only.
 
@@ -139,7 +139,7 @@ injection — both revert on exit Play Mode; nothing is saved to the scene or as
    (`deriveRunSpeed` / `deriveJumpApex` / `deriveTimeToApex`) — which it will, because
    `MotionMetrics.Compute` and `feel-derive.ts` share the formulas by design.
 
-5. **Verify.** `loomtide verify --profile precision --measurements <feel.json>`. Expect run / jump apex /
+5. **Verify.** `loombridge verify --profile precision --measurements <feel.json>`. Expect run / jump apex /
    time-to-apex graded against the precision bands, re-derivation **green**, and any undeclared metric
    reported "not measured" (status `incomplete` if so — honest, never a green-over-unmeasured).
 
@@ -195,7 +195,7 @@ judge — before this slice `measure_motion` emitted no timestep at all.
 
 ### What the C# data-path proved live ✅
 `runtime.measure_motion` with `includeSamples:true` worked exactly as designed on this real,
-Loomtide-did-not-build project:
+Loombridge-did-not-build project:
 - it **advanced the simulation and emitted the raw trajectory correctly** — e.g. 97 samples over a full
   800 ms game-time window under forced `Application.runInBackground = true`;
 - the new provenance came back **`projectFixedTimestepBeforeMeasurement: 0.02` /
@@ -273,7 +273,7 @@ mirror-clobbering defect is fixed and confirmed on the real project.
 **Headless EditMode test result** (editor closed; run from repo root, Unity 6000.3.9f1):
 ```
 "/Applications/Unity/Hub/Editor/6000.3.9f1/Unity.app/Contents/MacOS/Unity" \
-  -batchmode -nographics -projectPath unity-projects/loomtide-dev \
+  -batchmode -nographics -projectPath unity-projects/loombridge-dev \
   -runTests -testPlatform EditMode \
   -testResults /tmp/lt-editmode.xml -logFile /tmp/lt-editmode.log
 ```
@@ -343,7 +343,7 @@ latency gap (the gap was what let the fast controller wall itself before a separ
 opened — every prior run read `deltaX=0`). With `captureFps:0` (timestep NOT pinned) the game loop runs
 at its live rate and the injected input reaches the controller normally.
 
-**Live captures** (OnlineSamples `2d-platformer-controller_Loomtide`, `DemoScene:/Player`, Unity
+**Live captures** (OnlineSamples `2d-platformer-controller_Loombridge`, `DemoScene:/Player`, Unity
 6000.3.x; this original proof was operator-focused; PR #39 later removed that focus requirement):
 - **Run** — phases `[{[],150ms},{[RightArrow],800ms},{[],150ms}]`: phase 0 `deltaX=0` (stationary), phase 1
   `deltaX=2.25` (x:146.2→148.45 with RightArrow held — **input captured in-loop**), phase 2 `deltaX=0`
@@ -358,7 +358,7 @@ at its live rate and the injected input reaches the controller normally.
 slice for runSpeed; jump-press-onward slice for jumpApex/timeToApex). The reported values are the
 offline re-derivation of those very samples.
 
-**`loomtide verify --profile precision --measurements feel.json`** → `status=fail`, **0 pass / 3 fail**.
+**`loombridge verify --profile precision --measurements feel.json`** → `status=fail`, **0 pass / 3 fail**.
 All three measured metrics fail the *band* (this is a generic sample controller, not a precision
 platformer: runSpeed 2.8 vs 9, apex 0.8 vs 3, rise 44ms vs 280ms) — **the expected, honest outcome**.
 Crucially, all three `rederivation` verdicts **PASS** (reported value bit-matches re-derivation from the
@@ -373,11 +373,11 @@ re-derivation (surgical rejection). **A value hand-picked to satisfy the band ca
 because the raw live samples are the evidence and they refute it.** This closes the S4b self-grade hole
 on a *live*-captured trajectory, not just synthetic/offline fixtures.
 
-> Methodology notes: ran `verify` with `--root <scratch>` so the report (`.loomtide/reports/`) never
+> Methodology notes: ran `verify` with `--root <scratch>` so the report (`.loombridge/reports/`) never
 > touches the developer's sample project (verify-first non-mutation). `engine: not detected` in that
 > scratch root only downgrades a *clean pass* → incomplete; it does not affect a band `fail` or the
-> re-derivation verdicts (engine-independent). The frozen `~/.loomtide/runtime` had to be reinstalled
-> first (it predated S5b/S5c — no `feel-rederive` gate); see [[loomtide-frozen-runtime-reinstall]].
+> re-derivation verdicts (engine-independent). The frozen `~/.loombridge/runtime` had to be reinstalled
+> first (it predated S5b/S5c — no `feel-rederive` gate); see [[loombridge-frozen-runtime-reinstall]].
 
 **Historical remaining item, now fixed:** this proof originally required Unity app focus. Issue #37 /
 PR #39 removed that limitation by making bridge Input System routing focus-independent for the input

@@ -10,10 +10,10 @@ Use this skill to run the plan-time **elicitation front-end**: turn a one-line g
 build plan; this skill is the judgment half (the deterministic half is `validateGenreContract`).
 
 The gate is `validateGenreContract` in
-`mcp-server/src/loomtide/genre-contract/validator.ts`.
+`mcp-server/src/loombridge/genre-contract/validator.ts`.
 A contract is done only when that function returns `valid: true`. Never invent gate ids, units, or
 calculator ids outside the closed sets it binds against (listed below). A passing reference is
-`mcp-server/src/loomtide/genre-contract/examples/2d-shooter.contract.json`.
+`mcp-server/src/loombridge/genre-contract/examples/2d-shooter.contract.json`.
 
 ## Interaction model: draft first, ask only on uncertainty
 
@@ -114,7 +114,7 @@ Every row needs `target`, `tag`, and `bucket` (`coreVertical | deferredMeta` —
   injection), not just TS.
 - **`judgment-only`** — no measurable proxy. **Every judgment-only `target` REQUIRES a matching
   `humanOracleCheck` with `appliesTo === target`.**
-- **`engine-unsupported-today`** — outside Loomtide's substrate today (3D / Fusion-replicated state).
+- **`engine-unsupported-today`** — outside Loombridge's substrate today (3D / Fusion-replicated state).
 
 twitch/hybrid genres must commit to **at least one** non-judgment measurable feel target (any
 measurable-now / needs-new-calculator / needs-new-bridge-capability). Not everything can be
@@ -132,7 +132,7 @@ Any `band` (`{min?, max?, unit?}` or `{qualitative}`) REQUIRES an `evidenceKind`
 
 Band `unit`, when set, must be in the supported set: `u, u/s, u/s^2, s, ms, px, x`.
 
-Do not omit useful bands just because Loomtide cannot measure them today. If a hint-card provides a
+Do not omit useful bands just because Loombridge cannot measure them today. If a hint-card provides a
 `pack-default`, or a reference exemplar clearly anchors a range, include the band with the honest
 measurability tag (`needs-new-calculator`, `needs-new-bridge-capability`, or `judgment-only`). Only
 use no band when there is no pack default, no reference anchor, and no operator sign-off. Conversely,
@@ -176,7 +176,7 @@ weapon-roster (`kind: roster`), progression (`kind: progression`).
 A genre hint-card seeds defaults — `genreClass`, asset roles, exemplars, pack-default bands, and
 optional `coreHooks[]` for brief-defining meta-looking mechanics that need one minimal core
 representative. It is a declarative JSON read at
-`mcp-server/src/loomtide/genre-contract/genre-packs/<id>/hint-card.json` (forward reference — the
+`mcp-server/src/loombridge/genre-contract/genre-packs/<id>/hint-card.json` (forward reference — the
 pack-discovery refactor is a later milestone; here the hint-card is just a file the skill reads).
 Absent a pack, the spine + your genre knowledge still emit a contract — lower default quality, more
 honest gaps.

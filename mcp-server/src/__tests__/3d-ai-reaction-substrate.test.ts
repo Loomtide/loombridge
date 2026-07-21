@@ -41,7 +41,7 @@ function seriesOf(raw: RawTranscript, id: string): FieldSeries {
 }
 
 function runGenerator(): unknown {
-  const tempDir = mkdtempSync(join(tmpdir(), "loomtide-3d-ai-"));
+  const tempDir = mkdtempSync(join(tmpdir(), "loombridge-3d-ai-"));
   const out = join(tempDir, "derived.json");
   try {
     const result = spawnSync(process.execPath, [join(bundleRoot, "generate.mjs"), "--output", out], {

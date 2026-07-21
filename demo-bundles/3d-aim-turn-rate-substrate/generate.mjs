@@ -162,7 +162,7 @@ const artifact = {
   honesty: {
     measures:
       "the LIVE yaw turn rate of a clean-room aim rig sweeping at a constant rate, derived from the rotation " +
-      "(eulerAngles) trajectory the Loomtide bridge now samples, in the repo-owned 3D shooter fixture.",
+      "(eulerAngles) trajectory the Loombridge bridge now samples, in the repo-owned 3D shooter fixture.",
     doesNotMeasure:
       "look responsiveness/latency (no input-onset binding here), recoil kick/recovery, ADS transition, aim " +
       "assist/fairness, mouse-look acceleration curves, or any production aim tuning. Those remain explicit gaps " +

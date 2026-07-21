@@ -19,9 +19,9 @@ Builds/
 MemoryCaptures/
 crashlytics-build.properties
 
-# --- Loomtide per-project state ---
-.loomtide/
-!templates/create-loomtide-game/.loomtide/
+# --- Loombridge per-project state ---
+.loombridge/
+!templates/create-loombridge-game/.loombridge/
 
 # --- OS ---
 .DS_Store

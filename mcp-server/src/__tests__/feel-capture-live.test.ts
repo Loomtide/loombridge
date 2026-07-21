@@ -4,8 +4,8 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import { runFeelCaptureLive, type FeelCaptureLiveClient } from "../loomtide/feel-capture/live.js";
-import type { FeelCaptureContract } from "../loomtide/feel-capture/types.js";
+import { runFeelCaptureLive, type FeelCaptureLiveClient } from "../loombridge/feel-capture/live.js";
+import type { FeelCaptureContract } from "../loombridge/feel-capture/types.js";
 import type { BridgeResponse } from "../types.js";
 
 function success(data: unknown): BridgeResponse {
@@ -81,7 +81,7 @@ class FakeClient implements FeelCaptureLiveClient {
 }
 
 test("live feel capture enters Play, runs the generic contract, writes measurements, and stops", async () => {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), "loomtide-feel-live-"));
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "loombridge-feel-live-"));
   const contractPath = path.join(root, "capture-contract.json");
   const outputPath = path.join(root, "profile-measurements.json");
   const artifactsDir = path.join(root, "capture-artifacts");
@@ -138,7 +138,7 @@ test("live feel capture enters Play, runs the generic contract, writes measureme
 });
 
 test("live feel capture opens the contract scene and restores activation preconditions", async () => {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), "loomtide-feel-live-preflight-"));
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "loombridge-feel-live-preflight-"));
   const contractPath = path.join(root, "capture-contract.json");
   const outputPath = path.join(root, "profile-measurements.json");
   const contract: FeelCaptureContract = {
@@ -203,7 +203,7 @@ test("live feel capture opens the contract scene and restores activation precond
 });
 
 test("live feel capture opens explicit scene paths but resolves locators by loaded scene name", async () => {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), "loomtide-feel-live-scene-path-"));
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "loombridge-feel-live-scene-path-"));
   const contractPath = path.join(root, "capture-contract.json");
   const outputPath = path.join(root, "profile-measurements.json");
   const contract: FeelCaptureContract = {
@@ -258,7 +258,7 @@ test("live feel capture opens explicit scene paths but resolves locators by load
 });
 
 test("live feel capture wraps keyboard contracts in an Input System session", async () => {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), "loomtide-feel-live-keyboard-"));
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "loombridge-feel-live-keyboard-"));
   const contractPath = path.join(root, "capture-contract.json");
   const outputPath = path.join(root, "profile-measurements.json");
   const contract: FeelCaptureContract = {
@@ -311,7 +311,7 @@ test("live feel capture wraps keyboard contracts in an Input System session", as
 });
 
 test("live feel capture preserves measurements and artifacts when disconnect cleanup fails", async () => {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), "loomtide-feel-live-disconnect-"));
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "loombridge-feel-live-disconnect-"));
   const contractPath = path.join(root, "capture-contract.json");
   const outputPath = path.join(root, "profile-measurements.json");
   const artifactsDir = path.join(root, "capture-artifacts");
@@ -346,8 +346,8 @@ test("live feel capture preserves measurements and artifacts when disconnect cle
 });
 
 test("live feel capture runs trace-replay contracts through the replay driver", async () => {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), "loomtide-feel-live-trace-"));
-  const traceDir = path.join(root, ".loomtide", "replays", "traces");
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "loombridge-feel-live-trace-"));
+  const traceDir = path.join(root, ".loombridge", "replays", "traces");
   await fs.mkdir(traceDir, { recursive: true });
   await fs.writeFile(
     path.join(traceDir, "start-game.json"),
@@ -400,7 +400,7 @@ test("live feel capture reuses the already-loaded scene by name instead of guess
   // Assets/PC2D/Example/Platformer/Platformer.unity, NOT Assets/Scenes/) used to be
   // forced through scenePathFor → "Assets/Scenes/Platformer.unity" → NOT_FOUND.
   // When that scene is already the loaded scene, we must NOT re-open it by a guessed path.
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), "loomtide-feel-live-loaded-"));
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "loombridge-feel-live-loaded-"));
   const contractPath = path.join(root, "capture-contract.json");
   const outputPath = path.join(root, "profile-measurements.json");
   const contract: FeelCaptureContract = {
@@ -440,7 +440,7 @@ test("live feel capture opens explicit scene paths instead of reusing basename m
   // Explicit asset paths are unambiguous. Do not reuse a loaded scene by basename only:
   // projects can contain multiple scenes named Platformer in different folders, and a
   // basename match would silently capture the wrong scene.
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), "loomtide-feel-live-explicit-path-"));
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "loombridge-feel-live-explicit-path-"));
   const contractPath = path.join(root, "capture-contract.json");
   const outputPath = path.join(root, "profile-measurements.json");
   const contract: FeelCaptureContract = {
@@ -479,7 +479,7 @@ test("live feel capture surfaces an actionable error when a bare-name scene is n
   // When the contract scene is a bare name AND that scene is not currently loaded, the
   // runner cannot resolve its asset path generically. It must say so clearly rather than
   // failing deep inside scene.open_scene with "Scene file not found: Assets/Scenes/...".
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), "loomtide-feel-live-unloaded-"));
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "loombridge-feel-live-unloaded-"));
   const contractPath = path.join(root, "capture-contract.json");
   const outputPath = path.join(root, "profile-measurements.json");
   const contract: FeelCaptureContract = {

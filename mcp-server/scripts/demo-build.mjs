@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Loomtide Demo Builder — builds the full Tier 2 platformer via MCP tools.
+ * Loombridge Demo Builder — builds the full Tier 2 platformer via MCP tools.
  * Follows skill defaults from .skills/unity-2d-game/references/.
  */
 import { fileURLToPath } from "node:url";

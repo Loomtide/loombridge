@@ -143,8 +143,8 @@ async function main() {
     ? { ...process.env }
     : {
       ...process.env,
-      LOOMTIDE_UNITY_TRANSPORT_MODE: "ipc",
-      LOOMTIDE_ENDPOINT_DISCOVERY_DIR: mkdtempSync(join(tmpdir(), "loomtide-disconnected-smoke-")),
+      LOOMBRIDGE_UNITY_TRANSPORT_MODE: "ipc",
+      LOOMBRIDGE_ENDPOINT_DISCOVERY_DIR: mkdtempSync(join(tmpdir(), "loombridge-disconnected-smoke-")),
     };
 
   const transport = new StdioClientTransport({

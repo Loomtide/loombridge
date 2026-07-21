@@ -1,13 +1,13 @@
 # Platformer Feel Profiles
 
 **Status:** S5a — Profile Contract (shipped 2026-06-02)
-**Source of truth:** `mcp-server/src/loomtide/genre-packs/platformer-2d/`
-**Schema:** `mcp-server/src/loomtide/schemas/platformer-profile.schema.json`
+**Source of truth:** `mcp-server/src/loombridge/genre-packs/platformer-2d/`
+**Schema:** `mcp-server/src/loombridge/schemas/platformer-profile.schema.json`
 
 A **profile** is a product-owned, named set of *measurable* 2D-platformer feel target
 bands. It is the verify-first counterpart to a game's `AcceptanceContract.feel` section:
 where a contract pins one game's exact feel, a profile says "for **this kind** of
-platformer, a healthy metric sits in **this band**." `loomtide verify` selects a profile
+platformer, a healthy metric sits in **this band**." `loombridge verify` selects a profile
 and reports measured-vs-band per metric — no prior `plan` or `build` required.
 
 ## The anti-vibe rule

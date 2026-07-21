@@ -1,6 +1,6 @@
 ---
 name: generated-3d-art-integration
-description: Integrate AI-generated 3D art (image → image-to-3D → Unity) into an existing gameplay blockout through Loomtide, as a parallel art vertical that preserves tuning-scene invariants. Use when skinning a 3D game (top-down/mobile extraction shooter, arena, etc.) with generated environments, characters, weapons, decals, and baked FX.
+description: Integrate AI-generated 3D art (image → image-to-3D → Unity) into an existing gameplay blockout through Loombridge, as a parallel art vertical that preserves tuning-scene invariants. Use when skinning a 3D game (top-down/mobile extraction shooter, arena, etc.) with generated environments, characters, weapons, decals, and baked FX.
 ---
 
 Use this skill to dress a working 3D gameplay blockout with generated art WITHOUT turning art
@@ -10,7 +10,7 @@ serialized wiring survived every swap.
 
 This skill is the actionable agent runbook. The deterministic boundary, provider-key safety,
 provenance field list, cache key, and mobile defaults are canonical in
-`Docs/Assets/GeneratedArtWorkflow.md` — read it once, follow it, do not restate it here. Loomtide never
+`Docs/Assets/GeneratedArtWorkflow.md` — read it once, follow it, do not restate it here. Loombridge never
 deterministically approves art quality; taste, silhouette read, hero-shot fidelity, animation feel, and
 weapon grip are HUMAN gates.
 
@@ -204,7 +204,7 @@ promoting into canonical docs, skills, or gates. Do not bury corrections in chat
 
 ## Boundaries
 
-- Keep Loomtide core generic: use `unity_*` / `runtime_*` ops and the CLI verbs. Do not add
+- Keep Loombridge core generic: use `unity_*` / `runtime_*` ops and the CLI verbs. Do not add
   game-specific bridge operations.
 - Missing source hash, provider job id, output hash, import diagnostics, or review capture ⇒ `blocked` /
   `incomplete`, never green (`GeneratedArtWorkflow.md` Failure Semantics).

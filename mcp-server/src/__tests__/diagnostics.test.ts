@@ -5,7 +5,7 @@ import {
   classifyServerCommand,
   parseSiblingServers,
   partitionCandidates,
-  isLoomtideServerCwd,
+  isLoombridgeServerCwd,
   formatDoctorLines,
   classifyRouteHealth,
   formatRouteHealthLine,
@@ -13,10 +13,10 @@ import {
 } from "../diagnostics.js";
 
 test("classifyServerCommand: path-qualified forms are trusted, bare is flagged, look-alikes rejected", () => {
-  // Path-qualified (unambiguous) — see .mcp.json + loomtide-install-locally.sh:
+  // Path-qualified (unambiguous) — see .mcp.json + loombridge-install-locally.sh:
   assert.equal(classifyServerCommand("node mcp-server/dist/index.js"), "path", "relative");
   assert.equal(classifyServerCommand("/opt/homebrew/bin/node /a/b/mcp-server/dist/index.js"), "path", "absolute");
-  assert.equal(classifyServerCommand("/usr/local/bin/node /h/.loomtide/runtime/mcp-server/dist/index.js"), "path", "frozen");
+  assert.equal(classifyServerCommand("/usr/local/bin/node /h/.loombridge/runtime/mcp-server/dist/index.js"), "path", "frozen");
   // Bare (cwd=mcp-server) — must be flagged for a cwd check, not trusted on argv alone:
   assert.equal(classifyServerCommand("node dist/index.js"), "bare", "bare cwd=mcp-server form");
   assert.equal(classifyServerCommand("node22 dist/index.js"), "bare", "versioned node binary");
@@ -28,11 +28,11 @@ test("classifyServerCommand: path-qualified forms are trusted, bare is flagged, 
   assert.equal(classifyServerCommand("bash dist/index.js"), null, "argv0 not a node binary");
 });
 
-test("isLoomtideServerCwd recognizes repo + frozen-runtime mcp-server dirs", () => {
-  assert.equal(isLoomtideServerCwd("/Users/x/Projects/AI/Loomtide/mcp-server"), true);
-  assert.equal(isLoomtideServerCwd("/Users/x/.loomtide/runtime/mcp-server/"), true, "trailing slash tolerated");
-  assert.equal(isLoomtideServerCwd("/Users/x/some-other-proj"), false);
-  assert.equal(isLoomtideServerCwd("/Users/x/mcp-server-fork"), false, "must be the mcp-server dir, not a prefix");
+test("isLoombridgeServerCwd recognizes repo + frozen-runtime mcp-server dirs", () => {
+  assert.equal(isLoombridgeServerCwd("/Users/x/Projects/AI/Loombridge/mcp-server"), true);
+  assert.equal(isLoombridgeServerCwd("/Users/x/.loombridge/runtime/mcp-server/"), true, "trailing slash tolerated");
+  assert.equal(isLoombridgeServerCwd("/Users/x/some-other-proj"), false);
+  assert.equal(isLoombridgeServerCwd("/Users/x/mcp-server-fork"), false, "must be the mcp-server dir, not a prefix");
 });
 
 const PS = [
@@ -63,7 +63,7 @@ test("partitionCandidates: path is confirmed; bare confirmed only with a verifie
     { pid: 4, ppid: 0, etime: "4", match: "bare" }, // cwd unresolvable -> ambiguous
   ];
   const cwds: Record<number, string | null> = {
-    2: "/Users/x/Loomtide/mcp-server",
+    2: "/Users/x/Loombridge/mcp-server",
     3: "/Users/x/some-other-proj",
     4: null,
   };
@@ -71,7 +71,7 @@ test("partitionCandidates: path is confirmed; bare confirmed only with a verifie
 
   assert.deepEqual(confirmed.map((s) => s.pid), [1, 2], "path + cwd-verified bare are confirmed");
   assert.deepEqual(ambiguous.map((s) => s.pid), [4], "unverifiable-cwd bare is ambiguous");
-  // pid 3 (bare, cwd verified NOT loomtide) is dropped entirely — never recommended for kill.
+  // pid 3 (bare, cwd verified NOT loombridge) is dropped entirely — never recommended for kill.
   assert.equal([...confirmed, ...ambiguous].some((s) => s.pid === 3), false, "unrelated bare app dropped");
 });
 
@@ -84,7 +84,7 @@ test("formatDoctorLines recommends kill only for confirmed; ambiguous gets a ver
     activeRoute: "my-game",
   });
   assert.equal(clean.length, 1);
-  assert.match(clean[0]!, /0 other loomtide MCP servers/);
+  assert.match(clean[0]!, /0 other loombridge MCP servers/);
 
   // Confirmed servers -> kill recommendation names exact PIDs.
   const confirmedOnly = formatDoctorLines({
@@ -94,7 +94,7 @@ test("formatDoctorLines recommends kill only for confirmed; ambiguous gets a ver
     activeRoute: null,
   });
   assert.equal(confirmedOnly.length, 2);
-  assert.match(confirmedOnly[0]!, /1 other loomtide MCP server \(pids: 18523\)/);
+  assert.match(confirmedOnly[0]!, /1 other loombridge MCP server \(pids: 18523\)/);
   assert.match(confirmedOnly[1]!, /kill 18523/);
   assert.match(confirmedOnly[1]!, /pkill -f mcp-server\/dist\/index\.js/);
 

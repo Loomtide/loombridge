@@ -116,7 +116,7 @@ function generateToolsDoc(): string {
   const lines: string[] = [];
 
   // Header
-  lines.push("# Loomtide Tools Reference");
+  lines.push("# Loombridge Tools Reference");
   lines.push("");
   lines.push(`> Auto-generated from OpRegistry. ${allOps.length} tools across ${grouped.size} categories.`);
   lines.push(">");

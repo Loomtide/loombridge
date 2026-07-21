@@ -5,7 +5,7 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 
 // Guards the Epic-4 distribution/onboarding invariants (findings RCL-O01/O02/O03):
-// an external consumer must be able to reach BOTH halves of Loomtide without a
+// an external consumer must be able to reach BOTH halves of Loombridge without a
 // machine-local relative path — the bridge via a resolvable UPM dep, the CLI via
 // npm/npx, and a template that wires both up out of the box.
 //
@@ -21,14 +21,14 @@ function readJson(rel: string): Record<string, unknown> {
 test("RCL-O02: CLI package.json is a private-org scoped package that ships the bundled bridge", () => {
   const pkg = readJson("mcp-server/package.json");
 
-  // The private-org distribution decision: scoped `@loomtide/cli`, published
+  // The private-org distribution decision: scoped `@loomtide/loombridge`, published
   // with restricted access — the org owns the npm scope, the CLI ships restricted
   // while the bundled bridge stays UPM-resolvable for consumers.
-  assert.equal(pkg.name, "@loomtide/cli", "the private-org package name is @loomtide/cli");
+  assert.equal(pkg.name, "@loomtide/loombridge", "the private-org package name is @loomtide/loombridge");
 
   const bin = pkg.bin as Record<string, string>;
-  assert.equal(bin.loomtide, "dist/cli.js", "the `loomtide` bin must point at the CLI dispatcher");
-  assert.equal(bin["loomtide-mcp"], "dist/index.js", "the MCP stdio server bin must be preserved");
+  assert.equal(bin.loombridge, "dist/cli.js", "the `loombridge` bin must point at the CLI dispatcher");
+  assert.equal(bin["loombridge-mcp"], "dist/index.js", "the MCP stdio server bin must be preserved");
 
   const publishConfig = pkg.publishConfig as Record<string, unknown> | undefined;
   assert.equal(
@@ -53,7 +53,7 @@ test("RCL-O02: CLI package.json is a private-org scoped package that ships the b
   const scripts = pkg.scripts as Record<string, string>;
   assert.ok(scripts.prepack?.includes("build"), "prepack must build dist before packing");
   assert.ok(
-    scripts.prepack?.includes("loomtide-pack-bridge"),
+    scripts.prepack?.includes("loombridge-pack-bridge"),
     "prepack must (re)pack the bridge tarball into bridge/ so a fresh publish always carries it",
   );
 });
@@ -63,14 +63,14 @@ test("private channel: one-command GitHub-Releases installer + release script ex
   assert.ok(installer.startsWith("#!"), "install.sh needs a shebang");
   // Must fetch the private release asset via EITHER the gh CLI or a token (no npm account).
   assert.ok(
-    installer.includes("gh release download") && installer.includes("LOOMTIDE_TOKEN"),
+    installer.includes("gh release download") && installer.includes("LOOMBRIDGE_TOKEN"),
     "the installer must support both gh-CLI auth and a token for the private release",
   );
   assert.ok(installer.includes("npm install -g"), "the installer must install the packed CLI globally");
   // Idempotent install==update: a --project fast-path also wires the bridge.
   assert.ok(installer.includes("install-bridge"), "the installer should also wire the bridge when --project is given");
 
-  const release = readFileSync(path.join(repoRoot, "scripts/loomtide-release.sh"), "utf-8");
+  const release = readFileSync(path.join(repoRoot, "scripts/loombridge-release.sh"), "utf-8");
   assert.ok(
     release.includes("npm pack") && release.includes("gh release"),
     "the release script must pack the CLI and publish it as a GitHub Release",
@@ -78,21 +78,21 @@ test("private channel: one-command GitHub-Releases installer + release script ex
   assert.ok(release.includes("install.sh"), "the release must also publish the installer as an asset");
 });
 
-test("loomtide update points CLI self-update at the one-line installer, not an npm registry", () => {
-  const src = readFileSync(path.join(repoRoot, "mcp-server/src/loomtide/update.ts"), "utf-8");
+test("loombridge update points CLI self-update at the one-line installer, not an npm registry", () => {
+  const src = readFileSync(path.join(repoRoot, "mcp-server/src/loombridge/update.ts"), "utf-8");
   assert.ok(
     src.includes("curl -fsSL") && src.includes("| sh"),
     "the CLI self-update hint must be the curl|sh installer (the same command used to install)",
   );
   assert.ok(
-    !/npm install -g @loomtide\/cli/.test(src),
+    !/npm install -g @loombridge\/cli/.test(src),
     "self-update must NOT instruct an npm-registry install while the private channel is GitHub Releases",
   );
 });
 
 test("RCL-O01: bridge package.json is a UPM-distributable package", () => {
-  const pkg = readJson("packages/com.loomtide.unitybridge/package.json");
-  assert.equal(pkg.name, "com.loomtide.unitybridge");
+  const pkg = readJson("packages/com.loomtide.loombridge/package.json");
+  assert.equal(pkg.name, "com.loomtide.loombridge");
   assert.ok(typeof pkg.version === "string" && (pkg.version as string).length > 0, "version is required");
   assert.ok(typeof pkg.unity === "string", "a `unity` minimum-version field is required for UPM");
 
@@ -108,9 +108,9 @@ test("RCL-O01: bridge package.json is a UPM-distributable package", () => {
 });
 
 test("RCL-O03: project template wires a RESOLVABLE bridge dep (not a machine-local path)", () => {
-  const manifest = readJson("templates/create-loomtide-game/Packages/manifest.json");
+  const manifest = readJson("templates/create-loombridge-game/Packages/manifest.json");
   const deps = manifest.dependencies as Record<string, string>;
-  const bridge = deps["com.loomtide.unitybridge"];
+  const bridge = deps["com.loomtide.loombridge"];
   assert.ok(bridge, "the template manifest must declare the bridge dependency");
   assert.ok(
     !bridge.startsWith("file:"),
@@ -131,21 +131,21 @@ test("RCL-O03: project template wires a RESOLVABLE bridge dep (not a machine-loc
   );
 });
 
-test("RCL-O03: project template ships a .mcp.json + .loomtide skeleton", () => {
-  const mcp = readJson("templates/create-loomtide-game/.mcp.json");
+test("RCL-O03: project template ships a .mcp.json + .loombridge skeleton", () => {
+  const mcp = readJson("templates/create-loombridge-game/.mcp.json");
   const servers = mcp.mcpServers as Record<string, { command?: string }>;
-  assert.ok(servers.loomtide, "the template .mcp.json must register a loomtide MCP server");
-  assert.ok(typeof servers.loomtide.command === "string", "the server entry needs a launch command");
+  assert.ok(servers.loombridge, "the template .mcp.json must register a loombridge MCP server");
+  assert.ok(typeof servers.loombridge.command === "string", "the server entry needs a launch command");
 
-  // The .loomtide skeleton + Unity version pin must exist as committed files.
+  // The .loombridge skeleton + Unity version pin must exist as committed files.
   const skeleton = readFileSync(
-    path.join(repoRoot, "templates/create-loomtide-game/.loomtide/README.md"),
+    path.join(repoRoot, "templates/create-loombridge-game/.loombridge/README.md"),
     "utf-8",
   );
-  assert.ok(skeleton.includes("loomtide plan"), "the .loomtide skeleton must point at `loomtide plan`");
+  assert.ok(skeleton.includes("loombridge plan"), "the .loombridge skeleton must point at `loombridge plan`");
 
   const version = readFileSync(
-    path.join(repoRoot, "templates/create-loomtide-game/ProjectSettings/ProjectVersion.txt"),
+    path.join(repoRoot, "templates/create-loombridge-game/ProjectSettings/ProjectVersion.txt"),
     "utf-8",
   );
   assert.ok(version.includes("m_EditorVersion:"), "the template must pin a Unity editor version");

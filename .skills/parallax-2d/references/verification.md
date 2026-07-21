@@ -19,7 +19,7 @@ across a **full drift cycle** and assert two things at **every sample**:
 2. **Position continuity** — the layer's world position does not teleport (no `~tile`-sized jump between
    adjacent samples — the "snap").
 
-This maps to the Loomtide **coverage** gate. The single-snapshot "soak" form (`framing-checks.md` in
+This maps to the Loombridge **coverage** gate. The single-snapshot "soak" form (`framing-checks.md` in
 `/verify-2d-game`) captures one post-drift bounds; the **trajectory form** below samples the *whole*
 cycle so it also catches the snap and any mid-cycle gap.
 

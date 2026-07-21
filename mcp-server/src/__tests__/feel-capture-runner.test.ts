@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { runFeelCaptureContract, type FeelCaptureSend } from "../loomtide/feel-capture/run.js";
-import { evaluateFeelCaptureRuntimeGuard } from "../loomtide/feel-capture/runtime-guard.js";
-import type { FeelCaptureContract } from "../loomtide/feel-capture/types.js";
-import { SHORT_HOP_CANONICAL_TAP_TICKS } from "../loomtide/genre-packs/platformer-2d/measure-recipe.js";
+import { runFeelCaptureContract, type FeelCaptureSend } from "../loombridge/feel-capture/run.js";
+import { evaluateFeelCaptureRuntimeGuard } from "../loombridge/feel-capture/runtime-guard.js";
+import type { FeelCaptureContract } from "../loombridge/feel-capture/types.js";
+import { SHORT_HOP_CANONICAL_TAP_TICKS } from "../loombridge/genre-packs/platformer-2d/measure-recipe.js";
 import { evaluateFeelProvenance } from "../verification/gates/feel-provenance.js";
 import { rederiveFromSources } from "../verification/gates/feel-rederive.js";
 
@@ -2120,14 +2120,14 @@ test("runner stamps and warns on stale installed runtime before capture", async 
 
   assert.equal(result.measurements.provenance.runtimeGuard?.status, "warn");
   assert.equal(result.measurements.provenance.runtimeGuard?.sourceCommit, "abcdef1");
-  assert.match(warnings[0] ?? "", /loomtide-install-locally\.sh/);
+  assert.match(warnings[0] ?? "", /loombridge-install-locally\.sh/);
 });
 
 test("runtime guard does not warn when installed and source commits match", () => {
   const guard = evaluateFeelCaptureRuntimeGuard({
     sourceCommit: "abcdef1",
     installed: {
-      tool: "loomtide",
+      tool: "loombridge",
       version: "0.1.0",
       commit: "abcdef1+dirty",
       builtAt: "2026-06-17T00:00:00.000Z",
@@ -2141,7 +2141,7 @@ test("runtime guard does not warn when installed and source commits match", () =
 test("runtime guard warns when the build stamp is incomplete", () => {
   const guard = evaluateFeelCaptureRuntimeGuard({
     installed: {
-      tool: "loomtide",
+      tool: "loombridge",
       version: "0.1.0",
       commit: "unknown",
       builtAt: null,

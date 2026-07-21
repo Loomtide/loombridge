@@ -17,8 +17,8 @@
  */
 
 import { makeGateReport, type GateCheck, type GateReport } from "./types.js";
-import type { CueMapSchema } from "../../loomtide/sfx/cue-map.js";
-import { validateSfxProbeSnapshot } from "../../loomtide/sfx/probe-contract.js";
+import type { CueMapSchema } from "../../loombridge/sfx/cue-map.js";
+import { validateSfxProbeSnapshot } from "../../loombridge/sfx/probe-contract.js";
 
 export const GATE_NAME = "sfx-runtime";
 

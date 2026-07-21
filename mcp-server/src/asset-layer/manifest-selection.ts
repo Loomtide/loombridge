@@ -3,7 +3,7 @@ import {
   type AssetManifest,
   type ManifestAsset,
   type ManifestRegistrySelection,
-} from "../loomtide/asset-manifest.js";
+} from "../loombridge/asset-manifest.js";
 import {
   resolveAssetGenreProfile,
   type RoleSelectionRule,

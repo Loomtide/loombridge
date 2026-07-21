@@ -2752,7 +2752,7 @@
     "deathMs": 1133.33
   },
   "honesty": {
-    "measures": "LIVE first projectile-collision hit edge to enemy death edge in a real shooter-combat loop, sampled in Play Mode through the Loomtide bridge against the repo-owned shooter-combat-dogfood fixture (enemy HitCount rises on DogfoodProjectile trigger collisions; IsDead is the causal consequence of Health reaching 0).",
+    "measures": "LIVE first projectile-collision hit edge to enemy death edge in a real shooter-combat loop, sampled in Play Mode through the Loombridge bridge against the repo-owned shooter-combat-dogfood fixture (enemy HitCount rises on DogfoodProjectile trigger collisions; IsDead is the causal consequence of Health reaching 0).",
     "doesNotMeasure": "player aim time, or production-tuned combat balance — the fixture is a minimal, deterministic combat loop (fixed cadence, one-shot kill at maxHealth 3), not a shipped, balanced game."
   }
 }

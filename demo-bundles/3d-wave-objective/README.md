@@ -57,4 +57,4 @@ including **completion-before-kill-all** / under-spawn / under-kill / alive-rema
 This bundle proves the narrow single-wave spawn→kill-all→complete edge only. It does **not** measure
 multi-wave pacing, difficulty curves, spawn directors, arenas, boss waves, loot rewards, mission design,
 or wave-survival balance — all explicit gaps. See
-`mcp-server/src/loomtide/genre-packs/3d-shooter/methodology-gaps.md`.
+`mcp-server/src/loombridge/genre-packs/3d-shooter/methodology-gaps.md`.

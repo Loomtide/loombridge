@@ -54,7 +54,7 @@ test("validatePreparedSprite rejects missing license and source provenance", asy
 
 test("validatePreparedSprite rejects unsupported formats, oversized dimensions, and bad Unity paths", async () => {
   const { profile, entry } = await loadTile();
-  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "loomtide-asset-validator-"));
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "loombridge-asset-validator-"));
   const unsupportedPath = path.join(tempDir, "tile.gif");
   await fs.writeFile(unsupportedPath, "not an image");
   const strictProfile: AssetProfile = {

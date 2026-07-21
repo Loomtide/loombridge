@@ -10,7 +10,7 @@ import {
   type GeneratedAssetAnnotation,
   type GeneratedAssetExportInput,
 } from "../asset-layer/generated-assets.js";
-import { createDraftAssetManifest, validateAssetManifest } from "../loomtide/asset-manifest.js";
+import { createDraftAssetManifest, validateAssetManifest } from "../loombridge/asset-manifest.js";
 
 const HASH = "c".repeat(64);
 const PRODUCED_AT = "2026-06-05T00:00:00.000Z";
@@ -19,7 +19,7 @@ function manifest() {
   return createDraftAssetManifest({
     mode: "generated",
     heroShot: {
-      path: ".loomtide/design/hero-shot.png",
+      path: ".loombridge/design/hero-shot.png",
       sha256: HASH,
     },
   });

@@ -5,8 +5,8 @@ import {
   feelBannerFor,
   renderFeelReportHtml,
   renderFeelReportMarkdown,
-} from "../loomtide/genre-packs/platformer-2d/feel-report-render.js";
-import type { ProfileVerifyReport } from "../loomtide/genre-packs/platformer-2d/verify-profile.js";
+} from "../loombridge/genre-packs/platformer-2d/feel-report-render.js";
+import type { ProfileVerifyReport } from "../loombridge/genre-packs/platformer-2d/verify-profile.js";
 
 function baseReport(over: Partial<ProfileVerifyReport> = {}): ProfileVerifyReport {
   return {
@@ -14,7 +14,7 @@ function baseReport(over: Partial<ProfileVerifyReport> = {}): ProfileVerifyRepor
     schemaVersion: "1",
     producedAt: "2026-06-20T00:00:00.000Z",
     producedBy: {
-      tool: "loomtide",
+      tool: "loombridge",
       version: "0.1.0",
       commit: "abc123",
       builtAt: "2026-06-20T00:00:00.000Z",
@@ -136,7 +136,7 @@ test("HTML report renders verdict, metric fixes, coverage, trust, mechanisms, re
   const html = renderFeelReportHtml(baseReport());
 
   assert.match(html, /^<!doctype html>/);
-  assert.match(html, /Loomtide Feel Verification/);
+  assert.match(html, /Loombridge Feel Verification/);
   assert.match(html, /Precision Platformer/);
   assert.match(html, /Fix jumpApex, then re-measure/);
   assert.match(html, /Jump apex/);

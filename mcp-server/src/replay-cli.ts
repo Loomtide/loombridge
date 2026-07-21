@@ -12,8 +12,8 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 
-import { parseTrace } from "./loomtide/replay/index.js";
-import { runLiveReplay } from "./loomtide/replay/run-live.js";
+import { parseTrace } from "./loombridge/replay/index.js";
+import { runLiveReplay } from "./loombridge/replay/run-live.js";
 
 interface CliArgs {
   trace: string;
@@ -54,7 +54,7 @@ async function main(): Promise<void> {
   const trace = parseTrace(raw);
 
   const home = process.env.HOME ?? process.cwd();
-  const proofRoot = `${home}/loomtide-runs/replay-proof/${trace.id}`;
+  const proofRoot = `${home}/loombridge-runs/replay-proof/${trace.id}`;
   const captureDir = args.captureDir ?? `${proofRoot}/actual`;
   const outPath = args.out ?? `${proofRoot}/report.json`;
 

@@ -4,7 +4,7 @@ import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
 
-/** A peer loomtide MCP server process discovered on this machine. */
+/** A peer loombridge MCP server process discovered on this machine. */
 export interface SiblingServer {
   pid: number;
   ppid: number;
@@ -13,11 +13,11 @@ export interface SiblingServer {
 }
 
 /**
- * How confidently a ps line was identified as a loomtide MCP server:
+ * How confidently a ps line was identified as a loombridge MCP server:
  *  - "path": a path-qualified entrypoint (`.../mcp-server/dist/index.js`) — unambiguous.
  *  - "bare": `node dist/index.js` with no path — could be ANY node app, since ps does not
  *    report cwd. Must have its cwd verified (see partitionCandidates) before it is treated
- *    as a real loomtide server / recommended for `kill`.
+ *    as a real loombridge server / recommended for `kill`.
  */
 export type ServerMatch = "path" | "bare";
 
@@ -35,13 +35,13 @@ export interface DoctorServers {
 const PKILL_PATTERN = "mcp-server/dist/index.js";
 
 /**
- * Classify a ps command line as a loomtide MCP server launch, or null if it isn't one.
+ * Classify a ps command line as a loombridge MCP server launch, or null if it isn't one.
  * The entrypoint is `dist/index.js`, launched several ways whose command lines differ —
  * and crucially NOT all carry the `mcp-server/` prefix:
  *   - `node mcp-server/dist/index.js`                          (.mcp.json, cwd = repo root)
  *   - `/abs/node /abs/mcp-server/dist/index.js`                (.mcp.json, absolute)
  *   - `node dist/index.js`                                     (cwd = mcp-server; scripts/smoke)
- *   - `/abs/node ~/.loomtide/runtime/mcp-server/dist/index.js` (installed/frozen runtime)
+ *   - `/abs/node ~/.loombridge/runtime/mcp-server/dist/index.js` (installed/frozen runtime)
  * A substring match on `mcp-server/dist/index.js` silently misses the bare cwd=mcp-server
  * form. But matching bare `dist/index.js` on argv alone OVER-matches: ps has no cwd, so an
  * unrelated node app launched as `node dist/index.js` looks identical. So path-qualified
@@ -68,13 +68,13 @@ export function classifyServerCommand(command: string): ServerMatch | null {
 }
 
 /** True when a resolved process cwd is a mcp-server directory (repo or frozen runtime). */
-export function isLoomtideServerCwd(cwd: string): boolean {
+export function isLoombridgeServerCwd(cwd: string): boolean {
   const c = cwd.replace(/\\/g, "/").replace(/\/+$/, "");
   return c.endsWith("/mcp-server") || c === "mcp-server";
 }
 
 /**
- * Parse `ps -axo pid=,ppid=,etime=,command=` output into loomtide MCP server CANDIDATES
+ * Parse `ps -axo pid=,ppid=,etime=,command=` output into loombridge MCP server CANDIDATES
  * (excluding `selfPid`), each tagged with its match confidence. Pure so it can be
  * unit-tested without spawning `ps`. Lines that don't match the expected shape are skipped.
  */
@@ -99,7 +99,7 @@ export function parseSiblingServers(psStdout: string, selfPid: number): SiblingC
  * "bare" candidate via the injected `resolveCwd` (injectable for testing):
  *   - "path" candidate                         → confirmed (entrypoint is unambiguous).
  *   - "bare" + cwd is a mcp-server dir          → confirmed.
- *   - "bare" + cwd resolves to something else   → dropped (it is not a loomtide server).
+ *   - "bare" + cwd resolves to something else   → dropped (it is not a loombridge server).
  *   - "bare" + cwd cannot be resolved           → ambiguous (reported, never kill-recommended).
  */
 export async function partitionCandidates(
@@ -116,7 +116,7 @@ export async function partitionCandidates(
     }
     const cwd = await resolveCwd(c.pid);
     if (cwd === null) ambiguous.push(base);
-    else if (isLoomtideServerCwd(cwd)) confirmed.push(base);
+    else if (isLoombridgeServerCwd(cwd)) confirmed.push(base);
     // else: cwd verified, not a mcp-server dir → not ours, drop silently.
   }
   return { confirmed, ambiguous };
@@ -144,7 +144,7 @@ async function resolveProcessCwd(pid: number): Promise<string | null> {
 }
 
 /**
- * Best-effort enumeration of OTHER running loomtide MCP server processes on this machine,
+ * Best-effort enumeration of OTHER running loombridge MCP server processes on this machine,
  * split into confirmed (kill-safe) and ambiguous (bare form whose cwd could not be verified).
  * Returns empty lists on any failure (ps unavailable, timeout, parse error): diagnostics
  * must never block or crash server startup.
@@ -223,9 +223,9 @@ export function formatRouteHealthLine(health: RouteHealthSnapshot): string {
     `compile=${health.compileState}`,
     `mcpRoute=${health.mcpRoute}`,
   ];
-  let line = `[loomtide] doctor: route health ${status}; ${parts.join("; ")}`;
+  let line = `[loombridge] doctor: route health ${status}; ${parts.join("; ")}`;
   if (status === "recoverable") {
-    line += "; bridge is healthy but MCP route is unregistered - reconnect/rebind the loomtide MCP server for this editor";
+    line += "; bridge is healthy but MCP route is unregistered - reconnect/rebind the loombridge MCP server for this editor";
   }
   if (health.latestCompileError) {
     line += `; latest compile error: ${health.latestCompileError}`;
@@ -246,8 +246,8 @@ export function formatDoctorLines(snap: DoctorSnapshot): string[] {
 
   let siblingDesc =
     confirmed.length === 0
-      ? "0 other loomtide MCP servers"
-      : `${confirmed.length} other loomtide MCP server${confirmed.length === 1 ? "" : "s"} `
+      ? "0 other loombridge MCP servers"
+      : `${confirmed.length} other loombridge MCP server${confirmed.length === 1 ? "" : "s"} `
         + `(pids: ${confirmed.map((s) => s.pid).join(", ")})`;
   if (ambiguous.length > 0) {
     siblingDesc += ` + ${ambiguous.length} possible (bare node dist/index.js, cwd unverified: `
@@ -256,7 +256,7 @@ export function formatDoctorLines(snap: DoctorSnapshot): string[] {
 
   const editors = editorNames.length ? editorNames.join(", ") : "none";
   const lines = [
-    `[loomtide] doctor: ${siblingDesc} running; editors discovered: ${editors}; `
+    `[loombridge] doctor: ${siblingDesc} running; editors discovered: ${editors}; `
       + `startup binding: ${binding}; active route: ${activeRoute ?? "unbound"}`,
   ];
   if (snap.routeHealth) {
@@ -264,7 +264,7 @@ export function formatDoctorLines(snap: DoctorSnapshot): string[] {
   }
   if (confirmed.length > 0) {
     lines.push(
-      `[loomtide] doctor: NOTE other loomtide MCP servers are running against this machine. `
+      `[loombridge] doctor: NOTE other loombridge MCP servers are running against this machine. `
         + `Stale servers from prior agent sessions can churn the Unity bridge; if unexpected, `
         + `stop them by PID (kill ${confirmed.map((s) => s.pid).join(" ")}) `
         + `or: pkill -f ${PKILL_PATTERN}`,
@@ -272,9 +272,9 @@ export function formatDoctorLines(snap: DoctorSnapshot): string[] {
   }
   if (ambiguous.length > 0) {
     lines.push(
-      `[loomtide] doctor: NOTE ${ambiguous.length} bare \`node dist/index.js\` process(es) `
+      `[loombridge] doctor: NOTE ${ambiguous.length} bare \`node dist/index.js\` process(es) `
         + `(pids ${ambiguous.map((s) => s.pid).join(", ")}) could not have their cwd verified; `
-        + `they MAY be loomtide servers or unrelated node apps — verify before killing.`,
+        + `they MAY be loombridge servers or unrelated node apps — verify before killing.`,
     );
   }
   return lines;

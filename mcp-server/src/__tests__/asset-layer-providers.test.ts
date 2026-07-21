@@ -48,7 +48,7 @@ function entry(overrides: Partial<AssetRegistryEntry> = {}): AssetRegistryEntry 
 }
 
 test("LocalAssetProvider copies once and reports cache reuse", async () => {
-  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "loomtide-provider-local-"));
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "loombridge-provider-local-"));
   const registryRoot = path.join(tempDir, "repo");
   const sourcePath = path.join(registryRoot, "fixtures", "asset.bin");
   const cachePath = path.join(tempDir, "cache", "asset.bin");
@@ -69,7 +69,7 @@ test("LocalAssetProvider copies once and reports cache reuse", async () => {
 });
 
 test("LocalAssetProvider rejects paths outside the registry root", async () => {
-  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "loomtide-provider-local-block-"));
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "loombridge-provider-local-block-"));
   const provider = new LocalAssetProvider();
   const file: AssetFile = { role: "sprite", format: "png", localPath: "../outside.bin" };
 
@@ -85,7 +85,7 @@ test("LocalAssetProvider rejects paths outside the registry root", async () => {
 });
 
 test("LocalAssetProvider rejects symlinks that escape the registry root", async () => {
-  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "loomtide-provider-local-symlink-"));
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "loombridge-provider-local-symlink-"));
   const registryRoot = path.join(tempDir, "repo");
   const outside = path.join(tempDir, "outside");
   await fs.mkdir(path.join(registryRoot, "fixtures"), { recursive: true });
@@ -107,7 +107,7 @@ test("LocalAssetProvider rejects symlinks that escape the registry root", async 
 });
 
 test("HttpAssetProvider emits deterministic diagnostics for download failures", async () => {
-  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "loomtide-provider-http-"));
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "loombridge-provider-http-"));
   const file: AssetFile = { role: "sprite", format: "png", url: "https://example.com/missing.png" };
   const provider = new HttpAssetProvider(async () => ({
     ok: false,
@@ -129,7 +129,7 @@ test("HttpAssetProvider emits deterministic diagnostics for download failures", 
 });
 
 test("HttpAssetProvider rejects private and non-http URLs before fetching", async () => {
-  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "loomtide-provider-http-block-"));
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "loombridge-provider-http-block-"));
   let fetchCalls = 0;
   const provider = new HttpAssetProvider(async () => {
     fetchCalls += 1;
@@ -161,7 +161,7 @@ test("HttpAssetProvider rejects private and non-http URLs before fetching", asyn
 });
 
 test("HttpAssetProvider rejects DNS names that resolve to private addresses", async () => {
-  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "loomtide-provider-http-dns-block-"));
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "loombridge-provider-http-dns-block-"));
   let fetchCalls = 0;
   const provider = new HttpAssetProvider(async () => {
     fetchCalls += 1;
@@ -185,7 +185,7 @@ test("HttpAssetProvider rejects DNS names that resolve to private addresses", as
 });
 
 test("HttpAssetProvider rejects redirects and oversized downloads", async () => {
-  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "loomtide-provider-http-redirect-size-"));
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "loombridge-provider-http-redirect-size-"));
   const provider = new HttpAssetProvider(async (url) => {
     if (url.includes("redirect")) {
       return {
@@ -225,7 +225,7 @@ test("HttpAssetProvider rejects redirects and oversized downloads", async () => 
 });
 
 test("HttpAssetProvider sends GitHub auth without leaking it to provider URLs", async () => {
-  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "loomtide-provider-http-auth-"));
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "loombridge-provider-http-auth-"));
   let githubAuth: string | undefined;
   let externalAuth: string | undefined;
   const response = {
@@ -271,7 +271,7 @@ test("HttpAssetProvider sends GitHub auth without leaking it to provider URLs", 
 });
 
 test("StubGenerationProvider rejects generation entries without calling services", async () => {
-  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "loomtide-provider-generation-"));
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "loombridge-provider-generation-"));
   const file: AssetFile = { role: "sprite", format: "png", url: "https://generation.example/request" };
   const provider = new StubGenerationProvider();
 

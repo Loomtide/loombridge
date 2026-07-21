@@ -8,11 +8,11 @@ import {
   resolveMcpStartupProjectBinding,
 } from "../startup-binding.js";
 
-const ENV_VAR = "LOOMTIDE_UNITY_PROJECT";
+const ENV_VAR = "LOOMBRIDGE_UNITY_PROJECT";
 
 /** Create a temp Unity project (with the ProjectVersion.txt marker) and return its root. */
 function makeUnityProject(): string {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "loomtide-unity-"));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "loombridge-unity-"));
   const projectSettings = path.join(root, "ProjectSettings");
   fs.mkdirSync(projectSettings, { recursive: true });
   fs.writeFileSync(
@@ -26,7 +26,7 @@ function makeUnityProject(): string {
 
 /** Create a temp directory that is NOT a Unity project. */
 function makeNonUnityDir(): string {
-  return fs.mkdtempSync(path.join(os.tmpdir(), "loomtide-plain-"));
+  return fs.mkdtempSync(path.join(os.tmpdir(), "loombridge-plain-"));
 }
 
 test("findUnityProjectRoot: returns the project root when started at the root", () => {

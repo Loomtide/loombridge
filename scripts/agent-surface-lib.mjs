@@ -1,20 +1,20 @@
 #!/usr/bin/env node
 /**
  * agent-surface-lib — the SINGLE scrubbing implementation + the SINGLE consumer-skill
- * list, shared by every path that assembles Loomtide's agent-facing surface.
+ * list, shared by every path that assembles Loombridge's agent-facing surface.
  *
  * Two importers, one source of truth (no duplicated sed / no duplicated skill list):
  *   - scripts/build-agent-surface.mjs  (imports scrubContent + CONSUMER_SKILLS to
- *     assemble the CONSUMER payload mcp-server/agent-surface/ shipped with @loomtide/cli)
- *   - scripts/loomtide-install-locally.sh  (shells out to this file's CLI: `--list-skills`
+ *     assemble the CONSUMER payload mcp-server/agent-surface/ shipped with @loomtide/loombridge)
+ *   - scripts/loombridge-install-locally.sh  (shells out to this file's CLI: `--list-skills`
  *     for the skill set and `--scrub` per file — the bash `rewrite()`/`CONSUMER_SKILLS`
  *     were deleted so there is exactly one scrubber and one list)
  *
  * The anti-drift test (install-agent.test.ts) imports this module and asserts both
  * importers reference it, so the two paths can never diverge.
  *
- * SCRUBBING replaces dev-repo invocations with the released `loomtide*` binaries,
- * generalizes/removes dev-repo absolute paths (so a hand-baked `/Users/.../Loomtide`
+ * SCRUBBING replaces dev-repo invocations with the released `loombridge*` binaries,
+ * generalizes/removes dev-repo absolute paths (so a hand-baked `/Users/.../Loombridge`
  * path or a `$REPO`-expanded one is stripped regardless of checkout location — the old
  * bash rewrite only handled the live `$REPO`, which silently missed committed absolute
  * paths when run from a worktree), and elides internal roadmap-directory references (the
@@ -45,43 +45,43 @@ export const CONSUMER_SKILLS = [
 function scrubRules(dataDir, rtMcp) {
   return [
     // Dev-repo ABSOLUTE node invocations (any /abs/prefix/node <abs>/mcp-server/dist/...).
-    [/(?:\S*\/)?node\s+\S*\/mcp-server\/dist\/verification\/capture-runner\.js/g, "loomtide-capture"],
-    [/(?:\S*\/)?node\s+\S*\/mcp-server\/dist\/verification\/analyze-frames\.js/g, "loomtide-analyze-frames"],
-    [/(?:\S*\/)?node\s+\S*\/mcp-server\/dist\/asset-layer\/handoff-consistency\.js/g, "loomtide-handoff-check"],
+    [/(?:\S*\/)?node\s+\S*\/mcp-server\/dist\/verification\/capture-runner\.js/g, "loombridge-capture"],
+    [/(?:\S*\/)?node\s+\S*\/mcp-server\/dist\/verification\/analyze-frames\.js/g, "loombridge-analyze-frames"],
+    [/(?:\S*\/)?node\s+\S*\/mcp-server\/dist\/asset-layer\/handoff-consistency\.js/g, "loombridge-handoff-check"],
     // Dev-repo RELATIVE node invocations -> released binaries.
-    [/node mcp-server\/dist\/cli\.js/g, "loomtide"],
-    [/node mcp-server\/dist\/verification\/capture-runner\.js/g, "loomtide-capture"],
-    [/node mcp-server\/dist\/verification\/tuning-runner\.js/g, "loomtide-tune"],
-    [/node mcp-server\/dist\/asset-layer\/handoff-consistency\.js/g, "loomtide-handoff-check"],
-    [/node mcp-server\/dist\/verification\/analyze-frames\.js/g, "loomtide-analyze-frames"],
+    [/node mcp-server\/dist\/cli\.js/g, "loombridge"],
+    [/node mcp-server\/dist\/verification\/capture-runner\.js/g, "loombridge-capture"],
+    [/node mcp-server\/dist\/verification\/tuning-runner\.js/g, "loombridge-tune"],
+    [/node mcp-server\/dist\/asset-layer\/handoff-consistency\.js/g, "loombridge-handoff-check"],
+    [/node mcp-server\/dist\/verification\/analyze-frames\.js/g, "loombridge-analyze-frames"],
     // prepare-project-assets.sh, in any form (relative, $REPO-relative, or a committed
     // absolute path) -> the released wrapper.
-    [/(?:\S*\/)?scripts\/prepare-project-assets\.sh/g, "loomtide-asset-prep"],
+    [/(?:\S*\/)?scripts\/prepare-project-assets\.sh/g, "loombridge-asset-prep"],
     // Legacy `cd <abs>/mcp-server` into the dev repo -> a no-op comment.
-    [/cd \S*\/mcp-server(?=\s|$)/g, ": # (legacy cd into dev repo removed by loomtide install)"],
+    [/cd \S*\/mcp-server(?=\s|$)/g, ": # (legacy cd into dev repo removed by loombridge install)"],
     // $REPO-relative wrapper paths (defensive; collapse any path prefix to the binary).
-    [/\S*\/loomtide-asset-prep/g, "loomtide-asset-prep"],
-    [/\S*\/loomtide-capture/g, "loomtide-capture"],
-    [/\S*\/loomtide-tune/g, "loomtide-tune"],
-    [/\S*\/loomtide-handoff-check/g, "loomtide-handoff-check"],
-    [/\S*\/loomtide-analyze-frames/g, "loomtide-analyze-frames"],
-    [/\S*\/loomtide-mcp/g, "loomtide-mcp"],
+    [/\S*\/loombridge-asset-prep/g, "loombridge-asset-prep"],
+    [/\S*\/loombridge-capture/g, "loombridge-capture"],
+    [/\S*\/loombridge-tune/g, "loombridge-tune"],
+    [/\S*\/loombridge-handoff-check/g, "loombridge-handoff-check"],
+    [/\S*\/loombridge-analyze-frames/g, "loombridge-analyze-frames"],
+    [/\S*\/loombridge-mcp/g, "loombridge-mcp"],
     // Asset-layer data + frozen-runtime paths relocate to the install target.
     [/asset-layer\/profiles\//g, `${dataDir}/asset-layer/profiles/`],
     [/asset-layer\/registry\//g, `${dataDir}/asset-layer/registry/`],
     [/mcp-server\/src\/verification\/scenarios\//g, `${rtMcp}/src/verification/scenarios/`],
     // Bare (no `node ` prefix) dev binary references that still name the dist path.
-    [/mcp-server\/dist\/verification\/tuning-runner\.js/g, "loomtide-tune"],
+    [/mcp-server\/dist\/verification\/tuning-runner\.js/g, "loombridge-tune"],
     // Internal schemas/types/gates -> a consumer-safe pointer at the CLI.
-    [/mcp-server\/src\/verification\/acceptance\.schema\.json/g, "<internal schema — validated by `loomtide plan`>"],
-    [/mcp-server\/src\/verification\/vlm-review\.schema\.json/g, "<internal schema — validated by `loomtide verify --vlm`>"],
-    [/mcp-server\/src\/verification\/types\.ts/g, "<internal types — see `loomtide verify --help`>"],
-    [/mcp-server\/src\/verification\/gates\//g, "<internal — see `loomtide verify --help`>"],
+    [/mcp-server\/src\/verification\/acceptance\.schema\.json/g, "<internal schema — validated by `loombridge plan`>"],
+    [/mcp-server\/src\/verification\/vlm-review\.schema\.json/g, "<internal schema — validated by `loombridge verify --vlm`>"],
+    [/mcp-server\/src\/verification\/types\.ts/g, "<internal types — see `loombridge verify --help`>"],
+    [/mcp-server\/src\/verification\/gates\//g, "<internal — see `loombridge verify --help`>"],
     // GENERAL catch (LAST, after every specific binary/schema rule so it never shadows
     // them): any remaining internal mcp-server/(src|dist)/… path — e.g. genre-pack internals
     // referenced in prose — collapses to a consumer-safe pointer. This is the backstop that
     // keeps dev-repo layout from leaking through a rule nobody wrote.
-    [/mcp-server\/(?:src|dist)\/[^\s`)\]]*/g, "<internal — see `loomtide --help`>"],
+    [/mcp-server\/(?:src|dist)\/[^\s`)\]]*/g, "<internal — see `loombridge --help`>"],
     // Dev Unity-project paths -> consumer-neutral references (specific before generic).
     [/unity-projects\/demo-platformer\/Assets\/Scripts\/[A-Za-z0-9_]*\.cs/g, "<internal — script body is reproduced verbatim above>"],
     [/unity-projects\/demo-platformer\/Assets\/Audio/g, "the project's Assets/Audio"],
@@ -91,18 +91,18 @@ function scrubRules(dataDir, rtMcp) {
     [/unity-projects\/switchyard-courier-clean/g, "<unity-project>"],
     [/unity-projects\/[a-zA-Z0-9_-]*-clean/g, "<unity-project>"],
     // Internal planning references (links first, then bare paths).
-    [/\[([^\]]*)\]\(\.\.\/\.\.\/\.planning\/[^)]*\)/g, "$1 (internal Loomtide roadmap — out of scope for consumers)"],
+    [/\[([^\]]*)\]\(\.\.\/\.\.\/\.planning\/[^)]*\)/g, "$1 (internal Loombridge roadmap — out of scope for consumers)"],
     [/\.planning\/design\/[a-zA-Z0-9/_-]*/g, "<design-annotation-mock>"],
     [/\.planning\/[a-zA-Z0-9/_.-]*\.md/g, "<internal planning ref>"],
   ];
 }
 
 /**
- * Scrub one file's text. `dataDir`/`rtMcp` default to a machine-neutral `~/.loomtide`
- * layout (used for the shipped consumer payload); loomtide-install-locally.sh passes the
+ * Scrub one file's text. `dataDir`/`rtMcp` default to a machine-neutral `~/.loombridge`
+ * layout (used for the shipped consumer payload); loombridge-install-locally.sh passes the
  * expanded absolute home paths for its global ~/.claude install.
  */
-export function scrubContent(text, { dataDir = "~/.loomtide", rtMcp = "~/.loomtide/runtime/mcp-server" } = {}) {
+export function scrubContent(text, { dataDir = "~/.loombridge", rtMcp = "~/.loombridge/runtime/mcp-server" } = {}) {
   // Normalize to LF first. A Windows checkout can hold CRLF in the source commands/skills
   // (git reports them clean under core.autocrlf=input), and copying those bytes verbatim
   // would ship a CRLF agent surface. The install ledger hashes the bytes written, so a
@@ -117,7 +117,7 @@ export function scrubContent(text, { dataDir = "~/.loomtide", rtMcp = "~/.loomti
   return out;
 }
 
-// ── CLI (used by loomtide-install-locally.sh; bash cannot import an ES module) ──
+// ── CLI (used by loombridge-install-locally.sh; bash cannot import an ES module) ──
 function cliMain(argv) {
   if (argv.includes("--list-skills")) {
     process.stdout.write(`${CONSUMER_SKILLS.join(" ")}\n`);

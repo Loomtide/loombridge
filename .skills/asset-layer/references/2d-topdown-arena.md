@@ -25,7 +25,7 @@ The profile maps primitives to deterministic Unity folders:
 From a clean Unity project folder, prepare the curated assets into the project handoff directory:
 
 ```bash
-<loomtide-repo>/scripts/prepare-project-assets.sh \
+<loombridge-repo>/scripts/prepare-project-assets.sh \
   --project "$PWD" \
   --profile asset-layer/profiles/2d-topdown-arena.json \
   --registry asset-layer/registry/switchyard-2d.json \
@@ -34,9 +34,9 @@ From a clean Unity project folder, prepare the curated assets into the project h
 
 This creates:
 
-- `.loomtide/handoff/switchyard-asset-prepare-report.json`
-- `.loomtide/handoff/switchyard-asset-attribution.md`
-- `.loomtide/handoff/asset-cache/`
+- `.loombridge/handoff/switchyard-asset-prepare-report.json`
+- `.loombridge/handoff/switchyard-asset-attribution.md`
+- `.loombridge/handoff/asset-cache/`
 
 Read the prepare report before authoring final sprites. Each accepted prepared asset includes:
 
@@ -79,17 +79,17 @@ The final handoff should include:
 - a list of registry asset ids used per role
 - explicit note for any role that fell back to procedural art and why
 - screenshots proving the final scene does not look like placeholder geometry
-- `.loomtide/handoff/asset-handoff-consistency.json` from `npm run asset:handoff:check`
+- `.loombridge/handoff/asset-handoff-consistency.json` from `npm run asset:handoff:check`
 
 Run the consistency check after final verdict files are written:
 
 ```bash
-cd <loomtide-repo>/mcp-server
+cd <loombridge-repo>/mcp-server
 npm run asset:handoff:check -- \
-  --prepare-report "$PROJECT/.loomtide/handoff/switchyard-asset-prepare-report.json" \
-  --verdict "$PROJECT/.loomtide/handoff/build-verdict.json,$PROJECT/.loomtide/handoff/final-verdict.json" \
-  --text "$PROJECT/.loomtide/handoff/SWITCHYARD_HANDOFF.md,$PROJECT/Assets/Scripts/Editor/SwitchyardSceneBuilder.cs" \
-  --output "$PROJECT/.loomtide/handoff/asset-handoff-consistency.json"
+  --prepare-report "$PROJECT/.loombridge/handoff/switchyard-asset-prepare-report.json" \
+  --verdict "$PROJECT/.loombridge/handoff/build-verdict.json,$PROJECT/.loombridge/handoff/final-verdict.json" \
+  --text "$PROJECT/.loombridge/handoff/SWITCHYARD_HANDOFF.md,$PROJECT/Assets/Scripts/Editor/SwitchyardSceneBuilder.cs" \
+  --output "$PROJECT/.loombridge/handoff/asset-handoff-consistency.json"
 ```
 
 Fix every reported issue before claiming final. In particular, audio roles must use the exact ids from

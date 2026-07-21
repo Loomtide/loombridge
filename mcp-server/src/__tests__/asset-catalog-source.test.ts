@@ -345,11 +345,11 @@ test("asset catalog source sends auth only to GitHub catalog URLs", async () => 
 test("asset catalog env REFUSES when unset (no private-mirror default) and honors an explicit URL", () => {
   assert.throws(
     () => catalogUrlFromEnv({}),
-    /LOOMTIDE_ASSET_CATALOG_URL/,
+    /LOOMBRIDGE_ASSET_CATALOG_URL/,
     "an unset catalog env must refuse with actionable guidance, never fall back to a private mirror",
   );
   assert.equal(
-    catalogUrlFromEnv({ LOOMTIDE_ASSET_CATALOG_URL: "https://example.invalid/catalog" }),
+    catalogUrlFromEnv({ LOOMBRIDGE_ASSET_CATALOG_URL: "https://example.invalid/catalog" }),
     "https://example.invalid/catalog",
   );
 });

@@ -60,4 +60,4 @@ This bundle proves ONE narrow perception→reaction latency, gated on a real LOS
 measure behavior trees, tactical movement, squads, cover selection, pathfinding quality, accuracy / aim
 fairness, target prioritization, or any broad combat intelligence — all explicit gaps. Cover and
 waves/objectives remain explicit gaps. See
-`mcp-server/src/loomtide/genre-packs/3d-shooter/methodology-gaps.md`.
+`mcp-server/src/loombridge/genre-packs/3d-shooter/methodology-gaps.md`.

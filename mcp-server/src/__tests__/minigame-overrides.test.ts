@@ -15,9 +15,9 @@ import {
   loadOverrides,
   mergeIntoOverrides,
   overridesPath,
-} from "../loomtide/minigame-overrides.js";
-import { validateMinigameContract } from "../loomtide/minigame-profiles/validator.js";
-import type { MinigameContract } from "../loomtide/minigame-profiles/types.js";
+} from "../loombridge/minigame-overrides.js";
+import { validateMinigameContract } from "../loombridge/minigame-profiles/validator.js";
+import type { MinigameContract } from "../loombridge/minigame-profiles/types.js";
 
 function validContract(over: Partial<MinigameContract> = {}): MinigameContract {
   return {

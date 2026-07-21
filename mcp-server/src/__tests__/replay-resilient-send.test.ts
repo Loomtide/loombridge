@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import type { BridgeResponse } from "../types.js";
-import { resilientSend, type ReconnectableClient } from "../loomtide/replay/index.js";
+import { resilientSend, type ReconnectableClient } from "../loombridge/replay/index.js";
 
 const CONN = new Error("CONNECTION_LOST: code=1006");
 const ok = (): BridgeResponse => ({ id: "x", status: "success", data: { ok: true }, timestamp: 0 });

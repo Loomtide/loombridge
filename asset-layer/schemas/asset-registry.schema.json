@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://loomtide.local/schemas/asset-registry.schema.json",
-  "title": "Loomtide Asset Registry Pack",
+  "$id": "https://loombridge.local/schemas/asset-registry.schema.json",
+  "title": "Loombridge Asset Registry Pack",
   "type": "object",
   "required": ["schemaVersion", "packId", "name", "entries"],
   "additionalProperties": false,

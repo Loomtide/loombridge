@@ -57,7 +57,7 @@ async function writeJson(filePath: string, data: unknown): Promise<void> {
 }
 
 test("editor discovery: scan excludes latest and ignores corrupt files", async () => {
-  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "loomtide-discovery-test-"));
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "loombridge-discovery-test-"));
   await writeJson(path.join(dir, "endpoint-discovery-a.json"), discoveryRecord({ sessionId: "a" }));
   await writeJson(path.join(dir, DISCOVERY_LATEST_FILE_NAME), discoveryRecord({ sessionId: "latest" }));
   await fs.writeFile(path.join(dir, "endpoint-discovery-corrupt.json"), "{not json", "utf8");
@@ -68,7 +68,7 @@ test("editor discovery: scan excludes latest and ignores corrupt files", async (
 });
 
 test("editor discovery: scan honors directory env override through preferred loader", async () => {
-  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "loomtide-discovery-env-"));
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "loombridge-discovery-env-"));
   await writeJson(path.join(dir, "endpoint-discovery-b.json"), discoveryRecord({
     sessionId: "b",
     projectPathCanonical: "/Users/dev/GameB",
@@ -76,10 +76,10 @@ test("editor discovery: scan honors directory env override through preferred loa
   }));
 
   const record = loadPreferredEndpointDiscovery(null, {
-    LOOMTIDE_ENDPOINT_DISCOVERY_DIR: dir,
+    LOOMBRIDGE_ENDPOINT_DISCOVERY_DIR: dir,
   }, 5000);
 
-  assert.equal(resolveDiscoveryDirectory({ LOOMTIDE_ENDPOINT_DISCOVERY_DIR: dir }), dir);
+  assert.equal(resolveDiscoveryDirectory({ LOOMBRIDGE_ENDPOINT_DISCOVERY_DIR: dir }), dir);
   assert.equal(record?.sessionId, "b");
 });
 
@@ -87,9 +87,9 @@ test("editor discovery: sanitized env still resolves the platform temp directory
   const resolved = resolveDiscoveryDirectory({});
 
   assert.equal(path.basename(resolved), "unitybridge");
-  assert.equal(path.basename(path.dirname(resolved)), "loomtide");
+  assert.equal(path.basename(path.dirname(resolved)), "loombridge");
   if (process.platform === "darwin") {
-    assert.notEqual(resolved, path.join("/tmp", "loomtide", "unitybridge"));
+    assert.notEqual(resolved, path.join("/tmp", "loombridge", "unitybridge"));
   }
 });
 
@@ -135,7 +135,7 @@ test("editor discovery: reload churn collapses identity-less (no processId) file
 });
 
 test("editor discovery: explicit single-file override remains compatible", async () => {
-  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "loomtide-discovery-file-"));
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "loombridge-discovery-file-"));
   const file = path.join(dir, "custom-discovery.json");
   await writeJson(file, discoveryRecord({ sessionId: "explicit", projectPathCanonical: "/Users/dev/Explicit" }));
 
@@ -193,7 +193,7 @@ test("editor discovery: reload churn collapses same project/process to newest re
 });
 
 test("editor discovery: projectPathsEquivalent treats a symlink and its target as equal", () => {
-  const root = fsSync.mkdtempSync(path.join(os.tmpdir(), "loomtide-symlink-eq-"));
+  const root = fsSync.mkdtempSync(path.join(os.tmpdir(), "loombridge-symlink-eq-"));
   try {
     const realDir = path.join(root, "real-project");
     const linkDir = path.join(root, "linked-project");
@@ -212,7 +212,7 @@ test("editor discovery: projectPathsEquivalent treats a symlink and its target a
 });
 
 test("editor discovery: projectPathsEquivalent rejects unrelated dirs and non-existent paths", () => {
-  const root = fsSync.mkdtempSync(path.join(os.tmpdir(), "loomtide-symlink-neq-"));
+  const root = fsSync.mkdtempSync(path.join(os.tmpdir(), "loombridge-symlink-neq-"));
   try {
     const a = path.join(root, "alpha");
     const b = path.join(root, "beta");

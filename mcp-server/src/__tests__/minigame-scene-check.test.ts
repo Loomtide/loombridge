@@ -7,9 +7,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { runSceneAgnosticCheck, EXIT, type SceneAgnosticCheckDeps } from "../loomtide/minigame-scene-check.js";
-import type { BuildContractResult } from "../loomtide/minigame-scene-build.js";
-import type { MinigameContract } from "../loomtide/minigame-profiles/types.js";
+import { runSceneAgnosticCheck, EXIT, type SceneAgnosticCheckDeps } from "../loombridge/minigame-scene-check.js";
+import type { BuildContractResult } from "../loombridge/minigame-scene-build.js";
+import type { MinigameContract } from "../loombridge/minigame-profiles/types.js";
 
 const trace = { start: { scene: "Assets/Scenes/Home.unity", reset: "scene-load" as const }, segments: [] };
 const contract = { id: "g" } as unknown as MinigameContract;

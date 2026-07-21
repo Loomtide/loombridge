@@ -64,4 +64,4 @@ degraded / no-shot / had-LOS / miss-as-block / damage-through-cover / false-cove
 This bundle proves the narrow LOS/damage-prevention property only. It does **not** measure tactical
 planning, cover-point generation, navmesh safe areas, peeking, suppression, flanking, AI cover selection,
 or production cover-map quality — all explicit gaps. Waves/objectives remain a later phase. See
-`mcp-server/src/loomtide/genre-packs/3d-shooter/methodology-gaps.md`.
+`mcp-server/src/loombridge/genre-packs/3d-shooter/methodology-gaps.md`.

@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://loomtide.local/schemas/asset-catalog.schema.json",
-  "title": "Loomtide Hosted Asset Catalog",
+  "$id": "https://loombridge.local/schemas/asset-catalog.schema.json",
+  "title": "Loombridge Hosted Asset Catalog",
   "oneOf": [
     { "$ref": "#/$defs/catalogRecord" },
     { "$ref": "#/$defs/catalogShard" }
@@ -30,7 +30,7 @@
         },
         "verifiedBy": {
           "type": "string",
-          "enum": ["developer", "loomtide", "source-owner"]
+          "enum": ["developer", "loombridge", "source-owner"]
         },
         "verifiedAt": {
           "type": "string",

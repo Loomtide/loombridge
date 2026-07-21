@@ -1,5 +1,5 @@
 /**
- * Shared TypeScript interfaces for Loomtide MCP Server.
+ * Shared TypeScript interfaces for Loombridge MCP Server.
  * These types define the wire protocol and data structures used
  * for communication between the MCP server and the Unity plugin.
  */

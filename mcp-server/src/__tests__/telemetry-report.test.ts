@@ -13,7 +13,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import { validateTelemetrySchema, type TelemetrySchema } from "../loomtide/telemetry/schema.js";
+import { validateTelemetrySchema, type TelemetrySchema } from "../loombridge/telemetry/schema.js";
 import {
   aggregateSet,
   buildTuningReport,
@@ -25,8 +25,8 @@ import {
   TUNING_REPORT_DISCLAIMER,
   type TelemetryRun,
   type TuningReport,
-} from "../loomtide/telemetry/report.js";
-import { loadRunSet } from "../loomtide/telemetry/loader.js";
+} from "../loombridge/telemetry/report.js";
+import { loadRunSet } from "../loombridge/telemetry/loader.js";
 
 const SCHEMA: TelemetrySchema = validateTelemetrySchema({
   schemaVersion: "1",

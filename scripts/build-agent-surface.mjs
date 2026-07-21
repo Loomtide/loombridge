@@ -1,14 +1,14 @@
 #!/usr/bin/env node
 /**
  * build-agent-surface — assemble the SCRUBBED consumer payload that ships with
- * @loomtide/cli and is installed into a partner project by `loomtide install-agent`.
+ * @loomtide/loombridge and is installed into a partner project by `loombridge install-agent`.
  *
- * Source of truth: commands/loomtide/*.md (Claude command bodies) + the CONSUMER_SKILLS
+ * Source of truth: commands/loombridge/*.md (Claude command bodies) + the CONSUMER_SKILLS
  * from agent-surface-lib.mjs. Every .md is scrubbed through the SAME scrubContent the
- * global install (loomtide-install-locally.sh) uses — one scrubber, no drift.
+ * global install (loombridge-install-locally.sh) uses — one scrubber, no drift.
  *
  * Output (generated, git-ignored, never committed — same pattern as mcp-server/bridge/):
- *   mcp-server/agent-surface/commands/loomtide/<name>.md
+ *   mcp-server/agent-surface/commands/loombridge/<name>.md
  *   mcp-server/agent-surface/skills/<name>/**
  *
  * Wired into `prepack` so `npm pack` bundles it; listed in package.json "files".
@@ -28,17 +28,17 @@ import { CONSUMER_SKILLS, scrubContent } from "./agent-surface-lib.mjs";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, "..");
 const OUT_DIR = path.join(REPO_ROOT, "mcp-server", "agent-surface");
-const COMMANDS_SRC = path.join(REPO_ROOT, "commands", "loomtide");
+const COMMANDS_SRC = path.join(REPO_ROOT, "commands", "loombridge");
 const SKILLS_SRC = path.join(REPO_ROOT, ".skills");
 
 /** Collect every planned (relPathInPayload, scrubbedContent) pair. */
 function plannedFiles() {
   const files = [];
 
-  // Commands: commands/loomtide/*.md -> agent-surface/commands/loomtide/*.md
+  // Commands: commands/loombridge/*.md -> agent-surface/commands/loombridge/*.md
   for (const name of fs.readdirSync(COMMANDS_SRC).filter((f) => f.endsWith(".md")).sort()) {
     const raw = fs.readFileSync(path.join(COMMANDS_SRC, name), "utf8");
-    files.push({ rel: path.join("commands", "loomtide", name), content: scrubContent(raw) });
+    files.push({ rel: path.join("commands", "loombridge", name), content: scrubContent(raw) });
   }
 
   // Skills: .skills/<name>/** -> agent-surface/skills/<name>/** (every file scrubbed).

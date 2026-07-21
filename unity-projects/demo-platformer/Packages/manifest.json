@@ -1,6 +1,6 @@
 {
   "dependencies": {
-    "com.loomtide.unitybridge": "file:../../../packages/com.loomtide.unitybridge",
+    "com.loomtide.loombridge": "file:../../../packages/com.loomtide.loombridge",
     "com.unity.2d.pixel-perfect": "5.1.1",
     "com.unity.2d.sprite": "1.0.0",
     "com.unity.inputsystem": "1.19.0",

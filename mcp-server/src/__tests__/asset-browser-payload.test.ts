@@ -158,9 +158,9 @@ test("buildAssetBrowserPayload can present hosted DB-backed search API records v
     trustTier: "trusted-default",
     review: {
       status: "verified",
-      verifiedBy: "loomtide",
+      verifiedBy: "loombridge",
       verifiedAt: "2026-06-05T00:00:00.000Z",
-      reviewer: "loomtide-core",
+      reviewer: "loombridge-core",
     },
   };
 
@@ -222,7 +222,7 @@ test("buildAssetBrowserPayload filters hosted catalog records by required tags",
 });
 
 test("buildAssetBrowserPayload presents compact generic catalog records for profile browsing", async () => {
-  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "loomtide-browser-compact-catalog-"));
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "loombridge-browser-compact-catalog-"));
   const compactCatalogPath = path.join(tempDir, "catalog.json");
   await fs.writeFile(compactCatalogPath, `${JSON.stringify({
     schemaVersion: "1",
@@ -252,7 +252,7 @@ test("buildAssetBrowserPayload presents compact generic catalog records for prof
         status: "verified",
         verifiedBy: "developer",
         verifiedAt: "2026-06-05T00:00:00.000Z",
-        reviewer: "Loomtide",
+        reviewer: "Loombridge",
       },
       tags: ["2d-assets", "cc0", "kenney", "preview", "sprite", "verified"],
       unity: {
@@ -273,7 +273,7 @@ test("buildAssetBrowserPayload presents compact generic catalog records for prof
 });
 
 test("buildAssetBrowserPayload can cache HTTP image previews into local imagePath values", async () => {
-  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "loomtide-browser-previews-"));
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "loombridge-browser-previews-"));
   const previewCacheDir = path.join(tempDir, "browser-previews");
   const fixturePath = path.join(repoRoot, "asset-layer/fixtures/platformer/player-blue.png");
   const bytes = await fs.readFile(fixturePath);
@@ -358,7 +358,7 @@ test("buildAssetBrowserPayload can cache HTTP image previews into local imagePat
 });
 
 test("buildAssetBrowserPayloadFromPrepareReport seeds inventory from accepted prepared assets", async () => {
-  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "loomtide-browser-report-"));
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "loombridge-browser-report-"));
   const spritePath = path.join(tempDir, "player.png");
   const audioPath = path.join(tempDir, "jump.wav");
   await fs.writeFile(spritePath, Buffer.from([1, 2, 3]));
@@ -457,7 +457,7 @@ test("buildAssetBrowserPayloadFromPrepareReport seeds inventory from accepted pr
 
   const payload = await buildAssetBrowserPayloadFromPrepareReport({ prepareReportPath: reportPath });
 
-  assert.equal(payload.title, "Loomtide Asset Confirmation");
+  assert.equal(payload.title, "Loombridge Asset Confirmation");
   assert.equal(payload.registry.name, "test-pack");
   assert.deepEqual(payload.inventory, ["test.player", "test.jump"]);
   assert.equal(payload.assets.length, 2);

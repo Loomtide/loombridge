@@ -11,7 +11,7 @@ hazard/pickup scripts may call `Respawn()` or subscribe to trigger/collision eve
 
 This controller is **Input-System-only**. The project must include `com.unity.inputsystem` and Active
 Input Handling must be Input System or Both. Do not add legacy `UnityEngine.Input` fallbacks:
-Loomtide cannot input-drive `Input.GetAxis` / `Input.GetButton` polling.
+Loombridge cannot input-drive `Input.GetAxis` / `Input.GetButton` polling.
 
 ```csharp
 using UnityEngine;

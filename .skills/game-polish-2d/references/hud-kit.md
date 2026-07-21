@@ -300,7 +300,7 @@ public static class TmpFontAssetBuilder
         BuildIfMissing();
     }
 
-    [MenuItem("Loomtide/Build TMP Font")]
+    [MenuItem("Loombridge/Build TMP Font")]
     public static void BuildMenu() => Build(force: true);
 
     private static void BuildIfMissing()

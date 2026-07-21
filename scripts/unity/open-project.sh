@@ -5,7 +5,7 @@ usage() {
   cat <<'EOF'
 Usage: scripts/unity/open-project.sh <project-path-or-name> [options]
 
-Launch a Unity project and wait until the Loomtide MCP bridge can route to it.
+Launch a Unity project and wait until the Loombridge MCP bridge can route to it.
 
 Project may be an absolute/relative Unity project path, or a repo-owned name under
 unity-projects/ (for example: shooter-3d-combat-dogfood).
@@ -22,7 +22,7 @@ Options:
 
 Environment:
   UNITY_EDITOR              Unity executable or Unity.app path override.
-  LOOMTIDE_UNITY_LAUNCH_LOG Launch log path (default: /tmp/loomtide-unity-<project>.log).
+  LOOMBRIDGE_UNITY_LAUNCH_LOG Launch log path (default: /tmp/loombridge-unity-<project>.log).
 EOF
 }
 
@@ -155,7 +155,7 @@ wait_for_bridge() {
   local deadline
   local status=1
 
-  smoke_log="$(mktemp "${TMPDIR:-/tmp}/loomtide-unity-smoke.XXXXXX")"
+  smoke_log="$(mktemp "${TMPDIR:-/tmp}/loombridge-unity-smoke.XXXXXX")"
 
   if [[ "$skip_build" != "true" ]]; then
     (cd "$root/mcp-server" && npm run build)
@@ -164,10 +164,10 @@ wait_for_bridge() {
   fi
 
   deadline=$((SECONDS + timeout_s))
-  echo "open-project: waiting for Loomtide MCP bridge (timeout ${timeout_s}s)"
+  echo "open-project: waiting for Loombridge MCP bridge (timeout ${timeout_s}s)"
   while (( SECONDS <= deadline )); do
-    if LOOMTIDE_UNITY_PROJECT="$project" \
-      LOOMTIDE_TARGET_PROJECT_PATH="$project" \
+    if LOOMBRIDGE_UNITY_PROJECT="$project" \
+      LOOMBRIDGE_TARGET_PROJECT_PATH="$project" \
       node "$root/scripts/phase3-mcp-smoke.mjs" --expect-connected ${assert_compile_clean:+--assert-compile-clean} \
       >"$smoke_log" 2>&1; then
       cat "$smoke_log"
@@ -267,7 +267,7 @@ main() {
   [[ -n "$version" ]] || die "could not read m_EditorVersion from $project/ProjectSettings/ProjectVersion.txt"
 
   project_name="$(basename "$project")"
-  launch_log="${LOOMTIDE_UNITY_LAUNCH_LOG:-/tmp/loomtide-unity-${project_name}.log}"
+  launch_log="${LOOMBRIDGE_UNITY_LAUNCH_LOG:-/tmp/loombridge-unity-${project_name}.log}"
 
   if [[ "$no_launch" != "true" || "$print_command" == "true" ]]; then
     if [[ -n "$unity_override" ]]; then

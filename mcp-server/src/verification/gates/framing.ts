@@ -56,7 +56,7 @@ export interface ScreenRectObject {
 
 /**
  * PixelPerfectCamera settings as captured into `screen-rects.json` by the raw
- * capture writer (`loomtide capture`). Absent on a hand-authored / pre-writer
+ * capture writer (`loombridge capture`). Absent on a hand-authored / pre-writer
  * capture, which degrades the pixel-perfect checks to a single WARN.
  */
 export interface PixelPerfectCapture {
@@ -162,7 +162,7 @@ function appendCameraChecks(
       status: "warn",
       detail:
         "framing.camera is pinned but screen-rects.json has no `camera` block. " +
-        "Re-capture with the raw writer (`loomtide capture --slice <id>`) so the camera/pixel-perfect settings are verified, not assumed.",
+        "Re-capture with the raw writer (`loombridge capture --slice <id>`) so the camera/pixel-perfect settings are verified, not assumed.",
     });
     return;
   }
@@ -225,7 +225,7 @@ function appendCameraChecks(
       status: "warn",
       detail:
         "screen-rects.json camera has no authoredOrthographicSize (the edit-mode Camera value). " +
-        "Re-capture with `loomtide capture` so the authored ortho size is verified — the runtime orthographicSize overscans under PixelPerfect and is not the enforced value.",
+        "Re-capture with `loombridge capture` so the authored ortho size is verified — the runtime orthographicSize overscans under PixelPerfect and is not the enforced value.",
     });
   } else {
     const d = Math.abs(camera.authoredOrthographicSize - spec.orthographicSize);
@@ -257,7 +257,7 @@ function appendCameraChecks(
       status: "warn",
       detail:
         "screen-rects.json camera has no `pixelPerfect` block (likely a hand-authored / pre-writer capture). " +
-        "Re-capture with `loomtide capture` so the PixelPerfectCamera settings are verified.",
+        "Re-capture with `loombridge capture` so the PixelPerfectCamera settings are verified.",
     });
     return;
   }
@@ -397,7 +397,7 @@ function appendPerspectiveExtentChecks(
         expected,
         "(no camera block in screen-rects.json)",
         "framing.camera declares a visibleGroundWidthM band but screen-rects.json has no `camera` block. " +
-          "Re-capture with `loomtide capture` so the camera height/projection/FOV are verified. A missing camera is a REFUSAL, not a skipped check.",
+          "Re-capture with `loombridge capture` so the camera height/projection/FOV are verified. A missing camera is a REFUSAL, not a skipped check.",
       ),
     );
     return;
@@ -547,7 +547,7 @@ function appendPerspectiveExtentChecks(
           expected,
           "(perspective, but no fieldOfView captured)",
           "camera is perspective but no `fieldOfView` was captured; the visible ground extent cannot be computed. " +
-            "Re-capture with `loomtide capture` (it reads the edit-mode Camera field of view). REFUSING.",
+            "Re-capture with `loombridge capture` (it reads the edit-mode Camera field of view). REFUSING.",
         ),
       );
       return;

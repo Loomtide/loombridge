@@ -23,14 +23,14 @@ import {
   sfxGateRefusals,
   wholeGameDonenessReasons,
   type VerdictLike,
-} from "../loomtide/doneness.js";
+} from "../loombridge/doneness.js";
 import { SFX_GATE_NAMES } from "../verification/run-gates.js";
-import { runPlan } from "../loomtide/plan.js";
-import { runVerify } from "../loomtide/verify.js";
-import { loomtidePaths } from "../loomtide/state.js";
+import { runPlan } from "../loombridge/plan.js";
+import { runVerify } from "../loombridge/verify.js";
+import { loombridgePaths } from "../loombridge/state.js";
 
 async function tmpRoot(): Promise<string> {
-  return fs.mkdtemp(path.join(os.tmpdir(), "loomtide-sfx-doneness-"));
+  return fs.mkdtemp(path.join(os.tmpdir(), "loombridge-sfx-doneness-"));
 }
 
 // ── readDeclaredSfxVerification (disk-truth read) ────────────────────────────
@@ -133,7 +133,7 @@ test("doneness REFUSES when disk declares sfx but the verdict predates it; re-ve
   const root = await tmpRoot();
   try {
     await runPlan({ root, genre: "platformer-2d", engine: "unity", force: false, allowMissingDesignTarget: true });
-    const paths = loomtidePaths(root);
+    const paths = loombridgePaths(root);
     await fs.mkdir(paths.verifyInputs, { recursive: true });
     await fs.writeFile(path.join(paths.verifyInputs, "console.json"), JSON.stringify({ logs: [] }), "utf-8");
 
@@ -185,7 +185,7 @@ test("doneness: a MALFORMED sfx section refuses fail-closed (cannot disarm by co
   const root = await tmpRoot();
   try {
     await runPlan({ root, genre: "platformer-2d", engine: "unity", force: false, allowMissingDesignTarget: true });
-    const paths = loomtidePaths(root);
+    const paths = loombridgePaths(root);
     const contract = JSON.parse(await fs.readFile(paths.acceptance, "utf-8")) as Record<string, unknown>;
     const verification = (contract.verification as Record<string, unknown> | undefined) ?? {};
     verification.sfx = { enabled: "yes" }; // hand-corrupted after declaring the gate

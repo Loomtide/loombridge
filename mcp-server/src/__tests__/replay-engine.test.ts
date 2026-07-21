@@ -10,7 +10,7 @@ import {
   type Assertion,
   type ReplayDriver,
   type ReplayTrace,
-} from "../loomtide/replay/index.js";
+} from "../loombridge/replay/index.js";
 
 // ───────────────────────────── fixtures ─────────────────────────────
 
@@ -108,7 +108,7 @@ function fakeDriver(opts: FakeOptions = {}): ReplayDriver {
       return { reached: true };
     },
     async capture(id: string) {
-      return { artifact: `.loomtide/replays/level-1-success/actual/${id}.png`, sha256: "deadbeef" };
+      return { artifact: `.loombridge/replays/level-1-success/actual/${id}.png`, sha256: "deadbeef" };
     },
     async evaluateAssertion(assertion: Assertion) {
       if (opts.failAssertionId === assertion.id) {

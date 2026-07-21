@@ -1,5 +1,5 @@
 /**
- * Pure core of `loomtide minigame capture` — the op→capture transform, the stable
+ * Pure core of `loombridge minigame capture` — the op→capture transform, the stable
  * per-object id, the trace-anchored state plan, and the honest flow.json assembly.
  * (The live bridge drive is exercised by hand against a running editor.)
  */
@@ -7,8 +7,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { buildScaffoldContract } from "../loomtide/minigame-scaffold.js";
-import { buildCaptureSummary } from "../loomtide/minigame-capture.js";
+import { buildScaffoldContract } from "../loombridge/minigame-scaffold.js";
+import { buildCaptureSummary } from "../loombridge/minigame-capture.js";
 import {
   actionSceneSlugs,
   assignObjectIds,
@@ -25,11 +25,11 @@ import {
   type CapturePlan,
   type RawScreenObject,
   type RawScreenRects,
-} from "../loomtide/minigame-capture-plan.js";
-import type { DeviceSpec, MinigameContract } from "../loomtide/minigame-profiles/types.js";
-import type { BackgroundCandidates } from "../loomtide/minigame-gates/types.js";
-import { changedObjectIds } from "../loomtide/minigame-gates/input-response.js";
-import type { Action, ReplayTrace } from "../loomtide/replay/types.js";
+} from "../loombridge/minigame-capture-plan.js";
+import type { DeviceSpec, MinigameContract } from "../loombridge/minigame-profiles/types.js";
+import type { BackgroundCandidates } from "../loombridge/minigame-gates/types.js";
+import { changedObjectIds } from "../loombridge/minigame-gates/input-response.js";
+import type { Action, ReplayTrace } from "../loombridge/replay/types.js";
 
 const tap = (path: string): Action => ({ do: "tap", locator: { path } });
 const wait = (path: string): Action => ({ do: "wait-for-visible", locator: { path } });
@@ -754,7 +754,7 @@ test("buildCaptureSummary: SUGGESTS the background binding (camera + layers + pe
   // Decorative excluded are listed.
   assert.match(out, /Decorative excluded: Cloud, Bird\./);
   // Emits the --background auto confirm command.
-  assert.match(out, /loomtide minigame finalize --contract g\.minigame\.json --captures captures --background auto/);
+  assert.match(out, /loombridge minigame finalize --contract g\.minigame\.json --captures captures --background auto/);
 });
 
 test("buildCaptureSummary: a recommended set that's <100% on the wide device warns the gate will FAIL there, still shows --background auto", () => {

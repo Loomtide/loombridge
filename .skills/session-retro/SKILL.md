@@ -1,12 +1,12 @@
 ---
 name: session-retro
-description: Mine a Loomtide dogfood session transcript for durable product learnings — friction, bypassed surfaces, and user corrections — into a stable-ID findings ledger with provenance tags and a routing table. Use after any real build/art/verify session (yours or a handoff) to codify what the run taught, or to re-mine a session that has grown since last time.
+description: Mine a Loombridge dogfood session transcript for durable product learnings — friction, bypassed surfaces, and user corrections — into a stable-ID findings ledger with provenance tags and a routing table. Use after any real build/art/verify session (yours or a handoff) to codify what the run taught, or to re-mine a session that has grown since last time.
 ---
 
 # Session Retro
 
-Use this skill to turn a Loomtide dogfood session into product signal. A dogfood session is a real
-game built or polished through the Loomtide bridge/CLI (the exemplars are an extraction-shooter dogfood
+Use this skill to turn a Loombridge dogfood session into product signal. A dogfood session is a real
+game built or polished through the Loombridge bridge/CLI (the exemplars are an extraction-shooter dogfood
 graybox and its art-integration follow-up). The deliverable is a **findings ledger** with stable IDs,
 provenance tags, and a routing table — the same two-artifact shape as the internal exemplars: a
 per-finding ledger plus a consolidated-learnings doc.
@@ -14,7 +14,7 @@ This loop has run manually twice with high-signal results; this skill codifies t
 future session is mined consistently.
 
 The mindset: **the session is the highest-fidelity source of what the product actually feels like to use.**
-A well-specified build that never once reached `loomtide plan/verify/doneness` is not a failure to report
+A well-specified build that never once reached `loombridge plan/verify/doneness` is not a failure to report
 politely — it is the central finding. Mine adversarially, verify against the transcript (never memory),
 and let shipped code — not PR titles — decide what is closed.
 
@@ -75,18 +75,18 @@ Sweep the transcript for:
 ### Pass B — flow/gap analysis (which surfaces got used vs BYPASSED)
 
 This pass produces the **mandatory surfaces-used-vs-bypassed report**. The headline exemplar finding came
-from exactly here: **0 `loomtide plan/build/verify/doneness/genre/assets/design` CLI verbs across an
+from exactly here: **0 `loombridge plan/build/verify/doneness/genre/assets/design` CLI verbs across an
 entire finished 9-step build** — the core had no front door in a consuming repo, so the build reached for
 the only lever it could see (the raw bridge). This is not a footnote; it is the top-line product signal.
 
 - Read the build's own spec/README/design docs (`<project>/README.md`, `DesignDocs/*.md`) to know what
   was built and what "done" was graded against.
-- Tally which Loomtide surfaces the session **used** (which bridge ops, which CLI verbs, whether
-  `.loomtide/` was created by the tool or hand-rolled) vs **BYPASSED** (which verbs/gates never ran that
+- Tally which Loombridge surfaces the session **used** (which bridge ops, which CLI verbs, whether
+  `.loombridge/` was created by the tool or hand-rolled) vs **BYPASSED** (which verbs/gates never ran that
   the build's own plan implied should have).
-- Watch for **false-green / verification theatre**: the build hand-creating `.loomtide/`-shaped evidence
-  (screenshots into `.loomtide/captures/`, "contract pass" graded against a prose checklist) with no
-  contract, no gate, nothing routed to the supervisor. A more `.loomtide`-aware agent produces a MORE
+- Watch for **false-green / verification theatre**: the build hand-creating `.loombridge/`-shaped evidence
+  (screenshots into `.loombridge/captures/`, "contract pass" graded against a prose checklist) with no
+  contract, no gate, nothing routed to the supervisor. A more `.loombridge`-aware agent produces a MORE
   convincing fake green — flag it as High.
 - Output a short table: `Surface | Used? | Evidence | If bypassed, why (missing front door / undiscoverable / not applicable)`.
 

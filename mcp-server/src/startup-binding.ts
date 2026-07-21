@@ -12,7 +12,7 @@ import {
  * if the bound target does not match a discovered editor the registry throws
  * `EDITOR_NOT_FOUND` — it must NEVER fall through to some other single editor.
  *
- * - `strict`  — an explicit `LOOMTIDE_UNITY_PROJECT` target. The explicit override for
+ * - `strict`  — an explicit `LOOMBRIDGE_UNITY_PROJECT` target. The explicit override for
  *   unusual layouts (e.g. when the cwd is not inside the Unity project).
  * - `cwd`     — the developer's intended project, inferred from the nearest Unity project
  *   root above the server's cwd. Launching the agent from inside a Unity project folder is
@@ -72,7 +72,7 @@ function hasUnityProjectMarker(dir: string): boolean {
  * Resolve the MCP server's startup project binding from its environment and cwd.
  *
  * Precedence (mirrors the plan's Binding Precedence §3–§4):
- *   1. `LOOMTIDE_UNITY_PROJECT` (strict) — the explicit override; wins over cwd inference.
+ *   1. `LOOMBRIDGE_UNITY_PROJECT` (strict) — the explicit override; wins over cwd inference.
  *   2. nearest Unity project root above `cwd` (cwd) — the developer's intended project.
  *   3. otherwise `{ kind: "none" }`.
  *

@@ -1,18 +1,18 @@
-# Install Loomtide on a new machine
+# Install Loombridge on a new machine
 
 The simplest end-to-end setup. There are two tracks — pick one:
 
 - **Track A — Partner install** (one command; installs **and** updates). The recommended path.
 - **Track B — From source** (works from a clone of this monorepo — the contributor/maintainer path).
 
-Both end at the same place: a `loomtide` command on your PATH and the Unity bridge installed into your project as a
-versioned tarball dependency, verified by `loomtide doctor`.
+Both end at the same place: a `loombridge` command on your PATH and the Unity bridge installed into your project as a
+versioned tarball dependency, verified by `loombridge doctor`.
 
 ## Requirements (both tracks)
 
 - Node.js `>= 18`
 - Unity `6000.3 LTS` (primary) or `2022.3 LTS` (compatibility)
-- `~/.local/bin` on your `PATH` (Track B installs auxiliary harness wrappers there — the core `loomtide`
+- `~/.local/bin` on your `PATH` (Track B installs auxiliary harness wrappers there — the core `loombridge`
   bin itself comes from the one-command installer or `npm link`, never `~/.local/bin`):
   ```bash
   echo "$PATH" | tr ':' '\n' | grep -q "$HOME/.local/bin" || echo 'add ~/.local/bin to your PATH'
@@ -22,7 +22,7 @@ versioned tarball dependency, verified by `loomtide doctor`.
 
 ## Track A — Partner install (one command)
 
-Loomtide ships to partners through **GitHub Releases** on a dedicated **release distribution channel** —
+Loombridge ships to partners through **GitHub Releases** on a dedicated **release distribution channel** —
 release assets only, no source; partners never need access to this monorepo. No npm account, no registry
 config. You already have a GitHub account, so authenticate once and then install (and later update) with a
 single command.
@@ -55,25 +55,25 @@ irm https://get.loomtide.ai/win | iex
 curl -fsSL https://get.loomtide.ai/setup | sh
 ```
 
-The Windows bootstrap is **PowerShell-native and does not require Git Bash** — the Loomtide CLI runs on Node
+The Windows bootstrap is **PowerShell-native and does not require Git Bash** — the Loombridge CLI runs on Node
 and works in any shell, so the bootstrap only needs Node.js + GitHub CLI (installed via `winget`). Pass a
 Unity project to wire it in the same shot: append `-Project C:\path\to\UnityProject` (PowerShell, or set
-`$env:LOOMTIDE_PROJECT` before the `irm | iex`) / `-s -- --project /path/to/UnityProject` (the `curl … | sh`
+`$env:LOOMBRIDGE_PROJECT` before the `irm | iex`) / `-s -- --project /path/to/UnityProject` (the `curl … | sh`
 form). The steps below are the **"I already have Node + gh"** path (or what the bootstrap runs for you).
 
 ```bash
 # 0. One-time: authenticate GitHub so the private release is downloadable
 gh auth login                     # GitHub CLI — https://cli.github.com
-#   (CI / no gh CLI? export LOOMTIDE_TOKEN=<fine-grained token, contents-read on the release distribution channel> instead)
+#   (CI / no gh CLI? export LOOMBRIDGE_TOKEN=<fine-grained token, contents-read on the release distribution channel> instead)
 
 # 1. Install the CLI — this same command UPDATES it later, just re-run it
 curl -fsSL https://get.loomtide.ai | sh
 
 # 2. Install the Unity bridge into YOUR Unity project (no repo clone, no git needed)
-loomtide install-bridge --project /path/to/UnityProject
+loombridge install-bridge --project /path/to/UnityProject
 
 # 3. Open that project in Unity, wait for it to finish compiling, then:
-loomtide doctor --project /path/to/UnityProject
+loombridge doctor --project /path/to/UnityProject
 ```
 
 `doctor` should print `healthy`. That's it.
@@ -85,16 +85,16 @@ loomtide doctor --project /path/to/UnityProject
 curl -fsSL https://get.loomtide.ai | sh -s -- --project /path/to/UnityProject
 ```
 
-**Pin a version** for reproducible/CI setups: `LOOMTIDE_VERSION=v0.2.0 curl -fsSL https://get.loomtide.ai | sh`.
+**Pin a version** for reproducible/CI setups: `LOOMBRIDGE_VERSION=v0.2.0 curl -fsSL https://get.loomtide.ai | sh`.
 
 > **On Windows:** the recommended path is the PowerShell bootstrap `irm https://get.loomtide.ai/win | iex`
 > (above) — it needs **no Git Bash / WSL**. If you already have Node + gh and prefer the raw `curl … | sh`
 > installer, run *that* line in **Git Bash** (bundled with Git for Windows) or WSL — it is a POSIX shell script
-> and won't run in cmd.exe/PowerShell. Either way, after install the `loomtide` command works in any
-> Windows shell (npm installs a `loomtide.cmd` shim), and `install-bridge`/`doctor`/`update` are cross-platform.
+> and won't run in cmd.exe/PowerShell. Either way, after install the `loombridge` command works in any
+> Windows shell (npm installs a `loombridge.cmd` shim), and `install-bridge`/`doctor`/`update` are cross-platform.
 > The default transport is **auto** (IPC first, TCP-loopback fallback). On **Windows** IPC is a named pipe and is
 > used by default. On **macOS/Linux** Unity's Mono editor runtime doesn't expose the unix-domain-socket API, so the
-> bridge always runs on TCP loopback there — IPC is Windows-only in practice today. `LOOMTIDE_UNITY_TRANSPORT_MODE=tcp`
+> bridge always runs on TCP loopback there — IPC is Windows-only in practice today. `LOOMBRIDGE_UNITY_TRANSPORT_MODE=tcp`
 > forces TCP (e.g. if a local security agent blocks the pipe on Windows); `=ipc` forces IPC and fails fast where no
 > IPC endpoint exists (all macOS/Linux editors). `doctor --live` prints the transport it actually used, so a fallback
 > is never silent. Committing the agent surface for a mixed-OS team? `install-agent`
@@ -106,15 +106,15 @@ curl -fsSL https://get.loomtide.ai | sh -s -- --project /path/to/UnityProject
 
 ### Optional: agent commands + skills
 
-The bridge is all you need. If you also want Loomtide's agent surface — the `/loomtide:*` slash
+The bridge is all you need. If you also want Loombridge's agent surface — the `/loombridge:*` slash
 commands and the game-build/verify skills — **installed into your project repo** (so they're committed and
 your teammates get them on the next `git pull`), opt in:
 
 ```bash
-loomtide install-agent --project /path/to/UnityProject
+loombridge install-agent --project /path/to/UnityProject
 ```
 
-This writes real files under `.claude/commands/loomtide/`, `.claude/skills/`, and `.codex/skills/` (never
+This writes real files under `.claude/commands/loombridge/`, `.claude/skills/`, and `.codex/skills/` (never
 into your `~/.claude` or `~/.codex`). The one-command installer can do it in the same shot with `--with-agent`:
 
 ```bash
@@ -123,14 +123,14 @@ curl -fsSL https://get.loomtide.ai | sh -s -- --project /path/to/UnityProject --
 
 - **To skip it: do nothing.** Skipping is the default — `install-bridge`/`update` print one optional hint and
   never nag.
-- **To opt out (and be remembered):** `loomtide install-agent --project /path/to/UnityProject --remove`.
+- **To opt out (and be remembered):** `loombridge install-agent --project /path/to/UnityProject --remove`.
   It deletes the managed files (any you hand-edited are left in place) and records the choice, so later
   `update`s stay silent. Re-run `install-agent` to re-enable.
 
-The choice lives in the committed `ProjectSettings/LoomtideInstall.json`, so it is **team-wide + versioned**:
-one dev decides and everyone's `loomtide update` behaves identically after a pull.
+The choice lives in the committed `ProjectSettings/LoombridgeInstall.json`, so it is **team-wide + versioned**:
+one dev decides and everyone's `loombridge update` behaves identically after a pull.
 
-> A published npm package (`npm install -g @loomtide/cli`) is the eventual public-launch channel; while the
+> A published npm package (`npm install -g @loomtide/loombridge`) is the eventual public-launch channel; while the
 > repo is private, the GitHub Releases command above is the supported path.
 
 ---
@@ -144,7 +144,7 @@ unreleased CLI changes, and the agent surface (slash commands, skills, aux harne
 ```bash
 # 1. Clone + build
 git clone https://github.com/Loomtide/loombridge.git
-cd Loomtide/mcp-server
+cd Loombridge/mcp-server
 npm ci
 npm run build
 
@@ -152,22 +152,22 @@ npm run build
 curl -fsSL https://get.loomtide.ai | sh
 
 # 2b. OR, to run your UNRELEASED CLI changes: link the dev bin (follows every `npm run build`):
-npm link                    # `loomtide --version` will show your local commit (+dirty)
+npm link                    # `loombridge --version` will show your local commit (+dirty)
 
-# 3. Agent surface (slash commands, skills, aux harness wrappers -> ~/.local/bin/loomtide-*):
+# 3. Agent surface (slash commands, skills, aux harness wrappers -> ~/.local/bin/loombridge-*):
 cd ..
-./scripts/loomtide-install-locally.sh
+./scripts/loombridge-install-locally.sh
 
 # 4. Install the Unity bridge into YOUR Unity project + verify (same as Track A):
-loomtide install-bridge --project /path/to/UnityProject
-loomtide doctor --project /path/to/UnityProject
+loombridge install-bridge --project /path/to/UnityProject
+loombridge doctor --project /path/to/UnityProject
 ```
 
 Notes for Track B:
 
-- `loomtide-install-locally.sh` deliberately does **not** install a `loomtide` bin — a `~/.local/bin`
+- `loombridge-install-locally.sh` deliberately does **not** install a `loombridge` bin — a `~/.local/bin`
   wrapper would shadow the released CLI on PATH. It even removes such wrappers left by older versions.
-- With `npm link`, `npm run build` is all a rebuild takes; `loomtide --version` tells you which build
+- With `npm link`, `npm run build` is all a rebuild takes; `loombridge --version` tells you which build
   (release commit vs your local `+dirty`) you're actually running.
 - To push your checkout's **bridge** into a consumer project without a release, see the dev short path
   under [Keeping it up to date](#keeping-it-up-to-date).
@@ -181,17 +181,17 @@ tarball under `Packages/tarballs/`:
 
 ```jsonc
 { "dependencies": {
-    "com.loomtide.unitybridge": "file:tarballs/com.loomtide.unitybridge-<ver>.tgz"
+    "com.loomtide.loombridge": "file:tarballs/com.loomtide.loombridge-<ver>.tgz"
 } }
 ```
 
 Unity resolves that read-only into `Library/PackageCache`, so the package's `Tests/` are excluded from your compile
 automatically (no NUnit errors) and nobody can accidentally edit the bridge in place. It also writes
-`ProjectSettings/LoomtideInstall.json` (the record `doctor` / `update` read). This route was chosen over UPM
+`ProjectSettings/LoombridgeInstall.json` (the record `doctor` / `update` read). This route was chosen over UPM
 git-URL / scoped-registry distribution because it keeps a private monorepo private (only packaged bytes ship)
 and needs no consumer git credentials; see [`BridgeDistribution.md`](BridgeDistribution.md) for the fallbacks.
 
-Air-gapped / no manifest dependency wanted? Use `loomtide install-bridge --project <p> --embedded` (physically copies
+Air-gapped / no manifest dependency wanted? Use `loombridge install-bridge --project <p> --embedded` (physically copies
 the package, `Tests/` stripped).
 
 ## Keeping it up to date
@@ -200,29 +200,29 @@ the package, `Tests/` stripped).
 
 ```bash
 curl -fsSL https://get.loomtide.ai | sh              # 1. update the CLI (pulls the latest release)
-loomtide update --project /path/to/UnityProject      # 2. swap the project's bridge to the CLI-bundled one
+loombridge update --project /path/to/UnityProject      # 2. swap the project's bridge to the CLI-bundled one
 ```
 
-`loomtide update` swaps in the bridge tarball bundled with your current CLI (backs up the install record, prunes the
+`loombridge update` swaps in the bridge tarball bundled with your current CLI (backs up the install record, prunes the
 old tarball), then runs `doctor`. It never self-updates the CLI (self-running an install is unreliable across
 nvm/volta/asdf) — that's what the first command is for.
 
 **Dev short path** (from a checkout, no release needed) — push THIS clone's bridge into a project in one command:
 
 ```bash
-scripts/loomtide-dev-update.sh --project /path/to/UnityProject            # add --dry-run to preview
+scripts/loombridge-dev-update.sh --project /path/to/UnityProject            # add --dry-run to preview
 ```
 
-It packs the bridge from your working tree and runs `loomtide update --tarball` with it. After either path, focus
+It packs the bridge from your working tree and runs `loombridge update --tarball` with it. After either path, focus
 the Unity editor (or trigger an asset refresh) so it re-resolves the tarball — expect one domain reload while the
-bridge recompiles, then `loomtide doctor --project <dir> --live` to confirm.
+bridge recompiles, then `loombridge doctor --project <dir> --live` to confirm.
 
 ## Health check any time
 
 ```bash
-loomtide doctor --project /path/to/UnityProject          # offline install + wiring health
-loomtide doctor --project /path/to/UnityProject --live   # also connect to the running Unity bridge
-loomtide doctor --project /path/to/UnityProject --ci     # JSON output for pipelines
+loombridge doctor --project /path/to/UnityProject          # offline install + wiring health
+loombridge doctor --project /path/to/UnityProject --live   # also connect to the running Unity bridge
+loombridge doctor --project /path/to/UnityProject --ci     # JSON output for pipelines
 ```
 
 Every failed row prints the exact command to fix it. Exit codes: `0` healthy · `1` problems found · `2` usage.
@@ -231,7 +231,7 @@ Every failed row prints the exact command to fix it. Exit codes: `0` healthy · 
 
 Point your MCP client at the server the CLI ships:
 
-- command: `loomtide`
+- command: `loombridge`
 - args: `["mcp"]`
 
 For multiple open Unity projects and per-session routing, see [`GettingStarted.md`](GettingStarted.md).
@@ -242,16 +242,16 @@ Publish a new CLI version to GitHub Releases for the CLI (release assets only; p
 never on this monorepo):
 
 ```bash
-scripts/loomtide-release.sh                 # tag defaults to v<version> from mcp-server/package.json
-scripts/loomtide-release.sh --dry-run       # pack only, no release (sanity check)
+scripts/loombridge-release.sh                 # tag defaults to v<version> from mcp-server/package.json
+scripts/loombridge-release.sh --dry-run       # pack only, no release (sanity check)
 ```
 
-It packs `@loomtide/cli` (whose `prepack` bundles the current bridge tarball) and uploads
-`loomtide-cli-<ver>.tgz` **plus** `scripts/install.sh` as release assets. Developers pick it up automatically —
-`curl -fsSL https://get.loomtide.ai | sh` always resolves the latest release. (`LOOMTIDE_REPO=<owner/repo>`
+It packs `@loomtide/loombridge` (whose `prepack` bundles the current bridge tarball) and uploads
+`loombridge-cli-<ver>.tgz` **plus** `scripts/install.sh` as release assets. Developers pick it up automatically —
+`curl -fsSL https://get.loomtide.ai | sh` always resolves the latest release. (`LOOMBRIDGE_REPO=<owner/repo>`
 overrides the target for both the release script and the installer.)
 
-> **After editing `scripts/install.sh`:** redeploy it to the `get-loomtide` Vercel project so
+> **After editing `scripts/install.sh`:** redeploy it to the `get-loombridge` Vercel project so
 > `get.loomtide.ai` serves the new version. The script carries no secrets — it uses each developer's own
 > GitHub auth to fetch the private release asset — and rarely changes, since it always pulls "latest".
 
@@ -263,11 +263,11 @@ auth and makes no network call, so a bad RC never reaches the release distributi
 
 ```bash
 (cd mcp-server && npm pack)                                    # prepack bundles the current bridge
-sh scripts/install.sh --tarball mcp-server/loomtide-cli-<ver>.tgz \
+sh scripts/install.sh --tarball mcp-server/loombridge-cli-<ver>.tgz \
    --project /path/to/ScratchUnityProject --with-agent
-loomtide doctor --project /path/to/ScratchUnityProject --live  # expect: healthy
+loombridge doctor --project /path/to/ScratchUnityProject --live  # expect: healthy
 ```
 
-`LOOMTIDE_CLI_TARBALL=<path>` is the env-var equivalent (useful in CI). Either form takes precedence over the
+`LOOMBRIDGE_CLI_TARBALL=<path>` is the env-var equivalent (useful in CI). Either form takes precedence over the
 release fetch. Afterwards, reinstall the published CLI with the normal
 `curl -fsSL https://get.loomtide.ai | sh` so you are not left running a local build.

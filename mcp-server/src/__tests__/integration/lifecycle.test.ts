@@ -41,7 +41,7 @@ function waitForExit(child: ChildProcessWithoutNullStreams, timeoutMs: number): 
 test("server exits when its controlling client closes stdin (EOF) — no orphan", async () => {
   const env = { ...process.env };
   // Keep startup deterministic: don't let an inherited binding change routing logs.
-  delete env.LOOMTIDE_UNITY_PROJECT;
+  delete env.LOOMBRIDGE_UNITY_PROJECT;
 
   const child = spawn(process.execPath, [SERVER_ENTRY], {
     cwd: os.tmpdir(),

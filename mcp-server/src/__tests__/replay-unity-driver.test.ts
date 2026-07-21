@@ -12,7 +12,7 @@ import {
   type Action,
   type Anchor,
   type Assertion,
-} from "../loomtide/replay/index.js";
+} from "../loombridge/replay/index.js";
 
 // ───────────────────────── fake bridge ─────────────────────────
 
@@ -46,7 +46,7 @@ function resp(partial: Partial<BridgeResponse> & Pick<BridgeResponse, "status" |
   return { id: "t", timestamp: 0, ...partial };
 }
 
-const driverOpts = { captureDir: ".loomtide/replays/test/actual", pollIntervalMs: 1 };
+const driverOpts = { captureDir: ".loombridge/replays/test/actual", pollIntervalMs: 1 };
 const tap = (path: string): Action => ({ do: "tap", locator: { path } });
 const lastCall = (calls: Recorded[], command: string): Recorded | undefined =>
   [...calls].reverse().find((c) => c.command === command);

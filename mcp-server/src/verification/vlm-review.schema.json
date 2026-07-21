@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://loomtide.dev/schemas/vlm-review.schema.json",
-  "title": "Loomtide Tier-2 VLM Review Findings (ADVISORY)",
+  "$id": "https://loombridge.dev/schemas/vlm-review.schema.json",
+  "title": "Loombridge Tier-2 VLM Review Findings (ADVISORY)",
   "description": "The strict review-findings shape a fresh-context VLM reviewer subagent emits when comparing rendered key frames against the design mock + acceptance contract. This tier is ADVISORY for the Tier-1 `status`: it is reported under the SEPARATE `reviewFindings` key of the verify report and is NOT folded into the Tier-1 pass/fail. HOWEVER, the verify-2d-game definition-of-done REQUIRES this review to run against PLAY-MODE frames (HUD visible) and every perceptual `fail` to be resolved (fix → re-verify) or justified in writing before handover. No free-form verdict is permitted — only criteria scored pass|warn|fail with a one-line reason and the evidence frame it is based on.",
   "type": "object",
   "additionalProperties": false,
@@ -10,11 +10,11 @@
     "reference": {
       "type": "object",
       "additionalProperties": false,
-      "description": "What the review compared the frames AGAINST (plan §P0.1). The hero-shot fidelity predicate in `loomtide doneness` requires `heroShotSha256` to equal the FROZEN hero-shot hash recorded in the verdict's `designTarget.pngSha256`; this is the machine-checkable proof the review judged the hero-shot IMAGE rather than contract attributes (`references hero-shot.png:false` was the RUN-1 tell that this was missing).",
+      "description": "What the review compared the frames AGAINST (plan §P0.1). The hero-shot fidelity predicate in `loombridge doneness` requires `heroShotSha256` to equal the FROZEN hero-shot hash recorded in the verdict's `designTarget.pngSha256`; this is the machine-checkable proof the review judged the hero-shot IMAGE rather than contract attributes (`references hero-shot.png:false` was the RUN-1 tell that this was missing).",
       "properties": {
         "heroShot": {
           "type": "string",
-          "description": "Path to the frozen hero-shot the reviewers were given (e.g. `.loomtide/design/hero-shot.png`)."
+          "description": "Path to the frozen hero-shot the reviewers were given (e.g. `.loombridge/design/hero-shot.png`)."
         },
         "heroShotSha256": {
           "type": "string",
@@ -63,7 +63,7 @@
     },
     "criteria": {
       "type": "array",
-      "description": "The advisory criteria requested by the game contract or the default generic rubric. Each is scored independently. Three groups: (A) design-fidelity checks (composition/palette/font/juice/end-state/hazard/collectible path/parallax) and (B) perceptual long-tail checks — `hud-crispness`, `props-grounded`, `platform-edge-to-edge`, `backdrop-seamless`, `palette-match`, `composition-match`, `rendering-artifacts` — the catch-all for the 'looks wrong' issues the deterministic gates miss; and (C) the HERO-SHOT STRUCTURAL FIDELITY checks — `composition-match`, `parallax-present`, `platform-tiers`, `element-placement-arc` — judged against the frozen hero-shot IMAGE (plan §P0.1/P0.2). Group C is special: for a design-targeted build, `loomtide doneness` REFUSES to certify unless every group-C criterion is present and `pass`. These are not advisory — they are the moat (a flat-background / flat-level build that diverges from the hero shot cannot be certified, regardless of green Tier-1 gates). Every group-B `fail` MUST be resolved (fix the build → re-verify) or explicitly justified in writing before handover — see `vlm-review.md`.",
+      "description": "The advisory criteria requested by the game contract or the default generic rubric. Each is scored independently. Three groups: (A) design-fidelity checks (composition/palette/font/juice/end-state/hazard/collectible path/parallax) and (B) perceptual long-tail checks — `hud-crispness`, `props-grounded`, `platform-edge-to-edge`, `backdrop-seamless`, `palette-match`, `composition-match`, `rendering-artifacts` — the catch-all for the 'looks wrong' issues the deterministic gates miss; and (C) the HERO-SHOT STRUCTURAL FIDELITY checks — `composition-match`, `parallax-present`, `platform-tiers`, `element-placement-arc` — judged against the frozen hero-shot IMAGE (plan §P0.1/P0.2). Group C is special: for a design-targeted build, `loombridge doneness` REFUSES to certify unless every group-C criterion is present and `pass`. These are not advisory — they are the moat (a flat-background / flat-level build that diverges from the hero shot cannot be certified, regardless of green Tier-1 gates). Every group-B `fail` MUST be resolved (fix the build → re-verify) or explicitly justified in writing before handover — see `vlm-review.md`.",
       "items": {
         "type": "object",
         "additionalProperties": false,

@@ -2,8 +2,8 @@
   "schemaVersion": "0.1.0",
   "sourceGenreId": "2d-shooter",
   "sourceConfidence": "experimental",
-  "generatedAcceptance": ".loomtide/ACCEPTANCE.json",
-  "generatedSlices": ".loomtide/SLICES.json",
+  "generatedAcceptance": ".loombridge/ACCEPTANCE.json",
+  "generatedSlices": ".loombridge/SLICES.json",
   "promotedCoreSlices": [
     "arena",
     "controller",

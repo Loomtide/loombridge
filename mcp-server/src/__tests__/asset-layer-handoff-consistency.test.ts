@@ -66,7 +66,7 @@ async function writePrepareReport(tempDir: string): Promise<string> {
 }
 
 test("handoff consistency passes when verdict ids match accepted prepare report assets", async () => {
-  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "loomtide-handoff-pass-"));
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "loombridge-handoff-pass-"));
   const prepareReportPath = await writePrepareReport(tempDir);
   const verdictPath = path.join(tempDir, "Assets/Handoff/build-verdict.json");
   const handoffPath = path.join(tempDir, "Assets/Handoff/SWITCHYARD_HANDOFF.md");
@@ -100,7 +100,7 @@ test("handoff consistency passes when verdict ids match accepted prepare report 
 });
 
 test("handoff consistency fails on stale skipped prose and mismatched audio ids", async () => {
-  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "loomtide-handoff-fail-"));
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "loombridge-handoff-fail-"));
   const prepareReportPath = await writePrepareReport(tempDir);
   const verdictPath = path.join(tempDir, "Assets/Handoff/build-verdict.json");
   const handoffPath = path.join(tempDir, "Assets/Handoff/SWITCHYARD_HANDOFF.md");
@@ -134,7 +134,7 @@ test("handoff consistency fails on stale skipped prose and mismatched audio ids"
 });
 
 test("handoff consistency fails when accepted assets exist but verdict says registry was skipped", async () => {
-  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "loomtide-handoff-skipped-"));
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "loombridge-handoff-skipped-"));
   const prepareReportPath = await writePrepareReport(tempDir);
   const verdictPath = path.join(tempDir, "Assets/Handoff/final-verdict.json");
 

@@ -1,4 +1,4 @@
-# End-to-End Build Checklist (Loomtide MCP)
+# End-to-End Build Checklist (Loombridge MCP)
 
 Use these tool names exactly.
 
@@ -7,7 +7,7 @@ Use these tool names exactly.
 Run these before any build steps. If any fails, surface the deterministic blocker code to the user and stop.
 
 1. `unity_editor_get_state` — confirms bridge handshake succeeded.
-   - Failure: `CONNECTION_ERROR` / `PREFLIGHT_BLOCKED` → ask user to open Unity on a project that references `com.loomtide.unitybridge` and wait for `[UnityBridge] Server started`.
+   - Failure: `CONNECTION_ERROR` / `PREFLIGHT_BLOCKED` → ask user to open Unity on a project that references `com.loomtide.loombridge` and wait for `[Loombridge] Server started`.
 2. `unity_input_get_capabilities` — confirms input automation is available.
    - Failure: `INPUT_CAPABILITY_BLOCKED` → report `blockerCode` and stop. Common causes: required package missing, headless mode.
 3. `unity_editor_wait_for { "playMode": "stopped" }` — confirms not in play mode (scene mutations are unreliable during play).

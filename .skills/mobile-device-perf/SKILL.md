@@ -16,12 +16,12 @@ counts.
 > is audited-and-sound but NOT yet device-proven. Every concrete dogfood number is an ANECDOTE from
 > one game on one phone — use the *shape* of the rule, re-derive the number per game/device.
 
-## Loomtide surface routing (do the static pass FIRST)
+## Loombridge surface routing (do the static pass FIRST)
 
-1. **Run `loomtide mobile-audit` before touching anything.** Capture the working set with the MCP op
+1. **Run `loombridge mobile-audit` before touching anything.** Capture the working set with the MCP op
    `unity_editor_audit_mobile_assets` (walks the CURRENTLY-LOADED scenes: textures / audio / meshes by
    `triangle_load` = tris × instance_count, quality + URP render-pipeline settings), save the
-   `payload_kind: mobile_asset_audit` response verbatim, feed it to `loomtide mobile-audit --input
+   `payload_kind: mobile_asset_audit` response verbatim, feed it to `loombridge mobile-audit --input
    <audit.json>` for advisory findings. This ranks SUSPECTS (the 30.7k-tri wall instanced 57× surfaces at
    the top); it is stamped `hardware_unvalidated` **by design** — it never certifies frame rate. It tells
    you where to point the device capture, not whether the game is fast.
@@ -36,7 +36,7 @@ counts.
 The whole capture is **automated and scripted end to end** — no hand-timed screenshots:
 
 - **Build → install → launch → logcat harvest.** A durable C# `[MenuItem]` build (driven via one
-  `unity_editor_execute_menu_item` op + `.loomtide/editor-allowlist.json`) → `adb install` → `adb shell am
+  `unity_editor_execute_menu_item` op + `.loombridge/editor-allowlist.json`) → `adb install` → `adb shell am
   start … --ez botmode true` (arms the scene's bot cohort at 1× time) → `[PERF]` lines filtered out of
   `adb logcat`. `[validated: GRL-C25/C28, 1 run]`
 - **Structured perf lines in logcat are the device-truth channel.** The on-device overlay emits one
@@ -117,12 +117,12 @@ addition once it proves out on a second run.
 
 ## Boundaries
 
-- Loomtide owns the **static** audit (`unity_editor_audit_mobile_assets` → `loomtide mobile-audit`, always
+- Loombridge owns the **static** audit (`unity_editor_audit_mobile_assets` → `loombridge mobile-audit`, always
   `hardware_unvalidated`) and the geometry-drift proof that an optimization pass did not move gameplay. It
   does **not** own the device: the adb pipeline, logcat harvest, on-device overlay, Play Console export,
   profiler/GPU counters, and the physical min-spec device are all outside the bridge — this skill is the
   human/device-in-the-loop runbook that surrounds them.
-- Use only generic `unity_*` / `loomtide` ops; do not add game-specific bridge operations.
+- Use only generic `unity_*` / `loombridge` ops; do not add game-specific bridge operations.
 - A `mobile-audit` finding, a passing editor capture, or a green reference-tier A/B is NEVER a min-spec
   pass — it stays `hardware_unvalidated` / inconclusive until a real min-spec device build proves frame
   rate, memory, and thermal soak. Theory-sound ≠ device-proven.

@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://loomtide.dev/schemas/verification-scenario.schema.json",
-  "title": "Loomtide verification scenario",
+  "$id": "https://loombridge.dev/schemas/verification-scenario.schema.json",
+  "title": "Loombridge verification scenario",
   "type": "object",
   "additionalProperties": false,
   "required": ["schemaVersion", "id", "gameKind", "playMode", "measure", "sequences"],

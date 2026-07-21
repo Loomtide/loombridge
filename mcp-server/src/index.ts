@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Loomtide MCP Server — stdio transport entry point.
+ * Loombridge MCP Server — stdio transport entry point.
  *
  * Bridges Claude Code (via MCP stdio) to the Unity Editor plugin (via WebSocket).
  * Exposes all Unity ops as MCP tools and records traces.
@@ -51,23 +51,23 @@ import {
   EDITOR_USE_TOOL_NAME,
 } from "./editor-tools.js";
 import {
-  LOOMTIDE_PROJECT_INIT_TOOL,
-  LOOMTIDE_PROJECT_INIT_TOOL_NAME,
-  LOOMTIDE_STATUS_TOOL,
-  LOOMTIDE_STATUS_TOOL_NAME,
-  LOOMTIDE_VERIFY_TOOL,
-  LOOMTIDE_VERIFY_TOOL_NAME,
-  LOOMTIDE_DONENESS_TOOL,
-  LOOMTIDE_DONENESS_TOOL_NAME,
-  LOOMTIDE_MOBILE_AUDIT_TOOL,
-  LOOMTIDE_MOBILE_AUDIT_TOOL_NAME,
-  buildLoomtideStatusPayload,
-  runLoomtideProjectInit,
-  runLoomtideVerifyTool,
-  runLoomtideDonenessTool,
+  LOOMBRIDGE_PROJECT_INIT_TOOL,
+  LOOMBRIDGE_PROJECT_INIT_TOOL_NAME,
+  LOOMBRIDGE_STATUS_TOOL,
+  LOOMBRIDGE_STATUS_TOOL_NAME,
+  LOOMBRIDGE_VERIFY_TOOL,
+  LOOMBRIDGE_VERIFY_TOOL_NAME,
+  LOOMBRIDGE_DONENESS_TOOL,
+  LOOMBRIDGE_DONENESS_TOOL_NAME,
+  LOOMBRIDGE_MOBILE_AUDIT_TOOL,
+  LOOMBRIDGE_MOBILE_AUDIT_TOOL_NAME,
+  buildLoombridgeStatusPayload,
+  runLoombridgeProjectInit,
+  runLoombridgeVerifyTool,
+  runLoombridgeDonenessTool,
   buildAndWriteMobileAuditReport,
   extractMobileAuditThresholds,
-} from "./loomtide-bridge-tools.js";
+} from "./loombridge-bridge-tools.js";
 import {
   EditorRegistry,
   EditorRoutingError,
@@ -614,15 +614,15 @@ export function resolveSafeScreenshotOutputPath(
     : path.resolve(resolvedCwd, requestedPath);
 
   // Containment is enforced against the concrete artifact roots only. We do NOT
-  // whitelist the project cwd itself: doing so would let `.loomtide/../<path>` or
+  // whitelist the project cwd itself: doing so would let `.loombridge/../<path>` or
   // `captures/../<path>` escape the artifact dirs and overwrite arbitrary files
   // under the project root (the target only has to land somewhere below cwd).
-  // The `.loomtide` and `captures` roots already admit every legitimate relative
+  // The `.loombridge` and `captures` roots already admit every legitimate relative
   // path, and `..` escapes are correctly rejected by the path.relative check.
   const allowedRoots = [
-    path.resolve(resolvedCwd, ".loomtide"),
+    path.resolve(resolvedCwd, ".loombridge"),
     path.resolve(resolvedCwd, "captures"),
-    path.join(os.homedir(), "loomtide-runs"),
+    path.join(os.homedir(), "loombridge-runs"),
     path.resolve("/tmp"),
     path.resolve(os.tmpdir()),
   ];
@@ -634,7 +634,7 @@ export function resolveSafeScreenshotOutputPath(
 
   if (!isAllowed) {
     throw new Error(
-      "outputPath must stay under .loomtide/, captures/, ~/loomtide-runs, or /tmp",
+      "outputPath must stay under .loombridge/, captures/, ~/loombridge-runs, or /tmp",
     );
   }
 
@@ -710,25 +710,25 @@ export function formatEditorRoutingError(
 
 /**
  * The non-op ("core") MCP tools served alongside the Unity op registry: editor
- * routing + the deterministic Loomtide workflow front door (status/init/verify/
+ * routing + the deterministic Loombridge workflow front door (status/init/verify/
  * doneness/mobile-audit). Exported so a test can guard that the workflow verbs
  * stay ON the surface (GRL-C20/C21: agents adopt what is in the visible list).
  * These are MCP-layer tools, NOT bridge ops — they do not affect the op count.
  */
-export const LOOMTIDE_CORE_TOOLS = [
+export const LOOMBRIDGE_CORE_TOOLS = [
   EDITOR_LIST_TOOL,
   EDITOR_USE_TOOL,
-  LOOMTIDE_STATUS_TOOL,
-  LOOMTIDE_PROJECT_INIT_TOOL,
-  LOOMTIDE_VERIFY_TOOL,
-  LOOMTIDE_DONENESS_TOOL,
-  LOOMTIDE_MOBILE_AUDIT_TOOL,
+  LOOMBRIDGE_STATUS_TOOL,
+  LOOMBRIDGE_PROJECT_INIT_TOOL,
+  LOOMBRIDGE_VERIFY_TOOL,
+  LOOMBRIDGE_DONENESS_TOOL,
+  LOOMBRIDGE_MOBILE_AUDIT_TOOL,
 ];
 
-const SERVER_NAME = "loomtide";
+const SERVER_NAME = "loombridge";
 const SERVER_VERSION = "0.2.0";
 
-// Exported so the `loomtide` CLI dispatcher (cli.ts) can boot the server via the
+// Exported so the `loombridge` CLI dispatcher (cli.ts) can boot the server via the
 // `mcp` subcommand. The main-module guard below still auto-runs it when the file
 // is the entry point (e.g. the `node dist/index.js` form in every .mcp.json).
 export async function main(): Promise<void> {
@@ -737,7 +737,7 @@ export async function main(): Promise<void> {
   const opRegistry = new OpRegistry();
 
   // Infer the session's Unity project once at boot so untargeted calls auto-bind without a
-  // manual loomtide_editor_use: env (LOOMTIDE_UNITY_PROJECT) or cwd (nearest Unity project
+  // manual loombridge_editor_use: env (LOOMBRIDGE_UNITY_PROJECT) or cwd (nearest Unity project
   // root above the working directory). Both bind fail-closed. Routing logs go to stderr only
   // — stdout is the MCP channel.
   const startupBinding = resolveMcpStartupProjectBinding({
@@ -746,11 +746,11 @@ export async function main(): Promise<void> {
   });
   if (startupBinding.kind === "strict") {
     console.error(
-      `[loomtide] Auto-binding to Unity project (LOOMTIDE_UNITY_PROJECT): ${startupBinding.target}`,
+      `[loombridge] Auto-binding to Unity project (LOOMBRIDGE_UNITY_PROJECT): ${startupBinding.target}`,
     );
   } else if (startupBinding.kind === "cwd") {
     console.error(
-      `[loomtide] Auto-binding to Unity project (cwd, inferred from working directory): ${startupBinding.target}`,
+      `[loombridge] Auto-binding to Unity project (cwd, inferred from working directory): ${startupBinding.target}`,
     );
   }
 
@@ -779,7 +779,7 @@ export async function main(): Promise<void> {
 
   server.setRequestHandler(ListToolsRequestSchema, async () => {
     return {
-      tools: [...opRegistry.toMCPTools(), ...LOOMTIDE_CORE_TOOLS],
+      tools: [...opRegistry.toMCPTools(), ...LOOMBRIDGE_CORE_TOOLS],
     };
   });
 
@@ -825,48 +825,48 @@ export async function main(): Promise<void> {
       }
     }
 
-    // Core-discovery tools (RCL-P01/P04): read/scaffold the local `.loomtide/`
+    // Core-discovery tools (RCL-P01/P04): read/scaffold the local `.loombridge/`
     // verification state — never routed to Unity. `root` defaults to the server's
     // working directory (the consuming project).
-    if (toolName === LOOMTIDE_STATUS_TOOL_NAME) {
+    if (toolName === LOOMBRIDGE_STATUS_TOOL_NAME) {
       const params = (request.params.arguments ?? {}) as Record<string, unknown>;
       const root = typeof params.root === "string" && params.root.trim() ? path.resolve(params.root) : process.cwd();
       try {
-        return formatToolResult(LOOMTIDE_STATUS_TOOL_NAME, await buildLoomtideStatusPayload(root)) as CallToolResult;
+        return formatToolResult(LOOMBRIDGE_STATUS_TOOL_NAME, await buildLoombridgeStatusPayload(root)) as CallToolResult;
       } catch (err) {
         return formatErrorResult(err instanceof Error ? err.message : String(err)) as CallToolResult;
       }
     }
 
-    if (toolName === LOOMTIDE_PROJECT_INIT_TOOL_NAME) {
+    if (toolName === LOOMBRIDGE_PROJECT_INIT_TOOL_NAME) {
       const params = (request.params.arguments ?? {}) as Record<string, unknown>;
       const root = typeof params.root === "string" && params.root.trim() ? path.resolve(params.root) : process.cwd();
       try {
-        return formatToolResult(LOOMTIDE_PROJECT_INIT_TOOL_NAME, await runLoomtideProjectInit(root)) as CallToolResult;
+        return formatToolResult(LOOMBRIDGE_PROJECT_INIT_TOOL_NAME, await runLoombridgeProjectInit(root)) as CallToolResult;
       } catch (err) {
         return formatErrorResult(err instanceof Error ? err.message : String(err)) as CallToolResult;
       }
     }
 
     // Deterministic WORKFLOW front door (T4a). `verify` / `doneness` route to the
-    // SAME code paths the `loomtide` CLI calls (never a re-decided verdict) and
+    // SAME code paths the `loombridge` CLI calls (never a re-decided verdict) and
     // surface the gate output VERBATIM; they never touch Unity. `root` defaults to
     // the server's working directory (the consuming project).
-    if (toolName === LOOMTIDE_VERIFY_TOOL_NAME) {
+    if (toolName === LOOMBRIDGE_VERIFY_TOOL_NAME) {
       const params = (request.params.arguments ?? {}) as Record<string, unknown>;
       const root = typeof params.root === "string" && params.root.trim() ? path.resolve(params.root) : process.cwd();
       try {
-        return formatToolResult(LOOMTIDE_VERIFY_TOOL_NAME, await runLoomtideVerifyTool(root)) as CallToolResult;
+        return formatToolResult(LOOMBRIDGE_VERIFY_TOOL_NAME, await runLoombridgeVerifyTool(root)) as CallToolResult;
       } catch (err) {
         return formatErrorResult(err instanceof Error ? err.message : String(err)) as CallToolResult;
       }
     }
 
-    if (toolName === LOOMTIDE_DONENESS_TOOL_NAME) {
+    if (toolName === LOOMBRIDGE_DONENESS_TOOL_NAME) {
       const params = (request.params.arguments ?? {}) as Record<string, unknown>;
       const root = typeof params.root === "string" && params.root.trim() ? path.resolve(params.root) : process.cwd();
       try {
-        return formatToolResult(LOOMTIDE_DONENESS_TOOL_NAME, await runLoomtideDonenessTool(root)) as CallToolResult;
+        return formatToolResult(LOOMBRIDGE_DONENESS_TOOL_NAME, await runLoombridgeDonenessTool(root)) as CallToolResult;
       } catch (err) {
         return formatErrorResult(err instanceof Error ? err.message : String(err)) as CallToolResult;
       }
@@ -877,7 +877,7 @@ export async function main(): Promise<void> {
     // routing/connection error every op gives (NOT_ROUTABLE etc.), then feeds the
     // payload through the CLI's report builder (byte-identical report) and returns
     // a summary + top offenders + the report path — never the full report inline.
-    if (toolName === LOOMTIDE_MOBILE_AUDIT_TOOL_NAME) {
+    if (toolName === LOOMBRIDGE_MOBILE_AUDIT_TOOL_NAME) {
       const params = (request.params.arguments ?? {}) as Record<string, unknown>;
       const root = typeof params.root === "string" && params.root.trim() ? path.resolve(params.root) : process.cwd();
       const thresholds = extractMobileAuditThresholds(params);
@@ -905,7 +905,7 @@ export async function main(): Promise<void> {
           const routeMismatch = isRouteMismatchError(connectErr);
           const publicMessage = routeMismatch
             ? `Routed editor turned out to be a different Unity project than '${route.projectPathCanonical ?? "the selected target"}'. `
-              + "Run loomtide_editor_list and re-select with loomtide_editor_use (or pass an explicit project)."
+              + "Run loombridge_editor_list and re-select with loombridge_editor_use (or pass an explicit project)."
             : `Unity not connected: ${formatConnectionErrorMessage(connectErr)}`;
           return formatErrorResult(publicMessage, routeMismatch ? "ROUTE_MISMATCH" : "CONNECTION_ERROR") as CallToolResult;
         }
@@ -931,7 +931,7 @@ export async function main(): Promise<void> {
       if (!built.ok) {
         return formatErrorResult(built.error) as CallToolResult;
       }
-      return formatToolResult(LOOMTIDE_MOBILE_AUDIT_TOOL_NAME, built.payload) as CallToolResult;
+      return formatToolResult(LOOMBRIDGE_MOBILE_AUDIT_TOOL_NAME, built.payload) as CallToolResult;
     }
 
     const op = opRegistry.getByToolName(toolName);
@@ -1057,7 +1057,7 @@ export async function main(): Promise<void> {
         const routeMismatch = isRouteMismatchError(connectErr);
         const publicMessage = routeMismatch
           ? `Routed editor turned out to be a different Unity project than '${route.projectPathCanonical ?? "the selected target"}'. `
-            + "Run loomtide_editor_list and re-select with loomtide_editor_use (or pass an explicit project)."
+            + "Run loombridge_editor_list and re-select with loombridge_editor_use (or pass an explicit project)."
           : `Unity not connected: ${formatConnectionErrorMessage(connectErr)}`;
         const code = routeMismatch ? "ROUTE_MISMATCH" : "CONNECTION_ERROR";
         const durationMs = Date.now() - startTime;
@@ -1275,7 +1275,7 @@ export async function main(): Promise<void> {
 
     // Record trace (async, don't block response)
     traceRecorder.record(traceEntry).catch((err) => {
-      console.error(`[loomtide] Failed to record trace: ${(err as Error).message}`);
+      console.error(`[loombridge] Failed to record trace: ${(err as Error).message}`);
     });
 
     // Manage the input-session heartbeat for sessions this server owns. Starting on
@@ -1314,14 +1314,14 @@ export async function main(): Promise<void> {
   const shutdown = async (cause: string) => {
     if (shuttingDown) return;
     shuttingDown = true;
-    console.error(`[loomtide] Shutting down (${cause})...`);
+    console.error(`[loombridge] Shutting down (${cause})...`);
     try {
       inputKeepalive.stopAll();
       await editorRegistry.disconnectAll();
       await server.close();
     } catch (err) {
       console.error(
-        `[loomtide] Shutdown cleanup error: ${err instanceof Error ? err.message : String(err)}`,
+        `[loombridge] Shutdown cleanup error: ${err instanceof Error ? err.message : String(err)}`,
       );
     }
     process.exit(0);
@@ -1345,7 +1345,7 @@ export async function main(): Promise<void> {
   const transport = new StdioServerTransport();
   await server.connect(transport);
 
-  console.error(`[loomtide] MCP server started (${SERVER_NAME} v${SERVER_VERSION})`);
+  console.error(`[loombridge] MCP server started (${SERVER_NAME} v${SERVER_VERSION})`);
 
   // ─── Startup diagnostics ───
   // One-line environment health snapshot so a dirty machine (orphaned sibling servers,
@@ -1367,7 +1367,7 @@ export async function main(): Promise<void> {
     for (const line of lines) console.error(line);
   } catch (err) {
     console.error(
-      `[loomtide] doctor diagnostics skipped: ${err instanceof Error ? err.message : String(err)}`,
+      `[loombridge] doctor diagnostics skipped: ${err instanceof Error ? err.message : String(err)}`,
     );
   }
 }
@@ -1437,7 +1437,7 @@ function attachUnityClientEvents(
       processId: handshake.processId,
     }).catch(() => {});
     console.error(
-      `[loomtide] Connected to Unity (session: ${handshake.sessionId}, port: ${handshake.port}, `
+      `[loombridge] Connected to Unity (session: ${handshake.sessionId}, port: ${handshake.port}, `
       + `project: ${handshake.projectPathCanonical ?? projectPathCanonical ?? "unknown"})`,
     );
   };
@@ -1453,18 +1453,18 @@ function attachUnityClientEvents(
       processId: unityClient.handshake?.processId,
       error: { reason },
     }).catch(() => {});
-    console.error(`[loomtide] Disconnected from Unity: ${reason}`);
+    console.error(`[loombridge] Disconnected from Unity: ${reason}`);
   };
 
   unityClient.events.onReconnecting = (attempt) => {
     console.error(
-      `[loomtide] Reconnecting to Unity`
+      `[loombridge] Reconnecting to Unity`
       + `${projectPathCanonical ? ` (${projectPathCanonical})` : ""} (attempt ${attempt + 1})...`,
     );
   };
 
   unityClient.events.onProbe = (message) => {
-    console.error(`[loomtide] ${message}`);
+    console.error(`[loombridge] ${message}`);
   };
 }
 
@@ -1472,7 +1472,7 @@ function attachUnityClientEvents(
 const isMainModule = process.argv[1]?.endsWith("index.js") || process.argv[1]?.endsWith("index.ts");
 if (isMainModule) {
   main().catch((err) => {
-    console.error("[loomtide] Fatal error:", err);
+    console.error("[loombridge] Fatal error:", err);
     process.exit(1);
   });
 }

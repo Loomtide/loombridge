@@ -10,7 +10,7 @@ regressions; HUMANS judge fun. This skill covers the loop machinery plus a speci
 tuning grammar (provenance labeled per rule — most of it is single-run candidate material).
 
 The telemetry schema, persona spread, and evidence classes are genre-pack artifacts + shipped analysis:
-`mcp-server/src/loomtide/genre-packs/3d-topdown-arena/telemetry.json` (per-run summary + closed event
+`mcp-server/src/loombridge/genre-packs/3d-topdown-arena/telemetry.json` (per-run summary + closed event
 set), `.../personas.json` (Timid/Balanced/Greedy/Reckless with intent + envelope + calibration posture),
 and `mcp-server/src/verification/gates/evidence-classes.ts`. Point at those for the field lists — do not
 restate them here.
@@ -136,7 +136,7 @@ table: "Do NOT promote to a shipped genre pack from this + codex alone."
 - Human notes agree: tension comes from greed choices, not confusion.
 
 ## Boundaries
-- Loomtide owns the telemetry SCHEMA + persona CONTRACT + the deterministic cohort/tuning analysis; it
+- Loombridge owns the telemetry SCHEMA + persona CONTRACT + the deterministic cohort/tuning analysis; it
   does not RUN the bot (that runtime is game-side C#). Use generic ops; no game-specific bridge ops.
 - Missing `runId`/`producedAt`, a duplicate `runId`, an uncalibrated persona backing a balance claim, or
   a single "all green" compressing evidence classes ⇒ `blocked`/caveat, never a clean pass.

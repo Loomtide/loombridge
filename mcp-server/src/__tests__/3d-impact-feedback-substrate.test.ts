@@ -46,7 +46,7 @@ interface DerivedArtifact {
 }
 
 function runGenerator(): { hitstop: unknown; screenShake: unknown } {
-  const tempDir = mkdtempSync(join(tmpdir(), "loomtide-3d-impact-"));
+  const tempDir = mkdtempSync(join(tmpdir(), "loombridge-3d-impact-"));
   const hitstopPath = join(tempDir, "hitstop.json");
   const screenShakePath = join(tempDir, "screen-shake.json");
   try {

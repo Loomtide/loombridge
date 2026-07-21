@@ -6,24 +6,24 @@ import {
   projectPathCanonicalEquals,
 } from "./editor-discovery.js";
 
-export const EDITOR_LIST_TOOL_NAME = "loomtide_editor_list";
-export const EDITOR_USE_TOOL_NAME = "loomtide_editor_use";
+export const EDITOR_LIST_TOOL_NAME = "loombridge_editor_list";
+export const EDITOR_USE_TOOL_NAME = "loombridge_editor_use";
 
 export const EDITOR_LIST_TOOL = {
   name: EDITOR_LIST_TOOL_NAME,
-  description: "List Unity editors discovered by Loomtide and show the active/pinned editor when known.",
+  description: "List Unity editors discovered by Loombridge and show the active/pinned editor when known.",
   inputSchema: { type: "object", properties: {}, required: [] },
 };
 
 export const EDITOR_USE_TOOL = {
   name: EDITOR_USE_TOOL_NAME,
-  description: "Select the active Unity editor for subsequent Loomtide calls in this MCP process.",
+  description: "Select the active Unity editor for subsequent Loombridge calls in this MCP process.",
   inputSchema: {
     type: "object",
     properties: {
       project: {
         type: "string",
-        description: "Project path canonical value, full project path, or unique project name from loomtide_editor_list.",
+        description: "Project path canonical value, full project path, or unique project name from loombridge_editor_list.",
       },
     },
     required: ["project"],

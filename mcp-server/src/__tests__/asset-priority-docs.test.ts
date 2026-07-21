@@ -16,8 +16,8 @@ function read(relativePath: string): string {
   return fs.readFileSync(path.join(repoRoot, relativePath), "utf-8");
 }
 
-const PLAN = "commands/loomtide/plan.md";
-const BUILD = "commands/loomtide/build.md";
+const PLAN = "commands/loombridge/plan.md";
+const BUILD = "commands/loombridge/build.md";
 const SKILL = ".skills/asset-layer/SKILL.md";
 const DOC = "Docs/Assets/AssetPriority.md";
 
@@ -78,7 +78,7 @@ test("build command forbids primitive fallback and points back to the asset stag
 
   assert.match(build, /Docs\/Assets\/AssetPriority\.md/);
   assert.match(build, /ASSET_MANIFEST\.json/);
-  assert.match(build, /go\s+back to `?loomtide assets`?/i);
+  assert.match(build, /go\s+back to `?loombridge assets`?/i);
   assert.match(build, /Do NOT substitute a Unity primitive|primitives are construction\s+scaffolding only/i);
 });
 
@@ -97,7 +97,7 @@ test("asset-layer skill is hosted-first, documents the 3D path, web-search evide
   assert.match(skill, /sha256/i);
   // precondition: registry-plan/apply need a draft manifest first (omitting it makes the
   // copy-paste 3D block error). Guards the second adversarial finding.
-  assert.match(skill, /--asset-mode/, "skill 3D block must state the loomtide plan --asset-mode precondition");
+  assert.match(skill, /--asset-mode/, "skill 3D block must state the loombridge plan --asset-mode precondition");
 });
 
 // Cross-cutting invariant: the whole point of the change. The web-store domain serves /api/...,

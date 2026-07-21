@@ -288,7 +288,7 @@ const screenShakeArtifact = {
   honesty: {
     measures:
       "the LIVE peak displacement of the camera transform punched as the causal consequence of a real 3D " +
-      "projectile collision, derived from the {x,y,z} trajectory the Loomtide bridge now samples, in the " +
+      "projectile collision, derived from the {x,y,z} trajectory the Loombridge bridge now samples, in the " +
       "repo-owned 3D shooter fixture. The entire signal lives in the Z axis, so this is genuinely a 3D proof.",
     doesNotMeasure:
       "screen-shake QUALITY/readability, trauma curves, perlin-noise shake shape, kickback feel, or any " +

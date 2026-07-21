@@ -7,9 +7,9 @@ gates.
 
 This component + its JSON contract are locked here. The runnable bridge emitter that invokes
 `WriteTileCaptures(string outDir)` now ships: the allowlisted `capture.invoke_static` op, driven by
-**`loomtide capture --slice <ground-tiling-slice>`** (which dispatches the tiling recipe from the slice's
+**`loombridge capture --slice <ground-tiling-slice>`** (which dispatches the tiling recipe from the slice's
 `platform-tiles`/`tile-render` gates), writes `platform-tiles.json` + `tile-render.json` under
-`.loomtide/verify/<slice>/` with a `_provenance` block. Capture JSON is never hand-authored. Author this
+`.loombridge/verify/<slice>/` with a `_provenance` block. Capture JSON is never hand-authored. Author this
 component verbatim at `Assets/Scripts/Level/GroundTiling.cs` (no asmdef ⇒ Assembly-CSharp ⇒ the
 Newtonsoft-free JSON above is required to compile).
 

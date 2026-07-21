@@ -7,18 +7,18 @@ import { fileURLToPath } from "node:url";
 import { OpRegistry } from "../op-registry.js";
 import { EDITOR_LIST_TOOL_NAME, EDITOR_USE_TOOL_NAME } from "../editor-tools.js";
 import {
-  LOOMTIDE_DONENESS_TOOL_NAME,
-  LOOMTIDE_MOBILE_AUDIT_TOOL_NAME,
-  LOOMTIDE_PROJECT_INIT_TOOL_NAME,
-  LOOMTIDE_STATUS_TOOL_NAME,
-  LOOMTIDE_VERIFY_TOOL_NAME,
-} from "../loomtide-bridge-tools.js";
+  LOOMBRIDGE_DONENESS_TOOL_NAME,
+  LOOMBRIDGE_MOBILE_AUDIT_TOOL_NAME,
+  LOOMBRIDGE_PROJECT_INIT_TOOL_NAME,
+  LOOMBRIDGE_STATUS_TOOL_NAME,
+  LOOMBRIDGE_VERIFY_TOOL_NAME,
+} from "../loombridge-bridge-tools.js";
 import {
   ROUTING_DOC_VERSION,
   SUGGESTED_ROUTING_LINE,
   parseRoutingDocVersion,
   renderRoutingDoc,
-} from "../loomtide/routing-doc.js";
+} from "../loombridge/routing-doc.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // dist/__tests__ -> mcp-server/src is ../../src.
@@ -32,7 +32,7 @@ function cliVerbs(): Set<string> {
   return verbs;
 }
 
-describe("routing-doc (LOOMTIDE.md front door)", () => {
+describe("routing-doc (LOOMBRIDGE.md front door)", () => {
   test("REALITY CHECK: every tool/op/verb name in the template exists at HEAD", () => {
     const doc = renderRoutingDoc();
     const registry = new OpRegistry();
@@ -49,34 +49,34 @@ describe("routing-doc (LOOMTIDE.md front door)", () => {
       );
     }
 
-    // CLI verbs the doc points at (`loomtide <verb>`).
-    const cliRefs = [...doc.matchAll(/\bloomtide ([a-z][a-z0-9-]*)/g)].map((m) => m[1]);
+    // CLI verbs the doc points at (`loombridge <verb>`).
+    const cliRefs = [...doc.matchAll(/\bloombridge ([a-z][a-z0-9-]*)/g)].map((m) => m[1]);
     assert.ok(cliRefs.length >= 5, `expected several CLI verb references, saw ${cliRefs.length}`);
     for (const verb of cliRefs) {
       assert.ok(
         verbs.has(verb),
-        `routing doc references CLI verb "loomtide ${verb}" which is NOT a case in cli.ts dispatch`,
+        `routing doc references CLI verb "loombridge ${verb}" which is NOT a case in cli.ts dispatch`,
       );
     }
 
-    // loomtide_* MCP tool names (the server's own tools, distinct from unity_* ops). Any
+    // loombridge_* MCP tool names (the server's own tools, distinct from unity_* ops). Any
     // template edit naming one must resolve against the SERVED tool names, not slip past
     // the unity_*/CLI-verb checks.
-    // EXTEND this set when new loomtide_* MCP tools are registered on the server.
-    const servedLoomtideMcpTools = new Set<string>([
+    // EXTEND this set when new loombridge_* MCP tools are registered on the server.
+    const servedLoombridgeMcpTools = new Set<string>([
       EDITOR_LIST_TOOL_NAME,
       EDITOR_USE_TOOL_NAME,
-      LOOMTIDE_STATUS_TOOL_NAME,
-      LOOMTIDE_PROJECT_INIT_TOOL_NAME,
-      LOOMTIDE_VERIFY_TOOL_NAME,
-      LOOMTIDE_DONENESS_TOOL_NAME,
-      LOOMTIDE_MOBILE_AUDIT_TOOL_NAME,
+      LOOMBRIDGE_STATUS_TOOL_NAME,
+      LOOMBRIDGE_PROJECT_INIT_TOOL_NAME,
+      LOOMBRIDGE_VERIFY_TOOL_NAME,
+      LOOMBRIDGE_DONENESS_TOOL_NAME,
+      LOOMBRIDGE_MOBILE_AUDIT_TOOL_NAME,
     ]);
-    const loomtideMcpRefs = [...doc.matchAll(/\bloomtide_[a-z0-9_]+/g)].map((m) => m[0]);
-    for (const name of loomtideMcpRefs) {
+    const loombridgeMcpRefs = [...doc.matchAll(/\bloombridge_[a-z0-9_]+/g)].map((m) => m[0]);
+    for (const name of loombridgeMcpRefs) {
       assert.ok(
-        servedLoomtideMcpTools.has(name),
-        `routing doc references MCP tool "${name}" which is NOT a served loomtide_* tool on this branch`,
+        servedLoombridgeMcpTools.has(name),
+        `routing doc references MCP tool "${name}" which is NOT a served loombridge_* tool on this branch`,
       );
     }
   });
@@ -89,13 +89,13 @@ describe("routing-doc (LOOMTIDE.md front door)", () => {
   test("template is agent-facing, moment-of-need-first, and bounded (≤120 lines)", () => {
     const doc = renderRoutingDoc();
     const lines = doc.split("\n");
-    assert.ok(lines.length <= 120, `LOOMTIDE.md is ${lines.length} lines (budget ≤120)`);
+    assert.ok(lines.length <= 120, `LOOMBRIDGE.md is ${lines.length} lines (budget ≤120)`);
     // The routing TABLE (moment → surface) must come before the honesty prose.
     assert.ok(doc.indexOf("Route the moment") < doc.indexOf("Honesty rules"), "routing table must lead");
     // Header echoes the exact copy-paste line install prints.
     assert.ok(doc.includes(SUGGESTED_ROUTING_LINE), "header must echo the suggested CLAUDE.md/AGENTS.md line");
     // Honesty rules the agent must keep.
-    for (const needle of [".loomtide/", "capture is not a verification", "Harness fault"]) {
+    for (const needle of [".loombridge/", "capture is not a verification", "Harness fault"]) {
       assert.ok(doc.includes(needle), `honesty rules must mention: ${needle}`);
     }
   });
@@ -115,7 +115,7 @@ describe("routing-doc (LOOMTIDE.md front door)", () => {
     // Claude gets slash commands; Codex is explicitly routed to its OWN skills dir AND told
     // the command bodies are readable prose (it can't run the `.claude/commands` as commands).
     assert.match(on, /\.codex\/skills\//, "Codex skills location is named");
-    assert.match(on, /\.claude\/commands\/loomtide\/\*\.md/, "command prose path Codex can open+follow");
+    assert.match(on, /\.claude\/commands\/loombridge\/\*\.md/, "command prose path Codex can open+follow");
     assert.match(on, /Codex/, "the line addresses Codex explicitly");
 
     // Enabling the surface must NOT change the version marker (only a conditional line moved),
@@ -125,17 +125,17 @@ describe("routing-doc (LOOMTIDE.md front door)", () => {
   });
 
   test("parseRoutingDocVersion returns null for a user-authored file (no marker)", () => {
-    assert.equal(parseRoutingDocVersion("# My own notes\nnothing loomtide here\n"), null);
-    assert.equal(parseRoutingDocVersion("<!-- loomtide:routing-doc v7 -->\n# hi"), 7);
+    assert.equal(parseRoutingDocVersion("# My own notes\nnothing loombridge here\n"), null);
+    assert.equal(parseRoutingDocVersion("<!-- loombridge:routing-doc v7 -->\n# hi"), 7);
   });
 
   test("marker is anchored: a user file merely QUOTING the marker mid-body stays user-authored", () => {
     // Unanchored matching would claim this file as ours and clobber it on a version bump.
-    const quoting = "# My notes about Loomtide\n\nThe generated file starts with `<!-- loomtide:routing-doc v1 -->`.\n";
+    const quoting = "# My notes about Loombridge\n\nThe generated file starts with `<!-- loombridge:routing-doc v1 -->`.\n";
     assert.equal(parseRoutingDocVersion(quoting), null);
     // Leading BOM / whitespace before OUR marker is still ours (editors add these).
-    assert.equal(parseRoutingDocVersion("﻿<!-- loomtide:routing-doc v2 -->\n"), 2);
-    assert.equal(parseRoutingDocVersion("\n  <!-- loomtide:routing-doc v3 -->\n"), 3);
+    assert.equal(parseRoutingDocVersion("﻿<!-- loombridge:routing-doc v2 -->\n"), 2);
+    assert.equal(parseRoutingDocVersion("\n  <!-- loombridge:routing-doc v3 -->\n"), 3);
     // parse(render()) round-trip survives the anchoring.
     assert.equal(parseRoutingDocVersion(renderRoutingDoc(5)), 5);
   });

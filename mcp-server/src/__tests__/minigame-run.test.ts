@@ -1,5 +1,5 @@
 /**
- * `loomtide minigame run` — the one-command pipeline runner. The orchestration core
+ * `loombridge minigame run` — the one-command pipeline runner. The orchestration core
  * (`driveRun`) is IO-injected, so the progression, the two human stop gates (NOT READY /
  * READY→baseline), the error-stop, and the no-progress backstop are exercised here with a
  * FAKE workspace + fake step runner — no disk, no subprocesses. `stepArgv` is pinned against
@@ -9,8 +9,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { driveRun, runRun, stepArgv, type RunDeps } from "../loomtide/minigame-run.js";
-import type { WorkspaceFacts } from "../loomtide/minigame-next.js";
+import { driveRun, runRun, stepArgv, type RunDeps } from "../loombridge/minigame-run.js";
+import type { WorkspaceFacts } from "../loombridge/minigame-next.js";
 
 /** A fully-defaulted facts object; override per test to place the workspace in the flow. */
 function facts(over: Partial<WorkspaceFacts> = {}): WorkspaceFacts {

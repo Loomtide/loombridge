@@ -29,9 +29,9 @@
 
 import { makeGateReport, type GateCheck, type GateReport } from "./types.js";
 import type { NumericTarget } from "../types.js";
-import type { CueMapSchema } from "../../loomtide/sfx/cue-map.js";
-import type { SfxLatencyCapture } from "../../loomtide/sfx/capture-shapes.js";
-import { validateSfxProbeSnapshot } from "../../loomtide/sfx/probe-contract.js";
+import type { CueMapSchema } from "../../loombridge/sfx/cue-map.js";
+import type { SfxLatencyCapture } from "../../loombridge/sfx/capture-shapes.js";
+import { validateSfxProbeSnapshot } from "../../loombridge/sfx/probe-contract.js";
 import { bandWindow, withinBand } from "./feel.js";
 
 export const GATE_NAME = "inputToSfxLatency";

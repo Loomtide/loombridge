@@ -8,7 +8,7 @@ vanilla. It proves a narrow claim:
 - status: `experimental-green`
 - production claim: explicitly false
 
-The proof is intentionally not a full Loomtide production build mode. Bootstrap build plumbing,
+The proof is intentionally not a full Loombridge production build mode. Bootstrap build plumbing,
 automatic spawned-object discovery, and per-genre fidelity criteria are still methodology gaps. The
 bundle records a minimal 2D-shooter slice that passes supported gates, includes live Unity shot-counter
 evidence for `fireIntervalMs`, live Unity spawn-signal evidence for `fireInputToSpawnLatency`, live Unity
@@ -29,7 +29,7 @@ a fire-SFX edge.
 ## Verification
 
 The bundle is validated by `validateExperimentalBuildProof` in
-`mcp-server/src/loomtide/genre-contract/experimental-build-proof.ts`.
+`mcp-server/src/loombridge/genre-contract/experimental-build-proof.ts`.
 
 Run from `mcp-server/`:
 

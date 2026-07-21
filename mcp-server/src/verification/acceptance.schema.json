@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://loomtide.dev/schemas/acceptance.schema.json",
-  "title": "Loomtide Acceptance Contract",
+  "$id": "https://loombridge.dev/schemas/acceptance.schema.json",
+  "title": "Loombridge Acceptance Contract",
   "description": "Game-agnostic acceptance contract: the machine-checkable spec every verification gate checks against.",
   "type": "object",
   "additionalProperties": false,
@@ -333,7 +333,7 @@
           }
         },
         "requiredEvidenceClasses": {
-          "description": "Anti-compression gate (dogfood learnings §6 / High #7): each named evidence class must be \"present\" in the verdict's evidenceClasses block or `loomtide doneness` refuses. Absent = no new gate.",
+          "description": "Anti-compression gate (dogfood learnings §6 / High #7): each named evidence class must be \"present\" in the verdict's evidenceClasses block or `loombridge doneness` refuses. Absent = no new gate.",
           "type": "array",
           "items": {
             "enum": [

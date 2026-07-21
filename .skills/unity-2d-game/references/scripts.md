@@ -1,6 +1,6 @@
 # Script Templates (Unity 6000.3 + 2022.3 Compatible)
 
-These scripts have been validated end-to-end through Loomtide MCP.
+These scripts have been validated end-to-end through Loombridge MCP.
 
 ## PlayerController.cs
 

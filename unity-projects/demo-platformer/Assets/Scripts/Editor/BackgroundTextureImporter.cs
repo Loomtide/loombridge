@@ -20,7 +20,7 @@ public static class BackgroundTextureImporter
     [UnityEditor.Callbacks.DidReloadScripts]
     private static void OnScriptsReloaded() => ConformAll(force: false);
 
-    [MenuItem("Loomtide/Conform Background Textures")]
+    [MenuItem("Loombridge/Conform Background Textures")]
     public static void ConformMenu() => ConformAll(force: true);
 
     private static void ConformAll(bool force)

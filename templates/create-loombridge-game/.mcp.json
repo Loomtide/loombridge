@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "loombridge": {
+      "type": "stdio",
+      "command": "loombridge-mcp",
+      "args": []
+    }
+  }
+}

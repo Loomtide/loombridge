@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { parseTrace, type Action, type Anchor, type ReplayDriver } from "../loomtide/replay/index.js";
-import { RecordingSession } from "../loomtide/replay/record.js";
+import { parseTrace, type Action, type Anchor, type ReplayDriver } from "../loombridge/replay/index.js";
+import { RecordingSession } from "../loombridge/replay/record.js";
 
 function fakeDriver(
   opts: { failTap?: string; missAnchor?: string; captureNoImage?: boolean } = {},

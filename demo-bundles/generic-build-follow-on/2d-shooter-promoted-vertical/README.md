@@ -3,14 +3,14 @@
 Status: `experimental-green` proof bundle for the promoted `weapon` slice.
 
 This bundle proves the next generic-genre step after GenreContract promotion: the committed
-`mcp-server/src/loomtide/genre-contract/examples/2d-shooter.contract.json` promotes into runtime Loomtide artifacts,
+`mcp-server/src/loombridge/genre-contract/examples/2d-shooter.contract.json` promotes into runtime Loombridge artifacts,
 and the promoted weapon slice validates against artifact-backed gate and metric evidence.
 
 ## Artifacts
 
 - `generate.mjs` — deterministic generator. Run after `cd mcp-server && npm run build`.
-- `acceptance.json` — promoted `.loomtide/ACCEPTANCE.json` fixture.
-- `slices.json` — promoted `.loomtide/SLICES.json` fixture.
+- `acceptance.json` — promoted `.loombridge/ACCEPTANCE.json` fixture.
+- `slices.json` — promoted `.loombridge/SLICES.json` fixture.
 - `promotion-report.json` — promotion report with explicit gaps.
 - `2d-shooter-promoted-run.json` — experimental build proof bundle.
 - `ttk-shooter-combat-loop-raw-2026-06-25.json` — **immutable raw capture transcript**: the verbatim

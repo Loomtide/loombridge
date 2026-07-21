@@ -10,10 +10,10 @@ import {
   resolveFeelProfileModule,
   resolveGenrePack,
   scenarioPacks,
-} from "../loomtide/genre-registry.js";
-import { HERO_SHOT_FIDELITY_CRITERIA, VLM_REVIEW_CRITERION_IDS, fidelityCriteriaForGenre } from "../loomtide/doneness.js";
-import { SHIPPED_PROFILE_IDS } from "../loomtide/genre-packs/platformer-2d/profiles.js";
-import { unknownProfileMessage } from "../loomtide/genre-packs/platformer-2d/verify-profile.js";
+} from "../loombridge/genre-registry.js";
+import { HERO_SHOT_FIDELITY_CRITERIA, VLM_REVIEW_CRITERION_IDS, fidelityCriteriaForGenre } from "../loombridge/doneness.js";
+import { SHIPPED_PROFILE_IDS } from "../loombridge/genre-packs/platformer-2d/profiles.js";
+import { unknownProfileMessage } from "../loombridge/genre-packs/platformer-2d/verify-profile.js";
 
 test("genre registry resolves platformer-2d to real template paths", () => {
   const pack = resolveGenrePack("platformer-2d");
@@ -118,7 +118,7 @@ test("scenarioPacks resolves the platformer bundled pack + a working match predi
 
 test("the default genre is a registered genre (plan carries no genre literal)", () => {
   // plan.ts resolves its omitted-`--genre` default through defaultGenreId(); that value must always
-  // resolve, or an argument-less `loomtide plan` would crash with "unknown genre".
+  // resolve, or an argument-less `loombridge plan` would crash with "unknown genre".
   assert.equal(defaultGenreId(), DEFAULT_GENRE_ID);
   assert.ok(resolveGenrePack(defaultGenreId()), "default genre must be registered");
   assert.ok(knownGenreIds().includes(defaultGenreId()));

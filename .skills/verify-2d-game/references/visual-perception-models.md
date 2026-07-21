@@ -52,7 +52,7 @@ to a specific state/object/control.
 ### 2. Open-vocabulary grounding
 
 Use a vision model to produce boxes, masks, OCR regions, labels, and counts.
-Then let Loomtide grade those outputs against the contract.
+Then let Loombridge grade those outputs against the contract.
 
 Good questions:
 
@@ -79,7 +79,7 @@ semantic criterion as blocking.
 
 ### Florence-2
 
-Best first local candidate for Loomtide experimentation.
+Best first local candidate for Loombridge experimentation.
 
 Why:
 
@@ -121,7 +121,7 @@ Best later-stage regression model.
 
 These are fast and reliable once the label space is known, but they are not the
 right first tool for arbitrary mock comparison. They become valuable after
-Loomtide has collected and labeled common mini-game categories:
+Loombridge has collected and labeled common mini-game categories:
 
 - player;
 - collectible;
@@ -199,20 +199,20 @@ The model worker should emit a structured artifact per frame:
 Suggested path:
 
 ```text
-.loomtide/verify/<state>/visual-perception.json
+.loombridge/verify/<state>/visual-perception.json
 ```
 
 For a consolidated multi-state run:
 
 ```text
-.loomtide/verify/visual-perception.json
+.loombridge/verify/visual-perception.json
 ```
 
 with `frames[]` entries keyed by state/frame id.
 
 ## Contract comparison
 
-The contract should declare expected visual facts in terms Loomtide can grade:
+The contract should declare expected visual facts in terms Loombridge can grade:
 
 ```json
 {

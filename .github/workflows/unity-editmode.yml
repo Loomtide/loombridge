@@ -13,14 +13,14 @@ on:
   pull_request:
     paths:
       - "packages/**"
-      - "unity-projects/loomtide-dev/**"
+      - "unity-projects/loombridge-dev/**"
       - ".github/workflows/unity-editmode.yml"
   push:
     branches:
       - main
     paths:
       - "packages/**"
-      - "unity-projects/loomtide-dev/**"
+      - "unity-projects/loombridge-dev/**"
       - ".github/workflows/unity-editmode.yml"
 
 jobs:
@@ -36,7 +36,7 @@ jobs:
       - name: Detect Unity test files
         id: detect
         run: |
-          if [ -d packages/com.loomtide.unitybridge/Tests/Editor ] && find packages/com.loomtide.unitybridge/Tests/Editor -type f \( -name '*Test.cs' -o -name '*Tests.cs' \) | grep -q .; then
+          if [ -d packages/com.loomtide.loombridge/Tests/Editor ] && find packages/com.loomtide.loombridge/Tests/Editor -type f \( -name '*Test.cs' -o -name '*Tests.cs' \) | grep -q .; then
             echo "has_tests=true" >> "$GITHUB_OUTPUT"
           else
             echo "has_tests=false" >> "$GITHUB_OUTPUT"
@@ -78,7 +78,7 @@ jobs:
         env:
           UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
         with:
-          projectPath: unity-projects/loomtide-dev
+          projectPath: unity-projects/loombridge-dev
           unityVersion: ${{ matrix.unity_version }}
           testMode: EditMode
           artifactsPath: unity-test-results/${{ matrix.label }}
@@ -98,7 +98,7 @@ jobs:
       - name: Explain why Unity tests were skipped
         run: |
           if [ "${{ needs.detect-tests.outputs.has_tests }}" != "true" ]; then
-            echo "Skipped: no Unity test files found under packages/com.loomtide.unitybridge/Tests/Editor."
+            echo "Skipped: no Unity test files found under packages/com.loomtide.loombridge/Tests/Editor."
           fi
           if [ "${{ needs.detect-tests.outputs.has_license }}" != "true" ]; then
             echo "Skipped: UNITY_LICENSE secret is not configured (forks and fresh clones skip gracefully)."

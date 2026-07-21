@@ -14,8 +14,8 @@ import {
   unverifiableGestureScenes,
   ENTRY_SCENE_REFUSAL,
   type SceneQueryDriver,
-} from "../loomtide/minigame-scene-gating.js";
-import type { ReplayTrace, Segment, Action } from "../loomtide/replay/types.js";
+} from "../loombridge/minigame-scene-gating.js";
+import type { ReplayTrace, Segment, Action } from "../loombridge/replay/types.js";
 
 // ── D5 — resolveEntryScene ───────────────────────────────────────────────────────
 

@@ -1,6 +1,6 @@
 ---
 name: platformer-level-design
-description: Design playable 2D platformer levels through Loomtide MCP — one-way platforms, locked ground tiling, reachable spacing, and colliders that match visible surfaces. Use whenever placing ground/platforms in a 2D platformer.
+description: Design playable 2D platformer levels through Loombridge MCP — one-way platforms, locked ground tiling, reachable spacing, and colliders that match visible surfaces. Use whenever placing ground/platforms in a 2D platformer.
 ---
 
 # Platformer Level Design (2D)
@@ -16,7 +16,7 @@ rule: reach a goal, collect required items, survive a timer, defeat enemies, or 
 
 ## 0. Manifest Asset Bindings
 
-Before placing terrain or interactables, read `.loomtide/ASSET_MANIFEST.json` and the current
+Before placing terrain or interactables, read `.loombridge/ASSET_MANIFEST.json` and the current
 slice's `sliceBindings` entry. Use the bound asset IDs and their `resolvedPaths`; never search the
 registry as a substitute inside the slice.
 
@@ -105,8 +105,8 @@ Place platforms within the player controller's actual motion envelope, then prov
 - [ ] Boundary grounds overrun the overscan-aware camera frame.
 - [ ] Every required route platform is reachable by probe, not eyeballing.
 - [ ] Interactables are wired per `references/interactables.md` and match the contract's win/fail rules.
-- [ ] After `loomtide verify --slice <id>` is green, approve with an operator artifact when available:
-      `loomtide plan --go --note "ground tiling inspected; no repeated seam band" --signoff path/to/frame.png`.
+- [ ] After `loombridge verify --slice <id>` is green, approve with an operator artifact when available:
+      `loombridge plan --go --note "ground tiling inspected; no repeated seam band" --signoff path/to/frame.png`.
 
 ## References
 

@@ -76,7 +76,7 @@ test("image metadata parser reads PNG dimensions without image dependencies", as
 });
 
 test("prepareAssets writes deterministic cache files and report metadata", async () => {
-  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "loomtide-asset-prepare-"));
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "loombridge-asset-prepare-"));
   const cacheDir = path.join(tempDir, "cache");
   const outputPath = path.join(tempDir, "platformer-assets.json");
 
@@ -124,7 +124,7 @@ test("prepareAssets writes deterministic cache files and report metadata", async
 });
 
 test("prepareAssets selects + prepares a trusted-default record from the hosted search API (network-free)", async () => {
-  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "loomtide-api-prepare-"));
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "loombridge-api-prepare-"));
   const cacheDir = path.join(tempDir, "cache");
   const outputPath = path.join(tempDir, "api-assets.json");
 
@@ -176,9 +176,9 @@ test("prepareAssets selects + prepares a trusted-default record from the hosted 
     trustTier: "trusted-default",
     review: {
       status: "verified",
-      verifiedBy: "loomtide",
+      verifiedBy: "loombridge",
       verifiedAt: "2026-06-05T00:00:00.000Z",
-      reviewer: "loomtide-core",
+      reviewer: "loombridge-core",
     },
   };
 
@@ -235,7 +235,7 @@ test("prepareAssets selects + prepares a trusted-default record from the hosted 
 });
 
 test("prepareAssets accepts a source-bound local GLB model without sprite validation", async () => {
-  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "loomtide-model-prepare-"));
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "loombridge-model-prepare-"));
   const registryDir = path.join(tempDir, "asset-layer/registry");
   const fixtureDir = path.join(tempDir, "asset-layer/fixtures/3d-shooter");
   const cacheDir = path.join(tempDir, "cache");
@@ -322,8 +322,8 @@ test("prepareAssets rejects passing both catalogApiUrl and catalogPath", async (
       profilePath: path.join(repoRoot, "asset-layer/profiles/2d-platformer.json"),
       catalogApiUrl: "https://api.test",
       catalogPath: path.join(repoRoot, "asset-layer/catalog-fixtures/platformer-catalog.json"),
-      cacheDir: path.join(os.tmpdir(), "loomtide-mutex-cache"),
-      outputPath: path.join(os.tmpdir(), "loomtide-mutex-out.json"),
+      cacheDir: path.join(os.tmpdir(), "loombridge-mutex-cache"),
+      outputPath: path.join(os.tmpdir(), "loombridge-mutex-out.json"),
       primitives: ["tile"],
     }),
     /exactly one of --registry, --catalog, or --catalog-api/,
@@ -331,7 +331,7 @@ test("prepareAssets rejects passing both catalogApiUrl and catalogPath", async (
 });
 
 test("prepareAssets can prepare verified records from a hosted catalog source", async () => {
-  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "loomtide-catalog-prepare-"));
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "loombridge-catalog-prepare-"));
   const cacheDir = path.join(tempDir, "cache");
   const outputPath = path.join(tempDir, "catalog-assets.json");
   const sourceImage = path.join(repoRoot, "asset-layer/fixtures/platformer/grass-tile.png");
@@ -352,7 +352,7 @@ test("prepareAssets can prepare verified records from a hosted catalog source", 
       source: {
         title: "Catalog Fixture Grass Tile",
         url: "https://example.invalid/catalog-fixture",
-        author: "Loomtide Fixture",
+        author: "Loombridge Fixture",
         verified: true,
         provenance: {
           verifiedAt: "2026-06-05T00:00:00.000Z",
@@ -396,7 +396,7 @@ test("prepareAssets can prepare verified records from a hosted catalog source", 
         status: "verified",
         verifiedBy: "developer",
         verifiedAt: "2026-06-05T00:00:00.000Z",
-        reviewer: "Loomtide Test",
+        reviewer: "Loombridge Test",
       },
       pack: {
         packId: "hosted-catalog-fixture-pack",
@@ -425,7 +425,7 @@ test("prepareAssets can prepare verified records from a hosted catalog source", 
 });
 
 test("prepareAssets prepares the checked-in hosted catalog tile fixture offline", async () => {
-  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "loomtide-checked-in-catalog-"));
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "loombridge-checked-in-catalog-"));
   const cacheDir = path.join(tempDir, "cache");
   const outputPath = path.join(tempDir, "checked-in-catalog-assets.json");
   const catalogPath = path.join(repoRoot, "asset-layer/catalog-fixtures/platformer-catalog.json");
@@ -463,7 +463,7 @@ test("prepareAssets prepares the checked-in hosted catalog tile fixture offline"
 });
 
 test("prepareAssets falls back from missing local mirrors to hosted file URLs", async () => {
-  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "loomtide-provider-fallback-"));
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "loombridge-provider-fallback-"));
   const cacheDir = path.join(tempDir, "cache");
   const outputPath = path.join(tempDir, "fallback-assets.json");
   const sourceImage = path.join(repoRoot, "asset-layer/fixtures/platformer/grass-tile.png");
@@ -484,7 +484,7 @@ test("prepareAssets falls back from missing local mirrors to hosted file URLs", 
       source: {
         title: "Fallback Fixture Grass Tile",
         url: "https://example.invalid/fallback-fixture",
-        author: "Loomtide Fixture",
+        author: "Loombridge Fixture",
         verified: true,
         provenance: {
           verifiedAt: "2026-06-05T00:00:00.000Z",
@@ -533,7 +533,7 @@ test("prepareAssets falls back from missing local mirrors to hosted file URLs", 
         status: "verified",
         verifiedBy: "developer",
         verifiedAt: "2026-06-05T00:00:00.000Z",
-        reviewer: "Loomtide Test",
+        reviewer: "Loombridge Test",
       },
     }],
   }, null, 2)}\n`);

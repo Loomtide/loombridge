@@ -12,8 +12,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import type { BridgeResponse } from "../types.js";
-import { parseTrace, type BridgeSend, type OutcomeSpec } from "../loomtide/replay/index.js";
-import { recordObservedTrace } from "../loomtide/replay/observe-record-live.js";
+import { parseTrace, type BridgeSend, type OutcomeSpec } from "../loombridge/replay/index.js";
+import { recordObservedTrace } from "../loombridge/replay/observe-record-live.js";
 
 type Handler = (params: Record<string, unknown>) => { data?: unknown; error?: string; code?: string };
 

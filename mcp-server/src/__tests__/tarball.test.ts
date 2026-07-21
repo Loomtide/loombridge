@@ -6,7 +6,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { readTarball, readTarballFile, extractTarball } from "../loomtide/tarball.js";
+import { readTarball, readTarballFile, extractTarball } from "../loombridge/tarball.js";
 
 /**
  * Fixtures are produced by the SYSTEM tar, not by a writer of our own, so the reader is
@@ -15,7 +15,7 @@ import { readTarball, readTarballFile, extractTarball } from "../loomtide/tarbal
  * `host:file` parsing, which is the very bug this module exists to avoid.
  */
 function buildFixture(format: "gnu" | "pax"): { tgz: string; dir: string } | null {
-  const dir = mkdtempSync(path.join(tmpdir(), "loomtide-tarball-test-"));
+  const dir = mkdtempSync(path.join(tmpdir(), "loombridge-tarball-test-"));
   mkdirSync(path.join(dir, "package", "Runtime"), { recursive: true });
   writeFileSync(path.join(dir, "package", "package.json"), JSON.stringify({ name: "pkg", version: "1.2.3" }));
   writeFileSync(path.join(dir, "package", "Runtime", "Nested.cs"), "// nested\n");
@@ -46,7 +46,7 @@ for (const format of ["gnu", "pax"] as const) {
   test(`extractTarball round-trips a ${format}-format tarball`, () => {
     const fixture = buildFixture(format);
     if (!fixture) return;
-    const dest = mkdtempSync(path.join(tmpdir(), "loomtide-tarball-out-"));
+    const dest = mkdtempSync(path.join(tmpdir(), "loombridge-tarball-out-"));
     try {
       extractTarball(fixture.tgz, dest);
       assert.ok(existsSync(path.join(dest, "package", "package.json")));
@@ -104,7 +104,7 @@ function tarball(entries: Array<{ name: string; body: string; typeflag?: string 
 }
 
 function writeTgz(buf: Buffer): { tgz: string; dir: string } {
-  const dir = mkdtempSync(path.join(tmpdir(), "loomtide-tarball-hand-"));
+  const dir = mkdtempSync(path.join(tmpdir(), "loombridge-tarball-hand-"));
   const tgz = path.join(dir, "hand.tgz");
   writeFileSync(tgz, buf);
   return { tgz, dir };
@@ -112,7 +112,7 @@ function writeTgz(buf: Buffer): { tgz: string; dir: string } {
 
 test("extractTarball refuses a member that escapes the destination", () => {
   const { tgz, dir } = writeTgz(tarball([{ name: "../escaped.txt", body: "pwned" }]));
-  const dest = mkdtempSync(path.join(tmpdir(), "loomtide-tarball-guard-"));
+  const dest = mkdtempSync(path.join(tmpdir(), "loombridge-tarball-guard-"));
   try {
     assert.throws(() => extractTarball(tgz, dest), /refusing to extract outside/);
     assert.equal(existsSync(path.join(path.dirname(dest), "escaped.txt")), false);

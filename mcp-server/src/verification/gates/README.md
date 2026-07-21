@@ -1,6 +1,6 @@
 # Tier-1 Deterministic Gates (Phase C)
 
-Pure, unit-testable gate evaluators for the Loomtide verification pipeline.
+Pure, unit-testable gate evaluators for the Loombridge verification pipeline.
 Each gate grades one captured op-output file against the acceptance contract
 and reports pass/warn/fail; `run-gates.ts` aggregates every gate's report into
 the final `build-verdict.json`.

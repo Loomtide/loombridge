@@ -134,7 +134,7 @@ function hostIsPrivate(value: string): boolean {
  * e.g. an http(s) url whose path embeds the private registry repo.
  */
 function looksLikePrivateMirrorPath(value: string): boolean {
-  return /Loomtide\/LoomtideAssetRegistry/i.test(value);
+  return /Loombridge\/LoomtideAssetRegistry/i.test(value);
 }
 
 function publicFileUrl(file: AssetFile): string | undefined {

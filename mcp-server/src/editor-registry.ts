@@ -18,7 +18,7 @@ export interface EditorRoute {
 
 /**
  * Display-only descriptor for the configured startup binding, surfaced in the
- * `loomtide_editor_list` payload so an agent can see the session is auto-bound even before
+ * `loombridge_editor_list` payload so an agent can see the session is auto-bound even before
  * the first routed op commits it. `resolved` = "the configured target currently maps to
  * exactly one discovered editor". Null in the payload when the binding kind is "none".
  */
@@ -102,7 +102,7 @@ export class EditorRegistry {
   }
 
   /**
-   * Compute the display state for `loomtide_editor_list` WITHOUT mutating routing state.
+   * Compute the display state for `loombridge_editor_list` WITHOUT mutating routing state.
    *
    * This is the read-only counterpart to `selectEditor`/`_tryStartupBinding`: it never sets
    * `_activeProjectPathCanonical`, never throws, and never creates clients. Listing must stay
@@ -206,7 +206,7 @@ export class EditorRegistry {
           this._activeProjectPathCanonical = null;
           throw new EditorRoutingError(
             "EDITOR_NOT_FOUND",
-            `Active Unity editor '${activeProjectPathCanonical}' is no longer discovered. Run loomtide_editor_list and select an active editor again.`,
+            `Active Unity editor '${activeProjectPathCanonical}' is no longer discovered. Run loombridge_editor_list and select an active editor again.`,
             records,
           );
         }
@@ -245,7 +245,7 @@ export class EditorRegistry {
     if (records.length > 1) {
       throw new EditorRoutingError(
         "EDITOR_AMBIGUOUS",
-        "Multiple Unity editors are open. Select one with loomtide_editor_use or pass a top-level project parameter.",
+        "Multiple Unity editors are open. Select one with loombridge_editor_use or pass a top-level project parameter.",
         records,
       );
     }

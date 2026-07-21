@@ -1,12 +1,12 @@
 {
-  "name": "loomtide",
+  "name": "loombridge",
   "version": "0.1.0",
-  "description": "Loomtide commands for Claude Code & Codex — plan + verify the gameplay pipeline (CLI-first, agent-agnostic).",
+  "description": "Loombridge commands for Claude Code & Codex — plan + verify the gameplay pipeline (CLI-first, agent-agnostic).",
   "author": {
-    "name": "Loomtide"
+    "name": "Loombridge"
   },
   "keywords": [
-    "loomtide",
+    "loombridge",
     "unity",
     "game-feel",
     "verification",
@@ -14,11 +14,11 @@
     "slash-commands"
   ],
   "commands": [
-    "./commands/loomtide/plan.md",
-    "./commands/loomtide/status.md",
-    "./commands/loomtide/ask.md",
-    "./commands/loomtide/build.md",
-    "./commands/loomtide/verify.md",
-    "./commands/loomtide/e2e.md"
+    "./commands/loombridge/plan.md",
+    "./commands/loombridge/status.md",
+    "./commands/loombridge/ask.md",
+    "./commands/loombridge/build.md",
+    "./commands/loombridge/verify.md",
+    "./commands/loombridge/e2e.md"
   ]
 }

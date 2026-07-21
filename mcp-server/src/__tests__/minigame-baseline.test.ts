@@ -22,18 +22,18 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import { assertValidMinigameContract } from "../loomtide/minigame-profiles/validator.js";
-import type { MinigameContract } from "../loomtide/minigame-profiles/types.js";
-import { runVerifyMinigame, type MinigameVerifyReport } from "../loomtide/verify-minigame.js";
-import { run as minigameRun } from "../loomtide/minigame.js";
+import { assertValidMinigameContract } from "../loombridge/minigame-profiles/validator.js";
+import type { MinigameContract } from "../loombridge/minigame-profiles/types.js";
+import { runVerifyMinigame, type MinigameVerifyReport } from "../loombridge/verify-minigame.js";
+import { run as minigameRun } from "../loombridge/minigame.js";
 import {
   BASELINE_MANIFEST,
   compareStateToBaseline,
   type BaselineManifest,
   type BaselineStateInputs,
-} from "../loomtide/minigame-baseline.js";
-import type { DecodedImage } from "../loomtide/minigame-gates/frame-facts.js";
-import type { MinigameCaptureObject } from "../loomtide/minigame-gates/types.js";
+} from "../loombridge/minigame-baseline.js";
+import type { DecodedImage } from "../loombridge/minigame-gates/frame-facts.js";
+import type { MinigameCaptureObject } from "../loombridge/minigame-gates/types.js";
 
 // ── PNG writer (RGBA, lossless) — same shape as verification-analyze-frames.test ──
 function crc32(buf: Buffer): number {

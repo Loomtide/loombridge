@@ -5,7 +5,7 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 default_repo_root="$(cd "$script_dir/.." && pwd)"
 repo_root="$(cd "${1:-$default_repo_root}" && pwd)"
 
-package_root="$repo_root/packages/com.loomtide.unitybridge"
+package_root="$repo_root/packages/com.loomtide.loombridge"
 asset_roots=( "$repo_root"/unity-projects/*/Assets )
 
 missing_meta=()

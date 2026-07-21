@@ -22,7 +22,7 @@ The launcher:
 4. Starts Unity with `-projectPath`.
 5. Builds `mcp-server`.
 6. Waits until `scripts/phase3-mcp-smoke.mjs --expect-connected` passes with
-   `LOOMTIDE_UNITY_PROJECT` / `LOOMTIDE_TARGET_PROJECT_PATH` pinned to the requested project.
+   `LOOMBRIDGE_UNITY_PROJECT` / `LOOMBRIDGE_TARGET_PROJECT_PATH` pinned to the requested project.
 
 Useful options:
 

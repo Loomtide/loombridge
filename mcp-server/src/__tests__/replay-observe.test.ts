@@ -12,8 +12,8 @@ import {
   type Assertion,
   type ObservedClick,
   type ReplayDriver,
-} from "../loomtide/replay/index.js";
-import { captureOutcomes, observeLive } from "../loomtide/replay/observe-live.js";
+} from "../loombridge/replay/index.js";
+import { captureOutcomes, observeLive } from "../loombridge/replay/observe-live.js";
 import type { BridgeResponse } from "../types.js";
 
 const click = (path: string, tMs: number): ObservedClick => ({ tMs, locator: { path }, button: 0 });

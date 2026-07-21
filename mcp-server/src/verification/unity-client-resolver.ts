@@ -5,7 +5,7 @@ import {
 import type { UnityEndpointDiscoveryRecord } from "../types.js";
 import type { UnityClient } from "../unity-client.js";
 
-export const UNITY_PROJECT_ENV_VAR = "LOOMTIDE_UNITY_PROJECT";
+export const UNITY_PROJECT_ENV_VAR = "LOOMBRIDGE_UNITY_PROJECT";
 
 export interface UnityClientResolverOptions {
   project?: unknown;

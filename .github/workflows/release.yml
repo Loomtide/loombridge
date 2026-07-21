@@ -3,8 +3,8 @@
 # AUTHORED in the monorepo at scripts/oss/workflows/release.yml and installed
 # into .github/workflows/ by scripts/oss/export-loombridge.mjs. Product-name
 # strings are written PRE-rename — scripts/oss/rename-loombridge.mjs rewrites
-# them (e.g. loomtide-pack-bridge.sh -> loombridge-pack-bridge.sh,
-# loomtide-cli-<v>.tgz -> loombridge-cli-<v>.tgz) with the rest of the tree.
+# them (e.g. loombridge-pack-bridge.sh -> loombridge-pack-bridge.sh,
+# loombridge-cli-<v>.tgz -> loombridge-cli-<v>.tgz) with the rest of the tree.
 #
 # On tag v*:
 #   build + unit-test -> pack the bridge UPM tarball + `npm pack` the CLI ->
@@ -58,7 +58,7 @@ jobs:
         run: npm run test:unit
 
       - name: Pack bridge UPM tarball
-        run: bash scripts/loomtide-pack-bridge.sh --out-dir release-assets
+        run: bash scripts/loombridge-pack-bridge.sh --out-dir release-assets
 
       # `npm pack` runs prepack (build + bundle the bridge tarball + agent
       # surface), so the published CLI carries everything install-bridge and
@@ -71,7 +71,7 @@ jobs:
           npm pack
           TAG_V="${GITHUB_REF_NAME#v}"
           PACKED="$(ls ./*.tgz | head -1)"
-          cp "$PACKED" "../release-assets/loomtide-cli-${TAG_V}.tgz"
+          cp "$PACKED" "../release-assets/loombridge-cli-${TAG_V}.tgz"
           ls -l ../release-assets
 
       - name: Create GitHub Release

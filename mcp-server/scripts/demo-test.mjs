@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Loomtide Demo Tester — uses UpArrow for jump (Space broken via MCP on macOS).
+ * Loombridge Demo Tester — uses UpArrow for jump (Space broken via MCP on macOS).
  * Tests: UpArrow jump (key_down/key_up), movement, combined move+jump.
  *
  * Key insight: isPressed + manual edge detection means the first key_down
