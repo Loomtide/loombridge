@@ -8,7 +8,7 @@ minors are not patched — upgrade to the newest release to stay supported.
 
 | Version | Supported |
 |---------|-----------|
-| Latest minor (currently 0.2.x) | Yes |
+| Latest minor (currently 0.3.x) | Yes |
 | Any earlier minor | No |
 
 ## Reporting a Vulnerability

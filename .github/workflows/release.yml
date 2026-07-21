@@ -13,6 +13,7 @@ on:
 
 permissions:
   contents: write
+  id-token: write # npm trusted publishing (OIDC)
 
 jobs:
   release:
@@ -78,24 +79,20 @@ jobs:
             --generate-notes \
             release-assets/*
 
-      # The `secrets` context is not available in job/step `if:` on all paths —
-      # detect the token in a step and gate on its output.
-      - name: Detect NPM_TOKEN
-        id: npm
-        env:
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: |
-          if [ -n "$NPM_TOKEN" ]; then
-            echo "has_token=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "has_token=false" >> "$GITHUB_OUTPUT"
-            echo "NOTICE: NPM_TOKEN is not configured — skipping npm publish." \
-                 "The GitHub Release assets above are still the primary install channel (install.sh)."
-          fi
-
-      - name: npm publish
-        if: steps.npm.outputs.has_token == 'true'
+      # npm publish via TRUSTED PUBLISHING (OIDC) — preferred: no token secret.
+      # Configure once on npmjs.com: package @loomtide/loombridge -> Settings ->
+      # Trusted publisher -> GitHub Actions (Loomtide/loombridge, release.yml).
+      # NPM_TOKEN remains an optional fallback. Until one of the two is
+      # configured, the step notices-and-continues: the GitHub Release assets
+      # above are the primary install channel (install.sh).
+      - name: npm publish (trusted publishing, token fallback)
         working-directory: mcp-server
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: npm publish --access public
+        run: |
+          npm install -g npm@11 >/dev/null 2>&1 || true   # OIDC exchange needs npm >= 11.5
+          if npm publish --provenance --access public; then
+            echo "npm publish succeeded."
+          else
+            echo "::warning::npm publish did not complete — trusted publishing not configured yet (or token missing/invalid). GitHub Release assets remain the primary install channel."
+          fi

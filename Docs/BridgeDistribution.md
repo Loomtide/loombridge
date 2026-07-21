@@ -79,14 +79,14 @@ Add this to the consumer project's `Packages/manifest.json`:
 ```
 
 > **Pick a ref that actually resolves.** The `#<ref>` must exist on the remote. As
-> of this writing **no `v0.2.0` release tag has been published**, so `#v0.2.0` would
+> of this writing **no `v0.3.0` release tag has been published**, so `#v0.3.0` would
 > FAIL package resolution — do not pin a tag that isn't pushed.
 > - `#main` (used above and by the `create-loombridge-game` template) resolves today
 >   and tracks the latest merged bridge — convenient, but **non-reproducible**.
 > - For a **reproducible** pin, use a **commit SHA** (`#<40-char-sha>`), or a
->   **release tag once one is published**: `git tag v0.2.0 <commit> && git push origin v0.2.0`
+>   **release tag once one is published**: `git tag v0.3.0 <commit> && git push origin v0.3.0`
 >   from a release commit whose version matches the bridge `package.json` `version`,
->   then pin `#v0.2.0`.
+>   then pin `#v0.3.0`.
 - Unity rewrites the entry into a `lock` block in `Packages/packages-lock.json`
   on first resolve, capturing the exact resolved hash.
 - **Tests are not compiled.** A git-URL (immutable) package's `Tests/` assembly

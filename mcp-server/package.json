@@ -1,6 +1,6 @@
 {
   "name": "@loomtide/loombridge",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "MCP server + CLI for Loombridge — game-feel engineering for AI-built games",
   "type": "module",
   "main": "dist/index.js",

@@ -271,7 +271,7 @@ publishes and MCP reads `endpoint-discovery-latest.json`. Full details in
 
 ## Roadmap & non-goals
 
-Loombridge is pre-1.0 (`0.2.x`). The near-term direction is broader genre packs and feel
+Loombridge is pre-1.0 (`0.3.x`). The near-term direction is broader genre packs and feel
 coverage on top of the same deterministic contract. Some things are **permanent
 non-goals**, not missing features:
 
