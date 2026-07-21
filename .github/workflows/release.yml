@@ -28,7 +28,6 @@ jobs:
           node-version: "20"
           cache: "npm"
           cache-dependency-path: mcp-server/package-lock.json
-          registry-url: "https://registry.npmjs.org"
 
       - name: Install dependencies
         working-directory: mcp-server
@@ -88,11 +87,19 @@ jobs:
       - name: npm publish (trusted publishing, token fallback)
         working-directory: mcp-server
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          REPO_PRIVATE: ${{ github.event.repository.private }}
         run: |
-          npm install -g npm@11 >/dev/null 2>&1 || true   # OIDC exchange needs npm >= 11.5
-          if npm publish --provenance --access public; then
-            echo "npm publish succeeded."
+          npm install -g npm@11   # OIDC exchange needs npm >= 11.5
+          # A stale/empty _authToken npmrc line preempts the OIDC exchange — start clean.
+          rm -f "$HOME/.npmrc"
+          if [ -n "$NPM_TOKEN" ]; then
+            echo "//registry.npmjs.org/:_authToken=$NPM_TOKEN" > "$HOME/.npmrc"
+          fi
+          # Provenance attestation requires a PUBLIC repo; skip it while private.
+          PROV="true"; [ "$REPO_PRIVATE" = "true" ] && PROV="false"
+          if npm publish --access public --provenance="$PROV"; then
+            echo "npm publish succeeded (provenance=$PROV)."
           else
             echo "::warning::npm publish did not complete — trusted publishing not configured yet (or token missing/invalid). GitHub Release assets remain the primary install channel."
           fi
