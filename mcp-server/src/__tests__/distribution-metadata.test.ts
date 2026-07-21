@@ -4,10 +4,11 @@ import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
-// Guards the Epic-4 distribution/onboarding invariants (findings RCL-O01/O02/O03):
+// Guards the distribution/onboarding invariants (findings RCL-O01/O02/O03):
 // an external consumer must be able to reach BOTH halves of Loombridge without a
 // machine-local relative path — the bridge via a resolvable UPM dep, the CLI via
-// npm/npx, and a template that wires both up out of the box.
+// the public GitHub-Releases installer, and a template that wires both up out of
+// the box. This repo is the public source; releases are public GitHub Releases.
 //
 // Compiled test lives at mcp-server/dist/__tests__/<this>.js, so the repo root is
 // three levels up regardless of cwd.
@@ -18,13 +19,13 @@ function readJson(rel: string): Record<string, unknown> {
   return JSON.parse(readFileSync(path.join(repoRoot, rel), "utf-8"));
 }
 
-test("RCL-O02: CLI package.json is a private-org scoped package that ships the bundled bridge", () => {
+test("RCL-O02: CLI package.json is the scoped public package that ships the bundled bridge", () => {
   const pkg = readJson("mcp-server/package.json");
 
-  // The private-org distribution decision: scoped `@loomtide/loombridge`, published
-  // with restricted access — the org owns the npm scope, the CLI ships restricted
-  // while the bundled bridge stays UPM-resolvable for consumers.
-  assert.equal(pkg.name, "@loomtide/loombridge", "the private-org package name is @loomtide/loombridge");
+  // The distribution decision: scoped `@loomtide/loombridge`, published with public
+  // access — the org owns the npm scope, and the bundled bridge stays UPM-resolvable
+  // for consumers.
+  assert.equal(pkg.name, "@loomtide/loombridge", "the scoped package name is @loomtide/loombridge");
 
   const bin = pkg.bin as Record<string, string>;
   assert.equal(bin.loombridge, "dist/cli.js", "the `loombridge` bin must point at the CLI dispatcher");
@@ -33,14 +34,14 @@ test("RCL-O02: CLI package.json is a private-org scoped package that ships the b
   const publishConfig = pkg.publishConfig as Record<string, unknown> | undefined;
   assert.equal(
     publishConfig?.access,
-    "restricted",
-    "publishConfig.access must be restricted — this is a PRIVATE package",
+    "public",
+    "publishConfig.access must be public — a scoped package defaults to restricted, so publishing publicly requires this",
   );
 
   const repo = pkg.repository as Record<string, unknown> | undefined;
   assert.ok(
-    typeof repo?.url === "string" && (repo.url as string).includes("github.com"),
-    "a repository url is required npm publish metadata",
+    typeof repo?.url === "string" && (repo.url as string).includes("github.com/Loomtide/loombridge"),
+    "the repository url must point at the public github.com/Loomtide/loombridge source",
   );
 
   const files = pkg.files as string[];
@@ -58,13 +59,15 @@ test("RCL-O02: CLI package.json is a private-org scoped package that ships the b
   );
 });
 
-test("private channel: one-command GitHub-Releases installer + release script exist", () => {
+test("release channel: one-command GitHub-Releases installer + release script exist", () => {
   const installer = readFileSync(path.join(repoRoot, "scripts/install.sh"), "utf-8");
   assert.ok(installer.startsWith("#!"), "install.sh needs a shebang");
-  // Must fetch the private release asset via EITHER the gh CLI or a token (no npm account).
+  // Fetches the release asset via the gh CLI (with a token fallback for CI) — no npm
+  // account. Public releases need no auth; the gh/token paths keep the pre-flip private
+  // window working too.
   assert.ok(
     installer.includes("gh release download") && installer.includes("LOOMBRIDGE_TOKEN"),
-    "the installer must support both gh-CLI auth and a token for the private release",
+    "the installer must support gh-CLI download plus a token fallback for the release asset",
   );
   assert.ok(installer.includes("npm install -g"), "the installer must install the packed CLI globally");
   // Idempotent install==update: a --project fast-path also wires the bridge.
@@ -86,7 +89,7 @@ test("loombridge update points CLI self-update at the one-line installer, not an
   );
   assert.ok(
     !/npm install -g @loombridge\/cli/.test(src),
-    "self-update must NOT instruct an npm-registry install while the private channel is GitHub Releases",
+    "self-update must NOT instruct an npm-registry install — the supported channel is the GitHub-Releases installer",
   );
 });
 

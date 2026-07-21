@@ -93,16 +93,16 @@ in this step is the *registry side* of the handoff; Unity import is the *project
 Pick profile / registry / name from `STATE.md`'s `genre`:
 
 ```bash
-# Platformer-2d (the canonical clean-room path — typically tiderunner-clean):
+# Platformer-2d (point --project at your Unity project):
 scripts/prepare-project-assets.sh \
-  --project unity-projects/tiderunner-clean \
+  --project <your-unity-project> \
   --profile asset-layer/profiles/2d-platformer.json \
   --registry asset-layer/registry/platformer-2d.json \
   --name platformer
 
-# Top-down arena (e.g. Switchyard):
+# Top-down arena:
 # scripts/prepare-project-assets.sh \
-#   --project unity-projects/switchyard-courier-clean \
+#   --project <your-topdown-project> \
 #   --profile asset-layer/profiles/2d-topdown-arena.json \
 #   --registry asset-layer/registry/switchyard-2d.json \
 #   --name switchyard
@@ -114,9 +114,10 @@ its absolute path — `<repo-root>/scripts/prepare-project-assets.sh --project "
 The **`asset-layer`** skill covers the full flow (registry validation, provenance,
 browser confirmation, deterministic project cache, attribution).
 
-> Do **not** use `npm --prefix mcp-server run asset:platformer:prepare` for a clean-room
-> validation run — that script writes to the *repo's* `demo/.artifacts/` directory (useful
-> for local CI smoke tests, **not** for staging assets into a clean-room project).
+> Do **not** run the repo-local prepare CLI (`node mcp-server/dist/asset-layer/prepare-cli.js`) with a
+> `--output`/`--cache` under the repo's `demo/.artifacts/` for a clean-room validation run — that stages
+> assets into the *repo*, not the target project. Use `loombridge-asset-prep --project <path>` so the
+> handoff lands under `<project>/.loombridge/handoff/`.
 
 ## 3. Route the intent (agent judgment — the part the CLI does NOT do)
 

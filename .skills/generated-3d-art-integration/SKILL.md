@@ -8,11 +8,12 @@ integration into gameplay tuning. Art is a parallel vertical: fork the scene, ap
 variants / visual-only children / instance overrides, and prove the tuning scene's geometry and
 serialized wiring survived every swap.
 
-This skill is the actionable agent runbook. The deterministic boundary, provider-key safety,
-provenance field list, cache key, and mobile defaults are canonical in
-`Docs/Assets/GeneratedArtWorkflow.md` — read it once, follow it, do not restate it here. Loombridge never
-deterministically approves art quality; taste, silhouette read, hero-shot fidelity, animation feel, and
-weapon grip are HUMAN gates.
+This skill is the actionable agent runbook. Workflow in brief: keep the generation provider's API key
+out of the committed tree (env-only); record provenance for every generated asset (source prompt/image,
+model/tool, license, cache key/sha); import against mobile-safe defaults (poly/texture budgets, compression,
+mip settings); and keep the boundary firm — Loombridge deterministically checks that the tuning scene's
+geometry and serialized wiring survive each swap, but never approves art quality. Taste, silhouette read,
+hero-shot fidelity, animation feel, and weapon grip are HUMAN gates.
 
 ## Inputs (gather before Stage 0)
 

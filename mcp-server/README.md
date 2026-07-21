@@ -70,16 +70,8 @@ Use this same checklist on both Unity `6000.3 LTS` (primary) and `2022.3 LTS` (c
    ```bash
    npm run verify:phase3:baseline
    ```
-
-6. v0.11.0 reliability matrix evidence (from `mcp-server/`):
-   ```bash
-   npm run verify:phase3:baseline
-   npm run matrix:phase3:6000.3
-   npm run matrix:phase3:2022.3
-   ```
-   The v0.11.0 Phase 3 closeout ran this matrix across both supported Unity versions (6000.3 and
-   2022.3) and archived the resulting evidence internally; the commands above reproduce the same
-   matrix on demand.
+   Run this on both Unity `6000.3 LTS` (primary) and `2022.3 LTS` (compatibility) with the editor open
+   to confirm the bridge routes and captures on each supported version.
 
 ## Claude Code Configuration
 
@@ -159,23 +151,21 @@ Guardrail:
 
 ## Scenario Runner (Generic Orchestration)
 
-Run reusable scenario documents from `demo/scenarios/` to validate tool composition with deterministic preflight-first pass/fail/blocked reports.
+Run reusable scenario documents from `demo/scenarios/` to validate tool composition with deterministic preflight-first pass/fail/blocked reports. The scenario runner is built as `dist/scenario-cli.js` (`npm run build`).
 
-From `mcp-server/`:
-
-```bash
-npm run scenario:validate
-npm run scenario:run
-```
-
-- `scenario:validate` runs `generic-smoke.json` in `--dry-run` mode and writes `demo/.artifacts/scenario-validate.json`.
-- `scenario:run` executes `generic-playtest.json` against a connected Unity editor, gates scenario steps with deterministic preflight checks, and writes `demo/.artifacts/scenario-run.json`.
-
-Direct CLI usage:
+Dry-run validation of a scenario document (no Unity needed):
 
 ```bash
 node dist/scenario-cli.js --scenario ../demo/scenarios/generic-smoke.json --dry-run --output ../demo/.artifacts/scenario-report.json
 ```
+
+Against a connected Unity editor, drop `--dry-run` to execute the steps with deterministic preflight gating:
+
+```bash
+node dist/scenario-cli.js --scenario ../demo/scenarios/generic-smoke.json --output ../demo/.artifacts/scenario-run.json
+```
+
+Available scenario documents live under `demo/scenarios/` (`generic-smoke.json`, `build-fresh-platformer.json`, and the `build-platformer-with-assets.template.json` asset-import template).
 
 Report contract highlights:
 - `status`: `pass`, `fail`, or `blocked`
@@ -188,58 +178,37 @@ Report contract highlights:
 
 ## Asset Layer Platformer Scenario
 
-The v0.11.0 asset layer prepares curated CC0 platformer sprites into a local cache and generates a scenario that imports them with generic Loombridge tools.
+The asset layer prepares curated CC0 platformer sprites into a local cache and can generate a scenario that imports them with generic Loombridge tools. The prepare/validate steps run through the built `dist/asset-layer/*` CLIs.
 
-From `mcp-server/`:
-
-```bash
-npm run verify:phase3:asset-layer
-```
-
-Equivalent expanded sequence:
+From `mcp-server/` (after `npm run build`):
 
 ```bash
-npm run build
-npm run test:unit
-npm run test:integration
-npm run asset:platformer:validate
-npm run asset:platformer:prepare
-npm run asset:platformer:attribution
-npm run scenario:platformer:assets:validate
+# Prepare + checksum-verify curated platformer assets into a deterministic cache:
+node dist/asset-layer/prepare-cli.js \
+  --profile ../asset-layer/profiles/2d-platformer.json \
+  --catalog ../asset-layer/catalog-fixtures/platformer-catalog.json \
+  --output ../demo/.artifacts/platformer-assets.json \
+  --cache ../demo/.artifacts/asset-cache
 ```
 
 Generated outputs:
 - `../demo/.artifacts/platformer-assets.json`: report with `cachePath`, `cacheStatus`, `sha256` checksum, `unityPath`, `source`, `license`, provenance, provider diagnostics, validation status, and rejection diagnostics
-- `../demo/.artifacts/platformer-assets-attribution.md`: markdown attribution/provenance output for accepted assets
 - `../demo/.artifacts/asset-cache/`: deterministic local asset cache
-- `../demo/scenarios/build-platformer-with-assets.json`: scenario using `unity_asset_create_sprite` `source_path` and `Assets/Art/...` import paths
 
 The asset prepare CLI validates registry policy before selection. It rejects disallowed license values, source unverified entries, invalid checksum declarations or checksum mismatch, unsupported primitive/kind pairings, and audio metadata failures. Acquisition uses a provider adapter interface for local fixtures, HTTP downloads, and unconfigured generation providers; generation entries return `PROVIDER_NOT_CONFIGURED` until a real adapter is implemented and configured.
 
-Connected execution after UnityBridge is running in `unity-projects/demo-platformer`:
-
-```bash
-node dist/scenario-cli.js --scenario ../demo/scenarios/build-platformer-with-assets.json --output ../demo/.artifacts/platformer-assets-run.json
-```
+Each accepted asset's report entry carries an `import.toolArguments` payload (`source_path` = the cached byte, `path` = the `Assets/Art/...` target). A build agent replays those through `unity_asset_create_sprite` over the MCP bridge with `unity-projects/demo-platformer` open; `demo/scenarios/build-platformer-with-assets.template.json` is the scenario template for that import step.
 
 Boundary rule: registry/profile/scenario data can be genre-specific, but the MCP surface remains generic. Do not add `platformer.*` tools; compose `unity_*`, runtime, input, and screenshot steps instead.
 
 ## Hosted Asset Registry
 
-The hosted catalog is **live at scale** (66,859 records — PNG sprites / OGG audio / self-contained GLB
-models / SVG vectors — on Cloudflare R2 + Railway Postgres behind a read-only search API, with an
-in-Unity asset browser). The local registry remains supported; new asset-registry work targets the
-hosted catalog boundary. As-built state, operations, and pending work:
-`../Docs/Assets/HostedAssetRegistry.md` ("Live Status & Handoff"); external quickstart:
+The hosted catalog is a company-run service, **live at scale** (66,859 records — PNG sprites / OGG audio
+/ self-contained GLB models / SVG vectors — on Cloudflare R2 + Railway Postgres behind a public read-only
+search API at `https://asset-api-production-59d9.up.railway.app/v1/assets/search`, with an in-Unity asset
+browser). The local registry remains supported; new asset-registry work targets the hosted catalog
+boundary. External developer quickstart (browse + prepare against the public catalog, no credentials):
 `../Docs/Assets/PublicCatalogQuickstart.md`.
-
-Private mirror seed (publish-pipeline input):
-
-- Repo: `https://github.com/Loomtide/LoomtideAssetRegistry`
-- Provider/source: `kenney` / `kenney-all-in-one-3.5.0`
-- Asset bytes: `assets/providers/kenney/all-in-one/3.5.0/`
-- Sharded catalog: `catalog/assets/kenney-all-in-one-3.5.0/part-*.jsonl`
-- Source metadata: `catalog/sources/kenney-all-in-one-3.5.0.json`
 
 Catalog records include `localPath`, `githubRawUrl`, `githubBlobUrl`, checksum/size metadata,
 license policy, acquisition lane, trust tier, and `review.status`. Treat `review.status === "verified"`
@@ -272,39 +241,16 @@ Implementation rules:
 - Use `LOOMBRIDGE_ASSET_REGISTRY_TOKEN`, `GITHUB_TOKEN`, or `GH_TOKEN` for private GitHub catalog/file
   reads. Loombridge attaches the bearer token only to GitHub hosts, not arbitrary provider downloads.
 
-## Cross-Project Scenario Matrix
+## Multi-Version Validation
 
-Cross-project closeout for `v0.11.0` is profile-driven and keeps core APIs game-agnostic.
-
-Profile registry:
-- `demo/scenarios/cross-project/profiles.json`
-
-Project profiles:
-- `loombridge-dev` -> `unity-projects/loombridge-dev`
-- `demo-platformer` -> `unity-projects/demo-platformer`
-
-Commands from `mcp-server/`:
+Core APIs stay game-agnostic across both supported editors. Validate on each by opening the target Unity
+project (`unity-projects/loombridge-dev` or `unity-projects/demo-platformer`) on `6000.3 LTS` (primary) or
+`2022.3 LTS` (compatibility) and running the baseline gate plus the connected smoke:
 
 ```bash
-npm run matrix:cross-project:loombridge-dev
-npm run matrix:cross-project:demo-platformer
+npm run verify:phase3:baseline     # test:all + disconnected smoke + meta check
+npm run smoke:phase3:connected     # connected smoke against the open editor
 ```
-
-Direct script form:
-
-```bash
-node ../scripts/phase3-cross-project-matrix.mjs --mode both --unity-version 6000.3 --profile loombridge-dev --output ../demo/.artifacts/03-matrix-loombridge-dev.json
-node ../scripts/phase3-cross-project-matrix.mjs --mode both --unity-version 6000.3 --profile demo-platformer --output ../demo/.artifacts/03-matrix-demo-platformer.json
-```
-
-The v0.11.0 closeout ran this matrix across both supported Unity versions and both project
-profiles, archiving the resulting evidence + summary internally; the commands above reproduce
-the same matrix artifacts on demand.
-
-Artifact interpretation:
-- `status=pass`: disconnected baseline + connected scenario run succeeded.
-- `status=blocked`: deterministic environmental blocker (for example `EPERM_LOOPBACK`, `ECONNREFUSED_NO_LISTENER`, `TIMEOUT_CONNECT`); blocked connected output is preserved as evidence but is not a product pass when offline gates pass.
-- `status=fail`: unexpected regression in scenario execution/tooling.
 
 ## Development
 
@@ -312,26 +258,21 @@ Artifact interpretation:
 npm run build          # Compile TypeScript
 npm run test:unit      # Run unit tests
 npm run test:integration  # Run integration tests (spawns server over stdio)
-npm test               # Build + all tests
+npm test               # Build + unit tests
+npm run test:all       # Build + unit + integration tests
 npm run typecheck      # Type-check without emitting
+npm run ci             # typecheck + build + unit tests (the pre-commit bar)
 npm run smoke:phase3:disconnected  # MCP smoke check without Unity
 npm run smoke:phase3:connected     # MCP smoke check with Unity running
-npm run matrix:phase3:6000.3       # disconnected+connected reliability matrix for Unity 6000.3
-npm run matrix:phase3:2022.3       # disconnected+connected reliability matrix for Unity 2022.3
-npm run matrix:cross-project:loombridge-dev  # profile-based cross-project matrix (package-dev project)
-npm run matrix:cross-project:demo-platformer   # profile-based cross-project matrix (demo consumer project)
-npm run verify:phase3:asset-layer     # v0.11.0 build + tests + asset-layer offline gate
-npm run asset:platformer:prepare          # prepare/cache curated platformer assets
-npm run asset:platformer:attribution      # emit attribution markdown from the prepare report
-npm run scenario:platformer:assets:validate  # generate and dry-run curated asset scenario
 npm run check:unity-meta           # Unity .meta integrity check
 npm run verify:phase3:baseline     # test:all + disconnected smoke + meta check
+npm run docs:tools                 # regenerate TOOLS.md
 ```
 
-Matrix status interpretation:
-- `pass`: disconnected and connected runs succeeded for the target Unity version.
-- `blocked`: deterministic environmental blocker (for example `EPERM_LOOPBACK`) with remediation guidance.
-- `fail`: unexpected runtime/tooling failure that must be investigated before closeout.
+Status interpretation:
+- `pass`: disconnected and connected runs succeeded.
+- `blocked`: deterministic environmental blocker (for example `EPERM_LOOPBACK`) with remediation guidance — preserved as evidence, not a product pass.
+- `fail`: unexpected runtime/tooling failure that must be investigated.
 
 Connected blocker interpretation:
 - `ECONNREFUSED_NO_LISTENER`: UnityBridge listener is not running/reachable (open Unity and wait for `[Loombridge] Server started ...`).
@@ -339,7 +280,7 @@ Connected blocker interpretation:
 
 ## Troubleshooting
 
-- **CONNECTION_ERROR**: run `npm run verify:phase3:baseline`, then run `npm run matrix:phase3:6000.3` and `npm run matrix:phase3:2022.3` to capture blocker signatures/remediation hints (`EPERM_LOOPBACK`, `ECONNREFUSED_NO_LISTENER`, `TIMEOUT_CONNECT`) for both `6000.3` and `2022.3`.
+- **CONNECTION_ERROR**: run `npm run verify:phase3:baseline`, then `npm run smoke:phase3:connected` with the editor open to capture blocker signatures/remediation hints (`EPERM_LOOPBACK`, `ECONNREFUSED_NO_LISTENER`, `TIMEOUT_CONNECT`).
 - **Bridge startup logs missing**: verify Unity console shows `[Loombridge] Bootstrap initializing` and `[Loombridge] Server started on ws://...`.
 - **Port conflicts**: the plugin scans ports 8200-8210. Ensure no other process is bound to those ports.
 - **Build errors**: Verify Node.js >= 18 with `node --version`.

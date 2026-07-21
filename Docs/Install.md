@@ -22,13 +22,9 @@ versioned tarball dependency, verified by `loombridge doctor`.
 
 ## Track A — Partner install (one command)
 
-Loombridge ships to partners through **GitHub Releases** on a dedicated **release distribution channel** —
-release assets only, no source; partners never need access to this monorepo. No npm account, no registry
-config. You already have a GitHub account, so authenticate once and then install (and later update) with a
-single command.
-
-> **Maintainers — granting a partner access** (read on the distribution repo is all they need):
-> `gh api -X PUT repos/Loomtide/loombridge/collaborators/<github-username> -f permission=pull`
+Loombridge ships through **public GitHub Releases** on this repo (`Loomtide/loombridge`) — the release
+assets carry the packed CLI and installer. No npm account, no registry config, and no repository access to
+grant. Install (and later update) with a single command.
 
 #### Fresh machine? One bootstrap command (installs the prerequisites too)
 
@@ -62,9 +58,8 @@ Unity project to wire it in the same shot: append `-Project C:\path\to\UnityProj
 form). The steps below are the **"I already have Node + gh"** path (or what the bootstrap runs for you).
 
 ```bash
-# 0. One-time: authenticate GitHub so the private release is downloadable
-gh auth login                     # GitHub CLI — https://cli.github.com
-#   (CI / no gh CLI? export LOOMBRIDGE_TOKEN=<fine-grained token, contents-read on the release distribution channel> instead)
+# 0. (Optional) The release assets are public, so no auth is needed. The installer uses the GitHub
+#    CLI if it is already authenticated, and falls back to LOOMBRIDGE_TOKEN=<token> in CI if you set it.
 
 # 1. Install the CLI — this same command UPDATES it later, just re-run it
 curl -fsSL https://get.loomtide.ai | sh
@@ -130,8 +125,8 @@ curl -fsSL https://get.loomtide.ai | sh -s -- --project /path/to/UnityProject --
 The choice lives in the committed `ProjectSettings/LoombridgeInstall.json`, so it is **team-wide + versioned**:
 one dev decides and everyone's `loombridge update` behaves identically after a pull.
 
-> A published npm package (`npm install -g @loomtide/loombridge`) is the eventual public-launch channel; while the
-> repo is private, the GitHub Releases command above is the supported path.
+> A published npm package (`npm install -g @loomtide/loombridge`) is a parallel channel; the public GitHub
+> Releases command above is the supported install/update path and always resolves the latest release.
 
 ---
 
@@ -188,8 +183,8 @@ tarball under `Packages/tarballs/`:
 Unity resolves that read-only into `Library/PackageCache`, so the package's `Tests/` are excluded from your compile
 automatically (no NUnit errors) and nobody can accidentally edit the bridge in place. It also writes
 `ProjectSettings/LoombridgeInstall.json` (the record `doctor` / `update` read). This route was chosen over UPM
-git-URL / scoped-registry distribution because it keeps a private monorepo private (only packaged bytes ship)
-and needs no consumer git credentials; see [`BridgeDistribution.md`](BridgeDistribution.md) for the fallbacks.
+git-URL / scoped-registry distribution because it ships only the packaged bridge bytes (no repo clone) and
+needs no consumer git credentials; see [`BridgeDistribution.md`](BridgeDistribution.md) for the fallbacks.
 
 Air-gapped / no manifest dependency wanted? Use `loombridge install-bridge --project <p> --embedded` (physically copies
 the package, `Tests/` stripped).
@@ -207,13 +202,14 @@ loombridge update --project /path/to/UnityProject      # 2. swap the project's b
 old tarball), then runs `doctor`. It never self-updates the CLI (self-running an install is unreliable across
 nvm/volta/asdf) — that's what the first command is for.
 
-**Dev short path** (from a checkout, no release needed) — push THIS clone's bridge into a project in one command:
+**Dev short path** (from a checkout, no release needed) — push THIS clone's bridge into a project in two steps:
 
 ```bash
-scripts/loombridge-dev-update.sh --project /path/to/UnityProject            # add --dry-run to preview
+scripts/loombridge-pack-bridge.sh --out-dir /tmp/loombridge-bridge          # pack THIS checkout's bridge .tgz
+loombridge update --project /path/to/UnityProject --tarball /tmp/loombridge-bridge/*.tgz
 ```
 
-It packs the bridge from your working tree and runs `loombridge update --tarball` with it. After either path, focus
+This packs the bridge from your working tree and runs `loombridge update --tarball` with it. After either path, focus
 the Unity editor (or trigger an asset refresh) so it re-resolves the tarball — expect one domain reload while the
 bridge recompiles, then `loombridge doctor --project <dir> --live` to confirm.
 
@@ -234,12 +230,12 @@ Point your MCP client at the server the CLI ships:
 - command: `loombridge`
 - args: `["mcp"]`
 
-For multiple open Unity projects and per-session routing, see [`GettingStarted.md`](GettingStarted.md).
+For multiple open Unity projects and per-session routing, see the transport/endpoint-discovery notes in the
+top-level `README.md` and `mcp-server/README.md`.
 
 ## Cutting a release (maintainers)
 
-Publish a new CLI version to GitHub Releases for the CLI (release assets only; partners get read there,
-never on this monorepo):
+Publish a new CLI version to public GitHub Releases on this repo:
 
 ```bash
 scripts/loombridge-release.sh                 # tag defaults to v<version> from mcp-server/package.json
@@ -252,14 +248,15 @@ It packs `@loomtide/loombridge` (whose `prepack` bundles the current bridge tarb
 overrides the target for both the release script and the installer.)
 
 > **After editing `scripts/install.sh`:** redeploy it to the `get-loombridge` Vercel project so
-> `get.loomtide.ai` serves the new version. The script carries no secrets — it uses each developer's own
-> GitHub auth to fetch the private release asset — and rarely changes, since it always pulls "latest".
+> `get.loomtide.ai` serves the new version. The script carries no secrets — the release assets are public,
+> so it fetches them without auth (using the GitHub CLI if present) — and rarely changes, since it always
+> pulls "latest".
 
 ### Smoke-test the release candidate first
 
 Point the installer at a locally built asset to exercise the **real** install path — same `npm install -g`,
 same PATH check, same optional `--project` / `--with-agent` wiring — before anything is published. Needs no
-auth and makes no network call, so a bad RC never reaches the release distribution channel:
+auth and makes no network call, so a bad RC never reaches a published release:
 
 ```bash
 (cd mcp-server && npm pack)                                    # prepack bundles the current bridge

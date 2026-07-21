@@ -13,12 +13,12 @@ Around these sit two supporting subsystems: the **replay verification** engine (
 - `mcp-server/` — TypeScript: the MCP stdio server, the op registry, **and** the `loombridge` CLI (`src/cli.ts`, `src/loombridge/`).
 - `unity-projects/loombridge-dev/` — package development + EditMode test project.
 - `unity-projects/demo-platformer/` — demo consumer project (local `file:` package reference).
-- `apps/asset-api/` — read-only hosted asset search API (Node `http`, Railway-deployed).
 - `asset-layer/` — curated registry packs, validation profiles, public catalog seed, fixtures, provenance.
 - `commands/loombridge/` — agent-facing slash-command prose (Claude; Codex wrappers are generator-emitted).
-- `scripts/` — install/freeze (`loombridge-install-locally.sh`), bridge packaging (`loombridge-pack-bridge.sh`) + legacy embed (`loombridge-embed-bridge.sh`), build stamping, smoke/matrix runners, artifact sync.
-- `Docs/` — product docs: `Install.md` (new-machine setup) + `BridgeDistribution.md` (bridge install options), `Profiles/` (verify contracts + partner guides), `Assets/` (hosted registry), `FutureIdeas/ReplayVerification.md` (replay design + status), dogfood retrospectives, positioning.
-- `unity-plugin/` — legacy archive only; never used for active work.
+- `scripts/` — install/freeze (`loombridge-install-locally.sh`), bridge packaging (`loombridge-pack-bridge.sh`) + legacy embed (`loombridge-embed-bridge.sh`), build stamping, smoke runners, artifact sync.
+- `Docs/` — product docs: `Install.md` (new-machine setup) + `BridgeDistribution.md` (bridge install options), `Profiles/` (verify contracts + partner guides), `Assets/` (public hosted-catalog quickstart), `ThreatModel.md`, `UnityAutonomousLaunch.md`.
+
+The hosted asset search API is a company-run service (public endpoint below), not a subtree of this repo.
 
 Unity targets: `6000.3` LTS primary, `2022.3` compatibility. Unity diagnostics use the `[Loombridge]` log prefix. Node `>= 18`.
 
@@ -154,7 +154,7 @@ The threat model is a self-graded or hand-crafted verdict. The mechanism is code
 
 ### Bridge Distribution & Install
 
-A consumer project installs the Unity bridge as a **versioned `.tgz` tarball added as a `file:` immutable dependency** in `Packages/manifest.json` — not a physical copy. `loombridge install-bridge --project <p>` drops the CLI-bundled tarball into `<project>/Packages/tarballs/`, writes the `file:` dependency, and records `ProjectSettings/LoombridgeInstall.json` (`installMode`, bridge version, `bridgeProtocol`, tarball `sha256`). Because Unity resolves an immutable dependency read-only into `Library/PackageCache`, the package's `Tests/` **self-exclude** from the consumer compile — an immutable dependency is not a Unity *testable*, so `UNITY_INCLUDE_TESTS` stays undefined and the `nunit`-referencing test asmdef never compiles. The tarball therefore ships `Tests/` unstripped yet cannot break a consumer that lacks `com.unity.test-framework` (the RUN-1 #62 break, which the legacy *embedded* copy had to strip against). This keeps a private monorepo private — only packaged bytes ship, inside `@loomtide/loombridge`; no consumer git credentials — and removes the "developer edited the embedded bridge" drift.
+A consumer project installs the Unity bridge as a **versioned `.tgz` tarball added as a `file:` immutable dependency** in `Packages/manifest.json` — not a physical copy. `loombridge install-bridge --project <p>` drops the CLI-bundled tarball into `<project>/Packages/tarballs/`, writes the `file:` dependency, and records `ProjectSettings/LoombridgeInstall.json` (`installMode`, bridge version, `bridgeProtocol`, tarball `sha256`). Because Unity resolves an immutable dependency read-only into `Library/PackageCache`, the package's `Tests/` **self-exclude** from the consumer compile — an immutable dependency is not a Unity *testable*, so `UNITY_INCLUDE_TESTS` stays undefined and the `nunit`-referencing test asmdef never compiles. The tarball therefore ships `Tests/` unstripped yet cannot break a consumer that lacks `com.unity.test-framework` (the RUN-1 #62 break, which the legacy *embedded* copy had to strip against). Only the packaged bridge bytes ship, inside `@loomtide/loombridge` — a consumer needs no git credentials and no repo clone — and the read-only install removes the "developer edited the embedded bridge" drift.
 
 - **Packaging** — `scripts/loombridge-pack-bridge.sh` produces the one versioned distribution unit (`+ .sha256`), refusing to pack if the Tests asmdef ever loses its `UNITY_INCLUDE_TESTS` guard. Shared metadata/tarball helpers live in `src/loombridge/bridge-install-common.ts` (single source of truth for `install-bridge`, `doctor`, `update`).
 - **`doctor`** — offline health of the local install + a project's wiring (metadata, manifest `file:` dep, tarball presence + sha integrity, version drift vs the CLI-bundled bridge, protocol expectation); `--live` pins to `--project` and runs the same `evaluatePrerequisiteChecks` protocol preflight against the running bridge; `--ci` emits JSON. Every failed row prints its fix.
@@ -187,7 +187,7 @@ CR-style release verification for 2D kids mini-games against a `MinigameContract
 
 ## Replay Verification Subsystem
 
-Record a human demonstration once, replay it deterministically forever (`src/loombridge/replay/`; design + status: `Docs/FutureIdeas/ReplayVerification.md`).
+Record a human demonstration once, replay it deterministically forever (`src/loombridge/replay/`).
 
 - **Trace format** (`.loombridge/replays/traces/<id>.trace.json`): segments of steps — `tap`, `drag`, `world-tap`, `key-tap`, `key-hold`, `key-down`/`key-up`/`wait` (timed-edge keyboard with concurrent holds), `wait-for-visible` — gated by anchors (`ui-visible`, runtime `condition`) with captures tied to anchors. Outcome assertions (captured end-state, `reachedWhenVisible`-gated so an unreached state can't false-pass) close the "flow ok but outcome wrong" hole. Reset tiers: scene-load / game hook / editor relaunch.
 - **Recording** (`trace record --observe`): the observer records what the game *responded to* — gesture-time locator resolution (reparenting drags keep the origin path), inert taps dropped + counted, keyboard edges on a timeline, per-step settle timing from the human's own dwell. Traces are green by construction; an empty observation is refused.
@@ -209,12 +209,12 @@ Registry packs + validation profiles (`2d-platformer`, `2d-topdown-arena`) with 
 A productionized, public, engine-neutral catalog — **66,859 records**: 55,502 PNG sprites, 1,342 OGG audio, 4,970 GLB models (self-contained; external textures embedded at publish), 5,045 SVG vectors.
 
 - **Storage**: Cloudflare R2 public bucket (sha256-pinned objects, idempotent resumable publish via `mcp-server/src/asset-authoring/r2-publish.ts`); model browse thumbnails from `Previews/*.png`.
-- **Database + API**: Railway Postgres (`assets` table, indexed id/primitive/kind/tags + full `record_json`) behind a read-only search API (`apps/asset-api/`, live at `asset-api-production-59d9.up.railway.app`): `/v1/assets/search`, `/v1/assets/:id`, `/v1/catalog/public/...` shards + index.
+- **Database + API**: Railway Postgres (`assets` table, indexed id/primitive/kind/tags + full `record_json`) behind a company-run read-only search API (live at `https://asset-api-production-59d9.up.railway.app`, hosted separately from this repo): `/v1/assets/search`, `/v1/assets/:id`, `/v1/catalog/public/...` shards + index.
 - **Publish pipeline**: private mirror registry → `registry-scale-publish.ts` (public transform, per-format routing, validation, exclude-with-reason) → R2 upload → `public-catalog-build.ts` (deterministic shards + `index.json`; byte-identical across runs) → batched DB ingest. This authoring/publish tooling lives in `mcp-server/src/asset-authoring/` (the private side of the OSS seam); `mcp-server/src/asset-layer/` keeps only the export-bound client side (catalog sources, prepare pipeline, validation, registry-plan/apply support).
 - **Unity consumption**: the in-editor **Loombridge Asset Browser** (`Editor/UI/LoombridgeAssetBrowser.cs`, Window → Loombridge → Asset Browser) live-searches the hosted API with thumbnails; the picker handshake (`unity_asset_picker_open/state/close`, `unity_asset_browser_open`) lets an agent offer choices to a human. Per-engine import deps are validated, not assumed: GLB needs `com.unity.cloud.gltfast` + `imageconversion`; SVG needs `com.unity.vectorgraphics`; PNG/OGG are native.
 - **Agent consumption**: `ApiCatalogSource` / `HttpCatalogSource` / `LocalCatalogSource` feed the same prepare pipeline, so hosted assets get the same checksum/license/provenance enforcement as local ones.
 
-Operational state, re-run instructions, and pending work: `Docs/Assets/HostedAssetRegistry.md` ("Live Status & Handoff"); external quickstart: `Docs/Assets/PublicCatalogQuickstart.md`.
+External developer quickstart (browse + prepare against the public catalog, no credentials): `Docs/Assets/PublicCatalogQuickstart.md`.
 
 ## Core vs Game-Specific
 
@@ -234,4 +234,4 @@ Loombridge core stays game-agnostic. Core APIs are neutral primitives (`scene.*`
 - **Deterministic CLI vs agent judgment** — the CLI owns gates, state, and exits; VLM/model review is advisory and independently attested; nothing model-judged enters a deterministic verdict.
 - **Honest measurement** — values are re-derived from raw captured samples; "reported" (un-re-derivable) values are flagged, and self-grades are rejected.
 - **Frozen runtime** — partners and dogfood runs execute a stamped, immutable install, so "which build graded this" is always answerable.
-- **Bridge ships as an immutable tarball dependency** — a `file:` `.tgz` in the consumer manifest (not a physical embed): its `Tests/` self-exclude (immutable ⇒ not a *testable*), it keeps a private monorepo private with no consumer git credentials, and Unity's read-only `PackageCache` copy can't be edited into drift. Compatibility is gated on the bridge protocol integer, not the marketing version.
+- **Bridge ships as an immutable tarball dependency** — a `file:` `.tgz` in the consumer manifest (not a physical embed): its `Tests/` self-exclude (immutable ⇒ not a *testable*), it ships only packaged bytes with no consumer git credentials or repo clone, and Unity's read-only `PackageCache` copy can't be edited into drift. Compatibility is gated on the bridge protocol integer, not the marketing version.

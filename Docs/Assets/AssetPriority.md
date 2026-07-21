@@ -74,7 +74,8 @@ one as final art certifies against a fiction.
 
 ## See also
 
-- `Docs/Assets/HostedAssetRegistry.md` — the hosted catalog architecture + API contract.
+- `ARCHITECTURE.md` ("Public Hosted Asset Catalog") — the hosted catalog architecture + API contract.
+- `Docs/Assets/PublicCatalogQuickstart.md` — external quickstart against the public catalog.
 - `commands/loombridge/plan.md` — the asset strategy stage (registry-plan / registry-apply).
 - `commands/loombridge/build.md` — manifest-driven scene assembly (read the manifest first).
 - `.skills/asset-layer/SKILL.md` — the full prepare/validate/import flow incl. 3D path.

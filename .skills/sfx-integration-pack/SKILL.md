@@ -9,9 +9,11 @@ grammar, layer roles, frequency, variant policy, priority, bus, spatial policy),
 per run. This is a distinct pipeline from UI (`ui-polish-pack`) and environment/character art
 (`generated-3d-art-integration`).
 
-The provider-key safety, provenance field list, cache key, cue-grammar shape, Unity import defaults, and
-the top-down audio rig are **canonical in `Docs/Assets/GeneratedSfxWorkflow.md`** — read it once, follow
-it, do not restate it. The per-genre cue map lives as a genre-pack artifact
+Workflow in brief: generate or source each cue against a declared cue map, keep provider API keys out of
+the committed tree (env-only), and record provenance (source, license, author, cache key/sha) for every
+imported clip. Import with game-appropriate Unity defaults (compressed-in-memory for one-shots, streaming
+for loops/music) and, for a top-down game, anchor the listener to the player rather than the camera so
+distance attenuation reads correctly. The per-genre cue map lives as a genre-pack artifact
 (`mcp-server/src/loombridge/genre-packs/<genre>/cue-map.json`), and the verification gates read it. This
 skill is the actionable runbook + the DO/DO-NOT framing. Loombridge gates technical audio health and cue
 FIRING deterministically; "does it sound like the intended action?" stays a HUMAN gate.

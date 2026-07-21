@@ -46,23 +46,24 @@ This writes the tarball to `<project>/Packages/tarballs/` and adds:
   read-only into `Library/PackageCache`; an immutable dependency is not a
   "testable", so `UNITY_INCLUDE_TESTS` stays undefined and the `nunit`-referencing
   test asmdef never compiles into the consumer (proven live — see the decision doc).
-- **Keeps the (private) monorepo private** — only the packaged bridge bytes ship,
-  inside `@loomtide/loombridge`. No consumer git credentials.
+- **Ships only packaged bytes** — the versioned bridge tarball inside
+  `@loomtide/loombridge`, with no repo clone and no consumer git credentials.
 - **Read-only** ⇒ no "developer edited the embedded bridge" drift.
 - `loombridge update --project <p>` swaps the tarball and re-runs `doctor`.
 - Transitive UPM deps (`com.unity.ugui`, `com.unity.2d.sprite`,
   `com.unity.nuget.newtonsoft-json`) resolve from the bridge `package.json`.
 
-This is the default because it was proven live to keep a private monorepo private while avoiding the
-"developer edited the embedded bridge" drift that the legacy embedded-copy route was prone to.
+This is the default because it was proven live: a consumer needs no repo clone or git credentials, and the
+read-only install avoids the "developer edited the embedded bridge" drift that the legacy embedded-copy
+route was prone to.
 
 ## Option B — Git-URL UPM dependency
 
-> **Caveat for the private monorepo:** a git-URL forces git credentials on every
-> consumer machine + CI runner and makes Unity **clone the whole private repo** to
-> resolve the `?path=` subfolder. Prefer Option A while the repo is private; a
-> git-URL becomes attractive mainly once the bridge is public (or via a dedicated
-> mirror repo).
+> **Caveat:** a git-URL forces git on every consumer machine + CI runner and makes
+> Unity **clone the whole repo** to resolve the `?path=` subfolder. Option A avoids
+> both the clone and needing `git` in the editor's Package Manager; a git-URL is
+> mainly attractive if you prefer a native UPM-git workflow (or a dedicated mirror
+> repo).
 
 Unity's Package Manager can install a package directly from a git repository,
 pointing at a subdirectory with `?path=` and pinning a ref with `#<branch-tag-or-sha>`.
@@ -153,6 +154,5 @@ Use this when the editor cannot reach git or a registry (air-gapped CI, etc.).
 | Air-gapped / vendored snapshot | **D — `install-bridge --embedded`** |
 | In-repo fixture under `unity-projects/*` | the `file:` ref (dev-only) |
 
-For a brand-new project pre-wired with Option A plus a `.loombridge/` skeleton and
-`.mcp.json`, see the template at `templates/create-loombridge-game/`
-(`Docs/GettingStarted.md` links it).
+For a brand-new project pre-wired with a resolvable bridge dependency plus a `.loombridge/` skeleton and
+`.mcp.json`, see the template at `templates/create-loombridge-game/`.

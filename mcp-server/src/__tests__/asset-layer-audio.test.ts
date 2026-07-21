@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
@@ -51,11 +53,15 @@ test("validatePreparedAudio accepts profile-compliant optional audio", async () 
 });
 
 test("prepareAssets reports accepted audio separately from sprite imports", async () => {
+  // Write the report/cache into a throwaway temp dir. The prepare report embeds
+  // absolute machine paths (outputPath/cacheDir), so writing it into the tracked
+  // demo/.artifacts tree would leak a developer's home path into a committed file.
+  const outDir = mkdtempSync(path.join(tmpdir(), "loombridge-audio-test-"));
   const report = await prepareAssets({
     profilePath,
     registryPath,
-    outputPath: path.join(repoRoot, "demo/.artifacts/platformer-assets.audio-test.json"),
-    cacheDir: path.join(repoRoot, "demo/.artifacts/asset-cache-audio-test"),
+    outputPath: path.join(outDir, "platformer-assets.audio-test.json"),
+    cacheDir: path.join(outDir, "asset-cache-audio-test"),
     genre: "platformer-2d",
     primitives: ["sfx_collect"],
   });

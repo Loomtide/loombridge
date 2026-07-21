@@ -1,11 +1,7 @@
-# Loombridge public-repo Unity EditMode tests (GameCI).
+# Loombridge Unity EditMode tests (GameCI).
 #
-# AUTHORED in the monorepo at scripts/oss/workflows/unity-editmode.yml and
-# installed into .github/workflows/ by scripts/oss/export-loombridge.mjs.
-# Adapted from the monorepo workflow of the same name; the has-license gating is
-# KEPT so forks (and the repo itself, until UNITY_LICENSE is configured) skip
-# gracefully instead of failing. Product-name strings are written PRE-rename —
-# scripts/oss/rename-loombridge.mjs rewrites them with the rest of the tree.
+# The has-license gating lets forks (and this repo, until UNITY_LICENSE is
+# configured) skip gracefully instead of failing.
 name: Unity EditMode Tests
 
 on:

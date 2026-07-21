@@ -3,11 +3,11 @@
   "status": "pass",
   "registry": {
     "packId": "platformer-2d",
-    "path": "/Users/avinash/Projects/AI/loombridge/asset-layer/registry/platformer-2d.json"
+    "path": "asset-layer/registry/platformer-2d.json"
   },
   "profile": {
     "id": "2d-platformer",
-    "path": "/Users/avinash/Projects/AI/loombridge/asset-layer/profiles/2d-platformer.json"
+    "path": "asset-layer/profiles/2d-platformer.json"
   },
   "assets": [
     {
@@ -16,7 +16,7 @@
       "kind": "audio",
       "placeholder": false,
       "status": "accepted",
-      "cachePath": "/Users/avinash/Projects/AI/loombridge/demo/.artifacts/asset-cache-audio-test/opengameart.fupi.platformer.sfx.collect-audio-ddf996f90177.wav",
+      "cachePath": "demo/.artifacts/asset-cache-audio-test/opengameart.fupi.platformer.sfx.collect-audio-ddf996f90177.wav",
       "unityPath": "Assets/Audio/SFX/collect.wav",
       "source": {
         "title": "Plingy Coin",

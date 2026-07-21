@@ -1,10 +1,4 @@
-# Loombridge public-repo release pipeline.
-#
-# AUTHORED in the monorepo at scripts/oss/workflows/release.yml and installed
-# into .github/workflows/ by scripts/oss/export-loombridge.mjs. Product-name
-# strings are written PRE-rename — scripts/oss/rename-loombridge.mjs rewrites
-# them (e.g. loombridge-pack-bridge.sh -> loombridge-pack-bridge.sh,
-# loombridge-cli-<v>.tgz -> loombridge-cli-<v>.tgz) with the rest of the tree.
+# Loombridge release pipeline.
 #
 # On tag v*:
 #   build + unit-test -> pack the bridge UPM tarball + `npm pack` the CLI ->

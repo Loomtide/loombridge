@@ -1,9 +1,5 @@
-# Loombridge public-repo CI.
-#
-# AUTHORED in the monorepo at scripts/oss/workflows/ci.yml and installed into
-# .github/workflows/ by scripts/oss/export-loombridge.mjs. Product-name strings
-# below are written PRE-rename on purpose — scripts/oss/rename-loombridge.mjs
-# rewrites them together with the rest of the exported tree.
+# Loombridge CI: typecheck, build, unit tests, and the TOOLS.md drift check for
+# the MCP server, plus the Unity .meta consistency check.
 name: CI
 
 on:

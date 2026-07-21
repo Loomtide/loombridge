@@ -8,11 +8,12 @@ icons, minimap, settings — WITHOUT faking readability or letting AI tells slip
 its own pipeline, separate from environment/character art (`generated-3d-art-integration`) and from SFX
 (`sfx-integration-pack`).
 
-The magenta chroma-key extraction recipe, one-element-per-image rule, review-every-state rule, the
-runtime-driven-restyle rule, and the 9-slice clean-center rule are **canonical in
-`Docs/Assets/GeneratedArtWorkflow.md` → "UI Skin Passes"** — read that once and follow it; this skill
-adds only the delta (uGUI/import gotchas, the state matrix, safe-area, honest store shots, text-fit /
-AI-tell copy review) plus the DO/DO-NOT framing. Loombridge never deterministically approves UI taste;
+Core recipe in brief: generate each UI element on a flat magenta (chroma-key) background, one element per
+image, and key it out to a clean transparent sprite; author 9-slice sprites with a clean, artifact-free
+center so borders stretch without smearing; restyle at runtime (swap sprites/colors on the live components)
+rather than rebuilding the hierarchy; and review the UI in EVERY game state, not just the idle screen. This
+skill adds the delta on top (uGUI/import gotchas, the state matrix, safe-area, honest store shots, text-fit
+/ AI-tell copy review) plus the DO/DO-NOT framing. Loombridge never deterministically approves UI taste;
 readability, layout beauty, and copy quality are HUMAN gates.
 
 Provenance tags below: **VALIDATED** = seen across ≥2 sources (a ledger + a planning/workflow doc, a

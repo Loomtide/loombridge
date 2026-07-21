@@ -44,13 +44,13 @@ create-loombridge-game/
    for the editor to resolve a git-URL dependency.
 
 3. **Install the CLI** so the `loombridge` / `loombridge-mcp` bins are available (the
-   `.mcp.json` here invokes `loombridge-mcp`). Per `Docs/GettingStarted.md`:
+   `.mcp.json` here invokes `loombridge-mcp`). Per `Docs/Install.md`:
 
    ```bash
    # tarball (works today, no registry):
    #   cd <Loombridge>/mcp-server && npm ci && npm pack
    #   npm i -g ./loombridge-cli-<version>.tgz
-   # or, once published to the private @loombridge org: npm i -g @loomtide/loombridge
+   # or, once published to the @loomtide npm scope: npm i -g @loomtide/loombridge
    ```
 
    If you prefer not to install globally, switch `.mcp.json`'s server command to

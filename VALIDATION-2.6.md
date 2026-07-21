@@ -2,8 +2,8 @@
 
 Validation of the renamed, self-contained Loombridge export against a REAL Unity editor.
 
-- **Tree:** `/Users/avinash/Projects/AI/loombridge` (git `a12c682`, "Loombridge export snapshot (pre-verification)")
-- **CLI:** `loombridge 0.2.0 (a12c682, built 2026-07-21T12:02:34Z)` via `node mcp-server/dist/cli.js`
+- **Tree:** this repository checkout at the import commit ("Loombridge export snapshot (pre-verification)")
+- **CLI:** `loombridge 0.2.0` (import commit, built 2026-07-21T12:02:34Z) via `node mcp-server/dist/cli.js`
 - **Bridge package:** `com.loomtide.loombridge` 0.2.0, plugin protocol 1
 - **Date:** 2026-07-21 · macOS 15.6 (Darwin 24.6.0, arm64) · Node v23.7.0
 - **Transport:** TCP loopback `ws://localhost:8209` (IPC is Windows-only)

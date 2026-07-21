@@ -4,13 +4,14 @@ This is the external-developer quickstart for browsing and preparing **public** 
 assets — with no private GitHub token and no checked-out private mirror.
 
 > **Live now:** the public catalog is published at scale (66,859 assets across sprite/audio/model/vector)
-> on R2, with a deployed read-only search API (`asset-api-production-59d9.up.railway.app/v1/assets/search`)
-> and a live Unity asset browser (`Window → Loombridge → Asset Browser`). Agent-side, source from the API
-> with the `--catalog-api <baseUrl>` flag on `browser-payload`/`prepare`. Full as-built state + how to
-> operate: [`HostedAssetRegistry.md` → "Live Status & Handoff"](HostedAssetRegistry.md).
+> on R2, served by a company-run read-only search API
+> (`https://asset-api-production-59d9.up.railway.app/v1/assets/search`) with a live Unity asset browser
+> (`Window → Loombridge → Asset Browser`). Agent-side, source from the API with the `--catalog-api <baseUrl>`
+> flag on `browser-payload`/`prepare`.
 
-For architecture and the publish pipeline, see [`HostedAssetRegistry.md`](./HostedAssetRegistry.md).
-This doc only covers commands that exist **today** against the read-only public catalog.
+For the catalog's architecture and publish pipeline, see the "Public Hosted Asset Catalog" section of
+[`ARCHITECTURE.md`](../../ARCHITECTURE.md). This doc only covers commands that exist **today** against the
+read-only public catalog.
 
 ---
 
