@@ -1,14 +1,14 @@
 {
   "name": "loombridge",
   "version": "0.1.0",
-  "description": "Loombridge commands for Claude Code & Codex — plan + verify the gameplay pipeline (CLI-first, agent-agnostic).",
+  "description": "Loombridge commands for Claude Code & Codex \u2014 plan + verify the gameplay pipeline (CLI-first, agent-agnostic).",
   "author": {
     "name": "Loombridge"
   },
   "keywords": [
     "loombridge",
     "unity",
-    "game-feel",
+    "game-verification",
     "verification",
     "codex",
     "slash-commands"

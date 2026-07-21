@@ -1,6 +1,8 @@
 # Loombridge
 
-**Game-feel engineering for AI-built games**, by [Loomtide](https://loomtide.ai).
+**Build and verify Unity games with AI agents**, by [Loomtide](https://loomtide.ai) — a
+121-tool MCP bridge and a deterministic CLI whose doneness gate refuses to call a build
+done on the agent's word.
 
 Loombridge lets an AI agent **see, drive, and measure** a Unity game the way a QA
 engineer would — and then it **refuses to call the game "done" on the agent's word.**
@@ -25,8 +27,8 @@ It's for two audiences at once:
 
 There are already several MCP servers that let an agent poke at the Unity Editor. They
 stop at *actuation* — move an object, run some C#, take a screenshot. The hard part of
-AI-built games isn't building them; it's knowing whether the result feels good and
-telling the difference between a real "done" and a confident hallucination.
+AI-built games isn't building them; it's knowing whether the result is actually good —
+and telling the difference between a real "done" and a confident hallucination.
 
 Loombridge adds a **verification layer** underneath the actuation that other Unity
 bridges don't have:

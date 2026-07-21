@@ -1,6 +1,6 @@
 # Loombridge MCP Server
 
-Loombridge is game-feel engineering for AI-built games, by [Loomtide](https://loomtide.ai). This package is its Unity bridge — the "Playwright for Unity" mechanism: an MCP server that exposes Unity editor operations as tools over stdio, enabling Claude Code (or any MCP-compatible client) to create objects, write scripts, capture screenshots, drive input, and verify running games without touching the Unity GUI.
+Loombridge is the agent layer for building and verifying Unity games, by [Loomtide](https://loomtide.ai). This package is its Unity bridge — the "Playwright for Unity" mechanism: an MCP server that exposes Unity editor operations as tools over stdio, enabling Claude Code (or any MCP-compatible client) to create objects, write scripts, capture screenshots, drive input, and verify running games without touching the Unity GUI.
 
 ## Prerequisites
 

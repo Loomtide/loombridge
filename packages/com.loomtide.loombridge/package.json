@@ -2,7 +2,7 @@
   "name": "com.loomtide.loombridge",
   "version": "0.3.0",
   "displayName": "Loombridge for Unity",
-  "description": "Unity bridge for Loombridge (game-feel engineering for AI-built games) — lets AI agents see, control, and verify the Unity Editor through MCP.",
+  "description": "Unity bridge for Loombridge \u2014 lets AI agents see, control, build, and verify Unity games through 121 typed MCP tools.",
   "unity": "2022.3",
   "license": "Apache-2.0",
   "keywords": [
