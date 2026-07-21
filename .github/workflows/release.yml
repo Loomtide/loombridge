@@ -91,6 +91,8 @@ jobs:
           REPO_PRIVATE: ${{ github.event.repository.private }}
         run: |
           npm install -g npm@11   # OIDC exchange needs npm >= 11.5
+          echo "npm version: $(npm --version)"
+          if [ -n "$ACTIONS_ID_TOKEN_REQUEST_URL" ]; then echo "OIDC env: PRESENT"; else echo "OIDC env: MISSING (id-token permission not effective)"; fi
           # A stale/empty _authToken npmrc line preempts the OIDC exchange — start clean.
           rm -f "$HOME/.npmrc"
           if [ -n "$NPM_TOKEN" ]; then
