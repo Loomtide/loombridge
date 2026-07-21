@@ -1,0 +1,159 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://loomtide.local/schemas/asset-ingest-candidate.schema.json",
+  "title": "Loomtide Asset Ingest Candidate",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "id",
+    "acquisitionLane",
+    "sourceUrl",
+    "provider",
+    "licenseClaim",
+    "fileUrls",
+    "observed",
+    "provenance",
+    "review"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": { "type": "string", "const": "1" },
+    "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]*$" },
+    "acquisitionLane": { "type": "string", "enum": ["api", "mirror-index", "scraped-discovery"] },
+    "sourceUrl": { "type": "string", "format": "uri" },
+    "pageTitle": { "type": "string", "minLength": 1 },
+    "author": { "type": "string", "minLength": 1 },
+    "provider": {
+      "type": "object",
+      "required": ["name", "url"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "url": { "type": "string", "format": "uri" },
+        "type": { "type": "string", "enum": ["local", "http", "generation"] },
+        "acquisitionLane": { "type": "string", "enum": ["api", "mirror-index", "scraped-discovery"] },
+        "termsNotes": { "type": "string" }
+      }
+    },
+    "licenseClaim": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "spdx": { "type": "string", "minLength": 1 },
+        "url": { "type": "string", "format": "uri" },
+        "requiresAttribution": { "type": "boolean" },
+        "commercialUse": { "type": "boolean" },
+        "raw": { "type": "string" }
+      }
+    },
+    "fileUrls": {
+      "type": "array",
+      "items": { "type": "string", "format": "uri" }
+    },
+    "observed": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "genre": { "type": "string", "minLength": 1 },
+        "primitive": { "type": "string", "minLength": 1 },
+        "kind": { "type": "string", "enum": ["sprite", "audio", "material", "model"] },
+        "category": { "type": "string", "minLength": 1 },
+        "tags": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "technical": {
+          "type": "object",
+          "additionalProperties": true,
+          "properties": {
+            "width": { "type": "integer", "minimum": 1 },
+            "height": { "type": "integer", "minimum": 1 },
+            "pixelsPerUnit": { "type": "integer", "minimum": 1 },
+            "transparent": { "type": "boolean" },
+            "sampleRate": { "type": "integer", "minimum": 1 },
+            "channels": { "type": "integer", "minimum": 1 },
+            "bitDepth": { "type": "integer", "minimum": 1 },
+            "durationMs": { "type": "number", "exclusiveMinimum": 0 }
+          }
+        },
+        "unity": {
+          "type": "object",
+          "additionalProperties": true,
+          "properties": {
+            "path": { "type": "string", "pattern": "^Assets/.+" },
+            "pixelsPerUnit": { "type": "integer", "minimum": 1 },
+            "spriteMode": { "type": "string", "enum": ["single", "multiple"] },
+            "filterMode": { "type": "string", "enum": ["Point", "Bilinear"] },
+            "defaultSpriteName": { "type": "string", "minLength": 1 }
+          }
+        },
+        "files": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["url"],
+            "additionalProperties": false,
+            "properties": {
+              "url": { "type": "string", "format": "uri" },
+              "role": { "type": "string", "enum": ["sprite", "spritesheet", "background", "decor", "audio"] },
+              "format": { "type": "string", "enum": ["png", "jpg", "jpeg", "wav"] },
+              "sizeBytes": { "type": "integer", "minimum": 1 },
+              "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+            }
+          }
+        }
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "required": ["discoveredAt", "method", "provider"],
+      "additionalProperties": false,
+      "properties": {
+        "discoveredAt": { "type": "string", "minLength": 1 },
+        "method": { "type": "string", "enum": ["api", "crawler", "mirror-index"] },
+        "provider": { "type": "string", "minLength": 1 },
+        "sourceRecordId": { "type": "string", "minLength": 1 },
+        "indexUrl": { "type": "string", "format": "uri" },
+        "notes": { "type": "string" }
+      }
+    },
+    "review": {
+      "type": "object",
+      "required": ["status"],
+      "additionalProperties": false,
+      "properties": {
+        "status": { "type": "string", "enum": ["unreviewed", "needs-review", "verified", "rejected"] },
+        "verifiedBy": { "type": "string", "enum": ["developer", "loomtide", "source-owner"] },
+        "verifiedAt": { "type": "string", "minLength": 1 },
+        "reviewer": { "type": "string", "minLength": 1 },
+        "notes": { "type": "string" },
+        "reason": { "type": "string" }
+      }
+    },
+    "rejection": {
+      "type": "object",
+      "required": ["reason", "detail"],
+      "additionalProperties": false,
+      "properties": {
+        "reason": {
+          "type": "string",
+          "enum": [
+            "NON_COMMERCIAL",
+            "UNCLEAR_LICENSE",
+            "ATTRIBUTION_NOT_SUPPORTED",
+            "MISSING_AUTHOR",
+            "MISSING_DOWNLOAD_URL",
+            "PROVIDER_TERMS_CONFLICT",
+            "CHECKSUM_MISMATCH",
+            "MISSING_SOURCE",
+            "MISSING_FILE_METADATA",
+            "INVALID_PROVENANCE",
+            "UNREVIEWED_SCRAPED_CANDIDATE"
+          ]
+        },
+        "detail": { "type": "string", "minLength": 1 }
+      }
+    }
+  }
+}

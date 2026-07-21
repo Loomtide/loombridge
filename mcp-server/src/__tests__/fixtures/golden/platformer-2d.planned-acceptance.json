@@ -1,0 +1,484 @@
+{
+  "schemaVersion": "1",
+  "game": "GOLDEN_GAME",
+  "source": {
+    "mock": "mcp-server/src/__tests__/fixtures/design-briefs/level-hero-shot.html",
+    "feelDoc": "mcp-server/src/__tests__/fixtures/design-briefs/trailer-demo-concept.md",
+    "note": "Hand-authored from the mock (palette/fonts/HUD/juice/camera) + the locked feel doc (feel params). This is the contract Phase C gates check against; it is the source of truth, the parser is verified to match it."
+  },
+  "fonts": {
+    "global": {
+      "family": "Press Start 2P",
+      "note": "HUD font; pixel display face. mock: .hud { font-family: 'Press Start 2P', monospace }."
+    },
+    "byRole": {
+      "score": {
+        "family": "Press Start 2P"
+      },
+      "lives": {
+        "family": "Press Start 2P"
+      },
+      "timer": {
+        "family": "Press Start 2P"
+      }
+    }
+  },
+  "palette": {
+    "entries": [
+      {
+        "hex": "#0d1015",
+        "roles": [
+          "background"
+        ],
+        "name": "ink"
+      },
+      {
+        "hex": "#4dd0e1",
+        "roles": [
+          "hud-accent"
+        ],
+        "name": "cyan"
+      },
+      {
+        "hex": "#ff4d8d",
+        "roles": [
+          "juice",
+          "hearts"
+        ],
+        "name": "magenta"
+      },
+      {
+        "hex": "#ffc857",
+        "roles": [
+          "camera-frame"
+        ],
+        "name": "gold"
+      },
+      {
+        "hex": "#b388ff",
+        "roles": [
+          "parallax"
+        ],
+        "name": "lavender"
+      },
+      {
+        "hex": "#ffd166",
+        "roles": [
+          "score",
+          "fruit-counter"
+        ],
+        "name": "gold"
+      },
+      {
+        "hex": "#ffffff",
+        "roles": [
+          "timer"
+        ],
+        "name": "hud-white"
+      }
+    ]
+  },
+  "hud": {
+    "elements": [
+      {
+        "id": "score",
+        "role": "Fruit counter",
+        "anchor": "top-left",
+        "insetPx": 24,
+        "colorRole": "score",
+        "font": "Press Start 2P",
+        "format": "×NN / total",
+        "required": true,
+        "note": "Annotation A. 22px, white text w/ 3px black drop; ×NN / total in #ffd166. Apple icon idle-bobs."
+      },
+      {
+        "id": "timer",
+        "role": "Run timer",
+        "anchor": "top-center",
+        "colorRole": "timer",
+        "font": "Press Start 2P",
+        "format": "mm:ss:ff",
+        "required": false,
+        "note": "Annotation C. Optional / hidden in story mode. Red pulse dot in last 10s."
+      },
+      {
+        "id": "lives",
+        "role": "Heart row",
+        "anchor": "top-right",
+        "insetPx": 24,
+        "colorRole": "hearts",
+        "font": "Press Start 2P",
+        "format": "3 hearts (empty pip on loss)",
+        "required": true,
+        "note": "Annotation B. Max 3 hearts (magenta #ff4d8d fill); lost slot stays as empty pip so layout never shifts."
+      }
+    ]
+  },
+  "framing": {
+    "aspect": {
+      "w": 16,
+      "h": 9
+    },
+    "nativeResolution": {
+      "w": 256,
+      "h": 144
+    },
+    "pixelScale": 5,
+    "camera": {
+      "worldPosition": {
+        "x": 8,
+        "y": 4.5,
+        "z": -10
+      },
+      "orthographicSize": 4.5,
+      "origin": "bottom-left",
+      "backgroundColorHex": "#2a1f4d",
+      "pixelPerfect": {
+        "assetsPPU": 16,
+        "refResolutionX": 256,
+        "refResolutionY": 144,
+        "upscaleRT": false,
+        "pixelSnapping": true,
+        "note": "upscaleRT MUST be false (HUD-crispness fix): true rasterizes the Screen Space-Camera HUD into the 256x144 RT then upscales it -> blurry text, and the ui-conformance hudCrispness check fails. The verified demo scene currently ships m_UpscaleRT:1 (true) — that is the bug the fix targets; the contract pins false."
+      },
+      "note": "Concrete one-screen static framing, read from the demo Main Camera + PixelPerfectCamera + Camera2DSetup. orthographicSize 4.5 is the AUTHORED Camera half-height (= refResolutionY/(2*assetsPPU) = 144/32); with worldPosition y=4.5 it puts the world origin at the bottom edge; x=8 centers a 16-unit-wide screen so the frame spans x in [0,16], origin bottom-left. The framing gate enforces this AUTHORED value (captured in EDIT mode by `loomtide capture` as camera.authoredOrthographicSize) — it is NOT a hard runtime value: PixelPerfectCamera OVERSCANS the live orthographicSize at play time when the Game view isn't exactly 16:9 with cropFrame off (e.g. ~5.85 in a taller window), and that runtime value is recorded in screen-rects.json but never enforced. backgroundColorHex #2a1f4d = rgb(0.165,0.122,0.302), the dark-night clear color. Build from THESE values — do not open the demo."
+    },
+    "cameraMode": "static",
+    "playerAnchor": {
+      "centerXFraction": 0.4,
+      "tolerance": 0.05,
+      "note": "ACCEPTED (Phase F reconcile): Tiderunner ships a STATIC one-screen camera, so the mock's 40% 'lead-the-look' anchor (Annotation I) does NOT apply per-frame — it presumed a FOLLOWING camera. With cameraMode=static the framing gate treats the player-anchor check as informational (pass + note), not a warn. The 40% target is retained for reference only."
+    },
+    "verticalPan": false,
+    "note": "Annotation I. 16x9 tiles visible, 256x144 native @ 5x = 1280x720. No vertical pan — slice reads in one screen."
+  },
+  "physics": {
+    "fixedTimestep": 0.0166667,
+    "note": "60 Hz. Required for the dash-distance target to be hittable: dashTime 0.15s = exactly 9 physics steps -> dashSpeed 18.75 x 0.15 = 2.8125u. At Unity's default 50 Hz, 0.15s = 7.5 steps and the dash quantizes to 2.625/3.0u (out of band). Set Project Settings > Time > Fixed Timestep = 0.0166667. See game-polish-2d/references/feel-mechanics.md."
+  },
+  "feel": {
+    "runSpeed": {
+      "target": 7,
+      "unit": "u/s",
+      "band": {
+        "percent": 5
+      },
+      "note": "moveSpeed 7"
+    },
+    "jumpApex": {
+      "target": 2.2,
+      "unit": "u",
+      "band": {
+        "percent": 5
+      },
+      "note": "jumpSpeed 14.22 + gravityScale 4.402 -> apex 2.20u"
+    },
+    "timeToApex": {
+      "target": 325,
+      "unit": "ms",
+      "band": {
+        "percent": 10
+      },
+      "note": "measured 325ms"
+    },
+    "shortHopApex": {
+      "target": 0.72,
+      "unit": "u",
+      "band": {
+        "percent": 10
+      },
+      "note": "jumpCutMultiplier 0.5 -> short hop 0.72u"
+    },
+    "dashDistance": {
+      "target": 2.8125,
+      "unit": "u",
+      "band": {
+        "percent": 5
+      },
+      "note": "= dashSpeed 18.75 x dashTime 0.15; the 3.0u was an arithmetic slip."
+    },
+    "dashTime": {
+      "target": 0.15,
+      "unit": "s",
+      "band": {
+        "percent": 10
+      }
+    },
+    "dashCooldown": {
+      "target": 0.4,
+      "unit": "s",
+      "band": {
+        "percent": 10
+      },
+      "note": "one dash per airtime"
+    },
+    "coyoteTime": {
+      "target": 0.1,
+      "unit": "s",
+      "band": {
+        "abs": 0.02
+      }
+    },
+    "jumpBuffer": {
+      "target": 0.1,
+      "unit": "s",
+      "band": {
+        "abs": 0.02
+      }
+    }
+  },
+  "juice": {
+    "dashTrail": {
+      "ghosts": 3,
+      "opacities": [
+        52,
+        32,
+        18
+      ],
+      "spacingPx": 10,
+      "holdMs": 80,
+      "tint": "cyan / screen blend",
+      "note": "Annotation D. 3 ghost copies behind player while dash active."
+    },
+    "landingDust": {
+      "particles": 4,
+      "spreadXPx": 6,
+      "fadeMs": 240,
+      "note": "Annotation E. 4 dust particles on touchdown/launch, +/-6px X spread, fade over 240ms. Every grounded landing."
+    },
+    "fruitPop": {
+      "frames": 6,
+      "scaleKeyframes": [
+        1,
+        1.4,
+        0
+      ],
+      "sparkles": 6,
+      "sfx": "coin_05.wav",
+      "note": "Annotation F. On pickup: swap to Collected.png 6-frame burst, scale 1.0->1.4->0, +1 score punch, 6 gold sparkles radial."
+    },
+    "hitStop": {
+      "ms": 100,
+      "frames": 6,
+      "playerFlashWhite": true,
+      "note": "Annotation G. On saw/spike contact: pause all tweens 6 frames (100ms), player flashes white 1 frame, then screen shake fires."
+    },
+    "screenShake": {
+      "amplitudePx": 4,
+      "decayMs": 180,
+      "trigger": "hit-only",
+      "note": "Annotation H. Trauma model: 4px amplitude, perlin XY offset, 180ms exponential decay. Triggers on hit ONLY — NOT on landing."
+    },
+    "parallax": {
+      "continuityThresholdU": 1.6,
+      "layers": [
+        {
+          "name": "Sky",
+          "factor": 0.3,
+          "coversFrame": true
+        },
+        {
+          "name": "Hills",
+          "factor": 0.6,
+          "coversBottom": true
+        },
+        {
+          "name": "Foreground",
+          "factor": 1
+        }
+      ],
+      "note": "Annotation J. Sky x0.3 (stars, slow drift) -> Hills x0.6 (silhouette) -> Foreground x1.0 (tiles + actors). Vertical drift on far layer only. continuityThresholdU 1.6: the Sky backdrop's per-step center may drift at most 1.6u between trajectory samples; a larger jump is a teleport/snap that tears the parallax (coverage gate CONTINUITY check)."
+    }
+  },
+  "audio": {
+    "playerComponent": "SfxPlayer",
+    "cues": [
+      {
+        "id": "jump",
+        "clip": "Assets/Audio/jump.wav",
+        "trigger": "PlayerController jump launch (velocity.y = jumpSpeed)",
+        "required": true,
+        "note": "Rising square blip."
+      },
+      {
+        "id": "dash",
+        "clip": "Assets/Audio/dash.wav",
+        "trigger": "PlayerController BeginDash",
+        "required": true,
+        "note": "Downward noise sweep / whoosh."
+      },
+      {
+        "id": "collect",
+        "clip": "Assets/Audio/collect.wav",
+        "trigger": "Collectible OnTriggerEnter2D (pickup)",
+        "required": true,
+        "note": "Short ascending arpeggio; replaces the mock's coin_05.wav with a procedurally-generated clip."
+      },
+      {
+        "id": "hit",
+        "clip": "Assets/Audio/hit.wav",
+        "trigger": "Hazard Hit (saw/spike contact, alongside HitStop)",
+        "required": true,
+        "note": "Noise burst."
+      },
+      {
+        "id": "bounce",
+        "clip": "Assets/Audio/bounce.wav",
+        "trigger": "Trampoline TryBounce (LaunchUp)",
+        "required": true,
+        "note": "Boing / pitch-up."
+      },
+      {
+        "id": "win",
+        "clip": "Assets/Audio/win.wav",
+        "trigger": "GameManager WinLevel",
+        "required": true,
+        "note": "Short major-arpeggio jingle."
+      }
+    ],
+    "note": "Procedural retro 8-bit SFX, generated with numpy → 16-bit PCM .wav (CC0, same procedural-provenance story as the PIL-generated sky/hills — no external asset sourcing). A drop-in SfxPlayer singleton (pooled AudioSource) plays them and exposes PlayCount; the manifest gate confirms the SfxPlayer GameObject is present in-scene, and a runtime assertion checks SfxPlayer.PlayCount > 0 after a collect/jump. See game-polish-2d/references/audio.md."
+  },
+  "manifest": {
+    "matching": "regex",
+    "caseSensitive": false,
+    "extrasAreFailure": false,
+    "elements": [
+      {
+        "nameRegex": "player|ninja|frog",
+        "type": "GameObject",
+        "primitive": "player",
+        "required": true
+      },
+      {
+        "nameRegex": "ground|tile|platform|terrain",
+        "type": "GameObject",
+        "primitive": "tile",
+        "minCount": 1,
+        "required": true
+      },
+      {
+        "nameRegex": "fruit|apple|cherr|strawberry|banana|kiwi",
+        "type": "GameObject",
+        "primitive": "collectible",
+        "minCount": 1,
+        "required": true
+      },
+      {
+        "nameRegex": "saw",
+        "type": "GameObject",
+        "primitive": "hazard",
+        "required": true
+      },
+      {
+        "nameRegex": "spike",
+        "type": "GameObject",
+        "primitive": "hazard",
+        "required": true
+      },
+      {
+        "nameRegex": "flag|checkpoint|goal",
+        "type": "GameObject",
+        "primitive": "goal",
+        "required": true
+      },
+      {
+        "nameRegex": "GameManager",
+        "type": "GameObject",
+        "required": true
+      },
+      {
+        "nameRegex": "SfxPlayer",
+        "type": "GameObject",
+        "primitive": "audio",
+        "required": true
+      }
+    ]
+  },
+  "win": {
+    "rule": "all-fruit",
+    "endStateMode": "modal",
+    "restartAction": "R",
+    "buildRule": "all-fruit (ACCEPTED): GameManager.isWin flips on score >= totalCoins. Reaching the flag (WinLevel()) remains a secondary win trigger.",
+    "note": "Phase F reconcile: the build's all-fruit rule (score >= totalCoins) is now the ACCEPTED win rule. The mock framed the flag as the goal, but collecting all fruit is the consciously-adopted primary objective; reaching the flag stays as a secondary win trigger. The earlier reach-flag/all-fruit mismatch is resolved in favor of all-fruit."
+  },
+  "reachability": {
+    "verticalMarginU": 0.5,
+    "note": "Geometric envelope slack for the reachability gate. verticalMarginU 0.5 adds half a unit above jump/launch apex; horizontalMarginU is omitted so the gate derives it from the feel budget (dashDistance + runSpeed x airtime). Closes the teleport-completion hole: every collectible must sit inside the movement envelope, not just be teleportable onto."
+  },
+  "placement": {
+    "groundedToleranceU": 0.1
+  },
+  "render": {
+    "viewportMode": "full",
+    "maxBorderFraction": 0.02,
+    "maxArtifactLineFraction": 0.85,
+    "maxStableRegionChangeFraction": 0.08,
+    "note": "Playable demo videos should fill the Game-view screenshot; unintended black bars/boxed camera output fail."
+  },
+  "platformer": {
+    "tileIntegerTolerance": 0.01,
+    "colliderSurfaceToleranceU": 0.1,
+    "note": "Platformer terrain is top-cap row plus body/fill rows; capped tiles must not repeat vertically."
+  },
+  "props": {
+    "checkPlayerOverlap": true,
+    "purposes": [
+      {
+        "nameRegex": "apple|fruit|coin|collectible",
+        "purpose": "collectible"
+      },
+      {
+        "nameRegex": "saw|spike|hazard",
+        "purpose": "hazard"
+      },
+      {
+        "nameRegex": "trampoline|bounce|spring",
+        "purpose": "launcher"
+      },
+      {
+        "nameRegex": "flag|checkpoint|goal",
+        "purpose": "goal"
+      }
+    ]
+  },
+  "capturePack": {
+    "states": [
+      {
+        "name": "spawn",
+        "description": "Player at spawn, no input yet — establishes the look/composition baseline.",
+        "probe": "Enter Play; sample the first frame after the scene is ready.",
+        "requiredCaptures": [
+          "spawn/verify-manifest.json",
+          "spawn/screen-rects.json"
+        ]
+      },
+      {
+        "name": "hazard",
+        "description": "Player adjacent to a hazard mid-arc — exposes hazard readability + framing under motion.",
+        "probe": "Drive the player toward a saw/spike; capture when player overlaps the hazard's screen-space halo.",
+        "requiredCaptures": [
+          "hazard/verify-manifest.json",
+          "hazard/screen-rects.json"
+        ]
+      },
+      {
+        "name": "movement",
+        "description": "Player mid-dash or mid-jump — captures the juice + camera under motion.",
+        "probe": "Trigger a dash or full jump; capture mid-trajectory (3rd dash frame, or apex).",
+        "requiredCaptures": [
+          "movement/verify-manifest.json",
+          "movement/screen-rects.json"
+        ]
+      },
+      {
+        "name": "win",
+        "description": "Win/end-state reached — exposes the final modal/composition + HUD final state.",
+        "probe": "Reach the flag (or collect-all-fruit per `win.rule`); capture after the win modal/state appears.",
+        "requiredCaptures": [
+          "win/verify-manifest.json",
+          "win/screen-rects.json"
+        ]
+      }
+    ]
+  }
+}

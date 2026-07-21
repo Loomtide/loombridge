@@ -1,0 +1,123 @@
+{
+  "genreId": "systems-rts",
+  "genreClass": "systems",
+  "subGenres": ["skirmish-rts", "base-building", "resource-economy"],
+  "perspectives": ["top-down", "isometric"],
+  "canonicalTunables": [
+    { "id": "commandAckLatencyMs", "unit": "ms", "description": "input click to visible/audible command acknowledgement" },
+    { "id": "selectionFeedbackLatencyMs", "unit": "ms", "description": "click or drag-select to visible selected-state feedback" },
+    { "id": "unitMoveSpeed", "unit": "u/s", "description": "ground unit travel speed under player command" },
+    { "id": "unitTurnRate", "unit": "u/s", "description": "how quickly a unit visibly reorients toward an order" },
+    { "id": "gatherCycleSeconds", "unit": "s", "description": "one worker harvest-return-deposit cycle" },
+    { "id": "buildTimeSeconds", "unit": "s", "description": "construction duration for the representative production building" },
+    { "id": "trainTimeSeconds", "unit": "s", "description": "time to train one representative combat unit" },
+    { "id": "engagementTtkSeconds", "unit": "s", "description": "time for a reference combat unit to kill a like enemy" }
+  ],
+  "assetRoles": [
+    "worker-unit",
+    "combat-unit",
+    "resource-node",
+    "dropoff-building",
+    "production-building",
+    "terrain-map",
+    "selection-marker",
+    "command-marker-vfx",
+    "build-footprint-valid",
+    "build-footprint-invalid",
+    "health-bar",
+    "resource-hud",
+    "unit-count-hud",
+    "build-menu",
+    "selection-panel",
+    "attack-impact-vfx",
+    "command-sfx",
+    "completion-sfx"
+  ],
+  "defaultBands": [
+    {
+      "target": "commandAckLatencyMs",
+      "band": { "max": 150, "unit": "ms" },
+      "evidenceKind": "pack-default",
+      "measurabilityTag": "needs-new-calculator",
+      "calculator": "input-onset -> order-acknowledgement-event latency (none today)"
+    },
+    {
+      "target": "selectionFeedbackLatencyMs",
+      "band": { "max": 100, "unit": "ms" },
+      "evidenceKind": "pack-default",
+      "measurabilityTag": "needs-new-calculator",
+      "calculator": "click/drag-release -> selection-marker/UI-feedback latency (none today)"
+    },
+    {
+      "target": "unitMoveSpeed",
+      "band": { "min": 2, "max": 5, "unit": "u/s" },
+      "evidenceKind": "pack-default",
+      "measurabilityTag": "needs-new-calculator",
+      "calculator": "arbitrary commanded-unit path speed sampler (none today)"
+    },
+    {
+      "target": "gatherCycleSeconds",
+      "band": { "min": 6, "max": 14, "unit": "s" },
+      "evidenceKind": "pack-default",
+      "measurabilityTag": "needs-new-calculator",
+      "calculator": "resource harvest-return-deposit cycle sampler (none today)"
+    },
+    {
+      "target": "buildTimeSeconds",
+      "band": { "min": 8, "max": 25, "unit": "s" },
+      "evidenceKind": "pack-default",
+      "measurabilityTag": "needs-new-calculator",
+      "calculator": "construction start -> completed-building event sampler (none today)"
+    },
+    {
+      "target": "trainTimeSeconds",
+      "band": { "min": 6, "max": 18, "unit": "s" },
+      "evidenceKind": "pack-default",
+      "measurabilityTag": "needs-new-calculator",
+      "calculator": "train-button/queue-start -> unit-spawn event sampler (none today)"
+    },
+    {
+      "target": "engagementTtkSeconds",
+      "band": { "min": 4, "max": 14, "unit": "s" },
+      "evidenceKind": "pack-default",
+      "measurabilityTag": "needs-new-calculator",
+      "calculator": "unit-HP probe + time-to-zero on a reference 1v1 fixture (none today)"
+    },
+    {
+      "target": "macro-economy-tension",
+      "band": { "qualitative": "player faces meaningful produce-vs-build-vs-attack tradeoffs inside the first skirmish" },
+      "evidenceKind": "pack-default",
+      "measurabilityTag": "judgment-only"
+    },
+    {
+      "target": "battlefield-legibility",
+      "band": { "qualitative": "unit ownership, unit state, threats, and selected targets are readable at a glance" },
+      "evidenceKind": "pack-default",
+      "measurabilityTag": "judgment-only"
+    },
+    {
+      "target": "ai-opponent-believability",
+      "band": { "qualitative": "AI gathers, produces, attacks, and reacts enough to create a credible first opponent" },
+      "evidenceKind": "pack-default",
+      "measurabilityTag": "judgment-only"
+    },
+    {
+      "target": "pathfinding-quality",
+      "band": { "qualitative": "units reach orders without obvious bunching, stalls, jitter, or terrain confusion" },
+      "evidenceKind": "pack-default",
+      "measurabilityTag": "judgment-only"
+    },
+    {
+      "target": "build-placement-affordance",
+      "band": { "qualitative": "valid and invalid footprints are obvious before committing placement" },
+      "evidenceKind": "pack-default",
+      "measurabilityTag": "judgment-only"
+    }
+  ],
+  "exemplars": [
+    "Warcraft III (skirmish pacing + command legibility)",
+    "Age of Empires II (gather/build/train economy loop)",
+    "StarCraft (command responsiveness + combat readability)"
+  ],
+  "notes": "RTS is systems-heavy: do not claim measurable-now unless a calculator is implemented. Use pack-default bands for plan quality, but tag command, economy, movement, production, and combat timing as needs-new-calculator. Keep the core vertical to one faction, one worker, one combat unit, one resource loop, one production building, one map, and one baseline AI opponent; put rosters, tech trees, factions, campaign, fog-of-war depth, and multiplayer in deferredMeta."
+}

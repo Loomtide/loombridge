@@ -1,0 +1,28 @@
+{
+  "schemaVersion": "0.1.0",
+  "status": "superseded",
+  "historicalStatus": "blocked",
+  "blockedAt": "2026-06-25T00:08:27+05:30",
+  "gap": "live-unity-fire-event-capture",
+  "preparedProject": "unity-projects/shooter-fire-dogfood",
+  "checks": [
+    {
+      "name": "new Unity test project scaffold",
+      "status": "pass",
+      "command": "scripts/new-test-project.sh shooter-fire-dogfood --force"
+    },
+    {
+      "name": "agent surface",
+      "status": "pass",
+      "command": "scripts/check-agent-surface.sh unity-projects/shooter-fire-dogfood"
+    },
+    {
+      "name": "Unity editor registry",
+      "status": "blocked",
+      "observed": "Only GameHub was registered with the Loomtide bridge; shooter-fire-dogfood was not open."
+    }
+  ],
+  "supersededBy": "demo-bundles/generic-build-follow-on/live-unity-fire-dogfood/live-fire-capture-2026-06-25.json",
+  "nextRequiredAction": "None for fireIntervalMs live dogfood; the later live capture superseded this blocker.",
+  "noFalseGreen": "This record remains as history of the initial blocked attempt; it is not current evidence."
+}

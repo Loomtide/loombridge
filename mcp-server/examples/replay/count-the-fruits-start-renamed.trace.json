@@ -1,0 +1,26 @@
+{
+  "schemaVersion": "0.1",
+  "id": "count-the-fruits-start-renamed",
+  "title": "Regression: Start button renamed/removed",
+  "intent": "Simulates a build where the Start button was renamed. Replay must fail with a precise action-failed first divergence — no project mutation, the trace simply references the element the build no longer exposes.",
+  "start": { "scene": "Assets/Scenes/CountTheFruits.unity", "reset": "scene-load" },
+  "input": { "backend": "ui-events" },
+  "segments": [
+    {
+      "id": "start-to-question",
+      "actions": [
+        { "do": "tap", "locator": { "path": "/HUD/StartScreen/StartButtonRENAMED" } }
+      ],
+      "anchors": [
+        {
+          "id": "question-shown",
+          "kind": "ui-visible",
+          "locator": { "path": "/HUD/Banner/QuestionText" },
+          "timeoutMs": 4000
+        }
+      ],
+      "captures": [{ "id": "question", "atAnchor": "question-shown" }]
+    }
+  ],
+  "outcome": { "expected": "success" }
+}

@@ -1,0 +1,182 @@
+{
+  "schemaVersion": "1",
+  "game": "2d-shooter",
+  "source": {
+    "note": "Promoted from GenreContract 2d-shooter; genreClass=twitch; confidence=experimental."
+  },
+  "fonts": {
+    "global": {
+      "family": "Press Start 2P"
+    },
+    "byRole": {
+      "health": {
+        "family": "Press Start 2P"
+      },
+      "ammo": {
+        "family": "Press Start 2P"
+      },
+      "wave-score": {
+        "family": "Press Start 2P"
+      }
+    }
+  },
+  "palette": {
+    "entries": [
+      {
+        "hex": "#0d1015",
+        "roles": [
+          "background"
+        ],
+        "name": "ink"
+      },
+      {
+        "hex": "#4dd0e1",
+        "roles": [
+          "hud-accent",
+          "ammo"
+        ],
+        "name": "cyan"
+      },
+      {
+        "hex": "#ff4d8d",
+        "roles": [
+          "juice",
+          "health"
+        ],
+        "name": "magenta"
+      },
+      {
+        "hex": "#ffd166",
+        "roles": [
+          "score",
+          "weapon"
+        ],
+        "name": "gold"
+      },
+      {
+        "hex": "#ffffff",
+        "roles": [
+          "reticle",
+          "status"
+        ],
+        "name": "white"
+      }
+    ]
+  },
+  "hud": {
+    "elements": [
+      {
+        "id": "health",
+        "role": "health",
+        "anchor": "top-left",
+        "colorRole": "health",
+        "font": "Press Start 2P",
+        "required": true
+      },
+      {
+        "id": "ammo",
+        "role": "ammo",
+        "anchor": "top-center",
+        "colorRole": "ammo",
+        "font": "Press Start 2P",
+        "required": true
+      },
+      {
+        "id": "wave-score",
+        "role": "wave score",
+        "anchor": "top-right",
+        "colorRole": "wave-score",
+        "font": "Press Start 2P",
+        "required": true
+      }
+    ]
+  },
+  "framing": {
+    "aspect": {
+      "w": 16,
+      "h": 9
+    },
+    "nativeResolution": {
+      "w": 256,
+      "h": 144
+    },
+    "cameraMode": "static",
+    "playerAnchor": {
+      "centerXFraction": 0.5,
+      "tolerance": 0.1
+    },
+    "verticalPan": false
+  },
+  "feel": {},
+  "juice": {},
+  "manifest": {
+    "matching": "regex",
+    "caseSensitive": false,
+    "extrasAreFailure": false,
+    "elements": [
+      {
+        "nameRegex": "player.*character",
+        "type": "GameObject",
+        "primitive": "player-character",
+        "required": true
+      },
+      {
+        "nameRegex": "weapon",
+        "type": "GameObject",
+        "primitive": "weapon",
+        "required": true
+      },
+      {
+        "nameRegex": "reticle",
+        "type": "GameObject",
+        "primitive": "reticle",
+        "required": true
+      },
+      {
+        "nameRegex": "player.*projectile",
+        "type": "GameObject",
+        "primitive": "player-projectile",
+        "required": true
+      },
+      {
+        "nameRegex": "enemy",
+        "type": "GameObject",
+        "primitive": "enemy",
+        "required": true
+      },
+      {
+        "nameRegex": "arena.*floor",
+        "type": "GameObject",
+        "primitive": "arena-floor",
+        "required": true
+      },
+      {
+        "nameRegex": "arena.*wall",
+        "type": "GameObject",
+        "primitive": "arena-wall",
+        "required": true
+      },
+      {
+        "nameRegex": "arena",
+        "type": "GameObject",
+        "primitive": "arena",
+        "required": true
+      }
+    ]
+  },
+  "win": {
+    "rule": "all-enemies-defeated",
+    "endStateMode": "modal",
+    "restartAction": "R"
+  },
+  "verification": {
+    "gates": {
+      "platform-tiles": "not_applicable",
+      "tile-render": "not_applicable",
+      "parallax-motion": "not_applicable",
+      "reachability": "not_applicable",
+      "placement": "not_applicable"
+    },
+    "note": "Promoted generic contract: omitted platformer-shaped gates are not applicable unless the contract slice DAG explicitly requests them."
+  }
+}

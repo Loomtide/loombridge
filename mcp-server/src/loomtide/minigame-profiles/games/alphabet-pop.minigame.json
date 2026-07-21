@@ -1,0 +1,55 @@
+{
+  "schemaVersion": "1",
+  "id": "alphabet-pop",
+  "type": "2d-kids-minigame",
+  "title": "Alphabet Pop",
+  "description": "Tap the bubble showing the called-out letter to pop it; pop all letters to win.",
+  "scenes": ["Assets/Scenes/AlphabetPop.unity"],
+  "ageBand": "3-5",
+  "visualProfile": "tablet-landscape",
+  "requiredInFrame": [
+    { "id": "promptLabel", "locator": "AlphabetPop:/Canvas/PromptLabel", "description": "The 'Find the letter A' prompt text." },
+    { "id": "letterBubbleA", "locator": "AlphabetPop:/Canvas/Bubbles/BubbleA", "description": "A tappable letter bubble." },
+    { "id": "letterBubbleB", "locator": "AlphabetPop:/Canvas/Bubbles/BubbleB", "description": "A tappable letter bubble." },
+    { "id": "homeButton", "locator": "AlphabetPop:/Canvas/HUD/HomeButton", "description": "Back-to-home navigation." },
+    { "id": "scoreStars", "locator": "AlphabetPop:/Canvas/HUD/ScoreStars", "description": "Reward progress display." }
+  ],
+  "allowedOffscreen": [
+    { "id": "spawnerRoot", "locator": "AlphabetPop:/Spawner", "description": "Non-visual logic root; never expected in frame." }
+  ],
+  "states": [
+    { "id": "start", "kind": "start", "scene": "Assets/Scenes/AlphabetPop.unity", "requiredInFrame": ["promptLabel", "homeButton"], "description": "Title/idle before the first prompt." },
+    { "id": "active", "kind": "active", "scene": "Assets/Scenes/AlphabetPop.unity", "requiredInFrame": ["promptLabel", "letterBubbleA", "letterBubbleB", "homeButton"], "description": "Letters are tappable; a prompt is shown." },
+    { "id": "success_reward", "kind": "success_reward", "scene": "Assets/Scenes/AlphabetPop.unity", "requiredInFrame": ["scoreStars", "homeButton"], "description": "All letters popped; reward stars shown." },
+    { "id": "home_back", "kind": "home_back", "scene": "Assets/Scenes/AlphabetPop.unity", "requiredInFrame": ["homeButton"], "description": "Home/back navigation reached." }
+  ],
+  "uiSafeAreas": {
+    "maxOverflowFraction": 0,
+    "insets": { "top": 0.05, "bottom": 0.05, "left": 0.04, "right": 0.04 }
+  },
+  "tapTargets": {
+    "minSizeDp": 96
+  },
+  "interactionFlow": {
+    "happyPath": ["start", "active", "success_reward", "home_back"]
+  },
+  "artifactThresholds": {
+    "maxBorderFraction": 0.02,
+    "maxUniformBorderFraction": 0.02,
+    "minContentCoverage": 0.9
+  },
+  "checks": {
+    "deterministic": [
+      "safe-area",
+      "required-in-frame",
+      "tap-target-size",
+      "text-clipping",
+      "control-overlap",
+      "no-black-bars",
+      "render-frame",
+      "console-clean",
+      "interaction-flow"
+    ],
+    "advisory": ["vlm-readability", "vlm-age-appropriateness"]
+  }
+}

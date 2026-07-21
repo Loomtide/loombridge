@@ -1,0 +1,259 @@
+{
+  "schemaVersion": "1",
+  "game": "switchyard-courier",
+  "source": {
+    "mock": "mcp-server/src/__tests__/fixtures/design-briefs/switchyard-courier-design-brief.md",
+    "feelDoc": "mcp-server/src/__tests__/fixtures/design-briefs/switchyard-courier-design-brief.md",
+    "note": "Hand-authored from the Switchyard Courier design brief. This is a non-platformer proof contract: top-down movement, battery delivery, hazard telegraphs, and no platformer route assumptions."
+  },
+
+  "fonts": {
+    "global": {
+      "family": "Inter",
+      "note": "Clean utilitarian HUD face. Any readable sans-serif asset may be substituted only if this contract is updated."
+    },
+    "byRole": {
+      "deliveries": { "family": "Inter" },
+      "lives": { "family": "Inter" },
+      "carried": { "family": "Inter" },
+      "state": { "family": "Inter" }
+    },
+    "forbidden": [
+      {
+        "family": "Press Start 2P",
+        "note": "Tiderunner's exact HUD face; Switchyard must use a distinct utilitarian font."
+      }
+    ]
+  },
+
+  "palette": {
+    "entries": [
+      { "hex": "#151a1f", "roles": ["background", "floor"], "name": "graphite" },
+      { "hex": "#8fe3c3", "roles": ["objective", "deliveries", "terminal"], "name": "signal-teal" },
+      { "hex": "#f3b44e", "roles": ["hazard-warning", "carried"], "name": "warning-amber" },
+      { "hex": "#f25f5c", "roles": ["damage", "lives"], "name": "damage-red" },
+      { "hex": "#e8edf0", "roles": ["hud-text", "state"], "name": "soft-white" },
+      { "hex": "#5d6a73", "roles": ["boundary"], "name": "rail-gray" }
+    ]
+  },
+
+  "hud": {
+    "elements": [
+      {
+        "id": "deliveries",
+        "role": "Delivered batteries",
+        "anchor": "top-left",
+        "insetPx": 24,
+        "colorRole": "deliveries",
+        "font": "Inter",
+        "format": "DELIVERED 0/3",
+        "required": true,
+        "note": "Shows deposited batteries. Must not use side-view platformer scoring wording."
+      },
+      {
+        "id": "lives",
+        "role": "Lives remaining",
+        "anchor": "top-right",
+        "insetPx": 24,
+        "colorRole": "lives",
+        "font": "Inter",
+        "format": "LIVES 3",
+        "required": true,
+        "note": "Three-hit fail state. Red role only for damage/life status, not Tiderunner hearts."
+      },
+      {
+        "id": "carried",
+        "role": "Carried battery state",
+        "anchor": "bottom-left",
+        "insetPx": 24,
+        "colorRole": "carried",
+        "font": "Inter",
+        "format": "CARRYING NONE/BATTERY",
+        "required": true,
+        "note": "Must visibly change after pickup and delivery."
+      },
+      {
+        "id": "state",
+        "role": "Win/lose/message state",
+        "anchor": "center",
+        "colorRole": "state",
+        "font": "Inter",
+        "format": "SHIFT COMPLETE / SYSTEM FAILURE",
+        "required": false,
+        "note": "End-state overlay appears above all world sprites."
+      }
+    ]
+  },
+
+  "framing": {
+    "aspect": { "w": 16, "h": 9 },
+    "nativeResolution": { "w": 320, "h": 180 },
+    "pixelScale": 4,
+    "camera": {
+      "worldPosition": { "x": 0, "y": 0, "z": -10 },
+      "orthographicSize": 5,
+      "origin": "center",
+      "backgroundColorHex": "#151a1f",
+      "pixelPerfect": {
+        "assetsPPU": 32,
+        "refResolutionX": 320,
+        "refResolutionY": 180,
+        "upscaleRT": false,
+        "pixelSnapping": true,
+        "note": "Static top-down camera; HUD crispness still requires upscaleRT=false."
+      },
+      "note": "Static one-room arena. Suggested extents are about 14 x 8 world units."
+    },
+    "cameraMode": "static",
+    "playerAnchor": {
+      "centerXFraction": 0.5,
+      "tolerance": 0.2,
+      "note": "Informational in static camera mode. Player should remain visible while hazards and objectives stay readable."
+    },
+    "verticalPan": false,
+    "note": "One-screen top-down framing; no scrolling camera unless this contract is updated."
+  },
+
+  "physics": {
+    "fixedTimestep": 0.0166667,
+    "note": "60 Hz gives deterministic dodge and hazard timing measurements."
+  },
+
+  "feel": {
+    "runSpeed": {
+      "target": 5.5,
+      "unit": "u/s",
+      "band": { "percent": 8 },
+      "note": "Top-down maximum movement speed."
+    },
+    "dashDistance": {
+      "target": 1.4,
+      "unit": "u",
+      "band": { "percent": 10 },
+      "note": "Short dodge burst distance, not a platformer air dash."
+    },
+    "dashTime": {
+      "target": 0.18,
+      "unit": "s",
+      "band": { "percent": 10 }
+    },
+    "dashCooldown": {
+      "target": 0.5,
+      "unit": "s",
+      "band": { "percent": 10 }
+    },
+    "extra": {
+      "accelTo90": {
+        "target": 180,
+        "unit": "ms",
+        "band": { "percent": 15 },
+        "note": "Time to reach 90% top speed from rest."
+      },
+      "decelToStop": {
+        "target": 140,
+        "unit": "ms",
+        "band": { "percent": 20 },
+        "note": "Time to settle near-stop after input release."
+      },
+      "damageInvulnerability": {
+        "target": 0.7,
+        "unit": "s",
+        "band": { "percent": 15 }
+      }
+    }
+  },
+
+  "juice": {
+    "dashTrail": {
+      "ghosts": 2,
+      "opacities": [45, 18],
+      "spacingPx": 8,
+      "holdMs": 90,
+      "tint": "teal maintenance-light streak",
+      "note": "Dodge streak for top-down burst readability. Do not use Tiderunner's exact trail values."
+    },
+    "hitStop": {
+      "ms": 80,
+      "frames": 5,
+      "playerFlashWhite": true,
+      "note": "Brief damage confirmation without obscuring control."
+    },
+    "screenShake": {
+      "amplitudePx": 3,
+      "decayMs": 150,
+      "trigger": "damage-or-delivery-pulse",
+      "note": "Small shake on damage or terminal power-up only."
+    }
+  },
+
+  "audio": {
+    "playerComponent": "SfxPlayer",
+    "cues": [
+      { "id": "pickup", "clip": "Assets/Audio/SFX/pickup.wav", "trigger": "Battery pickup", "required": true },
+      { "id": "deposit", "clip": "Assets/Audio/SFX/deposit.wav", "trigger": "Terminal delivery", "required": true },
+      { "id": "dodge", "clip": "Assets/Audio/SFX/dodge.wav", "trigger": "Dodge burst", "required": true },
+      { "id": "hit", "clip": "Assets/Audio/SFX/hit.wav", "trigger": "Hazard damage", "required": true },
+      { "id": "win", "clip": "Assets/Audio/SFX/win.wav", "trigger": "All deliveries complete", "required": true },
+      { "id": "lose", "clip": "Assets/Audio/SFX/lose.wav", "trigger": "Lives reach zero", "required": true }
+    ],
+    "note": "Registry-backed audio preferred. Procedural fallback is allowed only if clearly marked and contract-compliant."
+  },
+
+  "manifest": {
+    "matching": "regex",
+    "caseSensitive": false,
+    "extrasAreFailure": false,
+    "elements": [
+      { "nameRegex": "player|courier|cart|bot", "type": "GameObject", "primitive": "player", "required": true },
+      { "nameRegex": "arena|boundary|rail|wall", "type": "GameObject", "primitive": "arena", "minCount": 1, "required": true },
+      { "nameRegex": "battery|cell|charge", "type": "GameObject", "primitive": "pickup", "minCount": 3, "required": true },
+      { "nameRegex": "terminal|socket|delivery", "type": "GameObject", "primitive": "terminal", "minCount": 3, "required": true },
+      { "nameRegex": "security|cone|arc|hazard|electric", "type": "GameObject", "primitive": "hazard", "minCount": 2, "required": true },
+      { "nameRegex": "GameManager|DeliveryManager", "type": "GameObject", "required": true },
+      { "nameRegex": "HUD|Canvas", "type": "GameObject", "required": true },
+      { "nameRegex": "SfxPlayer", "type": "GameObject", "primitive": "audio", "required": true }
+    ]
+  },
+
+  "win": {
+    "rule": "deliver-3-batteries",
+    "endStateMode": "modal",
+    "restartAction": "R",
+    "buildRule": "Player must collect batteries and deposit 3 at terminals. Win must not fire on pickup alone.",
+    "note": "Top-down delivery rule. No side-view platformer route or endpoint object."
+  },
+
+  "props": {
+    "checkPlayerOverlap": true,
+    "interactableScripts": [
+      "BatteryPickup",
+      "DeliveryTerminal",
+      "SecurityHazard",
+      "ElectricArc",
+      "TopDownPlayerController",
+      "SfxPlayer"
+    ]
+  },
+
+  "verification": {
+    "note": "Switchyard is a top-down arena proof. Generic gates apply; platformer/parallax gates are explicit not-applicable skips so the comparison does not force side-view assumptions onto this game.",
+    "gates": {
+      "manifest": "required",
+      "ui-conformance": "required",
+      "framing": "required",
+      "render-frame": "required",
+      "coverage": "not_applicable",
+      "parallax-motion": "not_applicable",
+      "visual-artifacts": "required",
+      "reachability": "not_applicable",
+      "placement": "required",
+      "platform-tiles": "not_applicable",
+      "tile-render": "not_applicable",
+      "prop-purpose": "required",
+      "playability": "required",
+      "feel": "required",
+      "console-clean": "required",
+      "frame-integrity": "required"
+    }
+  }
+}

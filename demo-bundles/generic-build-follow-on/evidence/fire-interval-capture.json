@@ -1,0 +1,36 @@
+{
+  "metric": "fireIntervalMs",
+  "status": "measured",
+  "source": "runtime.capture_input_motion",
+  "interactionId": "hold-fire",
+  "derivation": "sync",
+  "seriesId": "weapon-fire-count",
+  "sampledField": {
+    "id": "weapon-fire-count",
+    "locator": {
+      "path": "/Player/Weapon"
+    },
+    "type_name": "Weapon",
+    "property_path": "FireCount"
+  },
+  "fieldTimeline": [
+    {
+      "id": "weapon-fire-count",
+      "samples": [
+        { "tMs": 0, "value": 0 },
+        { "tMs": 100, "value": 1 },
+        { "tMs": 220, "value": 2 },
+        { "tMs": 340, "value": 3 }
+      ]
+    }
+  ],
+  "measurement": {
+    "value": 120,
+    "unit": "ms"
+  },
+  "notes": [
+    "Fixture-backed runner evidence, not a captured Unity project run.",
+    "Counter events at 100, 220, and 340 ms produce two intervals: 120 ms and 120 ms.",
+    "The runner still refuses this metric when fewer than two fire events are observed."
+  ]
+}

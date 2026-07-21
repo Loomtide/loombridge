@@ -1,0 +1,23 @@
+{
+  "schemaVersion": "1",
+  "id": "offscreen-negative",
+  "type": "2d-kids-minigame",
+  "title": "Offscreen Negative Fixture",
+  "description": "A deliberately-defective mini-game capture pack: in the 'active' state a required tap target has scrolled off-screen, so required-in-frame must FAIL and name the state/object id. The 'success_reward' state is clean, proving the failure is localized (not a blanket refusal).",
+  "scenes": ["Assets/Scenes/Offscreen.unity"],
+  "ageBand": "3-5",
+  "visualProfile": "phone-landscape",
+  "requiredInFrame": [
+    { "id": "targetButton", "locator": "Offscreen:/HUD/TargetButton" },
+    { "id": "rewardCard", "locator": "Offscreen:/HUD/RewardCard" }
+  ],
+  "states": [
+    { "id": "active", "kind": "active", "requiredInFrame": ["targetButton"] },
+    { "id": "success_reward", "kind": "success_reward", "requiredInFrame": ["rewardCard"] }
+  ],
+  "uiSafeAreas": { "maxOverflowFraction": 0 },
+  "tapTargets": { "minSizeDp": 96 },
+  "interactionFlow": { "happyPath": ["active", "success_reward"] },
+  "artifactThresholds": {},
+  "checks": { "deterministic": ["required-in-frame", "console-clean"] }
+}

@@ -1,0 +1,60 @@
+# Loombridge public-repo CI.
+#
+# AUTHORED in the monorepo at scripts/oss/workflows/ci.yml and installed into
+# .github/workflows/ by scripts/oss/export-loombridge.mjs. Product-name strings
+# below are written PRE-rename on purpose — scripts/oss/rename-loombridge.mjs
+# rewrites them together with the rest of the exported tree.
+name: CI
+
+on:
+  workflow_dispatch:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  mcp-server:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mcp-server
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: mcp-server/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Fast-failing dedicated type gate (a type error inside `test` reads as a
+      # generic test failure; this surfaces it unambiguously in seconds).
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Build
+        run: npm run build
+
+      - name: Unit tests
+        run: npm run test:unit
+
+      # TOOLS.md is generated — regenerate and fail if a PR forgot to commit it.
+      - name: Tool docs drift check
+        run: |
+          npm run docs:tools
+          git diff --exit-code -- TOOLS.md
+
+  unity-meta:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Unity .meta consistency check
+        run: bash scripts/check-unity-meta.sh

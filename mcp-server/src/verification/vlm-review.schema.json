@@ -1,0 +1,118 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://loomtide.dev/schemas/vlm-review.schema.json",
+  "title": "Loomtide Tier-2 VLM Review Findings (ADVISORY)",
+  "description": "The strict review-findings shape a fresh-context VLM reviewer subagent emits when comparing rendered key frames against the design mock + acceptance contract. This tier is ADVISORY for the Tier-1 `status`: it is reported under the SEPARATE `reviewFindings` key of the verify report and is NOT folded into the Tier-1 pass/fail. HOWEVER, the verify-2d-game definition-of-done REQUIRES this review to run against PLAY-MODE frames (HUD visible) and every perceptual `fail` to be resolved (fix → re-verify) or justified in writing before handover. No free-form verdict is permitted — only criteria scored pass|warn|fail with a one-line reason and the evidence frame it is based on.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["frames", "criteria", "summary"],
+  "properties": {
+    "reference": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "What the review compared the frames AGAINST (plan §P0.1). The hero-shot fidelity predicate in `loomtide doneness` requires `heroShotSha256` to equal the FROZEN hero-shot hash recorded in the verdict's `designTarget.pngSha256`; this is the machine-checkable proof the review judged the hero-shot IMAGE rather than contract attributes (`references hero-shot.png:false` was the RUN-1 tell that this was missing).",
+      "properties": {
+        "heroShot": {
+          "type": "string",
+          "description": "Path to the frozen hero-shot the reviewers were given (e.g. `.loomtide/design/hero-shot.png`)."
+        },
+        "heroShotSha256": {
+          "type": "string",
+          "description": "sha256 (hex) of the hero-shot bytes the reviewers compared against. Must match the verdict's `designTarget.pngSha256` for `doneness` to certify a design-targeted build."
+        }
+      }
+    },
+    "independence": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Attestation that this review was an INDEPENDENT, multi-reviewer pass — NOT the build agent grading itself (plan §P0.3). `doneness` refuses to certify a design-targeted build unless `independent` is true and `reviewerCount` >= 2. The CLI cannot prove fresh-context independence; it enforces that the review at least carries the >=2-reviewer attestation, and the command prose (vlm-review.md / build.md) makes the agent actually spawn fresh-context reviewers.",
+      "properties": {
+        "independent": {
+          "type": "boolean",
+          "description": "True when the reviewers did NOT author the build (fresh context, no build knowledge)."
+        },
+        "reviewerCount": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Number of independent reviewers whose flags were unioned into these findings. doneness requires >=2."
+        }
+      }
+    },
+    "frames": {
+      "type": "array",
+      "description": "The captured key frames the review is based on (spawn, mid-action moment, win/end, etc.). Each frame is referenced by `id` from a criterion's `evidenceFrame`.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "path"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Stable frame id, e.g. \"spawn\", \"action-mid\", \"win\"."
+          },
+          "path": {
+            "type": "string",
+            "description": "Artifact path to the captured PNG (no base64 blobs — store the file, reference it)."
+          },
+          "label": {
+            "type": "string",
+            "description": "Optional human label, e.g. \"Player at spawn, frame 0\"."
+          }
+        }
+      }
+    },
+    "criteria": {
+      "type": "array",
+      "description": "The advisory criteria requested by the game contract or the default generic rubric. Each is scored independently. Three groups: (A) design-fidelity checks (composition/palette/font/juice/end-state/hazard/collectible path/parallax) and (B) perceptual long-tail checks — `hud-crispness`, `props-grounded`, `platform-edge-to-edge`, `backdrop-seamless`, `palette-match`, `composition-match`, `rendering-artifacts` — the catch-all for the 'looks wrong' issues the deterministic gates miss; and (C) the HERO-SHOT STRUCTURAL FIDELITY checks — `composition-match`, `parallax-present`, `platform-tiers`, `element-placement-arc` — judged against the frozen hero-shot IMAGE (plan §P0.1/P0.2). Group C is special: for a design-targeted build, `loomtide doneness` REFUSES to certify unless every group-C criterion is present and `pass`. These are not advisory — they are the moat (a flat-background / flat-level build that diverges from the hero shot cannot be certified, regardless of green Tier-1 gates). Every group-B `fail` MUST be resolved (fix the build → re-verify) or explicitly justified in writing before handover — see `vlm-review.md`.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "status", "reason"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "The criterion id. One of the game-contract or default advisory rubric criteria. Group A = design fidelity; group B (`hud-crispness` … `rendering-artifacts`) = the perceptual long-tail checks, each comparing the PLAY-MODE frame to the mock/contract.",
+            "enum": [
+              "composition-centering",
+              "palette-adherence",
+              "font-rendering",
+              "juice-cue-presence",
+              "end-state-styling",
+              "hazard-readability",
+              "collectible-path",
+              "parallax",
+              "hud-crispness",
+              "props-grounded",
+              "platform-edge-to-edge",
+              "backdrop-seamless",
+              "palette-match",
+              "composition-match",
+              "rendering-artifacts",
+              "parallax-present",
+              "platform-tiers",
+              "element-placement-arc"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "description": "pass = matches the mock/contract; warn = a soft deviation worth surfacing; fail = a clear mismatch. ADVISORY — never gates the build.",
+            "enum": ["pass", "warn", "fail"]
+          },
+          "reason": {
+            "type": "string",
+            "description": "A SINGLE concise line citing the specific observation (e.g. \"score color does not match the contract palette\"). No multi-paragraph prose.",
+            "minLength": 1
+          },
+          "evidenceFrame": {
+            "type": "string",
+            "description": "The `frames[].id` this judgement is based on. Required in practice so a human can re-check the same frame; allowed to be omitted only for a criterion that spans all frames."
+          }
+        }
+      }
+    },
+    "summary": {
+      "type": "string",
+      "description": "A single short advisory summary line. Not a verdict; the Tier-1 gates decide pass/fail."
+    }
+  }
+}

@@ -1,0 +1,73 @@
+{
+  "schemaVersion": "1",
+  "id": "momentum",
+  "title": "Momentum Platformer",
+  "summary": "Speed-building feel: gradual acceleration, long deceleration glide, and a high top speed where momentum matters more than instant stop-start.",
+  "exemplars": ["Sonic the Hedgehog", "Pizza Tower"],
+  "metrics": {
+    "runSpeed": {
+      "target": 14,
+      "unit": "u/s",
+      "band": { "percent": 20 },
+      "whyItMatters": "A high top speed is the whole point of a momentum platformer.",
+      "suggestion": "Raise max horizontal speed toward 14 u/s."
+    },
+    "runAcceleration": {
+      "target": 25,
+      "unit": "u/s^2",
+      "band": { "percent": 30 },
+      "whyItMatters": "A slow build rewards committing to a run rather than tapping.",
+      "suggestion": "Lower ground acceleration so reaching top speed takes a beat."
+    },
+    "runDeceleration": {
+      "target": 18,
+      "unit": "u/s^2",
+      "band": { "percent": 35 },
+      "whyItMatters": "A long glide on release preserves momentum through level geometry.",
+      "suggestion": "Reduce ground friction so the player coasts after releasing input."
+    },
+    "jumpApex": {
+      "target": 3.5,
+      "unit": "u",
+      "band": { "percent": 18 },
+      "whyItMatters": "A mid-height arc that carries horizontal momentum across gaps.",
+      "suggestion": "Tune jump impulse so the apex sits near 3.5u."
+    },
+    "timeToApex": {
+      "target": 380,
+      "unit": "ms",
+      "band": { "abs": 90 },
+      "whyItMatters": "Enough hang to traverse at speed without floating aimlessly.",
+      "suggestion": "Tune jump impulse and rise gravity so the apex is reached in ~0.38s."
+    },
+    "maxFallSpeed": {
+      "target": 24,
+      "unit": "u/s",
+      "band": { "percent": 20 },
+      "whyItMatters": "A high terminal velocity lets the player convert height into speed.",
+      "suggestion": "Raise the fall-speed clamp toward 24 u/s."
+    },
+    "coyoteTime": {
+      "target": 0.1,
+      "unit": "s",
+      "band": { "abs": 0.04 },
+      "whyItMatters": "A forgiving window keeps high-speed runs from punishing edge timing.",
+      "suggestion": "Allow a coyote-time window of ~0.1s."
+    },
+    "jumpBuffer": {
+      "target": 0.1,
+      "unit": "s",
+      "band": { "abs": 0.05 },
+      "whyItMatters": "Buffering keeps jumps reliable when reactions lag behind speed.",
+      "suggestion": "Buffer a jump press for ~0.1s before grounding."
+    }
+  },
+  "build": {
+    "fixedTimestep": 0.0166667,
+    "stored": {}
+  },
+  "mechanisms": {
+    "requires": [],
+    "forbids": []
+  }
+}

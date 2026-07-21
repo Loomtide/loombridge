@@ -1,0 +1,11 @@
+{
+  "dependencies": {
+    "com.loomtide.unitybridge": "https://github.com/Loomtide/loombridge.git?path=/packages/com.loomtide.unitybridge#main",
+    "com.unity.ugui": "2.0.0",
+    "com.unity.2d.sprite": "1.0.0",
+    "com.unity.inputsystem": "1.7.0",
+    "com.unity.modules.animation": "1.0.0",
+    "com.unity.modules.physics": "1.0.0",
+    "com.unity.modules.physics2d": "1.0.0"
+  }
+}

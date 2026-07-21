@@ -1,0 +1,352 @@
+{
+  "schemaVersion": "0.1.0",
+  "genreContract": {
+    "schemaVersion": "0.1.0",
+    "genreId": "2d-shooter",
+    "subGenres": ["top-down", "twin-stick"],
+    "confidence": "experimental",
+    "targetPlatform": {
+      "device": "pc",
+      "inputScheme": "kb-mouse",
+      "aspect": "16:9",
+      "session": "short-arena"
+    },
+    "networkModel": {
+      "mode": "single-player",
+      "spPlayable": true
+    },
+    "coreLoop": {
+      "description": "move, aim, shoot, kill, survive a wave, upgrade",
+      "perspective": "top-down",
+      "subGenre": "twin-stick",
+      "genreClass": "twitch"
+    },
+    "artDirection": {
+      "style": "stylized neon arcade",
+      "assetRoles": [
+        "player-character",
+        "weapon",
+        "reticle",
+        "player-projectile",
+        "enemy",
+        "arena-floor",
+        "arena-wall",
+        "muzzle-vfx",
+        "hit-vfx",
+        "death-vfx",
+        "health-hud",
+        "ammo-hud",
+        "wave-score-hud",
+        "combat-sfx"
+      ],
+      "theme": "neon",
+      "heroShotMock": "design/2d-shooter-hero.png"
+    },
+    "verticalSliceBudget": {
+      "coreVerticalContent": {
+        "weapon": 1,
+        "enemy": 1,
+        "arena": 1
+      },
+      "deferred": ["weapon-roster", "enemy-variety", "progression", "matchmaking"]
+    },
+    "feedbackChains": [
+      {
+        "verb": "fire",
+        "input": "LMB",
+        "response": "projectile spawn",
+        "feedback": "muzzle flash + fire SFX + crosshair bloom; on impact: hit-marker + spark + damage number; on kill: death VFX + SFX + score"
+      },
+      {
+        "verb": "move",
+        "input": "WASD",
+        "response": "character acceleration",
+        "feedback": "directional dust + footstep cadence"
+      },
+      {
+        "verb": "take-damage",
+        "input": "enemy contact / projectile",
+        "response": "health decrement + brief i-frame",
+        "feedback": "screen-edge warning + shake"
+      }
+    ],
+    "tunables": [
+      {
+        "id": "fireIntervalMs",
+        "description": "time between shots",
+        "unit": "ms"
+      },
+      {
+        "id": "fireInputToSpawnLatency",
+        "description": "latency from fire input onset to an explicit projectile-spawn signal",
+        "unit": "ms"
+      },
+      {
+        "id": "projectileSpeed",
+        "description": "bullet travel speed",
+        "unit": "u/s"
+      },
+      {
+        "id": "moveSpeed",
+        "description": "player run speed",
+        "unit": "u/s"
+      },
+      {
+        "id": "ttkMs",
+        "description": "time to kill the reference enemy",
+        "unit": "ms"
+      },
+      {
+        "id": "screenShakeMag",
+        "description": "shake magnitude on fire/hit",
+        "unit": "px"
+      },
+      {
+        "id": "hitstopMs",
+        "description": "hit-stop on impact",
+        "unit": "ms"
+      }
+    ],
+    "measurabilityMap": [
+      {
+        "target": "inputToSfxLatency",
+        "tag": "measurable-now",
+        "calculator": "inputToSfxLatency",
+        "band": {
+          "max": 50,
+          "unit": "ms"
+        },
+        "evidenceKind": "pack-default",
+        "bucket": "coreVertical"
+      },
+      {
+        "target": "fireIntervalMs",
+        "tag": "measurable-now",
+        "calculator": "fireIntervalMs",
+        "band": {
+          "min": 90,
+          "max": 140,
+          "unit": "ms"
+        },
+        "evidenceKind": "pack-default",
+        "bucket": "coreVertical"
+      },
+      {
+        "target": "projectileSpeed",
+        "tag": "measurable-now",
+        "calculator": "projectileSpeed",
+        "band": {
+          "min": 18,
+          "max": 30,
+          "unit": "u/s"
+        },
+        "evidenceKind": "pack-default",
+        "bucket": "coreVertical"
+      },
+      {
+        "target": "fireInputToSpawnLatency",
+        "tag": "measurable-now",
+        "calculator": "fireInputToSpawnLatency",
+        "band": {
+          "max": 50,
+          "unit": "ms"
+        },
+        "evidenceKind": "pack-default",
+        "bucket": "coreVertical"
+      },
+      {
+        "target": "ttkMs",
+        "tag": "measurable-now",
+        "calculator": "ttkMs",
+        "band": { "min": 150, "max": 600, "unit": "ms" },
+        "evidenceKind": "pack-default",
+        "bucket": "coreVertical"
+      },
+      {
+        "target": "aiming-feel",
+        "tag": "judgment-only",
+        "bucket": "coreVertical"
+      }
+    ],
+    "referenceAnchor": {
+      "exemplars": ["Enter the Gungeon (twin-stick reference)"],
+      "notes": "Bands are pack-default/exemplar-set; inputToSfxLatency, fireIntervalMs, fireInputToSpawnLatency, projectileSpeed, and ttkMs are verifiable today when the weapon exposes sampled counters/signals, the projectile can be bound as the measured trajectory subject, or the reference enemy exposes sampled hit/death signals (ttkMs is measured first-hit->death). ttkMs has no live enemy-kill capture in this proof, so it remains an explicit methodology gap rather than a claimed live measurement."
+    },
+    "sliceDag": {
+      "coreVertical": [
+        {
+          "id": "arena",
+          "title": "Arena + framing",
+          "dependsOn": [],
+          "confidence": "experimental",
+          "gates": ["manifest", "framing", "console-clean"],
+          "kind": "arena"
+        },
+        {
+          "id": "controller",
+          "title": "Player controller + move",
+          "dependsOn": ["arena"],
+          "confidence": "experimental",
+          "gates": ["manifest", "console-clean"],
+          "gaps": ["move-feel-measurement"]
+        },
+        {
+          "id": "weapon",
+          "title": "Weapon core: fire -> projectile + impact",
+          "dependsOn": ["controller"],
+          "confidence": "experimental",
+          "gates": ["manifest", "console-clean", "visual-artifacts"],
+          "gaps": ["spawn-aware-capture"],
+          "kind": "weapon"
+        },
+        {
+          "id": "enemy",
+          "title": "Enemy + health/damage + death",
+          "dependsOn": ["weapon"],
+          "confidence": "experimental",
+          "gates": ["manifest", "console-clean"],
+          "gaps": ["ttk-live-capture"],
+          "kind": "enemy"
+        },
+        {
+          "id": "feedback",
+          "title": "Combat feedback (muzzle/hitmarker/shake/hitstop)",
+          "dependsOn": ["enemy"],
+          "confidence": "experimental",
+          "gates": ["manifest", "console-clean", "visual-artifacts"],
+          "gaps": ["hitstop-measurement", "screenshake-measurement"]
+        },
+        {
+          "id": "hud",
+          "title": "HUD (health/ammo/score)",
+          "dependsOn": ["enemy"],
+          "confidence": "experimental",
+          "gates": ["manifest", "ui-conformance", "console-clean"]
+        },
+        {
+          "id": "end-state",
+          "title": "Death / victory end-state",
+          "dependsOn": ["enemy"],
+          "confidence": "experimental",
+          "gates": ["manifest", "console-clean"]
+        }
+      ],
+      "deferredMeta": [
+        {
+          "id": "weapon-roster",
+          "title": "Multiple weapons",
+          "dependsOn": [],
+          "confidence": "experimental",
+          "kind": "roster",
+          "gaps": ["deferred-meta"]
+        },
+        {
+          "id": "progression",
+          "title": "Upgrades / unlocks",
+          "dependsOn": [],
+          "confidence": "experimental",
+          "kind": "progression",
+          "gaps": ["deferred-meta"]
+        }
+      ]
+    },
+    "refusalConditions": [
+      {
+        "condition": "unimplemented shooter feel targets",
+        "reason": "hit-stop, screen-shake, and automatic spawned-object discovery do not exist yet; tagged needs-new-calculator or kept as methodology gaps, not faked. TTK has a calculator but no live enemy-kill capture in this proof, so it stays an explicit gap"
+      },
+      {
+        "condition": "aim-assist fairness",
+        "reason": "judgment-only; requires a human oracle"
+      }
+    ],
+    "humanOracleChecks": [
+      {
+        "check": "does aiming feel responsive and fair?",
+        "appliesTo": "aiming-feel"
+      }
+    ]
+  },
+  "slice": {
+    "id": "weapon",
+    "title": "Weapon core: fire -> projectile + impact",
+    "confidence": "experimental",
+    "status": "experimental-green",
+    "productionReady": false,
+    "supportedGates": ["manifest", "console-clean", "visual-artifacts"]
+  },
+  "build": {
+    "runId": "run-2d-shooter-weapon-2026-06-24",
+    "builtAt": "2026-06-24T10:55:00.000Z",
+    "implementationSummary": "Minimal top-down shooter weapon slice: one player, one weapon, one projectile, one enemy impact target, muzzle/hit/death feedback roles, and no weapon roster/progression."
+  },
+  "capture": {
+    "capturedAt": "2026-06-24T10:56:00.000Z",
+    "gateEvidence": [
+      {
+        "gate": "manifest",
+        "status": "pass",
+        "artifact": "demo-bundles/generic-build-follow-on/evidence/weapon-manifest.json",
+        "summary": "Required core-vertical roles for the weapon slice are present: player, weapon, projectile, enemy target, muzzle VFX, hit VFX, death VFX, and combat SFX hook."
+      },
+      {
+        "gate": "console-clean",
+        "status": "pass",
+        "artifact": "demo-bundles/generic-build-follow-on/evidence/weapon-console.json",
+        "summary": "No compile/runtime errors are associated with the weapon-slice proof."
+      },
+      {
+        "gate": "visual-artifacts",
+        "status": "pass",
+        "artifact": "demo-bundles/generic-build-follow-on/evidence/weapon-visual-artifacts.json",
+        "summary": "Muzzle flash, projectile trail, impact spark, and enemy death feedback are present as slice evidence."
+      }
+    ],
+    "metricEvidence": [
+      {
+        "metric": "fireIntervalMs",
+        "status": "pass",
+        "artifact": "demo-bundles/generic-build-follow-on/live-unity-fire-dogfood/live-fire-capture-2026-06-25.json",
+        "summary": "Live Unity dogfood capture derives 133.3325ms cadence from a sampled DogfoodWeapon.FireCount fieldTimeline driven by an InputSystem Space fire phase."
+      },
+      {
+        "metric": "projectileSpeed",
+        "status": "pass",
+        "artifact": "demo-bundles/generic-build-follow-on/live-unity-projectile-speed/live-projectile-speed-capture-2026-06-25.json",
+        "summary": "Live Unity dogfood capture derives 17.9964u/s from the sampled /Projectile trajectory after the Space fire phase launches the projectile."
+      },
+      {
+        "metric": "fireInputToSpawnLatency",
+        "status": "pass",
+        "artifact": "demo-bundles/generic-build-follow-on/live-unity-input-spawn-latency/live-input-spawn-capture-2026-06-25.json",
+        "summary": "Live Unity dogfood capture derives 113.33ms from Space input onset to an explicit DogfoodSpawnSignal.ProjectileSpawnCount edge. status:pass = the sync calculator produced an honest measurement (measure-only metric); the pack-default 50ms band is an aspirational target, not gate-enforced until a shooter profile bands it, so the reported value is intentionally surfaced even though it exceeds the target band."
+      }
+    ]
+  },
+  "methodologyGaps": [
+    {
+      "id": "input-sfx-live-evidence",
+      "linkedTargets": ["inputToSfxLatency"],
+      "reason": "The calculator exists, but this experimental weapon-slice proof does not include a live fire-SFX edge capture; the target remains explicit rather than silently claimed."
+    },
+    {
+      "id": "spawn-aware-capture",
+      "reason": "The explicit spawn-signal calculator exists, but automatic discovery of arbitrary runtime-spawned projectile objects remains outside this proof."
+    },
+    {
+      "id": "ttk-live-capture",
+      "linkedTargets": ["ttkMs"],
+      "reason": "The first-hit->death time-to-kill calculator (deriveTimeToKill) exists and is unit-proven, but this experimental proof does not include a live Unity enemy-kill capture (sampled hit/death signals); ttkMs stays an explicit gap rather than a silently-claimed live measurement."
+    },
+    {
+      "id": "unimplemented shooter feel targets",
+      "linkedTargets": ["hitstopMs", "screenShakeMag"],
+      "reason": "The slice may be experimental-green on supported gates only; hit-stop and screen-shake have no calculator yet (needs-new-calculator) so it cannot claim them. ttkMs is owned solely by the ttk-live-capture gap above (single-sourced) now that its calculator exists."
+    },
+    {
+      "id": "aim-assist fairness",
+      "linkedTargets": ["aiming-feel"],
+      "reason": "Aiming feel is judgment-only and remains tied to the human oracle check."
+    }
+  ]
+}

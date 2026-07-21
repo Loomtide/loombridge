@@ -1,0 +1,234 @@
+{
+  "schemaVersion": "1",
+  "genre": "3d-topdown-arena",
+  "slices": [
+    {
+      "id": "arena",
+      "title": "Frame the top-down arena (high-angle camera, bounds, visible-ground extent)",
+      "dependsOn": [],
+      "skill": "topdown-arena-design",
+      "feelIntent": "Establish the bounded top-down / high-angle arena frame (orthographic-or-high-angle rig, pitch 55-90 down) so every later slice composes inside it. The play space must read TOP-DOWN, not over-shoulder. The visible ground-plane width is machine-checked so a character-as-a-speck over-wide frame (the dogfood ~54m miss) cannot pass unnoticed.",
+      "acceptance": {
+        "gates": ["framing", "console-clean"],
+        "criteria": {
+          "verification": "gate",
+          "verifiedBy": ["framing gate (framing.camera.visibleGroundWidthM, band 24-32m; refuses when captured camera height/pitch/FOV is absent)"],
+          "liveProof": "gate-enforced",
+          "note": "Deterministic Tier-1 framing gate over the captured camera evidence. The 24-32m band is declared in acceptance.json and is an exemplar arena read, not a per-run anecdote."
+        }
+      },
+      "state": "pending"
+    },
+    {
+      "id": "controller",
+      "title": "Twin-stick controller + top-down camera follow / look-ahead",
+      "dependsOn": ["arena"],
+      "skill": "topdown-arena-controller-camera",
+      "feelIntent": "Twin-stick movement plus the top-down follow camera. Movement and camera are ONE slice because the camera DAMPS toward the player and LEADS the aim/movement vector (the twin-stick look-ahead the dogfood spec named: half-life 0.10-0.18s, look-ahead 2-4m). Collide-and-slide along walls preserves tangential speed (never the frozen-controller regression).",
+      "acceptance": {
+        "gates": ["manifest", "console-clean"],
+        "criteria": {
+          "verification": "calculator",
+          "verifiedBy": [
+            "deriveMoveSpeed (top-down XZ move speed)",
+            "deriveAccelTo90 (time to reach 90% of target speed)",
+            "deriveCameraFollowDamping.halfLifeMs + .lookAheadOffset (catch-up half-life + steady lead toward the movement vector; honest-or-omit)",
+            "deriveWallSlideTangentRatio (tangential speed preserved while pinned against a wall)"
+          ],
+          "liveProof": "deferred",
+          "note": "Calculators are implemented + covered by synthetic-trace unit tests; a committed LIVE top-down capture (demo-bundles/3d-topdown-*) is deferred, exactly as recorded in methodology-gaps.md. Measure-only; not gate-enforced bands. deriveCameraFollowDamping refuses on a static/non-following rig (never a fabricated value); an instant-snap camera honestly reports halfLifeMs=0."
+        }
+      },
+      "state": "pending"
+    },
+    {
+      "id": "weapon",
+      "title": "Weapon core: fire -> projectile + aim",
+      "dependsOn": ["controller"],
+      "skill": "topdown-arena-weapon",
+      "feelIntent": "Firing spawns a visible projectile with a crisp cadence and travel speed, aimed along the twin-stick aim vector. Cadence, input-to-spawn latency, true-3D projectile speed, and aim turn rate are measure-only.",
+      "acceptance": {
+        "gates": ["manifest", "visual-artifacts", "console-clean"],
+        "criteria": {
+          "verification": "calculator",
+          "verifiedBy": [
+            "deriveFireIntervalMs (shot cadence; dimension-agnostic counter edges)",
+            "deriveInputToSpawnLatency (fire input -> projectile spawn)",
+            "deriveProjectileSpeed (true-3D {x,y,z} travel speed)",
+            "deriveAimTurnRateDegPerSec (aim rotation rate)"
+          ],
+          "liveProof": "deferred",
+          "note": "Measure-only calculators (implemented + unit-tested); no committed live top-down capture yet. Recoil / ADS remain explicit gaps (no calculator)."
+        }
+      },
+      "state": "pending"
+    },
+    {
+      "id": "enemy-pressure",
+      "title": "Reference enemy + reaction + cover + health/damage/death",
+      "dependsOn": ["weapon"],
+      "skill": "topdown-arena-enemy-pressure",
+      "feelIntent": "Reference enemy takes projectile damage and dies; it reacts to the player only through a real line-of-sight perception (LOS-gated), and cover between player and enemy blocks damage. First-hit to death, LOS-gated reaction latency, and cover-blocks-damage are measurable.",
+      "acceptance": {
+        "gates": ["manifest", "console-clean"],
+        "criteria": {
+          "verification": "calculator",
+          "verifiedBy": [
+            "deriveTimeToKill (first-hit to reference-enemy death)",
+            "deriveEnemyReactionLatencyMs (LOS-gated perception -> reaction; real Linecast, not a timer)",
+            "deriveCoverBlocksDamage (miss-vs-block guarded on an isolated lane)"
+          ],
+          "liveProof": "cover-and-reaction-live-proven-in-3d-shooter-ledger; topdown-capture-deferred",
+          "note": "deriveCoverBlocksDamage and deriveEnemyReactionLatencyMs are live-proven in the 3d-shooter substrate ledger (Phase-05/Phase-03); a top-down-specific committed capture is deferred here. Geographic-danger / sightline authoring as a DESIGN RULE is a gated single-source candidate (see methodology-gaps.md), not bound as contract material."
+        }
+      },
+      "state": "pending"
+    },
+    {
+      "id": "impact-feedback",
+      "title": "Combat feedback (muzzle / hit-spark / shake / hit-stop)",
+      "dependsOn": ["enemy-pressure"],
+      "skill": "topdown-arena-impact-feedback",
+      "feelIntent": "Fire and impact read clearly through muzzle flash, hit spark, a brief hit-stop, and a top-down camera kick. The hit-stop WINDOW and the camera-DISPLACEMENT magnitude are measurable; muzzle/hit-spark QUALITY remain design intent.",
+      "acceptance": {
+        "gates": ["visual-artifacts", "console-clean"],
+        "criteria": {
+          "verification": "calculator",
+          "verifiedBy": [
+            "deriveHitstopMs (impact freeze window duration)",
+            "deriveScreenShakeMag (true-3D camera displacement magnitude)",
+            "deriveHitscanImpactLatencyMs (fire -> impact latency)"
+          ],
+          "liveProof": "impact-feedback-live-proven-in-3d-shooter-ledger; topdown-capture-deferred",
+          "note": "hitstop + true-3D shake are live-proven in the shared 3d impact-feedback fixture (demo-bundles/3d-impact-feedback/, causality-gated); a top-down-rig capture is deferred. Muzzle flash / hit-spark quality are gaps (design intent, not measured)."
+        }
+      },
+      "state": "pending"
+    },
+    {
+      "id": "loot-loop",
+      "title": "Loot pickup loop (channelled pickup -> stash)",
+      "dependsOn": ["enemy-pressure"],
+      "skill": "topdown-arena-loot-loop",
+      "feelIntent": "The greed loop's acquisition beat: a crate is picked up over a channelled window and adds to the run stash. Pickup timing and value are read from the ground-truthed telemetry stream, not a bespoke gate.",
+      "acceptance": {
+        "gates": ["manifest", "console-clean"],
+        "criteria": {
+          "verification": "telemetry",
+          "verifiedBy": [
+            "events: loot_start / loot_complete / loot_cancel (t in seconds, global monotonic)",
+            "player_pos.stash + player_pos.holdKind/holdProgress (merged run-stash / hold state)",
+            "runSummary: firstPickupMs, firstHighValueMs (aggregate=mean)"
+          ],
+          "liveProof": "telemetry-schema-ground-truthed; cohort-runner-deferred",
+          "note": "Telemetry schema is ground-truthed against real dogfood-project PlaytestData (T3-T). This slice verifies the pickup EVENTS fire with honest values; the greed-TUNING grammar (first-crate-safe / second-not-free / third-is-the-decision, high-loot-behind-route-cost) is a gated single-source candidate (see methodology-gaps.md), NOT bound here."
+        }
+      },
+      "state": "pending"
+    },
+    {
+      "id": "extraction-hold",
+      "title": "Extraction hold-to-bank",
+      "dependsOn": ["loot-loop"],
+      "skill": "topdown-arena-extraction-hold",
+      "feelIntent": "The commit beat: standing in the extract zone runs a hold that, if not cancelled, banks the carried stash. The hold start / cancel / complete and the banked value are read from the ground-truthed telemetry stream.",
+      "acceptance": {
+        "gates": ["manifest", "console-clean"],
+        "criteria": {
+          "verification": "telemetry",
+          "verifiedBy": [
+            "events: extract_hold_start / extract_hold_cancel / extract_complete",
+            "player_pos.holdKind/holdProgress + damage.duringHold (hold-interrupt evidence)",
+            "runSummary: extractionStartMs, extractionCompleteMs, bankedValue (aggregate=mean)"
+          ],
+          "liveProof": "telemetry-schema-ground-truthed; hold-channel-calculators-unit-tested-live-deferred",
+          "note": "Primary binding is the ground-truthed telemetry (real extract_hold_* events). The feel calculators deriveHoldChannelDuration + deriveHoldInterruptOnDamage + deriveZoneObjectiveComplete are IMPLEMENTED and unit-tested but not yet backed by a committed live top-down capture (mirrors the 3d-shooter hold-channel ledger); do not claim them live-proven."
+        }
+      },
+      "state": "pending"
+    },
+    {
+      "id": "pressure-ramp",
+      "title": "Enemy pressure / heat ramp signal",
+      "dependsOn": ["enemy-pressure"],
+      "skill": "topdown-arena-pressure-ramp",
+      "feelIntent": "The run's rising-danger signal: a pressure phase begins and the heat / nearest-enemy proximity rises over the run. This slice verifies the pressure SIGNAL is emitted and rises honestly; it deliberately does NOT bake in WHY pressure rises.",
+      "acceptance": {
+        "gates": ["manifest", "console-clean"],
+        "criteria": {
+          "verification": "telemetry",
+          "verifiedBy": [
+            "event: pressure_start (reason, afterLootDelay)",
+            "player_pos.heat + player_pos.nearestEnemyDist",
+            "runSummary: firstEnemyNearMs, nearestEnemyDistanceMinM (aggregate=mean)"
+          ],
+          "liveProof": "telemetry-schema-ground-truthed; threat-ramp-calculator-unit-tested-live-deferred",
+          "note": "deriveThreatRampSlope is implemented + unit-tested but not backed by a committed live top-down capture (live-deferred). The DESIGN RULES pressure-tied-to-greed-not-clock and opener-only-nearest-spawn are gated single-source candidates (methodology-gaps.md), NOT bound here — this slice only checks the heat/proximity signal is present and monotone-ish, never that danger is tied to greed."
+        }
+      },
+      "state": "pending"
+    },
+    {
+      "id": "minimap",
+      "title": "Strategic minimap (informs without revealing)",
+      "dependsOn": ["enemy-pressure"],
+      "skill": "topdown-arena-minimap",
+      "feelIntent": "A spatial minimap that gives the player strategic reads WITHOUT solving the route for them: it shows broad authored danger zones ('this area is getting dangerous'), and deliberately withholds per-crate loot markers and exact-position enemy radar. This informs-not-reveals property is a dual-validated design contract (taught independently in the codex-tuning session and the Claude session).",
+      "acceptance": {
+        "gates": ["ui-conformance", "console-clean"],
+        "criteria": {
+          "verification": "dual-validated",
+          "provenance": "dual-validated (codex-tuning 019f0dfa + Claude 3de0bf92)",
+          "minimapContract": {
+            "informsNotReveals": true,
+            "requires": ["broad authored danger zones are present on the minimap"],
+            "forbids": ["per-crate loot markers", "exact-position enemy radar / precise enemy dots"],
+            "coverageAnecdote": "~22-26% of the arena visible at once was the single dogfood-project read — ILLUSTRATIVE anecdote only, NOT a band and NOT machine-enforced"
+          },
+          "verifiedBy": ["ui-conformance gate (widget placed + inside the safe area)"],
+          "liveProof": "gate-enforced-placement; informs-not-reveals-is-a-qualitative-human-checklist",
+          "note": "Tier-1 ui-conformance verifies the minimap widget is present and safe-area-legal. The informs-not-reveals CONTRACT is qualitative (a human/design checklist), never a deterministic gate — encoded here as first-class contract material because it is one of only two dual-validated extraction-shooter learnings."
+        }
+      },
+      "state": "pending"
+    },
+    {
+      "id": "hud",
+      "title": "HUD (score / ammo / health)",
+      "dependsOn": ["enemy-pressure"],
+      "skill": "topdown-arena-hud",
+      "feelIntent": "Score, ammo, and health read clearly and stay inside the safe area (top-down HUD; health as 3 hearts with a stable empty-pip on loss).",
+      "acceptance": {
+        "gates": ["manifest", "ui-conformance", "console-clean"],
+        "criteria": {
+          "verification": "gate",
+          "verifiedBy": ["ui-conformance gate (HUD elements present + inside the safe area, per acceptance.json hud.elements)"],
+          "liveProof": "gate-enforced",
+          "note": "Structural HUD slice — verified by the deterministic ui-conformance gate; no feel calculator or telemetry binding is claimed."
+        }
+      },
+      "state": "pending"
+    },
+    {
+      "id": "end-state",
+      "title": "Extraction win / lose-on-death end-state",
+      "dependsOn": ["extraction-hold"],
+      "skill": "topdown-arena-end-state",
+      "feelIntent": "The run resolves: a completed extraction banks the stash (win), and dying loses the carried stash (lose). Objective completion is measurable via the wave/objective calculator; the banked-vs-lost outcome is read from the ground-truthed telemetry.",
+      "acceptance": {
+        "gates": ["manifest", "console-clean"],
+        "criteria": {
+          "verification": "calculator",
+          "verifiedBy": [
+            "deriveWaveObjectiveComplete (spawn-N -> clear -> complete, kill-gated to the TRUE clear)",
+            "telemetry: outcome, bankedValue, lostValue, event death{lost}",
+            "deriveStashLossOnDeath (carried stash lost on death) — implemented, unit-tested, live-deferred"
+          ],
+          "liveProof": "wave-objective-live-proven-in-3d-shooter-ledger; stash-loss-live-deferred; topdown-capture-deferred",
+          "note": "deriveWaveObjectiveComplete is live-proven in the 3d-shooter substrate ledger (Phase-06). deriveStashLossOnDeath is implemented + unit-tested but not backed by a committed live top-down capture. The banked-vs-lost run outcome is also directly readable from the ground-truthed telemetry summary (outcome/bankedValue/lostValue)."
+        }
+      },
+      "state": "pending"
+    }
+  ]
+}

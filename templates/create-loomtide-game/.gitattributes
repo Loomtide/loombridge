@@ -1,0 +1,11 @@
+# Loomtide-managed files — keep LF on every OS so install ledgers / sha checks match.
+# (Windows Git's default core.autocrlf=true would otherwise flip LF→CRLF on checkout,
+#  making a macOS-authored install look "hand-edited" to a Windows teammate and vice versa.)
+LOOMTIDE.md              text eol=lf
+.claude/**               text eol=lf
+.codex/**                text eol=lf
+ProjectSettings/LoomtideInstall.json text eol=lf
+
+# The committed bridge tarball is BINARY — never munge it (doctor verifies its sha256).
+*.tgz                    binary
+Packages/tarballs/**     binary

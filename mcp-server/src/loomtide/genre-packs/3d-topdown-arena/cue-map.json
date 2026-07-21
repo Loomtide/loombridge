@@ -1,0 +1,207 @@
+{
+  "schemaVersion": "1",
+  "id": "3d-topdown-arena.cue-map.v1",
+  "genre": "3d-topdown-arena",
+  "note": "Genre-pack-owned cue event map for the 3D top-down extraction-shooter / greed-loop quadrant (SFX dogfood learnings; backlog High #5). Seeded from the Extraction/Roguelike/Top-Down taxonomy: required cues = fire, hit, hurt, loot open, loot tier reward, extract start/complete, enemy death, player death; optional cues = danger escalation, stash/bank, low health, zone warning. Each cue declares its game-event binding, layer roles, frequency class, variant/anti-fatigue policy, priority, mixer bus, and spatial policy — SFX as a semantic system, not a file drop. This is the DECLARATION the SFX gates read; it does not itself bind clips (that is the build stage's asset-binding capture).",
+  "honestyRules": [
+    {
+      "id": "physical-action-first",
+      "rule": "A cue's grammar names the PHYSICAL ACTION first, not a mood word: `metal footlocker clasp flips open, then a small reward bell` — not `loot pickup chime`. The dogfood project's first loot cue read as a swing/woosh because it was prompted for mood; the fix was changing the sound grammar to physical-action-first."
+    },
+    {
+      "id": "frequent-needs-variants",
+      "rule": "A cue with frequency `frequent` MUST carry a variantPolicy with count >= 2 and noImmediateRepeat:true (plus pitch/volume jitter). The dogfood project added round-robin/no-repeat variants for fire/hit/hurt/enemy-death precisely because single-clip frequent cues fatigue fast."
+    },
+    {
+      "id": "payload-not-global",
+      "rule": "A tiered/parametrized cue maps an event PAYLOAD field to its variant/tier (loot_reward reads `lootTier`); never a global PlayLoot() that hides the game state needed for better feedback. Tiered loot worked in the dogfood project because LootContainer already emitted the looted value."
+    },
+    {
+      "id": "audio-not-sole-channel",
+      "rule": "A critical/accessibility cue (low_health, zone_warning, player_death) must ALSO be represented visually or via captions — never make audio the only channel for critical information (Game Accessibility Guidelines / Xbox AG 104)."
+    }
+  ],
+  "cues": [
+    {
+      "id": "fire",
+      "event": "weapon.fire",
+      "required": true,
+      "frequency": "frequent",
+      "priority": "critical",
+      "mixerBus": "SFX",
+      "layerRoles": ["transient", "body", "sweetener"],
+      "spatial": { "mode": "2d" },
+      "variantPolicy": {
+        "count": 4,
+        "noImmediateRepeat": true,
+        "pitchJitter": { "min": -0.03, "max": 0.03 },
+        "volumeJitter": { "min": -1.5, "max": 0 },
+        "cooldownMs": 40,
+        "maxConcurrent": 4
+      },
+      "meaning": "Player fired the weapon — the primary input confirm; latency-sensitive. Self-feedback stays 2D for immediacy. transient = timing readability, body = weapon weight/identity, sweetener = mechanical click."
+    },
+    {
+      "id": "hit",
+      "event": "weapon.hitEnemy",
+      "required": true,
+      "frequency": "frequent",
+      "priority": "gameplay",
+      "mixerBus": "SFX",
+      "layerRoles": ["transient", "body"],
+      "spatial": { "mode": "3d", "rolloff": "logarithmic" },
+      "variantPolicy": {
+        "count": 3,
+        "noImmediateRepeat": true,
+        "pitchJitter": { "min": -0.04, "max": 0.04 },
+        "cooldownMs": 30
+      },
+      "meaning": "Player shot connected with an enemy — the hit-confirm. Positional (3D) so world threats read by direction; distinct from `fire` and from `enemy_death`."
+    },
+    {
+      "id": "hurt",
+      "event": "player.tookDamage",
+      "required": true,
+      "frequency": "frequent",
+      "priority": "gameplay",
+      "mixerBus": "SFX",
+      "layerRoles": ["transient", "body"],
+      "spatial": { "mode": "2d" },
+      "variantPolicy": {
+        "count": 3,
+        "noImmediateRepeat": true,
+        "pitchJitter": { "min": -0.05, "max": 0.05 }
+      },
+      "meaning": "Player took damage — self-feedback pain cue, 2D for immediacy."
+    },
+    {
+      "id": "loot_open",
+      "event": "loot.open",
+      "required": true,
+      "frequency": "occasional",
+      "priority": "gameplay",
+      "mixerBus": "SFX",
+      "layerRoles": ["transient", "body", "tail"],
+      "spatial": { "mode": "3d", "rolloff": "logarithmic" },
+      "variantPolicy": {
+        "count": 2,
+        "noImmediateRepeat": true,
+        "cooldownMs": 120
+      },
+      "meaning": "Physical action of opening a loot container: the metal footlocker clasp flips open. Shared identity across tiers; the reward chime is the separate `loot_reward` cue."
+    },
+    {
+      "id": "loot_reward",
+      "event": "loot_complete",
+      "required": true,
+      "frequency": "occasional",
+      "priority": "gameplay",
+      "mixerBus": "SFX",
+      "layerRoles": ["reward", "tail"],
+      "spatial": { "mode": "2d" },
+      "payloadMapping": {
+        "sourceField": "tier",
+        "kind": "tier",
+        "buckets": [
+          { "value": "low", "variantTag": "reward_low" },
+          { "value": "mid", "variantTag": "reward_mid" },
+          { "value": "high", "variantTag": "reward_high" }
+        ]
+      },
+      "meaning": "The reward confirm after the clasp: a small bell/chime whose richness escalates by loot tier (low/mid/high share the clasp identity, then add richer reward tails). Tier read from the telemetry `loot_complete` event's `tier` payload (ground-truthed real tiers low/mid/high) — not a global chime. Event name matches the telemetry event type so cue fires can be cross-verified against the run's event stream."
+    },
+    {
+      "id": "extract_start",
+      "event": "extract_hold_start",
+      "required": true,
+      "frequency": "rare",
+      "priority": "critical",
+      "mixerBus": "SFX",
+      "layerRoles": ["transient", "body", "context"],
+      "spatial": { "mode": "2d" },
+      "meaning": "Player began the extraction hold — high priority so it cuts through combat; marks the greed-vs-safety decision point."
+    },
+    {
+      "id": "extract_complete",
+      "event": "extract_complete",
+      "required": true,
+      "frequency": "rare",
+      "priority": "critical",
+      "mixerBus": "SFX",
+      "layerRoles": ["reward", "tail", "context"],
+      "spatial": { "mode": "2d" },
+      "meaning": "Extraction completed and value is banked — the run-secured relief/reward payoff."
+    },
+    {
+      "id": "enemy_death",
+      "event": "enemy.died",
+      "required": true,
+      "frequency": "frequent",
+      "priority": "gameplay",
+      "mixerBus": "SFX",
+      "layerRoles": ["transient", "body"],
+      "spatial": { "mode": "3d", "rolloff": "logarithmic" },
+      "variantPolicy": {
+        "count": 3,
+        "noImmediateRepeat": true,
+        "pitchJitter": { "min": -0.05, "max": 0.05 }
+      },
+      "meaning": "An enemy was killed — positional world event, distinct from the `hit` confirm."
+    },
+    {
+      "id": "player_death",
+      "event": "player.died",
+      "required": true,
+      "frequency": "rare",
+      "priority": "critical",
+      "mixerBus": "SFX",
+      "layerRoles": ["transient", "body", "tail"],
+      "spatial": { "mode": "2d" },
+      "meaning": "Player died and forfeited carried value — the run-lost failure cue. Also represented visually (see audio-not-sole-channel)."
+    },
+    {
+      "id": "danger_escalation",
+      "event": "danger.escalated",
+      "required": false,
+      "frequency": "occasional",
+      "priority": "cosmetic",
+      "mixerBus": "Music",
+      "layerRoles": ["sweetener", "context"],
+      "spatial": { "mode": "2d" },
+      "meaning": "Optional risk-escalation stinger as heat/danger rises — a greed-arc mood layer on the music bus."
+    },
+    {
+      "id": "stash",
+      "event": "stash.deposit",
+      "required": false,
+      "frequency": "occasional",
+      "priority": "gameplay",
+      "mixerBus": "UI",
+      "layerRoles": ["transient", "reward"],
+      "spatial": { "mode": "2d" },
+      "meaning": "Optional stash/bank deposit confirm on the UI bus."
+    },
+    {
+      "id": "low_health",
+      "event": "player.lowHealth",
+      "required": false,
+      "frequency": "rare",
+      "priority": "gameplay",
+      "mixerBus": "SFX",
+      "layerRoles": ["context", "sweetener"],
+      "spatial": { "mode": "2d" },
+      "meaning": "Optional low-health warning state. Accessibility: must pair with a visual equivalent (audio-not-sole-channel)."
+    },
+    {
+      "id": "zone_warning",
+      "event": "zone.warning",
+      "required": false,
+      "frequency": "occasional",
+      "priority": "gameplay",
+      "mixerBus": "SFX",
+      "layerRoles": ["transient", "context"],
+      "spatial": { "mode": "3d", "rolloff": "linear" },
+      "meaning": "Optional zone/collapse warning — positional so it doubles as spatial guidance toward/away from the hazard."
+    }
+  ]
+}

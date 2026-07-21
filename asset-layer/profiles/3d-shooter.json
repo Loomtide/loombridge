@@ -1,0 +1,102 @@
+{
+  "schemaVersion": "1",
+  "id": "3d-shooter",
+  "genre": "3d-shooter",
+  "description": "Validation and Unity placement profile for curated 3D shooter model/material assets. Model roles accept a real source-bound glb OR an honest Unity primitive/material fallback recorded as a placeholder.",
+  "validation": {
+    "allowedFormats": ["glb", "png", "jpg", "jpeg", "wav", "ogg"],
+    "maxDimensions": {
+      "width": 4096,
+      "height": 4096
+    },
+    "maxTexturePixels": 16777216,
+    "expectedPixelsPerUnit": 100,
+    "requiredProvenanceFields": ["verifiedAt", "origin"],
+    "allowedLicenses": ["CC0-1.0"],
+    "allowedKinds": ["model", "material", "sprite", "audio"],
+    "licensePolicy": {
+      "allowedSpdx": ["CC0-1.0"],
+      "deniedSpdx": ["GPL-3.0-only", "CC-BY-NC-4.0"]
+    },
+    "checksumPolicy": {
+      "requireSha256": false
+    },
+    "sourcePolicy": {
+      "requireVerified": true,
+      "minimumProvenanceFields": ["verifiedAt", "origin"]
+    },
+    "audio": {
+      "allowedFormats": ["wav", "ogg"],
+      "allowedSampleRates": [44100, 48000],
+      "allowedChannels": [1, 2],
+      "allowedBitDepths": [16, 24],
+      "maxDurationMs": 4000
+    }
+  },
+  "primitives": {
+    "player_model": {
+      "description": "Controllable player character mesh (humanoid/robot) or a primitive capsule fallback.",
+      "unityFolder": "Assets/Models/Player",
+      "supportedKinds": ["model", "material"]
+    },
+    "enemy_model": {
+      "description": "Enemy/target character mesh or a primitive capsule fallback.",
+      "unityFolder": "Assets/Models/Enemies",
+      "supportedKinds": ["model", "material"]
+    },
+    "arena": {
+      "description": "Arena floor / ground / environment mesh, or a primitive plane fallback.",
+      "unityFolder": "Assets/Models/Arena",
+      "supportedKinds": ["model", "material"]
+    },
+    "cover_prop": {
+      "description": "Cover prop (crate, wall, barrier) mesh, or a primitive cube fallback.",
+      "unityFolder": "Assets/Models/Props",
+      "supportedKinds": ["model", "material"]
+    },
+    "weapon_model": {
+      "description": "First-/third-person weapon mesh, or a primitive fallback.",
+      "unityFolder": "Assets/Models/Weapons",
+      "supportedKinds": ["model", "material"]
+    },
+    "projectile": {
+      "description": "Projectile / tracer mesh, or a primitive sphere fallback.",
+      "unityFolder": "Assets/Models/Projectiles",
+      "supportedKinds": ["model", "material"]
+    },
+    "reticle": {
+      "description": "Screen-space crosshair / reticle sprite.",
+      "unityFolder": "Assets/Art/UI/Reticle",
+      "supportedKinds": ["sprite"]
+    },
+    "hud": {
+      "description": "HUD frame, ammo, or health readout sprite.",
+      "unityFolder": "Assets/Art/UI/HUD",
+      "supportedKinds": ["sprite"]
+    },
+    "vfx": {
+      "description": "Impact / muzzle-flash effect sprite or material.",
+      "unityFolder": "Assets/Art/VFX",
+      "supportedKinds": ["sprite", "material"]
+    },
+    "sfx_fire": {
+      "description": "Short weapon fire sound effect.",
+      "unityFolder": "Assets/Audio/SFX",
+      "supportedKinds": ["audio"]
+    },
+    "sfx_impact": {
+      "description": "Short projectile/hit impact sound effect.",
+      "unityFolder": "Assets/Audio/SFX",
+      "supportedKinds": ["audio"]
+    }
+  },
+  "unity": {
+    "rootFolder": "Assets/Models",
+    "defaultSpriteMode": "single",
+    "defaultFilterMode": "Bilinear",
+    "toolArguments": {
+      "sourcePathKey": "source_path",
+      "destinationPathKey": "path"
+    }
+  }
+}

@@ -1,0 +1,4052 @@
+{
+  "schemaVersion": "1",
+  "packId": "platformer-2d",
+  "name": "Curated 2D Platformer Seed Registry",
+  "description": "Small offline-friendly seed pack for the platformer demo. Local fixture PNGs keep validation deterministic; provenance points to CC0 platformer candidates.",
+  "entries": [
+    {
+      "id": "kenney.pixel-platformer.player.sheet",
+      "genre": "platformer-2d",
+      "primitive": "player",
+      "kind": "sprite",
+      "priority": 40,
+      "source": {
+        "title": "Pixel Platformer",
+        "url": "https://www.kenney.nl/assets/pixel-platformer",
+        "downloadPage": "https://www.kenney.nl/media/pages/assets/pixel-platformer/33bb4921eb-1696667883/kenney_pixel-platformer.zip",
+        "author": "Kenney",
+        "verified": true,
+        "provenance": {
+          "verifiedAt": "2026-05-23",
+          "origin": "Kenney Pixel Platformer lists 200 files, 18x18 tile size, and Creative Commons CC0. The committed spritesheet was extracted from the official kenney_pixel-platformer.zip download.",
+          "fixture": "asset-layer/fixtures/platformer/kenney-pixel-platformer/tilemap-characters.png",
+          "notes": "Character spritesheet uses 24x24 cells with 1px spacing; default sprite is the first green player idle frame."
+        }
+      },
+      "license": {
+        "name": "Creative Commons CC0 1.0 Universal",
+        "spdx": "CC0-1.0",
+        "url": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "requiresAttribution": false
+      },
+      "provider": {
+        "name": "Kenney",
+        "url": "https://www.kenney.nl/",
+        "type": "local"
+      },
+      "files": [
+        {
+          "role": "spritesheet",
+          "format": "png",
+          "localPath": "asset-layer/fixtures/platformer/kenney-pixel-platformer/tilemap-characters.png",
+          "checksum": {
+            "algorithm": "sha256",
+            "value": "b4f63a99b228021c7c8106a09af47b1c9635e1a20b9dd9e6e666c9b36cc7d259"
+          }
+        }
+      ],
+      "technical": {
+        "width": 224,
+        "height": 74,
+        "pixelsPerUnit": 100,
+        "transparent": true
+      },
+      "tags": [
+        "platformer",
+        "character",
+        "player",
+        "spritesheet",
+        "kenney",
+        "pixel-platformer",
+        "oopi",
+        "cc0"
+      ],
+      "unity": {
+        "path": "Assets/Art/Sprites/Characters/kenney-pixel-platformer-characters.png",
+        "pixelsPerUnit": 100,
+        "spriteMode": "multiple",
+        "filterMode": "Point",
+        "defaultSpriteName": "player_green_idle",
+        "slicing": {
+          "mode": "grid",
+          "cell": {
+            "width": 24,
+            "height": 24
+          },
+          "spacing": {
+            "x": 1,
+            "y": 1
+          },
+          "pivot": "center",
+          "sprites": [
+            {
+              "name": "player_green_idle",
+              "column": 0,
+              "row": 0,
+              "tags": [
+                "player",
+                "green",
+                "idle"
+              ]
+            },
+            {
+              "name": "player_blue_idle",
+              "column": 2,
+              "row": 0,
+              "tags": [
+                "player",
+                "blue",
+                "idle"
+              ]
+            },
+            {
+              "name": "player_pink_idle",
+              "column": 4,
+              "row": 0,
+              "tags": [
+                "player",
+                "pink",
+                "idle"
+              ]
+            },
+            {
+              "name": "player_yellow_idle",
+              "column": 6,
+              "row": 0,
+              "tags": [
+                "player",
+                "yellow",
+                "idle"
+              ]
+            },
+            {
+              "name": "enemy_flyer",
+              "column": 6,
+              "row": 1,
+              "tags": [
+                "enemy",
+                "flying"
+              ]
+            },
+            {
+              "name": "enemy_walker",
+              "column": 0,
+              "row": 2,
+              "tags": [
+                "enemy",
+                "walker"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "kenney.pixel-platformer.tile.sheet",
+      "genre": "platformer-2d",
+      "primitive": "tile",
+      "kind": "sprite",
+      "priority": 40,
+      "source": {
+        "title": "Pixel Platformer",
+        "url": "https://www.kenney.nl/assets/pixel-platformer",
+        "downloadPage": "https://www.kenney.nl/media/pages/assets/pixel-platformer/33bb4921eb-1696667883/kenney_pixel-platformer.zip",
+        "author": "Kenney",
+        "verified": true,
+        "provenance": {
+          "verifiedAt": "2026-05-23",
+          "origin": "Kenney Pixel Platformer lists 200 files, 18x18 tile size, and Creative Commons CC0. The committed tilemap was extracted from the official kenney_pixel-platformer.zip download.",
+          "fixture": "asset-layer/fixtures/platformer/kenney-pixel-platformer/tilemap.png",
+          "notes": "Main tile sheet uses 18x18 cells with 1px spacing. This entry exposes terrain, hazards, props, and collectibles for Unity multiple-sprite import."
+        }
+      },
+      "license": {
+        "name": "Creative Commons CC0 1.0 Universal",
+        "spdx": "CC0-1.0",
+        "url": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "requiresAttribution": false
+      },
+      "provider": {
+        "name": "Kenney",
+        "url": "https://www.kenney.nl/",
+        "type": "local"
+      },
+      "files": [
+        {
+          "role": "spritesheet",
+          "format": "png",
+          "localPath": "asset-layer/fixtures/platformer/kenney-pixel-platformer/tilemap.png",
+          "checksum": {
+            "algorithm": "sha256",
+            "value": "75c4eb86e8ceba008cd73bfd839609e91de1ab32686ccd34dff904cfd39883ed"
+          }
+        }
+      ],
+      "technical": {
+        "width": 379,
+        "height": 170,
+        "pixelsPerUnit": 100,
+        "transparent": true
+      },
+      "tags": [
+        "platformer",
+        "tile",
+        "terrain",
+        "hazard",
+        "prop",
+        "kenney",
+        "pixel-platformer",
+        "oopi",
+        "cc0"
+      ],
+      "unity": {
+        "path": "Assets/Art/Sprites/Tiles/kenney-pixel-platformer-tiles.png",
+        "pixelsPerUnit": 100,
+        "spriteMode": "multiple",
+        "filterMode": "Point",
+        "defaultSpriteName": "ground_grass_center",
+        "slicing": {
+          "mode": "grid",
+          "cell": {
+            "width": 18,
+            "height": 18
+          },
+          "spacing": {
+            "x": 1,
+            "y": 1
+          },
+          "pivot": "center",
+          "sprites": [
+            {
+              "name": "ground_grass_left",
+              "column": 0,
+              "row": 0,
+              "tags": [
+                "ground",
+                "grass",
+                "left"
+              ]
+            },
+            {
+              "name": "ground_grass_center",
+              "column": 1,
+              "row": 0,
+              "tags": [
+                "ground",
+                "grass",
+                "center"
+              ]
+            },
+            {
+              "name": "ground_grass_right",
+              "column": 2,
+              "row": 0,
+              "tags": [
+                "ground",
+                "grass",
+                "right"
+              ]
+            },
+            {
+              "name": "box_wood",
+              "column": 8,
+              "row": 1,
+              "tags": [
+                "box",
+                "wood",
+                "prop"
+              ]
+            },
+            {
+              "name": "hazard_spike",
+              "column": 16,
+              "row": 1,
+              "tags": [
+                "hazard",
+                "spike"
+              ]
+            },
+            {
+              "name": "pipe_blue",
+              "column": 12,
+              "row": 0,
+              "tags": [
+                "pipe",
+                "blue",
+                "prop"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "kenney.pixel-platformer.collectible.sheet",
+      "genre": "platformer-2d",
+      "primitive": "collectible",
+      "kind": "sprite",
+      "priority": 35,
+      "source": {
+        "title": "Pixel Platformer",
+        "url": "https://www.kenney.nl/assets/pixel-platformer",
+        "downloadPage": "https://www.kenney.nl/media/pages/assets/pixel-platformer/33bb4921eb-1696667883/kenney_pixel-platformer.zip",
+        "author": "Kenney",
+        "verified": true,
+        "provenance": {
+          "verifiedAt": "2026-05-23",
+          "origin": "Kenney Pixel Platformer lists 200 files, 18x18 tile size, and Creative Commons CC0. The committed tilemap was extracted from the official kenney_pixel-platformer.zip download.",
+          "fixture": "asset-layer/fixtures/platformer/kenney-pixel-platformer/tilemap.png",
+          "notes": "Collectible entry reuses the main tile sheet with collectible-focused named slices for coins, gems, and keys."
+        }
+      },
+      "license": {
+        "name": "Creative Commons CC0 1.0 Universal",
+        "spdx": "CC0-1.0",
+        "url": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "requiresAttribution": false
+      },
+      "provider": {
+        "name": "Kenney",
+        "url": "https://www.kenney.nl/",
+        "type": "local"
+      },
+      "files": [
+        {
+          "role": "spritesheet",
+          "format": "png",
+          "localPath": "asset-layer/fixtures/platformer/kenney-pixel-platformer/tilemap.png",
+          "checksum": {
+            "algorithm": "sha256",
+            "value": "75c4eb86e8ceba008cd73bfd839609e91de1ab32686ccd34dff904cfd39883ed"
+          }
+        }
+      ],
+      "technical": {
+        "width": 379,
+        "height": 170,
+        "pixelsPerUnit": 100,
+        "transparent": true
+      },
+      "tags": [
+        "platformer",
+        "collectible",
+        "coin",
+        "gem",
+        "key",
+        "pickup",
+        "kenney",
+        "pixel-platformer",
+        "oopi",
+        "cc0"
+      ],
+      "unity": {
+        "path": "Assets/Art/Sprites/Collectibles/kenney-pixel-platformer-collectibles.png",
+        "pixelsPerUnit": 100,
+        "spriteMode": "multiple",
+        "filterMode": "Point",
+        "defaultSpriteName": "coin_bronze",
+        "slicing": {
+          "mode": "grid",
+          "cell": {
+            "width": 18,
+            "height": 18
+          },
+          "spacing": {
+            "x": 1,
+            "y": 1
+          },
+          "pivot": "center",
+          "sprites": [
+            {
+              "name": "coin_bronze",
+              "column": 7,
+              "row": 0,
+              "tags": [
+                "coin",
+                "bronze"
+              ]
+            },
+            {
+              "name": "gem_blue",
+              "column": 8,
+              "row": 2,
+              "tags": [
+                "gem",
+                "blue"
+              ]
+            },
+            {
+              "name": "key_gold",
+              "column": 16,
+              "row": 2,
+              "tags": [
+                "key",
+                "gold"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "kenney.pixel-platformer.background.sheet",
+      "genre": "platformer-2d",
+      "primitive": "background",
+      "kind": "sprite",
+      "priority": 35,
+      "source": {
+        "title": "Pixel Platformer",
+        "url": "https://www.kenney.nl/assets/pixel-platformer",
+        "downloadPage": "https://www.kenney.nl/media/pages/assets/pixel-platformer/33bb4921eb-1696667883/kenney_pixel-platformer.zip",
+        "author": "Kenney",
+        "verified": true,
+        "provenance": {
+          "verifiedAt": "2026-05-23",
+          "origin": "Kenney Pixel Platformer lists 200 files, 18x18 tile size, and Creative Commons CC0. The committed background tilemap was extracted from the official kenney_pixel-platformer.zip download.",
+          "fixture": "asset-layer/fixtures/platformer/kenney-pixel-platformer/tilemap-backgrounds.png",
+          "notes": "Background sheet uses 24x24 cells with 1px spacing for sky, cloud, mountain, and foliage backdrop tiles."
+        }
+      },
+      "license": {
+        "name": "Creative Commons CC0 1.0 Universal",
+        "spdx": "CC0-1.0",
+        "url": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "requiresAttribution": false
+      },
+      "provider": {
+        "name": "Kenney",
+        "url": "https://www.kenney.nl/",
+        "type": "local"
+      },
+      "files": [
+        {
+          "role": "background",
+          "format": "png",
+          "localPath": "asset-layer/fixtures/platformer/kenney-pixel-platformer/tilemap-backgrounds.png",
+          "checksum": {
+            "algorithm": "sha256",
+            "value": "d9d06a0ea339d9b1ec27760a5f3189eebf193547ce531ecf7ecaa10262d4b43c"
+          }
+        }
+      ],
+      "technical": {
+        "width": 199,
+        "height": 74,
+        "pixelsPerUnit": 100,
+        "transparent": false
+      },
+      "tags": [
+        "platformer",
+        "background",
+        "sky",
+        "cloud",
+        "mountain",
+        "kenney",
+        "pixel-platformer",
+        "oopi",
+        "cc0"
+      ],
+      "unity": {
+        "path": "Assets/Art/Backgrounds/kenney-pixel-platformer-backgrounds.png",
+        "pixelsPerUnit": 100,
+        "spriteMode": "multiple",
+        "filterMode": "Point",
+        "defaultSpriteName": "sky_clear",
+        "slicing": {
+          "mode": "grid",
+          "cell": {
+            "width": 24,
+            "height": 24
+          },
+          "spacing": {
+            "x": 1,
+            "y": 1
+          },
+          "pivot": "center",
+          "sprites": [
+            {
+              "name": "sky_clear",
+              "column": 0,
+              "row": 0,
+              "tags": [
+                "sky"
+              ]
+            },
+            {
+              "name": "cloud_low",
+              "column": 0,
+              "row": 1,
+              "tags": [
+                "cloud"
+              ]
+            },
+            {
+              "name": "mountain_small",
+              "column": 4,
+              "row": 1,
+              "tags": [
+                "mountain"
+              ]
+            },
+            {
+              "name": "forest_far",
+              "column": 7,
+              "row": 1,
+              "tags": [
+                "forest"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "kenney.platformer.tile.grass",
+      "placeholder": true,
+      "genre": "platformer-2d",
+      "primitive": "tile",
+      "kind": "sprite",
+      "priority": 10,
+      "source": {
+        "title": "Platformer Art Deluxe",
+        "url": "https://www.kenney.nl/assets/platformer-art-deluxe",
+        "downloadPage": "https://lpc.opengameart.org/content/platformer-art-deluxe",
+        "author": "Kenney",
+        "verified": true,
+        "provenance": {
+          "verifiedAt": "2026-05-21",
+          "origin": "Kenney Platformer Art Deluxe and OpenGameArt mirror both identify the pack as CC0 platformer/tile art.",
+          "fixture": "asset-layer/fixtures/platformer/grass-tile.png",
+          "notes": "Local fixture is a compact grass platform tile for disconnected validation."
+        }
+      },
+      "license": {
+        "name": "Creative Commons CC0 1.0 Universal",
+        "spdx": "CC0-1.0",
+        "url": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "requiresAttribution": false
+      },
+      "provider": {
+        "name": "Kenney",
+        "url": "https://www.kenney.nl/",
+        "type": "local"
+      },
+      "files": [
+        {
+          "role": "sprite",
+          "format": "png",
+          "localPath": "asset-layer/fixtures/platformer/grass-tile.png"
+        }
+      ],
+      "technical": {
+        "width": 64,
+        "height": 64,
+        "pixelsPerUnit": 100,
+        "transparent": true
+      },
+      "tags": [
+        "platformer",
+        "tile",
+        "grass",
+        "ground",
+        "cc0"
+      ],
+      "unity": {
+        "path": "Assets/Art/Sprites/Tiles/grass-tile.png",
+        "pixelsPerUnit": 100,
+        "spriteMode": "single",
+        "filterMode": "Bilinear"
+      }
+    },
+    {
+      "id": "kenney.platformer.collectible.coin",
+      "placeholder": true,
+      "genre": "platformer-2d",
+      "primitive": "collectible",
+      "kind": "sprite",
+      "priority": 10,
+      "source": {
+        "title": "Platformer Art Deluxe",
+        "url": "https://www.kenney.nl/assets/platformer-art-deluxe",
+        "downloadPage": "https://lpc.opengameart.org/content/platformer-art-deluxe",
+        "author": "Kenney",
+        "verified": true,
+        "provenance": {
+          "verifiedAt": "2026-05-21",
+          "origin": "OpenGameArt mirror describes separate PNG sprites and HUD/UI images under CC0.",
+          "fixture": "asset-layer/fixtures/platformer/coin-gold.png",
+          "notes": "Local fixture is a small gold pickup sprite for offline imports."
+        }
+      },
+      "license": {
+        "name": "Creative Commons CC0 1.0 Universal",
+        "spdx": "CC0-1.0",
+        "url": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "requiresAttribution": false
+      },
+      "provider": {
+        "name": "Kenney",
+        "url": "https://www.kenney.nl/",
+        "type": "local"
+      },
+      "files": [
+        {
+          "role": "sprite",
+          "format": "png",
+          "localPath": "asset-layer/fixtures/platformer/coin-gold.png"
+        }
+      ],
+      "technical": {
+        "width": 32,
+        "height": 32,
+        "pixelsPerUnit": 100,
+        "transparent": true
+      },
+      "tags": [
+        "platformer",
+        "collectible",
+        "coin",
+        "pickup",
+        "cc0"
+      ],
+      "unity": {
+        "path": "Assets/Art/Sprites/Collectibles/coin-gold.png",
+        "pixelsPerUnit": 100,
+        "spriteMode": "single",
+        "filterMode": "Bilinear"
+      }
+    },
+    {
+      "id": "opengameart.moxiecat.platformer.sfx.jump",
+      "genre": "platformer-2d",
+      "primitive": "sfx_jump",
+      "kind": "audio",
+      "priority": 35,
+      "source": {
+        "title": "8-bit Platformer SFX",
+        "url": "https://opengameart.org/content/8-bit-platformer-sfx-0",
+        "downloadPage": "https://opengameart.org/content/8-bit-platformer-sfx-0",
+        "author": "MoxieCat",
+        "verified": true,
+        "provenance": {
+          "verifiedAt": "2026-05-25",
+          "origin": "OpenGameArt entry '8-bit Platformer SFX' by MoxieCat is listed under CC0 and includes individual WAV cues for platformer actions.",
+          "fixture": "asset-layer/fixtures/platformer/sfx/moxiecat-8bit-platformer/jump.wav",
+          "notes": "Selected as the default short player jump cue for the platformer audio kit."
+        }
+      },
+      "license": {
+        "name": "Creative Commons CC0 1.0 Universal",
+        "spdx": "CC0-1.0",
+        "url": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "requiresAttribution": false
+      },
+      "provider": {
+        "name": "OpenGameArt",
+        "url": "https://opengameart.org/",
+        "type": "local"
+      },
+      "files": [
+        {
+          "role": "audio",
+          "format": "wav",
+          "localPath": "asset-layer/fixtures/platformer/sfx/moxiecat-8bit-platformer/jump.wav",
+          "checksum": {
+            "algorithm": "sha256",
+            "value": "5370db118da8710b95d91a1f7a98b0f86e815cd668b45d2bc6c9cdbe2deb0db8"
+          }
+        }
+      ],
+      "technical": {
+        "sampleRate": 44100,
+        "channels": 1,
+        "bitDepth": 16,
+        "durationMs": 287
+      },
+      "tags": [
+        "platformer",
+        "audio",
+        "sfx",
+        "jump",
+        "player",
+        "8bit",
+        "cc0"
+      ],
+      "unity": {
+        "path": "Assets/Audio/SFX/jump.wav",
+        "pixelsPerUnit": 100
+      }
+    },
+    {
+      "id": "opengameart.moxiecat.platformer.sfx.dash",
+      "genre": "platformer-2d",
+      "primitive": "sfx_dash",
+      "kind": "audio",
+      "priority": 35,
+      "source": {
+        "title": "8-bit Platformer SFX",
+        "url": "https://opengameart.org/content/8-bit-platformer-sfx-0",
+        "downloadPage": "https://opengameart.org/content/8-bit-platformer-sfx-0",
+        "author": "MoxieCat",
+        "verified": true,
+        "provenance": {
+          "verifiedAt": "2026-05-25",
+          "origin": "OpenGameArt entry '8-bit Platformer SFX' by MoxieCat is listed under CC0 and includes individual WAV cues for platformer actions.",
+          "fixture": "asset-layer/fixtures/platformer/sfx/moxiecat-8bit-platformer/dashwoosh.wav",
+          "notes": "Selected as the default dash/air-whoosh cue."
+        }
+      },
+      "license": {
+        "name": "Creative Commons CC0 1.0 Universal",
+        "spdx": "CC0-1.0",
+        "url": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "requiresAttribution": false
+      },
+      "provider": {
+        "name": "OpenGameArt",
+        "url": "https://opengameart.org/",
+        "type": "local"
+      },
+      "files": [
+        {
+          "role": "audio",
+          "format": "wav",
+          "localPath": "asset-layer/fixtures/platformer/sfx/moxiecat-8bit-platformer/dashwoosh.wav",
+          "checksum": {
+            "algorithm": "sha256",
+            "value": "6e699ad9333fd2cf8fd455ec3ff8f27bca406634c29e68c895d359bbbd9db211"
+          }
+        }
+      ],
+      "technical": {
+        "sampleRate": 44100,
+        "channels": 1,
+        "bitDepth": 16,
+        "durationMs": 2300
+      },
+      "tags": [
+        "platformer",
+        "audio",
+        "sfx",
+        "dash",
+        "whoosh",
+        "player",
+        "8bit",
+        "cc0"
+      ],
+      "unity": {
+        "path": "Assets/Audio/SFX/dash.wav",
+        "pixelsPerUnit": 100
+      }
+    },
+    {
+      "id": "opengameart.fupi.platformer.sfx.collect",
+      "genre": "platformer-2d",
+      "primitive": "sfx_collect",
+      "kind": "audio",
+      "priority": 35,
+      "source": {
+        "title": "Plingy Coin",
+        "url": "https://opengameart.org/content/plingy-coin",
+        "downloadPage": "https://opengameart.org/content/plingy-coin",
+        "author": "Fupi",
+        "verified": true,
+        "provenance": {
+          "verifiedAt": "2026-05-25",
+          "origin": "OpenGameArt entry 'Plingy Coin' by Fupi is listed under CC0 and provides a short WAV pickup cue.",
+          "fixture": "asset-layer/fixtures/platformer/sfx/fupi-plingy-coin/coin.wav",
+          "notes": "Selected as the default collectible pickup cue."
+        }
+      },
+      "license": {
+        "name": "Creative Commons CC0 1.0 Universal",
+        "spdx": "CC0-1.0",
+        "url": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "requiresAttribution": false
+      },
+      "provider": {
+        "name": "OpenGameArt",
+        "url": "https://opengameart.org/",
+        "type": "local"
+      },
+      "files": [
+        {
+          "role": "audio",
+          "format": "wav",
+          "localPath": "asset-layer/fixtures/platformer/sfx/fupi-plingy-coin/coin.wav",
+          "checksum": {
+            "algorithm": "sha256",
+            "value": "d0a0a830ec4e2ed70d58d065edf7136ef5db45f0f977238be3b0ba8cf9fdc3f8"
+          }
+        }
+      ],
+      "technical": {
+        "sampleRate": 44100,
+        "channels": 2,
+        "bitDepth": 16,
+        "durationMs": 904
+      },
+      "tags": [
+        "platformer",
+        "audio",
+        "sfx",
+        "collect",
+        "collectible",
+        "coin",
+        "pickup",
+        "cc0"
+      ],
+      "unity": {
+        "path": "Assets/Audio/SFX/collect.wav",
+        "pixelsPerUnit": 100
+      }
+    },
+    {
+      "id": "opengameart.moxiecat.platformer.sfx.hit",
+      "genre": "platformer-2d",
+      "primitive": "sfx_hit",
+      "kind": "audio",
+      "priority": 35,
+      "source": {
+        "title": "8-bit Platformer SFX",
+        "url": "https://opengameart.org/content/8-bit-platformer-sfx-0",
+        "downloadPage": "https://opengameart.org/content/8-bit-platformer-sfx-0",
+        "author": "MoxieCat",
+        "verified": true,
+        "provenance": {
+          "verifiedAt": "2026-05-25",
+          "origin": "OpenGameArt entry '8-bit Platformer SFX' by MoxieCat is listed under CC0 and includes individual WAV cues for platformer actions.",
+          "fixture": "asset-layer/fixtures/platformer/sfx/moxiecat-8bit-platformer/playerhurt.wav",
+          "notes": "Selected as the default player hit/hazard cue."
+        }
+      },
+      "license": {
+        "name": "Creative Commons CC0 1.0 Universal",
+        "spdx": "CC0-1.0",
+        "url": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "requiresAttribution": false
+      },
+      "provider": {
+        "name": "OpenGameArt",
+        "url": "https://opengameart.org/",
+        "type": "local"
+      },
+      "files": [
+        {
+          "role": "audio",
+          "format": "wav",
+          "localPath": "asset-layer/fixtures/platformer/sfx/moxiecat-8bit-platformer/playerhurt.wav",
+          "checksum": {
+            "algorithm": "sha256",
+            "value": "a572bed733d262ee92bc55a5d0781e1a19d7458c39438e41e5357338a2aa93a8"
+          }
+        }
+      ],
+      "technical": {
+        "sampleRate": 44100,
+        "channels": 1,
+        "bitDepth": 16,
+        "durationMs": 501
+      },
+      "tags": [
+        "platformer",
+        "audio",
+        "sfx",
+        "hit",
+        "hurt",
+        "hazard",
+        "player",
+        "8bit",
+        "cc0"
+      ],
+      "unity": {
+        "path": "Assets/Audio/SFX/hit.wav",
+        "pixelsPerUnit": 100
+      }
+    },
+    {
+      "id": "opengameart.moxiecat.platformer.sfx.bounce",
+      "genre": "platformer-2d",
+      "primitive": "sfx_bounce",
+      "kind": "audio",
+      "priority": 35,
+      "source": {
+        "title": "8-bit Platformer SFX",
+        "url": "https://opengameart.org/content/8-bit-platformer-sfx-0",
+        "downloadPage": "https://opengameart.org/content/8-bit-platformer-sfx-0",
+        "author": "MoxieCat",
+        "verified": true,
+        "provenance": {
+          "verifiedAt": "2026-05-25",
+          "origin": "OpenGameArt entry '8-bit Platformer SFX' by MoxieCat is listed under CC0 and includes individual WAV cues for platformer actions.",
+          "fixture": "asset-layer/fixtures/platformer/sfx/moxiecat-8bit-platformer/spring.wav",
+          "notes": "Selected as the default trampoline/spring bounce cue."
+        }
+      },
+      "license": {
+        "name": "Creative Commons CC0 1.0 Universal",
+        "spdx": "CC0-1.0",
+        "url": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "requiresAttribution": false
+      },
+      "provider": {
+        "name": "OpenGameArt",
+        "url": "https://opengameart.org/",
+        "type": "local"
+      },
+      "files": [
+        {
+          "role": "audio",
+          "format": "wav",
+          "localPath": "asset-layer/fixtures/platformer/sfx/moxiecat-8bit-platformer/spring.wav",
+          "checksum": {
+            "algorithm": "sha256",
+            "value": "2e50e65a01c76aea5c5e0328d01614bf3d3eec8b90eb963991cc7883dcec3846"
+          }
+        }
+      ],
+      "technical": {
+        "sampleRate": 44100,
+        "channels": 1,
+        "bitDepth": 16,
+        "durationMs": 334
+      },
+      "tags": [
+        "platformer",
+        "audio",
+        "sfx",
+        "bounce",
+        "spring",
+        "trampoline",
+        "8bit",
+        "cc0"
+      ],
+      "unity": {
+        "path": "Assets/Audio/SFX/bounce.wav",
+        "pixelsPerUnit": 100
+      }
+    },
+    {
+      "id": "opengameart.greyfroggames.platformer.sfx.win",
+      "genre": "platformer-2d",
+      "primitive": "sfx_win",
+      "kind": "audio",
+      "priority": 35,
+      "source": {
+        "title": "Level Complete Splash",
+        "url": "https://opengameart.org/content/level-complete-splash",
+        "downloadPage": "https://opengameart.org/content/level-complete-splash",
+        "author": "GreyFrogGames",
+        "verified": true,
+        "provenance": {
+          "verifiedAt": "2026-05-25",
+          "origin": "OpenGameArt entry 'Level Complete Splash' by GreyFrogGames is listed under CC0 and provides a short WAV level-complete cue.",
+          "fixture": "asset-layer/fixtures/platformer/sfx/greyfroggames-level-complete/levelcompletesplash.wav",
+          "notes": "Selected as the default win/level-complete cue."
+        }
+      },
+      "license": {
+        "name": "Creative Commons CC0 1.0 Universal",
+        "spdx": "CC0-1.0",
+        "url": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "requiresAttribution": false
+      },
+      "provider": {
+        "name": "OpenGameArt",
+        "url": "https://opengameart.org/",
+        "type": "local"
+      },
+      "files": [
+        {
+          "role": "audio",
+          "format": "wav",
+          "localPath": "asset-layer/fixtures/platformer/sfx/greyfroggames-level-complete/levelcompletesplash.wav",
+          "checksum": {
+            "algorithm": "sha256",
+            "value": "b8fff267e855bba495d7dce90a1c0f44e9d5e76fe9a27908bad830c57fa53afb"
+          }
+        }
+      ],
+      "technical": {
+        "sampleRate": 44100,
+        "channels": 2,
+        "bitDepth": 16,
+        "durationMs": 2065
+      },
+      "tags": [
+        "platformer",
+        "audio",
+        "sfx",
+        "win",
+        "level-complete",
+        "success",
+        "cc0"
+      ],
+      "unity": {
+        "path": "Assets/Audio/SFX/win.wav",
+        "pixelsPerUnit": 100
+      }
+    },
+    {
+      "id": "opengameart.grasslands.background.sky",
+      "placeholder": true,
+      "genre": "platformer-2d",
+      "primitive": "background",
+      "kind": "sprite",
+      "priority": 8,
+      "source": {
+        "title": "Grasslands Platformer Art v3",
+        "url": "https://opengameart.org/content/grasslands-platformer-art-v3",
+        "downloadPage": "https://opengameart.org/content/grasslands-platformer-art-v3",
+        "author": "KingCreator11",
+        "verified": true,
+        "provenance": {
+          "verifiedAt": "2026-05-21",
+          "origin": "OpenGameArt entry lists Grasslands Platformer Art v3 by KingCreator11 under CC0 with grasslands/platformer tile tags.",
+          "fixture": "asset-layer/fixtures/platformer/sky-background.png",
+          "notes": "Local fixture is a simple sky backdrop for deterministic scenario generation."
+        }
+      },
+      "license": {
+        "name": "Creative Commons CC0 1.0 Universal",
+        "spdx": "CC0-1.0",
+        "url": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "requiresAttribution": false
+      },
+      "provider": {
+        "name": "OpenGameArt",
+        "url": "https://opengameart.org/",
+        "type": "local"
+      },
+      "files": [
+        {
+          "role": "background",
+          "format": "png",
+          "localPath": "asset-layer/fixtures/platformer/sky-background.png"
+        }
+      ],
+      "technical": {
+        "width": 256,
+        "height": 128,
+        "pixelsPerUnit": 100,
+        "transparent": false
+      },
+      "tags": [
+        "platformer",
+        "background",
+        "grasslands",
+        "sky",
+        "cc0"
+      ],
+      "unity": {
+        "path": "Assets/Art/Backgrounds/sky-background.png",
+        "pixelsPerUnit": 100,
+        "spriteMode": "single",
+        "filterMode": "Bilinear"
+      }
+    },
+    {
+      "id": "opengameart.grasslands.decor.tree",
+      "placeholder": true,
+      "genre": "platformer-2d",
+      "primitive": "decor",
+      "kind": "sprite",
+      "priority": 6,
+      "source": {
+        "title": "2D Sunny Grassland Sprites",
+        "url": "https://opengameart.org/content/2d-sunny-grassland-sprites-platformer-sidescroller",
+        "downloadPage": "https://opengameart.org/content/2d-sunny-grassland-sprites-platformer-sidescroller",
+        "author": "LarryIRL",
+        "verified": true,
+        "provenance": {
+          "verifiedAt": "2026-05-21",
+          "origin": "OpenGameArt entry lists 2D sunny grassland platformer sprites under CC0/Public Domain with tree and cloud decorations.",
+          "fixture": "asset-layer/fixtures/platformer/tree-decor.png",
+          "notes": "Local fixture is a compact decoration sprite for future scenario placement."
+        }
+      },
+      "license": {
+        "name": "Creative Commons CC0 1.0 Universal",
+        "spdx": "CC0-1.0",
+        "url": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "requiresAttribution": false
+      },
+      "provider": {
+        "name": "OpenGameArt",
+        "url": "https://opengameart.org/",
+        "type": "local"
+      },
+      "files": [
+        {
+          "role": "decor",
+          "format": "png",
+          "localPath": "asset-layer/fixtures/platformer/tree-decor.png"
+        }
+      ],
+      "technical": {
+        "width": 64,
+        "height": 96,
+        "pixelsPerUnit": 100,
+        "transparent": true
+      },
+      "tags": [
+        "platformer",
+        "decor",
+        "tree",
+        "grasslands",
+        "cc0"
+      ],
+      "unity": {
+        "path": "Assets/Art/Sprites/Decor/tree-decor.png",
+        "pixelsPerUnit": 100,
+        "spriteMode": "single",
+        "filterMode": "Bilinear"
+      }
+    },
+    {
+      "id": "opengameart.simple.tile.vvvvvv",
+      "genre": "platformer-2d",
+      "primitive": "tile",
+      "kind": "sprite",
+      "priority": 5,
+      "source": {
+        "title": "Platformer Assets",
+        "url": "https://opengameart.org/content/platformer-assets-4",
+        "downloadPage": "https://opengameart.org/content/platformer-assets-4",
+        "author": "theMinesAreShakin",
+        "verified": true,
+        "provenance": {
+          "verifiedAt": "2026-05-21",
+          "origin": "OpenGameArt entry lists Platformer Assets by theMinesAreShakin under CC0 with simple VVVVVV-clone PNG assets including tiles.png.",
+          "fixture": "https://opengameart.org/sites/default/files/tiles_85.png",
+          "notes": "HTTP-backed candidate kept lower priority than local fixtures; use tags simple/vvvvvv to opt into this minimal tile style."
+        }
+      },
+      "license": {
+        "name": "Creative Commons CC0 1.0 Universal",
+        "spdx": "CC0-1.0",
+        "url": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "requiresAttribution": false
+      },
+      "provider": {
+        "name": "OpenGameArt",
+        "url": "https://opengameart.org/",
+        "type": "http"
+      },
+      "files": [
+        {
+          "role": "spritesheet",
+          "format": "png",
+          "url": "https://opengameart.org/sites/default/files/tiles_85.png",
+          "checksum": {
+            "algorithm": "sha256",
+            "value": "76d0330c6a0d5ede320407ab481929378315cf29183ef0d017d1a350a397f1ea"
+          }
+        }
+      ],
+      "technical": {
+        "width": 96,
+        "height": 64,
+        "pixelsPerUnit": 100,
+        "transparent": true
+      },
+      "tags": [
+        "platformer",
+        "tile",
+        "simple",
+        "vvvvvv",
+        "cc0",
+        "http"
+      ],
+      "unity": {
+        "path": "Assets/Art/Sprites/Tiles/simple-tiles.png",
+        "pixelsPerUnit": 100,
+        "spriteMode": "multiple",
+        "filterMode": "Point",
+        "defaultSpriteName": "tile.simple.block",
+        "slicing": {
+          "mode": "grid",
+          "cell": {
+            "width": 32,
+            "height": 32
+          },
+          "offset": {
+            "x": 0,
+            "y": 0
+          },
+          "spacing": {
+            "x": 0,
+            "y": 0
+          },
+          "pivot": "center",
+          "sprites": [
+            {
+              "name": "tile.simple.platform",
+              "column": 0,
+              "row": 0,
+              "tags": [
+                "tile",
+                "surface"
+              ]
+            },
+            {
+              "name": "tile.simple.structure",
+              "column": 1,
+              "row": 0,
+              "tags": [
+                "tile",
+                "structure"
+              ]
+            },
+            {
+              "name": "tile.simple.hazard-spike",
+              "column": 2,
+              "row": 0,
+              "tags": [
+                "hazard"
+              ]
+            },
+            {
+              "name": "tile.simple.block",
+              "column": 0,
+              "row": 1,
+              "tags": [
+                "tile",
+                "surface",
+                "default"
+              ]
+            },
+            {
+              "name": "tile.simple.bricks",
+              "column": 1,
+              "row": 1,
+              "tags": [
+                "tile",
+                "surface"
+              ]
+            },
+            {
+              "name": "tile.simple.detail",
+              "column": 2,
+              "row": 1,
+              "tags": [
+                "decor"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "opengameart.simple.collectible.coin",
+      "genre": "platformer-2d",
+      "primitive": "collectible",
+      "kind": "sprite",
+      "priority": 5,
+      "source": {
+        "title": "Platformer Assets",
+        "url": "https://opengameart.org/content/platformer-assets-4",
+        "downloadPage": "https://opengameart.org/content/platformer-assets-4",
+        "author": "theMinesAreShakin",
+        "verified": true,
+        "provenance": {
+          "verifiedAt": "2026-05-21",
+          "origin": "OpenGameArt entry lists Platformer Assets by theMinesAreShakin under CC0 with simple VVVVVV-clone PNG assets including coin.png.",
+          "fixture": "https://opengameart.org/sites/default/files/coin_23.png",
+          "notes": "HTTP-backed candidate kept lower priority than local fixtures; use tags simple/vvvvvv to opt into this minimal collectible style."
+        }
+      },
+      "license": {
+        "name": "Creative Commons CC0 1.0 Universal",
+        "spdx": "CC0-1.0",
+        "url": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "requiresAttribution": false
+      },
+      "provider": {
+        "name": "OpenGameArt",
+        "url": "https://opengameart.org/",
+        "type": "http"
+      },
+      "files": [
+        {
+          "role": "sprite",
+          "format": "png",
+          "url": "https://opengameart.org/sites/default/files/coin_23.png",
+          "checksum": {
+            "algorithm": "sha256",
+            "value": "0383e686b152ae38ea4ef0f5e3a54a939a83066630bafa6290caab7fbe56c68a"
+          }
+        }
+      ],
+      "technical": {
+        "width": 32,
+        "height": 32,
+        "pixelsPerUnit": 100,
+        "transparent": true
+      },
+      "tags": [
+        "platformer",
+        "collectible",
+        "coin",
+        "simple",
+        "vvvvvv",
+        "cc0",
+        "http"
+      ],
+      "unity": {
+        "path": "Assets/Art/Sprites/Collectibles/simple-coin.png",
+        "pixelsPerUnit": 100,
+        "spriteMode": "single",
+        "filterMode": "Point"
+      }
+    },
+    {
+      "id": "opengameart.scifi.tile.sheet",
+      "genre": "platformer-2d",
+      "primitive": "tile",
+      "kind": "sprite",
+      "priority": 4,
+      "source": {
+        "title": "Sci-fi platformer tileset",
+        "url": "https://opengameart.org/content/sci-fi-platformer-tileset",
+        "downloadPage": "https://opengameart.org/content/sci-fi-platformer-tileset",
+        "author": "Buch",
+        "verified": true,
+        "provenance": {
+          "verifiedAt": "2026-05-21",
+          "origin": "OpenGameArt entry lists Sci-fi platformer tileset by Buch under CC0; page describes a 16x16 platformer tileset with robots, levers, and an alternate palette.",
+          "fixture": "https://opengameart.org/sites/default/files/sheet_23.png",
+          "notes": "HTTP-backed candidate for science-fiction platformers; attribution is not required but appreciated by the source page."
+        }
+      },
+      "license": {
+        "name": "Creative Commons CC0 1.0 Universal",
+        "spdx": "CC0-1.0",
+        "url": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "requiresAttribution": false
+      },
+      "provider": {
+        "name": "OpenGameArt",
+        "url": "https://opengameart.org/",
+        "type": "http"
+      },
+      "files": [
+        {
+          "role": "spritesheet",
+          "format": "png",
+          "url": "https://opengameart.org/sites/default/files/sheet_23.png",
+          "checksum": {
+            "algorithm": "sha256",
+            "value": "3200dfb69f872cbb87476729c88efacfc654842b6185af6017b61a449c8b7100"
+          }
+        }
+      ],
+      "technical": {
+        "width": 384,
+        "height": 384,
+        "pixelsPerUnit": 100,
+        "transparent": true
+      },
+      "tags": [
+        "platformer",
+        "tile",
+        "scifi",
+        "robot",
+        "pixelart",
+        "cc0",
+        "http"
+      ],
+      "unity": {
+        "path": "Assets/Art/Sprites/Tiles/scifi-platformer-sheet.png",
+        "pixelsPerUnit": 100,
+        "spriteMode": "multiple",
+        "filterMode": "Point",
+        "defaultSpriteName": "tile.scifi.surface",
+        "slicing": {
+          "mode": "grid",
+          "cell": {
+            "width": 16,
+            "height": 16
+          },
+          "offset": {
+            "x": 0,
+            "y": 0
+          },
+          "spacing": {
+            "x": 0,
+            "y": 0
+          },
+          "pivot": "center",
+          "sprites": [
+            {
+              "name": "tile.scifi.surface",
+              "column": 0,
+              "row": 0,
+              "tags": [
+                "tile",
+                "surface",
+                "default"
+              ]
+            },
+            {
+              "name": "tile.scifi.surface-alt",
+              "column": 1,
+              "row": 0,
+              "tags": [
+                "tile",
+                "surface"
+              ]
+            },
+            {
+              "name": "tile.scifi.detail",
+              "column": 2,
+              "row": 0,
+              "tags": [
+                "decor"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "lpc.grassdead.player.spritesheet",
+      "genre": "platformer-2d",
+      "primitive": "player",
+      "kind": "sprite",
+      "priority": 4,
+      "source": {
+        "title": "Grass/Dead Grass Platformer Tileset",
+        "url": "https://lpc.opengameart.org/content/grassdead-grass-platformer-tileset",
+        "downloadPage": "https://lpc.opengameart.org/content/grassdead-grass-platformer-tileset",
+        "author": "PROWNE",
+        "verified": true,
+        "provenance": {
+          "verifiedAt": "2026-05-21",
+          "origin": "Liberated Pixel Cup/OpenGameArt entry lists Grass/Dead Grass Platformer Tileset by PROWNE under CC0 and describes live/dead grass tiles plus character frames.",
+          "fixture": "https://lpc.opengameart.org/sites/default/files/Spritesheet.png",
+          "notes": "HTTP-backed spritesheet candidate with character animation frames; kept lower priority until slicing metadata is added."
+        }
+      },
+      "license": {
+        "name": "Creative Commons CC0 1.0 Universal",
+        "spdx": "CC0-1.0",
+        "url": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "requiresAttribution": false
+      },
+      "provider": {
+        "name": "OpenGameArt LPC",
+        "url": "https://lpc.opengameart.org/",
+        "type": "http"
+      },
+      "files": [
+        {
+          "role": "spritesheet",
+          "format": "png",
+          "url": "https://lpc.opengameart.org/sites/default/files/Spritesheet.png",
+          "checksum": {
+            "algorithm": "sha256",
+            "value": "08a492230b3b611ae236ef990d081d22d2018ea5a896dd8cdbec0acbd2804bde"
+          }
+        }
+      ],
+      "technical": {
+        "width": 512,
+        "height": 512,
+        "pixelsPerUnit": 100,
+        "transparent": true
+      },
+      "tags": [
+        "platformer",
+        "character",
+        "player",
+        "grass",
+        "spritesheet",
+        "cc0",
+        "http"
+      ],
+      "unity": {
+        "path": "Assets/Art/Sprites/Characters/grassdead-player-sheet.png",
+        "pixelsPerUnit": 100,
+        "spriteMode": "single",
+        "filterMode": "Point"
+      }
+    },
+    {
+      "id": "opengameart.glitch.background",
+      "genre": "platformer-2d",
+      "primitive": "background",
+      "kind": "sprite",
+      "priority": 5,
+      "source": {
+        "title": "Background Made From Glitch Assets",
+        "url": "https://opengameart.org/content/background-made-from-glitch-assets",
+        "downloadPage": "https://opengameart.org/content/background-made-from-glitch-assets",
+        "author": "Graul98",
+        "verified": true,
+        "provenance": {
+          "verifiedAt": "2026-05-21",
+          "origin": "OpenGameArt entry lists Background Made From Glitch Assets by Graul98 under CC0 with platformer/sidescroller/background tags and a PNG file.",
+          "fixture": "https://opengameart.org/sites/default/files/brobackground.png",
+          "notes": "HTTP-backed static background candidate for larger side-scroller scenes."
+        }
+      },
+      "license": {
+        "name": "Creative Commons CC0 1.0 Universal",
+        "spdx": "CC0-1.0",
+        "url": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "requiresAttribution": false
+      },
+      "provider": {
+        "name": "OpenGameArt",
+        "url": "https://opengameart.org/",
+        "type": "http"
+      },
+      "files": [
+        {
+          "role": "background",
+          "format": "png",
+          "url": "https://opengameart.org/sites/default/files/brobackground.png",
+          "checksum": {
+            "algorithm": "sha256",
+            "value": "afdddde0908d8e563351b04748ed27dcde76b5358617bed31821ccf151a0d876"
+          }
+        }
+      ],
+      "technical": {
+        "width": 1024,
+        "height": 768,
+        "pixelsPerUnit": 100,
+        "transparent": false
+      },
+      "tags": [
+        "platformer",
+        "background",
+        "sidescroller",
+        "glitch",
+        "cc0",
+        "http"
+      ],
+      "unity": {
+        "path": "Assets/Art/Backgrounds/glitch-background.png",
+        "pixelsPerUnit": 100,
+        "spriteMode": "single",
+        "filterMode": "Bilinear"
+      }
+    },
+    {
+      "id": "kenney.new-platformer.player.sheet",
+      "genre": "platformer-2d",
+      "primitive": "player",
+      "kind": "sprite",
+      "priority": 39,
+      "source": {
+        "title": "New Platformer Pack",
+        "url": "https://www.kenney.nl/assets/new-platformer-pack",
+        "downloadPage": "https://www.kenney.nl/media/pages/assets/new-platformer-pack/1896103897-1764756702/kenney_new-platformer-pack-1.1.zip",
+        "author": "Kenney",
+        "verified": true,
+        "provenance": {
+          "verifiedAt": "2026-05-23",
+          "origin": "Kenney New Platformer Pack lists 440 files and Creative Commons CC0. The committed spritesheet was extracted from the official kenney_new-platformer-pack-1.1.zip download.",
+          "fixture": "asset-layer/fixtures/platformer/kenney-new-platformer/characters.png",
+          "notes": "TexturePacker rects expose representative astronaut character idle, jump, walk, hit, climb, and duck frames."
+        }
+      },
+      "license": {
+        "name": "Creative Commons CC0 1.0 Universal",
+        "spdx": "CC0-1.0",
+        "url": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "requiresAttribution": false
+      },
+      "provider": {
+        "name": "Kenney",
+        "url": "https://www.kenney.nl/",
+        "type": "local"
+      },
+      "files": [
+        {
+          "role": "spritesheet",
+          "format": "png",
+          "localPath": "asset-layer/fixtures/platformer/kenney-new-platformer/characters.png",
+          "checksum": {
+            "algorithm": "sha256",
+            "value": "f3d060ab294c262d51a8033074d1cd799506b7c536c941b4109ec35def178d3e"
+          }
+        }
+      ],
+      "technical": {
+        "width": 902,
+        "height": 902,
+        "pixelsPerUnit": 100,
+        "transparent": true
+      },
+      "tags": [
+        "platformer",
+        "character",
+        "player",
+        "astronaut",
+        "spritesheet",
+        "animation",
+        "kenney",
+        "new-platformer",
+        "cc0"
+      ],
+      "unity": {
+        "path": "Assets/Art/Sprites/Characters/kenney-new-platformer-characters.png",
+        "pixelsPerUnit": 100,
+        "spriteMode": "multiple",
+        "filterMode": "Point",
+        "defaultSpriteName": "character_green_idle",
+        "slicing": {
+          "mode": "rects",
+          "pivot": "center",
+          "sprites": [
+            {
+              "name": "character_green_idle",
+              "rect": {
+                "x": 0,
+                "y": 258,
+                "width": 128,
+                "height": 128
+              },
+              "tags": [
+                "player",
+                "green",
+                "idle"
+              ]
+            },
+            {
+              "name": "character_green_jump",
+              "rect": {
+                "x": 129,
+                "y": 258,
+                "width": 128,
+                "height": 128
+              },
+              "tags": [
+                "player",
+                "green",
+                "jump"
+              ]
+            },
+            {
+              "name": "character_green_walk_a",
+              "rect": {
+                "x": 258,
+                "y": 258,
+                "width": 128,
+                "height": 128
+              },
+              "tags": [
+                "player",
+                "green",
+                "walk"
+              ]
+            },
+            {
+              "name": "character_green_walk_b",
+              "rect": {
+                "x": 387,
+                "y": 258,
+                "width": 128,
+                "height": 128
+              },
+              "tags": [
+                "player",
+                "green",
+                "walk"
+              ]
+            },
+            {
+              "name": "character_green_hit",
+              "rect": {
+                "x": 774,
+                "y": 129,
+                "width": 128,
+                "height": 128
+              },
+              "tags": [
+                "player",
+                "green",
+                "hit"
+              ]
+            },
+            {
+              "name": "character_green_duck",
+              "rect": {
+                "x": 516,
+                "y": 129,
+                "width": 128,
+                "height": 128
+              },
+              "tags": [
+                "player",
+                "green",
+                "duck"
+              ]
+            },
+            {
+              "name": "character_green_climb_a",
+              "rect": {
+                "x": 258,
+                "y": 129,
+                "width": 128,
+                "height": 128
+              },
+              "tags": [
+                "player",
+                "green",
+                "climb"
+              ]
+            },
+            {
+              "name": "character_green_climb_b",
+              "rect": {
+                "x": 387,
+                "y": 129,
+                "width": 128,
+                "height": 128
+              },
+              "tags": [
+                "player",
+                "green",
+                "climb"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "kenney.new-platformer.enemy.sheet",
+      "genre": "platformer-2d",
+      "primitive": "enemy",
+      "kind": "sprite",
+      "priority": 34,
+      "source": {
+        "title": "New Platformer Pack",
+        "url": "https://www.kenney.nl/assets/new-platformer-pack",
+        "downloadPage": "https://www.kenney.nl/media/pages/assets/new-platformer-pack/1896103897-1764756702/kenney_new-platformer-pack-1.1.zip",
+        "author": "Kenney",
+        "verified": true,
+        "provenance": {
+          "verifiedAt": "2026-05-23",
+          "origin": "Kenney New Platformer Pack lists 440 files and Creative Commons CC0. The committed spritesheet was extracted from the official kenney_new-platformer-pack-1.1.zip download.",
+          "fixture": "asset-layer/fixtures/platformer/kenney-new-platformer/enemies.png",
+          "notes": "TexturePacker rects expose representative flying, walking, hazard, and slime enemy frames."
+        }
+      },
+      "license": {
+        "name": "Creative Commons CC0 1.0 Universal",
+        "spdx": "CC0-1.0",
+        "url": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "requiresAttribution": false
+      },
+      "provider": {
+        "name": "Kenney",
+        "url": "https://www.kenney.nl/",
+        "type": "local"
+      },
+      "files": [
+        {
+          "role": "spritesheet",
+          "format": "png",
+          "localPath": "asset-layer/fixtures/platformer/kenney-new-platformer/enemies.png",
+          "checksum": {
+            "algorithm": "sha256",
+            "value": "2cab7bcb106db10c7ce261609ce5be9db80373920f8851e0a11bcd364e43f23e"
+          }
+        }
+      ],
+      "technical": {
+        "width": 519,
+        "height": 519,
+        "pixelsPerUnit": 100,
+        "transparent": true
+      },
+      "tags": [
+        "platformer",
+        "enemy",
+        "hazard",
+        "spritesheet",
+        "animation",
+        "kenney",
+        "new-platformer",
+        "cc0"
+      ],
+      "unity": {
+        "path": "Assets/Art/Sprites/Enemies/kenney-new-platformer-enemies.png",
+        "pixelsPerUnit": 100,
+        "spriteMode": "multiple",
+        "filterMode": "Point",
+        "defaultSpriteName": "slime_normal_rest",
+        "slicing": {
+          "mode": "rects",
+          "pivot": "center",
+          "sprites": [
+            {
+              "name": "slime_normal_rest",
+              "rect": {
+                "x": 195,
+                "y": 325,
+                "width": 64,
+                "height": 64
+              },
+              "tags": [
+                "enemy",
+                "slime",
+                "idle"
+              ]
+            },
+            {
+              "name": "slime_normal_walk_a",
+              "rect": {
+                "x": 260,
+                "y": 325,
+                "width": 64,
+                "height": 64
+              },
+              "tags": [
+                "enemy",
+                "slime",
+                "walk"
+              ]
+            },
+            {
+              "name": "slime_normal_walk_b",
+              "rect": {
+                "x": 325,
+                "y": 325,
+                "width": 64,
+                "height": 64
+              },
+              "tags": [
+                "enemy",
+                "slime",
+                "walk"
+              ]
+            },
+            {
+              "name": "bee_rest",
+              "rect": {
+                "x": 325,
+                "y": 0,
+                "width": 64,
+                "height": 64
+              },
+              "tags": [
+                "enemy",
+                "bee",
+                "flying"
+              ]
+            },
+            {
+              "name": "fly_rest",
+              "rect": {
+                "x": 260,
+                "y": 130,
+                "width": 64,
+                "height": 64
+              },
+              "tags": [
+                "enemy",
+                "fly",
+                "flying"
+              ]
+            },
+            {
+              "name": "frog_rest",
+              "rect": {
+                "x": 455,
+                "y": 130,
+                "width": 64,
+                "height": 64
+              },
+              "tags": [
+                "enemy",
+                "frog"
+              ]
+            },
+            {
+              "name": "saw_rest",
+              "rect": {
+                "x": 65,
+                "y": 260,
+                "width": 64,
+                "height": 64
+              },
+              "tags": [
+                "hazard",
+                "saw"
+              ]
+            },
+            {
+              "name": "snail_rest",
+              "rect": {
+                "x": 130,
+                "y": 390,
+                "width": 64,
+                "height": 64
+              },
+              "tags": [
+                "enemy",
+                "snail"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "kenney.new-platformer.tile.sheet",
+      "genre": "platformer-2d",
+      "primitive": "tile",
+      "kind": "sprite",
+      "priority": 39,
+      "source": {
+        "title": "New Platformer Pack",
+        "url": "https://www.kenney.nl/assets/new-platformer-pack",
+        "downloadPage": "https://www.kenney.nl/media/pages/assets/new-platformer-pack/1896103897-1764756702/kenney_new-platformer-pack-1.1.zip",
+        "author": "Kenney",
+        "verified": true,
+        "provenance": {
+          "verifiedAt": "2026-05-23",
+          "origin": "Kenney New Platformer Pack lists 440 files and Creative Commons CC0. The committed spritesheet was extracted from the official kenney_new-platformer-pack-1.1.zip download.",
+          "fixture": "asset-layer/fixtures/platformer/kenney-new-platformer/tiles.png",
+          "notes": "TexturePacker rects expose blocks, terrain, hazards, collectibles, and platformer props."
+        }
+      },
+      "license": {
+        "name": "Creative Commons CC0 1.0 Universal",
+        "spdx": "CC0-1.0",
+        "url": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "requiresAttribution": false
+      },
+      "provider": {
+        "name": "Kenney",
+        "url": "https://www.kenney.nl/",
+        "type": "local"
+      },
+      "files": [
+        {
+          "role": "spritesheet",
+          "format": "png",
+          "localPath": "asset-layer/fixtures/platformer/kenney-new-platformer/tiles.png",
+          "checksum": {
+            "algorithm": "sha256",
+            "value": "877e68a345fc8e668c913bb5798e98ecf0bc2784aa899bfb409769bf1feb50d7"
+          }
+        }
+      ],
+      "technical": {
+        "width": 1169,
+        "height": 1169,
+        "pixelsPerUnit": 100,
+        "transparent": true
+      },
+      "tags": [
+        "platformer",
+        "tile",
+        "terrain",
+        "block",
+        "hazard",
+        "prop",
+        "spritesheet",
+        "kenney",
+        "new-platformer",
+        "cc0"
+      ],
+      "unity": {
+        "path": "Assets/Art/Sprites/Tiles/kenney-new-platformer-tiles.png",
+        "pixelsPerUnit": 100,
+        "spriteMode": "multiple",
+        "filterMode": "Point",
+        "defaultSpriteName": "grass",
+        "slicing": {
+          "mode": "rects",
+          "pivot": "center",
+          "sprites": [
+            {
+              "name": "grass",
+              "rect": {
+                "x": 455,
+                "y": 195,
+                "width": 64,
+                "height": 64
+              },
+              "tags": [
+                "terrain",
+                "grass"
+              ]
+            },
+            {
+              "name": "brick_brown",
+              "rect": {
+                "x": 325,
+                "y": 65,
+                "width": 64,
+                "height": 64
+              },
+              "tags": [
+                "terrain",
+                "brick"
+              ]
+            },
+            {
+              "name": "bricks_brown",
+              "rect": {
+                "x": 585,
+                "y": 65,
+                "width": 64,
+                "height": 64
+              },
+              "tags": [
+                "terrain",
+                "brick"
+              ]
+            },
+            {
+              "name": "block_blue",
+              "rect": {
+                "x": 0,
+                "y": 0,
+                "width": 64,
+                "height": 64
+              },
+              "tags": [
+                "block",
+                "blue"
+              ]
+            },
+            {
+              "name": "block_empty",
+              "rect": {
+                "x": 195,
+                "y": 0,
+                "width": 64,
+                "height": 64
+              },
+              "tags": [
+                "block"
+              ]
+            },
+            {
+              "name": "block_spikes",
+              "rect": {
+                "x": 715,
+                "y": 0,
+                "width": 64,
+                "height": 64
+              },
+              "tags": [
+                "hazard",
+                "spikes"
+              ]
+            },
+            {
+              "name": "bridge",
+              "rect": {
+                "x": 715,
+                "y": 65,
+                "width": 64,
+                "height": 64
+              },
+              "tags": [
+                "platform",
+                "bridge"
+              ]
+            },
+            {
+              "name": "coin_gold",
+              "rect": {
+                "x": 0,
+                "y": 130,
+                "width": 64,
+                "height": 64
+              },
+              "tags": [
+                "collectible",
+                "coin"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "kenney.new-platformer.background.sheet",
+      "genre": "platformer-2d",
+      "primitive": "background",
+      "kind": "sprite",
+      "priority": 30,
+      "source": {
+        "title": "New Platformer Pack",
+        "url": "https://www.kenney.nl/assets/new-platformer-pack",
+        "downloadPage": "https://www.kenney.nl/media/pages/assets/new-platformer-pack/1896103897-1764756702/kenney_new-platformer-pack-1.1.zip",
+        "author": "Kenney",
+        "verified": true,
+        "provenance": {
+          "verifiedAt": "2026-05-23",
+          "origin": "Kenney New Platformer Pack lists 440 files and Creative Commons CC0. The committed spritesheet was extracted from the official kenney_new-platformer-pack-1.1.zip download.",
+          "fixture": "asset-layer/fixtures/platformer/kenney-new-platformer/backgrounds.png",
+          "notes": "TexturePacker rects expose several solid, fade, color, and cloud background plates."
+        }
+      },
+      "license": {
+        "name": "Creative Commons CC0 1.0 Universal",
+        "spdx": "CC0-1.0",
+        "url": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "requiresAttribution": false
+      },
+      "provider": {
+        "name": "Kenney",
+        "url": "https://www.kenney.nl/",
+        "type": "local"
+      },
+      "files": [
+        {
+          "role": "background",
+          "format": "png",
+          "localPath": "asset-layer/fixtures/platformer/kenney-new-platformer/backgrounds.png",
+          "checksum": {
+            "algorithm": "sha256",
+            "value": "ac8b1d9869a4e6eebdcd339af53e6f4be0a9b499242418d632bdeda85c3a9cae"
+          }
+        }
+      ],
+      "technical": {
+        "width": 1027,
+        "height": 1027,
+        "pixelsPerUnit": 100,
+        "transparent": true
+      },
+      "tags": [
+        "platformer",
+        "background",
+        "sky",
+        "clouds",
+        "hills",
+        "kenney",
+        "new-platformer",
+        "cc0"
+      ],
+      "unity": {
+        "path": "Assets/Art/Backgrounds/kenney-new-platformer-backgrounds.png",
+        "pixelsPerUnit": 100,
+        "spriteMode": "multiple",
+        "filterMode": "Point",
+        "defaultSpriteName": "background_color_hills",
+        "slicing": {
+          "mode": "rects",
+          "pivot": "center",
+          "sprites": [
+            {
+              "name": "background_clouds",
+              "rect": {
+                "x": 0,
+                "y": 0,
+                "width": 256,
+                "height": 256
+              },
+              "tags": [
+                "clouds"
+              ]
+            },
+            {
+              "name": "background_color_hills",
+              "rect": {
+                "x": 514,
+                "y": 0,
+                "width": 256,
+                "height": 256
+              },
+              "tags": [
+                "hills"
+              ]
+            },
+            {
+              "name": "background_color_trees",
+              "rect": {
+                "x": 0,
+                "y": 257,
+                "width": 256,
+                "height": 256
+              },
+              "tags": [
+                "trees"
+              ]
+            },
+            {
+              "name": "background_fade_hills",
+              "rect": {
+                "x": 514,
+                "y": 257,
+                "width": 256,
+                "height": 256
+              },
+              "tags": [
+                "hills",
+                "fade"
+              ]
+            },
+            {
+              "name": "background_solid_sky",
+              "rect": {
+                "x": 257,
+                "y": 771,
+                "width": 256,
+                "height": 256
+              },
+              "tags": [
+                "sky"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "opengameart.sunnyland-tall-forest.parallax.back",
+      "genre": "platformer-2d",
+      "primitive": "parallax_background",
+      "kind": "sprite",
+      "priority": 33,
+      "source": {
+        "title": "SunnyLand Tall Forest Environment",
+        "url": "https://opengameart.org/content/sunnyland-tall-forest-environment",
+        "downloadPage": "https://opengameart.org/sites/default/files/tall_forest_files.zip",
+        "author": "ansimuz",
+        "verified": true,
+        "provenance": {
+          "verifiedAt": "2026-05-23",
+          "origin": "OpenGameArt SunnyLand Tall Forest Environment is listed as CC0 and includes seamless parallax backgrounds, a ground tileset, and props. The committed PNGs were extracted from tall_forest_files.zip.",
+          "fixture": "asset-layer/fixtures/platformer/sunnyland-tall-forest/back.png",
+          "notes": "Back parallax layer from the Tall Forest pack."
+        }
+      },
+      "license": {
+        "name": "Creative Commons CC0 1.0 Universal",
+        "spdx": "CC0-1.0",
+        "url": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "requiresAttribution": false
+      },
+      "provider": {
+        "name": "OpenGameArt",
+        "url": "https://opengameart.org/",
+        "type": "local"
+      },
+      "files": [
+        {
+          "role": "background",
+          "format": "png",
+          "localPath": "asset-layer/fixtures/platformer/sunnyland-tall-forest/back.png",
+          "checksum": {
+            "algorithm": "sha256",
+            "value": "5e7b7ec9803bf611cf0a45e5a530f8c59a9da90dc6f0421000733c6c06375a7c"
+          }
+        }
+      ],
+      "technical": {
+        "width": 144,
+        "height": 240,
+        "pixelsPerUnit": 100,
+        "transparent": true
+      },
+      "tags": [
+        "platformer",
+        "background",
+        "parallax",
+        "forest",
+        "sunnyland",
+        "ansimuz",
+        "cc0"
+      ],
+      "unity": {
+        "path": "Assets/Art/Backgrounds/Parallax/sunnyland-tall-forest-back.png",
+        "pixelsPerUnit": 100,
+        "spriteMode": "single",
+        "filterMode": "Point"
+      }
+    },
+    {
+      "id": "opengameart.sunnyland-tall-forest.parallax.middle",
+      "genre": "platformer-2d",
+      "primitive": "parallax_background",
+      "kind": "sprite",
+      "priority": 34,
+      "source": {
+        "title": "SunnyLand Tall Forest Environment",
+        "url": "https://opengameart.org/content/sunnyland-tall-forest-environment",
+        "downloadPage": "https://opengameart.org/sites/default/files/tall_forest_files.zip",
+        "author": "ansimuz",
+        "verified": true,
+        "provenance": {
+          "verifiedAt": "2026-05-23",
+          "origin": "OpenGameArt SunnyLand Tall Forest Environment is listed as CC0 and includes seamless parallax backgrounds, a ground tileset, and props. The committed PNGs were extracted from tall_forest_files.zip.",
+          "fixture": "asset-layer/fixtures/platformer/sunnyland-tall-forest/middle.png",
+          "notes": "Tileable tree middle parallax layer from the Tall Forest pack."
+        }
+      },
+      "license": {
+        "name": "Creative Commons CC0 1.0 Universal",
+        "spdx": "CC0-1.0",
+        "url": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "requiresAttribution": false
+      },
+      "provider": {
+        "name": "OpenGameArt",
+        "url": "https://opengameart.org/",
+        "type": "local"
+      },
+      "files": [
+        {
+          "role": "background",
+          "format": "png",
+          "localPath": "asset-layer/fixtures/platformer/sunnyland-tall-forest/middle.png",
+          "checksum": {
+            "algorithm": "sha256",
+            "value": "51fed6ff329ba0c9bdb8e7fe77610b526e3d3a95ff49f7178e2947371227d0db"
+          }
+        }
+      ],
+      "technical": {
+        "width": 192,
+        "height": 240,
+        "pixelsPerUnit": 100,
+        "transparent": true
+      },
+      "tags": [
+        "platformer",
+        "background",
+        "parallax",
+        "forest",
+        "trees",
+        "sunnyland",
+        "ansimuz",
+        "cc0"
+      ],
+      "unity": {
+        "path": "Assets/Art/Backgrounds/Parallax/sunnyland-tall-forest-middle.png",
+        "pixelsPerUnit": 100,
+        "spriteMode": "single",
+        "filterMode": "Point"
+      }
+    },
+    {
+      "id": "opengameart.sunnyland-tall-forest.parallax.far",
+      "genre": "platformer-2d",
+      "primitive": "parallax_background",
+      "kind": "sprite",
+      "priority": 32,
+      "source": {
+        "title": "SunnyLand Tall Forest Environment",
+        "url": "https://opengameart.org/content/sunnyland-tall-forest-environment",
+        "downloadPage": "https://opengameart.org/sites/default/files/tall_forest_files.zip",
+        "author": "ansimuz",
+        "verified": true,
+        "provenance": {
+          "verifiedAt": "2026-05-23",
+          "origin": "OpenGameArt SunnyLand Tall Forest Environment is listed as CC0 and includes seamless parallax backgrounds, a ground tileset, and props. The committed PNGs were extracted from tall_forest_files.zip.",
+          "fixture": "asset-layer/fixtures/platformer/sunnyland-tall-forest/far.png",
+          "notes": "Far parallax layer from the Tall Forest pack."
+        }
+      },
+      "license": {
+        "name": "Creative Commons CC0 1.0 Universal",
+        "spdx": "CC0-1.0",
+        "url": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "requiresAttribution": false
+      },
+      "provider": {
+        "name": "OpenGameArt",
+        "url": "https://opengameart.org/",
+        "type": "local"
+      },
+      "files": [
+        {
+          "role": "background",
+          "format": "png",
+          "localPath": "asset-layer/fixtures/platformer/sunnyland-tall-forest/far.png",
+          "checksum": {
+            "algorithm": "sha256",
+            "value": "3c3b5bb956ad86d96d7a056dc24c36978533df67de0582a4a4f76ae24159ab34"
+          }
+        }
+      ],
+      "technical": {
+        "width": 176,
+        "height": 240,
+        "pixelsPerUnit": 100,
+        "transparent": true
+      },
+      "tags": [
+        "platformer",
+        "background",
+        "parallax",
+        "forest",
+        "sunnyland",
+        "ansimuz",
+        "cc0"
+      ],
+      "unity": {
+        "path": "Assets/Art/Backgrounds/Parallax/sunnyland-tall-forest-far.png",
+        "pixelsPerUnit": 100,
+        "spriteMode": "single",
+        "filterMode": "Point"
+      }
+    },
+    {
+      "id": "opengameart.sunnyland-tall-forest.tile.sheet",
+      "genre": "platformer-2d",
+      "primitive": "tile",
+      "kind": "sprite",
+      "priority": 32,
+      "source": {
+        "title": "SunnyLand Tall Forest Environment",
+        "url": "https://opengameart.org/content/sunnyland-tall-forest-environment",
+        "downloadPage": "https://opengameart.org/sites/default/files/tall_forest_files.zip",
+        "author": "ansimuz",
+        "verified": true,
+        "provenance": {
+          "verifiedAt": "2026-05-23",
+          "origin": "OpenGameArt SunnyLand Tall Forest Environment is listed as CC0 and includes seamless parallax backgrounds, a ground tileset, and props. The committed PNGs were extracted from tall_forest_files.zip.",
+          "fixture": "asset-layer/fixtures/platformer/sunnyland-tall-forest/tileset.png",
+          "notes": "16x16 ground tileset from the Tall Forest pack."
+        }
+      },
+      "license": {
+        "name": "Creative Commons CC0 1.0 Universal",
+        "spdx": "CC0-1.0",
+        "url": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "requiresAttribution": false
+      },
+      "provider": {
+        "name": "OpenGameArt",
+        "url": "https://opengameart.org/",
+        "type": "local"
+      },
+      "files": [
+        {
+          "role": "spritesheet",
+          "format": "png",
+          "localPath": "asset-layer/fixtures/platformer/sunnyland-tall-forest/tileset.png",
+          "checksum": {
+            "algorithm": "sha256",
+            "value": "23d2e498da1847d7ec28de0789fc2a575fa4c365914d00d5ca657da614c0f8bd"
+          }
+        }
+      ],
+      "technical": {
+        "width": 112,
+        "height": 144,
+        "pixelsPerUnit": 100,
+        "transparent": true
+      },
+      "tags": [
+        "platformer",
+        "tile",
+        "forest",
+        "ground",
+        "sunnyland",
+        "ansimuz",
+        "cc0"
+      ],
+      "unity": {
+        "path": "Assets/Art/Sprites/Tiles/sunnyland-tall-forest-tileset.png",
+        "pixelsPerUnit": 100,
+        "spriteMode": "multiple",
+        "filterMode": "Point",
+        "defaultSpriteName": "forest_ground_center",
+        "slicing": {
+          "mode": "grid",
+          "cell": {
+            "width": 16,
+            "height": 16
+          },
+          "pivot": "center",
+          "sprites": [
+            {
+              "name": "forest_ground_left",
+              "column": 0,
+              "row": 0,
+              "tags": [
+                "ground",
+                "left"
+              ]
+            },
+            {
+              "name": "forest_ground_center",
+              "column": 1,
+              "row": 0,
+              "tags": [
+                "ground",
+                "center"
+              ]
+            },
+            {
+              "name": "forest_ground_right",
+              "column": 2,
+              "row": 0,
+              "tags": [
+                "ground",
+                "right"
+              ]
+            },
+            {
+              "name": "forest_dirt_left",
+              "column": 0,
+              "row": 1,
+              "tags": [
+                "dirt",
+                "left"
+              ]
+            },
+            {
+              "name": "forest_dirt_center",
+              "column": 1,
+              "row": 1,
+              "tags": [
+                "dirt",
+                "center"
+              ]
+            },
+            {
+              "name": "forest_dirt_right",
+              "column": 2,
+              "row": 1,
+              "tags": [
+                "dirt",
+                "right"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "opengameart.sunnyland-tall-forest.decor.plant",
+      "genre": "platformer-2d",
+      "primitive": "decor",
+      "kind": "sprite",
+      "priority": 28,
+      "source": {
+        "title": "SunnyLand Tall Forest Environment",
+        "url": "https://opengameart.org/content/sunnyland-tall-forest-environment",
+        "downloadPage": "https://opengameart.org/sites/default/files/tall_forest_files.zip",
+        "author": "ansimuz",
+        "verified": true,
+        "provenance": {
+          "verifiedAt": "2026-05-23",
+          "origin": "OpenGameArt SunnyLand Tall Forest Environment is listed as CC0 and includes seamless parallax backgrounds, a ground tileset, and props. The committed PNGs were extracted from tall_forest_files.zip.",
+          "fixture": "asset-layer/fixtures/platformer/sunnyland-tall-forest/plant.png",
+          "notes": "Vegetation prop from the Tall Forest pack."
+        }
+      },
+      "license": {
+        "name": "Creative Commons CC0 1.0 Universal",
+        "spdx": "CC0-1.0",
+        "url": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "requiresAttribution": false
+      },
+      "provider": {
+        "name": "OpenGameArt",
+        "url": "https://opengameart.org/",
+        "type": "local"
+      },
+      "files": [
+        {
+          "role": "decor",
+          "format": "png",
+          "localPath": "asset-layer/fixtures/platformer/sunnyland-tall-forest/plant.png",
+          "checksum": {
+            "algorithm": "sha256",
+            "value": "fed25f2728daefb503183ce9e80b280f128f41c568f243b88c028ad62b719548"
+          }
+        }
+      ],
+      "technical": {
+        "width": 42,
+        "height": 27,
+        "pixelsPerUnit": 100,
+        "transparent": true
+      },
+      "tags": [
+        "platformer",
+        "decor",
+        "plant",
+        "forest",
+        "sunnyland",
+        "ansimuz",
+        "cc0"
+      ],
+      "unity": {
+        "path": "Assets/Art/Sprites/Decor/sunnyland-tall-forest-plant.png",
+        "pixelsPerUnit": 100,
+        "spriteMode": "single",
+        "filterMode": "Point"
+      }
+    },
+    {
+      "id": "opengameart.sunnyland-tall-forest.decor.rock",
+      "genre": "platformer-2d",
+      "primitive": "decor",
+      "kind": "sprite",
+      "priority": 28,
+      "source": {
+        "title": "SunnyLand Tall Forest Environment",
+        "url": "https://opengameart.org/content/sunnyland-tall-forest-environment",
+        "downloadPage": "https://opengameart.org/sites/default/files/tall_forest_files.zip",
+        "author": "ansimuz",
+        "verified": true,
+        "provenance": {
+          "verifiedAt": "2026-05-23",
+          "origin": "OpenGameArt SunnyLand Tall Forest Environment is listed as CC0 and includes seamless parallax backgrounds, a ground tileset, and props. The committed PNGs were extracted from tall_forest_files.zip.",
+          "fixture": "asset-layer/fixtures/platformer/sunnyland-tall-forest/rock.png",
+          "notes": "Rock prop from the Tall Forest pack."
+        }
+      },
+      "license": {
+        "name": "Creative Commons CC0 1.0 Universal",
+        "spdx": "CC0-1.0",
+        "url": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "requiresAttribution": false
+      },
+      "provider": {
+        "name": "OpenGameArt",
+        "url": "https://opengameart.org/",
+        "type": "local"
+      },
+      "files": [
+        {
+          "role": "decor",
+          "format": "png",
+          "localPath": "asset-layer/fixtures/platformer/sunnyland-tall-forest/rock.png",
+          "checksum": {
+            "algorithm": "sha256",
+            "value": "eb6c1672ba453e7655f8b00bcdd9eccffc483751951f07f9623cb4c19cb05a2a"
+          }
+        }
+      ],
+      "technical": {
+        "width": 32,
+        "height": 32,
+        "pixelsPerUnit": 100,
+        "transparent": true
+      },
+      "tags": [
+        "platformer",
+        "decor",
+        "rock",
+        "forest",
+        "sunnyland",
+        "ansimuz",
+        "cc0"
+      ],
+      "unity": {
+        "path": "Assets/Art/Sprites/Decor/sunnyland-tall-forest-rock.png",
+        "pixelsPerUnit": 100,
+        "spriteMode": "single",
+        "filterMode": "Point"
+      }
+    },
+    {
+      "id": "kenney.smoke-particles.vfx.explosion",
+      "genre": "platformer-2d",
+      "primitive": "vfx",
+      "kind": "sprite",
+      "priority": 31,
+      "source": {
+        "title": "Smoke Particles",
+        "url": "https://www.kenney.nl/assets/smoke-particles",
+        "downloadPage": "https://kenney.nl/media/pages/assets/smoke-particles/23249a0d35-1677695171/kenney_smoke-particles.zip",
+        "author": "Kenney",
+        "verified": true,
+        "provenance": {
+          "verifiedAt": "2026-05-23",
+          "origin": "Kenney Smoke Particles lists 70 2D VFX files and Creative Commons CC0. The committed frames were extracted from the official kenney_smoke-particles.zip download.",
+          "fixture": "asset-layer/fixtures/platformer/kenney-smoke-particles/explosion00.png",
+          "notes": "First explosion frame from Kenney Smoke Particles."
+        }
+      },
+      "license": {
+        "name": "Creative Commons CC0 1.0 Universal",
+        "spdx": "CC0-1.0",
+        "url": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "requiresAttribution": false
+      },
+      "provider": {
+        "name": "Kenney",
+        "url": "https://www.kenney.nl/",
+        "type": "local"
+      },
+      "files": [
+        {
+          "role": "sprite",
+          "format": "png",
+          "localPath": "asset-layer/fixtures/platformer/kenney-smoke-particles/explosion00.png",
+          "checksum": {
+            "algorithm": "sha256",
+            "value": "bfd931b030a6ac464fbdd439a5230933571f52da9b0b94d197fce18c1e081260"
+          }
+        }
+      ],
+      "technical": {
+        "width": 583,
+        "height": 536,
+        "pixelsPerUnit": 100,
+        "transparent": true
+      },
+      "tags": [
+        "platformer",
+        "vfx",
+        "explosion",
+        "particle",
+        "kenney",
+        "smoke-particles",
+        "cc0"
+      ],
+      "unity": {
+        "path": "Assets/Art/Sprites/VFX/kenney-smoke-particles-explosion00.png",
+        "pixelsPerUnit": 100,
+        "spriteMode": "single",
+        "filterMode": "Point"
+      }
+    },
+    {
+      "id": "kenney.smoke-particles.vfx.white-puff",
+      "genre": "platformer-2d",
+      "primitive": "vfx",
+      "kind": "sprite",
+      "priority": 31,
+      "source": {
+        "title": "Smoke Particles",
+        "url": "https://www.kenney.nl/assets/smoke-particles",
+        "downloadPage": "https://kenney.nl/media/pages/assets/smoke-particles/23249a0d35-1677695171/kenney_smoke-particles.zip",
+        "author": "Kenney",
+        "verified": true,
+        "provenance": {
+          "verifiedAt": "2026-05-23",
+          "origin": "Kenney Smoke Particles lists 70 2D VFX files and Creative Commons CC0. The committed frames were extracted from the official kenney_smoke-particles.zip download.",
+          "fixture": "asset-layer/fixtures/platformer/kenney-smoke-particles/whitePuff00.png",
+          "notes": "First white puff frame from Kenney Smoke Particles."
+        }
+      },
+      "license": {
+        "name": "Creative Commons CC0 1.0 Universal",
+        "spdx": "CC0-1.0",
+        "url": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "requiresAttribution": false
+      },
+      "provider": {
+        "name": "Kenney",
+        "url": "https://www.kenney.nl/",
+        "type": "local"
+      },
+      "files": [
+        {
+          "role": "sprite",
+          "format": "png",
+          "localPath": "asset-layer/fixtures/platformer/kenney-smoke-particles/whitePuff00.png",
+          "checksum": {
+            "algorithm": "sha256",
+            "value": "33f894c2279bee9f77874dbfa3c0e9f071a0ee5e1a7065dcc40196029d699f58"
+          }
+        }
+      ],
+      "technical": {
+        "width": 381,
+        "height": 346,
+        "pixelsPerUnit": 100,
+        "transparent": true
+      },
+      "tags": [
+        "platformer",
+        "vfx",
+        "smoke",
+        "puff",
+        "particle",
+        "kenney",
+        "smoke-particles",
+        "cc0"
+      ],
+      "unity": {
+        "path": "Assets/Art/Sprites/VFX/kenney-smoke-particles-whitePuff00.png",
+        "pixelsPerUnit": 100,
+        "spriteMode": "single",
+        "filterMode": "Point"
+      }
+    },
+    {
+      "id": "kenney.smoke-particles.vfx.flash",
+      "genre": "platformer-2d",
+      "primitive": "vfx",
+      "kind": "sprite",
+      "priority": 30,
+      "source": {
+        "title": "Smoke Particles",
+        "url": "https://www.kenney.nl/assets/smoke-particles",
+        "downloadPage": "https://kenney.nl/media/pages/assets/smoke-particles/23249a0d35-1677695171/kenney_smoke-particles.zip",
+        "author": "Kenney",
+        "verified": true,
+        "provenance": {
+          "verifiedAt": "2026-05-23",
+          "origin": "Kenney Smoke Particles lists 70 2D VFX files and Creative Commons CC0. The committed frames were extracted from the official kenney_smoke-particles.zip download.",
+          "fixture": "asset-layer/fixtures/platformer/kenney-smoke-particles/flash00.png",
+          "notes": "First flash frame from Kenney Smoke Particles."
+        }
+      },
+      "license": {
+        "name": "Creative Commons CC0 1.0 Universal",
+        "spdx": "CC0-1.0",
+        "url": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "requiresAttribution": false
+      },
+      "provider": {
+        "name": "Kenney",
+        "url": "https://www.kenney.nl/",
+        "type": "local"
+      },
+      "files": [
+        {
+          "role": "sprite",
+          "format": "png",
+          "localPath": "asset-layer/fixtures/platformer/kenney-smoke-particles/flash00.png",
+          "checksum": {
+            "algorithm": "sha256",
+            "value": "e0597d637642f4ebeb17fbfe2a6a7dc7baf115efe00feccab78f054c36834ba6"
+          }
+        }
+      ],
+      "technical": {
+        "width": 550,
+        "height": 496,
+        "pixelsPerUnit": 100,
+        "transparent": true
+      },
+      "tags": [
+        "platformer",
+        "vfx",
+        "flash",
+        "impact",
+        "particle",
+        "kenney",
+        "smoke-particles",
+        "cc0"
+      ],
+      "unity": {
+        "path": "Assets/Art/Sprites/VFX/kenney-smoke-particles-flash00.png",
+        "pixelsPerUnit": 100,
+        "spriteMode": "single",
+        "filterMode": "Point"
+      }
+    },
+    {
+      "id": "kenney.smoke-particles.vfx.black-smoke",
+      "genre": "platformer-2d",
+      "primitive": "vfx",
+      "kind": "sprite",
+      "priority": 30,
+      "source": {
+        "title": "Smoke Particles",
+        "url": "https://www.kenney.nl/assets/smoke-particles",
+        "downloadPage": "https://kenney.nl/media/pages/assets/smoke-particles/23249a0d35-1677695171/kenney_smoke-particles.zip",
+        "author": "Kenney",
+        "verified": true,
+        "provenance": {
+          "verifiedAt": "2026-05-23",
+          "origin": "Kenney Smoke Particles lists 70 2D VFX files and Creative Commons CC0. The committed frames were extracted from the official kenney_smoke-particles.zip download.",
+          "fixture": "asset-layer/fixtures/platformer/kenney-smoke-particles/blackSmoke00.png",
+          "notes": "First black smoke frame from Kenney Smoke Particles."
+        }
+      },
+      "license": {
+        "name": "Creative Commons CC0 1.0 Universal",
+        "spdx": "CC0-1.0",
+        "url": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "requiresAttribution": false
+      },
+      "provider": {
+        "name": "Kenney",
+        "url": "https://www.kenney.nl/",
+        "type": "local"
+      },
+      "files": [
+        {
+          "role": "sprite",
+          "format": "png",
+          "localPath": "asset-layer/fixtures/platformer/kenney-smoke-particles/blackSmoke00.png",
+          "checksum": {
+            "algorithm": "sha256",
+            "value": "5d9f2b522beaa41511ef0ad1ccf2457d90b9aba8f5cac7154e3a86f8be7cc05b"
+          }
+        }
+      ],
+      "technical": {
+        "width": 362,
+        "height": 336,
+        "pixelsPerUnit": 100,
+        "transparent": true
+      },
+      "tags": [
+        "platformer",
+        "vfx",
+        "smoke",
+        "particle",
+        "kenney",
+        "smoke-particles",
+        "cc0"
+      ],
+      "unity": {
+        "path": "Assets/Art/Sprites/VFX/kenney-smoke-particles-blackSmoke00.png",
+        "pixelsPerUnit": 100,
+        "spriteMode": "single",
+        "filterMode": "Point"
+      }
+    },
+    {
+      "id": "opengameart.explosions.vfx.fireball",
+      "genre": "platformer-2d",
+      "primitive": "vfx",
+      "kind": "sprite",
+      "priority": 24,
+      "source": {
+        "title": "Explosions",
+        "url": "https://opengameart.org/content/explosions",
+        "downloadPage": "https://opengameart.org/sites/default/files/explosion1.png",
+        "author": "Ben Hickling",
+        "verified": true,
+        "provenance": {
+          "verifiedAt": "2026-05-23",
+          "origin": "OpenGameArt Explosions is listed as CC0. The committed PNG was downloaded from the OpenGameArt file attachment.",
+          "fixture": "asset-layer/fixtures/platformer/opengameart-explosion/explosion1.png",
+          "notes": "Single 128x128 transparent explosion frame for quick prototype feedback."
+        }
+      },
+      "license": {
+        "name": "Creative Commons CC0 1.0 Universal",
+        "spdx": "CC0-1.0",
+        "url": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "requiresAttribution": false
+      },
+      "provider": {
+        "name": "OpenGameArt",
+        "url": "https://opengameart.org/",
+        "type": "local"
+      },
+      "files": [
+        {
+          "role": "sprite",
+          "format": "png",
+          "localPath": "asset-layer/fixtures/platformer/opengameart-explosion/explosion1.png",
+          "checksum": {
+            "algorithm": "sha256",
+            "value": "ea9d937254ca44cd76469537e45d3aa26f621791324174e6ad49463dcb93f33a"
+          }
+        }
+      ],
+      "technical": {
+        "width": 128,
+        "height": 128,
+        "pixelsPerUnit": 100,
+        "transparent": true
+      },
+      "tags": [
+        "platformer",
+        "vfx",
+        "explosion",
+        "fire",
+        "opengameart",
+        "cc0"
+      ],
+      "unity": {
+        "path": "Assets/Art/Sprites/VFX/opengameart-explosions-fireball.png",
+        "pixelsPerUnit": 100,
+        "spriteMode": "single",
+        "filterMode": "Point"
+      }
+    },
+    {
+      "id": "pixelfrog.pixel-adventure.player.ninja-frog",
+      "genre": "platformer-2d",
+      "primitive": "player",
+      "kind": "sprite",
+      "priority": 20,
+      "source": {
+        "title": "Pixel Adventure 1 - Ninja Frog",
+        "url": "https://pixelfrog-assets.itch.io/pixel-adventure-1",
+        "downloadPage": "https://pixelfrog-assets.itch.io/pixel-adventure-1",
+        "author": "Pixel Frog",
+        "verified": true,
+        "provenance": {
+          "verifiedAt": "2026-05-23",
+          "origin": "Pixel Frog Pixel Adventure 1 (itch.io) is published as CC0. The committed Idle strip was extracted from the official pack's Main Characters/Ninja Frog folder.",
+          "fixture": "asset-layer/fixtures/platformer/pixel-adventure/characters/ninja-frog-idle.png",
+          "notes": "Idle (32x32) horizontal strip of 11 frames used as the entry sprite/thumbnail. Full animation set in the pack for this character: Run (32x32), Jump (32x32), Fall (32x32), Double Jump (32x32), Hit (32x32), Wall Jump (32x32)."
+        }
+      },
+      "license": {
+        "name": "Creative Commons CC0 1.0 Universal",
+        "spdx": "CC0-1.0",
+        "url": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "requiresAttribution": false
+      },
+      "provider": {
+        "name": "Pixel Frog",
+        "url": "https://pixelfrog-assets.itch.io/pixel-adventure-1",
+        "type": "local"
+      },
+      "files": [
+        {
+          "role": "spritesheet",
+          "format": "png",
+          "localPath": "asset-layer/fixtures/platformer/pixel-adventure/characters/ninja-frog-idle.png",
+          "checksum": {
+            "algorithm": "sha256",
+            "value": "282defd7762fd4a775b60a262d1fccb49037a85fd3b5babc832a632e26619f95"
+          }
+        }
+      ],
+      "technical": {
+        "width": 352,
+        "height": 32,
+        "pixelsPerUnit": 100,
+        "transparent": true
+      },
+      "tags": [
+        "platformer",
+        "character",
+        "player",
+        "spritesheet",
+        "animation",
+        "ninja-frog",
+        "pixel-frog",
+        "pixel-adventure",
+        "cc0"
+      ],
+      "unity": {
+        "path": "Assets/Art/Sprites/Characters/pixel-adventure-ninja-frog-idle.png",
+        "pixelsPerUnit": 100,
+        "spriteMode": "multiple",
+        "filterMode": "Point",
+        "defaultSpriteName": "ninja_frog_idle_00",
+        "slicing": {
+          "mode": "grid",
+          "cell": {
+            "width": 32,
+            "height": 32
+          },
+          "pivot": "center",
+          "sprites": [
+            {
+              "name": "ninja_frog_idle_00",
+              "column": 0,
+              "row": 0,
+              "tags": [
+                "player",
+                "ninja-frog",
+                "idle"
+              ]
+            },
+            {
+              "name": "ninja_frog_idle_01",
+              "column": 1,
+              "row": 0,
+              "tags": [
+                "player",
+                "ninja-frog",
+                "idle"
+              ]
+            },
+            {
+              "name": "ninja_frog_idle_02",
+              "column": 2,
+              "row": 0,
+              "tags": [
+                "player",
+                "ninja-frog",
+                "idle"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "pixelfrog.pixel-adventure.player.mask-dude",
+      "genre": "platformer-2d",
+      "primitive": "player",
+      "kind": "sprite",
+      "priority": 20,
+      "source": {
+        "title": "Pixel Adventure 1 - Mask Dude",
+        "url": "https://pixelfrog-assets.itch.io/pixel-adventure-1",
+        "downloadPage": "https://pixelfrog-assets.itch.io/pixel-adventure-1",
+        "author": "Pixel Frog",
+        "verified": true,
+        "provenance": {
+          "verifiedAt": "2026-05-23",
+          "origin": "Pixel Frog Pixel Adventure 1 (itch.io) is published as CC0. The committed Idle strip was extracted from the official pack's Main Characters/Mask Dude folder.",
+          "fixture": "asset-layer/fixtures/platformer/pixel-adventure/characters/mask-dude-idle.png",
+          "notes": "Idle (32x32) horizontal strip of 11 frames used as the entry sprite/thumbnail. Full animation set in the pack for this character: Run (32x32), Jump (32x32), Fall (32x32), Double Jump (32x32), Hit (32x32), Wall Jump (32x32)."
+        }
+      },
+      "license": {
+        "name": "Creative Commons CC0 1.0 Universal",
+        "spdx": "CC0-1.0",
+        "url": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "requiresAttribution": false
+      },
+      "provider": {
+        "name": "Pixel Frog",
+        "url": "https://pixelfrog-assets.itch.io/pixel-adventure-1",
+        "type": "local"
+      },
+      "files": [
+        {
+          "role": "spritesheet",
+          "format": "png",
+          "localPath": "asset-layer/fixtures/platformer/pixel-adventure/characters/mask-dude-idle.png",
+          "checksum": {
+            "algorithm": "sha256",
+            "value": "ded44a6ee1985f19201f87e11b373ac23db0541f27d7dfe8a2014848cb6ae66a"
+          }
+        }
+      ],
+      "technical": {
+        "width": 352,
+        "height": 32,
+        "pixelsPerUnit": 100,
+        "transparent": true
+      },
+      "tags": [
+        "platformer",
+        "character",
+        "player",
+        "spritesheet",
+        "animation",
+        "mask-dude",
+        "pixel-frog",
+        "pixel-adventure",
+        "cc0"
+      ],
+      "unity": {
+        "path": "Assets/Art/Sprites/Characters/pixel-adventure-mask-dude-idle.png",
+        "pixelsPerUnit": 100,
+        "spriteMode": "multiple",
+        "filterMode": "Point",
+        "defaultSpriteName": "mask_dude_idle_00",
+        "slicing": {
+          "mode": "grid",
+          "cell": {
+            "width": 32,
+            "height": 32
+          },
+          "pivot": "center",
+          "sprites": [
+            {
+              "name": "mask_dude_idle_00",
+              "column": 0,
+              "row": 0,
+              "tags": [
+                "player",
+                "mask-dude",
+                "idle"
+              ]
+            },
+            {
+              "name": "mask_dude_idle_01",
+              "column": 1,
+              "row": 0,
+              "tags": [
+                "player",
+                "mask-dude",
+                "idle"
+              ]
+            },
+            {
+              "name": "mask_dude_idle_02",
+              "column": 2,
+              "row": 0,
+              "tags": [
+                "player",
+                "mask-dude",
+                "idle"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "pixelfrog.pixel-adventure.player.pink-man",
+      "genre": "platformer-2d",
+      "primitive": "player",
+      "kind": "sprite",
+      "priority": 20,
+      "source": {
+        "title": "Pixel Adventure 1 - Pink Man",
+        "url": "https://pixelfrog-assets.itch.io/pixel-adventure-1",
+        "downloadPage": "https://pixelfrog-assets.itch.io/pixel-adventure-1",
+        "author": "Pixel Frog",
+        "verified": true,
+        "provenance": {
+          "verifiedAt": "2026-05-23",
+          "origin": "Pixel Frog Pixel Adventure 1 (itch.io) is published as CC0. The committed Idle strip was extracted from the official pack's Main Characters/Pink Man folder.",
+          "fixture": "asset-layer/fixtures/platformer/pixel-adventure/characters/pink-man-idle.png",
+          "notes": "Idle (32x32) horizontal strip of 11 frames used as the entry sprite/thumbnail. Full animation set in the pack for this character: Run (32x32), Jump (32x32), Fall (32x32), Double Jump (32x32), Hit (32x32), Wall Jump (32x32)."
+        }
+      },
+      "license": {
+        "name": "Creative Commons CC0 1.0 Universal",
+        "spdx": "CC0-1.0",
+        "url": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "requiresAttribution": false
+      },
+      "provider": {
+        "name": "Pixel Frog",
+        "url": "https://pixelfrog-assets.itch.io/pixel-adventure-1",
+        "type": "local"
+      },
+      "files": [
+        {
+          "role": "spritesheet",
+          "format": "png",
+          "localPath": "asset-layer/fixtures/platformer/pixel-adventure/characters/pink-man-idle.png",
+          "checksum": {
+            "algorithm": "sha256",
+            "value": "7ef14870dbcbdd0e0be9acb5cd30a37e0170cd00f6762118a4967d399f17a5e9"
+          }
+        }
+      ],
+      "technical": {
+        "width": 352,
+        "height": 32,
+        "pixelsPerUnit": 100,
+        "transparent": true
+      },
+      "tags": [
+        "platformer",
+        "character",
+        "player",
+        "spritesheet",
+        "animation",
+        "pink-man",
+        "pixel-frog",
+        "pixel-adventure",
+        "cc0"
+      ],
+      "unity": {
+        "path": "Assets/Art/Sprites/Characters/pixel-adventure-pink-man-idle.png",
+        "pixelsPerUnit": 100,
+        "spriteMode": "multiple",
+        "filterMode": "Point",
+        "defaultSpriteName": "pink_man_idle_00",
+        "slicing": {
+          "mode": "grid",
+          "cell": {
+            "width": 32,
+            "height": 32
+          },
+          "pivot": "center",
+          "sprites": [
+            {
+              "name": "pink_man_idle_00",
+              "column": 0,
+              "row": 0,
+              "tags": [
+                "player",
+                "pink-man",
+                "idle"
+              ]
+            },
+            {
+              "name": "pink_man_idle_01",
+              "column": 1,
+              "row": 0,
+              "tags": [
+                "player",
+                "pink-man",
+                "idle"
+              ]
+            },
+            {
+              "name": "pink_man_idle_02",
+              "column": 2,
+              "row": 0,
+              "tags": [
+                "player",
+                "pink-man",
+                "idle"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "pixelfrog.pixel-adventure.player.virtual-guy",
+      "genre": "platformer-2d",
+      "primitive": "player",
+      "kind": "sprite",
+      "priority": 20,
+      "source": {
+        "title": "Pixel Adventure 1 - Virtual Guy",
+        "url": "https://pixelfrog-assets.itch.io/pixel-adventure-1",
+        "downloadPage": "https://pixelfrog-assets.itch.io/pixel-adventure-1",
+        "author": "Pixel Frog",
+        "verified": true,
+        "provenance": {
+          "verifiedAt": "2026-05-23",
+          "origin": "Pixel Frog Pixel Adventure 1 (itch.io) is published as CC0. The committed Idle strip was extracted from the official pack's Main Characters/Virtual Guy folder.",
+          "fixture": "asset-layer/fixtures/platformer/pixel-adventure/characters/virtual-guy-idle.png",
+          "notes": "Idle (32x32) horizontal strip of 11 frames used as the entry sprite/thumbnail. Full animation set in the pack for this character: Run (32x32), Jump (32x32), Fall (32x32), Double Jump (32x32), Hit (32x32), Wall Jump (32x32)."
+        }
+      },
+      "license": {
+        "name": "Creative Commons CC0 1.0 Universal",
+        "spdx": "CC0-1.0",
+        "url": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "requiresAttribution": false
+      },
+      "provider": {
+        "name": "Pixel Frog",
+        "url": "https://pixelfrog-assets.itch.io/pixel-adventure-1",
+        "type": "local"
+      },
+      "files": [
+        {
+          "role": "spritesheet",
+          "format": "png",
+          "localPath": "asset-layer/fixtures/platformer/pixel-adventure/characters/virtual-guy-idle.png",
+          "checksum": {
+            "algorithm": "sha256",
+            "value": "8b478bc9dbb76859f5549f8a342d4a9660f529396ea71fba649f50769f83b179"
+          }
+        }
+      ],
+      "technical": {
+        "width": 352,
+        "height": 32,
+        "pixelsPerUnit": 100,
+        "transparent": true
+      },
+      "tags": [
+        "platformer",
+        "character",
+        "player",
+        "spritesheet",
+        "animation",
+        "virtual-guy",
+        "pixel-frog",
+        "pixel-adventure",
+        "cc0"
+      ],
+      "unity": {
+        "path": "Assets/Art/Sprites/Characters/pixel-adventure-virtual-guy-idle.png",
+        "pixelsPerUnit": 100,
+        "spriteMode": "multiple",
+        "filterMode": "Point",
+        "defaultSpriteName": "virtual_guy_idle_00",
+        "slicing": {
+          "mode": "grid",
+          "cell": {
+            "width": 32,
+            "height": 32
+          },
+          "pivot": "center",
+          "sprites": [
+            {
+              "name": "virtual_guy_idle_00",
+              "column": 0,
+              "row": 0,
+              "tags": [
+                "player",
+                "virtual-guy",
+                "idle"
+              ]
+            },
+            {
+              "name": "virtual_guy_idle_01",
+              "column": 1,
+              "row": 0,
+              "tags": [
+                "player",
+                "virtual-guy",
+                "idle"
+              ]
+            },
+            {
+              "name": "virtual_guy_idle_02",
+              "column": 2,
+              "row": 0,
+              "tags": [
+                "player",
+                "virtual-guy",
+                "idle"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "pixelfrog.pixel-adventure.tile.terrain",
+      "genre": "platformer-2d",
+      "primitive": "tile",
+      "kind": "sprite",
+      "priority": 20,
+      "source": {
+        "title": "Pixel Adventure 1 - Terrain",
+        "url": "https://pixelfrog-assets.itch.io/pixel-adventure-1",
+        "downloadPage": "https://pixelfrog-assets.itch.io/pixel-adventure-1",
+        "author": "Pixel Frog",
+        "verified": true,
+        "provenance": {
+          "verifiedAt": "2026-05-23",
+          "origin": "Pixel Frog Pixel Adventure 1 (itch.io) is published as CC0. The committed tileset was extracted from the official pack's Terrain folder.",
+          "fixture": "asset-layer/fixtures/platformer/pixel-adventure/terrain/terrain.png",
+          "notes": "Terrain (16x16) tileset, 352x176 = 22x11 grid of 16x16 tiles covering grass, dirt, stone, gold, and sand variants."
+        }
+      },
+      "license": {
+        "name": "Creative Commons CC0 1.0 Universal",
+        "spdx": "CC0-1.0",
+        "url": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "requiresAttribution": false
+      },
+      "provider": {
+        "name": "Pixel Frog",
+        "url": "https://pixelfrog-assets.itch.io/pixel-adventure-1",
+        "type": "local"
+      },
+      "files": [
+        {
+          "role": "spritesheet",
+          "format": "png",
+          "localPath": "asset-layer/fixtures/platformer/pixel-adventure/terrain/terrain.png",
+          "checksum": {
+            "algorithm": "sha256",
+            "value": "3fb1a76c7cc102116562f9533d51386b8e63616aa0e228f359001dbb7479eaab"
+          }
+        }
+      ],
+      "technical": {
+        "width": 352,
+        "height": 176,
+        "pixelsPerUnit": 100,
+        "transparent": true
+      },
+      "tags": [
+        "platformer",
+        "tile",
+        "terrain",
+        "ground",
+        "tileset",
+        "pixel-frog",
+        "pixel-adventure",
+        "cc0"
+      ],
+      "unity": {
+        "path": "Assets/Art/Sprites/Tiles/pixel-adventure-terrain.png",
+        "pixelsPerUnit": 100,
+        "spriteMode": "multiple",
+        "filterMode": "Point",
+        "defaultSpriteName": "terrain_grass_top",
+        "slicing": {
+          "mode": "grid",
+          "cell": {
+            "width": 16,
+            "height": 16
+          },
+          "pivot": "center",
+          "sprites": [
+            {
+              "name": "terrain_grass_top_left",
+              "column": 0,
+              "row": 0,
+              "tags": [
+                "ground",
+                "grass",
+                "left"
+              ]
+            },
+            {
+              "name": "terrain_grass_top",
+              "column": 1,
+              "row": 0,
+              "tags": [
+                "ground",
+                "grass",
+                "center"
+              ]
+            },
+            {
+              "name": "terrain_grass_top_right",
+              "column": 2,
+              "row": 0,
+              "tags": [
+                "ground",
+                "grass",
+                "right"
+              ]
+            },
+            {
+              "name": "terrain_dirt_center",
+              "column": 1,
+              "row": 1,
+              "tags": [
+                "ground",
+                "dirt",
+                "center"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "pixelfrog.pixel-adventure.background.gray",
+      "genre": "platformer-2d",
+      "primitive": "background",
+      "kind": "sprite",
+      "priority": 20,
+      "source": {
+        "title": "Pixel Adventure 1 - Gray Background",
+        "url": "https://pixelfrog-assets.itch.io/pixel-adventure-1",
+        "downloadPage": "https://pixelfrog-assets.itch.io/pixel-adventure-1",
+        "author": "Pixel Frog",
+        "verified": true,
+        "provenance": {
+          "verifiedAt": "2026-05-23",
+          "origin": "Pixel Frog Pixel Adventure 1 (itch.io) is published as CC0. The committed background was extracted from the official pack's Background folder.",
+          "fixture": "asset-layer/fixtures/platformer/pixel-adventure/background/gray.png",
+          "notes": "Gray.png is a 64x64 seamless tiling background texture; the pack also ships Blue, Brown, Green, Pink, Purple, and Yellow variants."
+        }
+      },
+      "license": {
+        "name": "Creative Commons CC0 1.0 Universal",
+        "spdx": "CC0-1.0",
+        "url": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "requiresAttribution": false
+      },
+      "provider": {
+        "name": "Pixel Frog",
+        "url": "https://pixelfrog-assets.itch.io/pixel-adventure-1",
+        "type": "local"
+      },
+      "files": [
+        {
+          "role": "background",
+          "format": "png",
+          "localPath": "asset-layer/fixtures/platformer/pixel-adventure/background/gray.png",
+          "checksum": {
+            "algorithm": "sha256",
+            "value": "b4edcb870085fdd1eb3d3c3b78da4080f2ba3dabd9782e742743e945d3284a51"
+          }
+        }
+      ],
+      "technical": {
+        "width": 64,
+        "height": 64,
+        "pixelsPerUnit": 100,
+        "transparent": false
+      },
+      "tags": [
+        "platformer",
+        "background",
+        "tiling",
+        "gray",
+        "pixel-frog",
+        "pixel-adventure",
+        "cc0"
+      ],
+      "unity": {
+        "path": "Assets/Art/Backgrounds/pixel-adventure-gray.png",
+        "pixelsPerUnit": 100,
+        "spriteMode": "single",
+        "filterMode": "Point"
+      }
+    },
+    {
+      "id": "pixelfrog.pixel-adventure.collectible.apple",
+      "genre": "platformer-2d",
+      "primitive": "collectible",
+      "kind": "sprite",
+      "priority": 20,
+      "source": {
+        "title": "Pixel Adventure 1 - Apple",
+        "url": "https://pixelfrog-assets.itch.io/pixel-adventure-1",
+        "downloadPage": "https://pixelfrog-assets.itch.io/pixel-adventure-1",
+        "author": "Pixel Frog",
+        "verified": true,
+        "provenance": {
+          "verifiedAt": "2026-05-23",
+          "origin": "Pixel Frog Pixel Adventure 1 (itch.io) is published as CC0. The committed fruit strip was extracted from the official pack's Items/Fruits folder.",
+          "fixture": "asset-layer/fixtures/platformer/pixel-adventure/fruits/apple.png",
+          "notes": "Apple.png is a 544x32 horizontal strip of 17 frames at 32x32 (animated pickup loop)."
+        }
+      },
+      "license": {
+        "name": "Creative Commons CC0 1.0 Universal",
+        "spdx": "CC0-1.0",
+        "url": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "requiresAttribution": false
+      },
+      "provider": {
+        "name": "Pixel Frog",
+        "url": "https://pixelfrog-assets.itch.io/pixel-adventure-1",
+        "type": "local"
+      },
+      "files": [
+        {
+          "role": "spritesheet",
+          "format": "png",
+          "localPath": "asset-layer/fixtures/platformer/pixel-adventure/fruits/apple.png",
+          "checksum": {
+            "algorithm": "sha256",
+            "value": "ee71a978665c5c375603a4a047d129729e319f03708787279954171caabfd1e3"
+          }
+        }
+      ],
+      "technical": {
+        "width": 544,
+        "height": 32,
+        "pixelsPerUnit": 100,
+        "transparent": true
+      },
+      "tags": [
+        "platformer",
+        "collectible",
+        "fruit",
+        "apple",
+        "pickup",
+        "spritesheet",
+        "animation",
+        "pixel-frog",
+        "pixel-adventure",
+        "cc0"
+      ],
+      "unity": {
+        "path": "Assets/Art/Sprites/Collectibles/pixel-adventure-apple.png",
+        "pixelsPerUnit": 100,
+        "spriteMode": "multiple",
+        "filterMode": "Point",
+        "defaultSpriteName": "apple_00",
+        "slicing": {
+          "mode": "grid",
+          "cell": {
+            "width": 32,
+            "height": 32
+          },
+          "pivot": "center",
+          "sprites": [
+            {
+              "name": "apple_00",
+              "column": 0,
+              "row": 0,
+              "tags": [
+                "collectible",
+                "apple"
+              ]
+            },
+            {
+              "name": "apple_01",
+              "column": 1,
+              "row": 0,
+              "tags": [
+                "collectible",
+                "apple"
+              ]
+            },
+            {
+              "name": "apple_02",
+              "column": 2,
+              "row": 0,
+              "tags": [
+                "collectible",
+                "apple"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "pixelfrog.pixel-adventure.collectible.cherries",
+      "genre": "platformer-2d",
+      "primitive": "collectible",
+      "kind": "sprite",
+      "priority": 20,
+      "source": {
+        "title": "Pixel Adventure 1 - Cherries",
+        "url": "https://pixelfrog-assets.itch.io/pixel-adventure-1",
+        "downloadPage": "https://pixelfrog-assets.itch.io/pixel-adventure-1",
+        "author": "Pixel Frog",
+        "verified": true,
+        "provenance": {
+          "verifiedAt": "2026-05-23",
+          "origin": "Pixel Frog Pixel Adventure 1 (itch.io) is published as CC0. The committed fruit strip was extracted from the official pack's Items/Fruits folder.",
+          "fixture": "asset-layer/fixtures/platformer/pixel-adventure/fruits/cherries.png",
+          "notes": "Cherries.png is a 544x32 horizontal strip of 17 frames at 32x32 (animated pickup loop)."
+        }
+      },
+      "license": {
+        "name": "Creative Commons CC0 1.0 Universal",
+        "spdx": "CC0-1.0",
+        "url": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "requiresAttribution": false
+      },
+      "provider": {
+        "name": "Pixel Frog",
+        "url": "https://pixelfrog-assets.itch.io/pixel-adventure-1",
+        "type": "local"
+      },
+      "files": [
+        {
+          "role": "spritesheet",
+          "format": "png",
+          "localPath": "asset-layer/fixtures/platformer/pixel-adventure/fruits/cherries.png",
+          "checksum": {
+            "algorithm": "sha256",
+            "value": "d9edb2c3157a28daf47c5f76a3cfb9354e6caa623c364784bfc3c015602e8f05"
+          }
+        }
+      ],
+      "technical": {
+        "width": 544,
+        "height": 32,
+        "pixelsPerUnit": 100,
+        "transparent": true
+      },
+      "tags": [
+        "platformer",
+        "collectible",
+        "fruit",
+        "cherries",
+        "pickup",
+        "spritesheet",
+        "animation",
+        "pixel-frog",
+        "pixel-adventure",
+        "cc0"
+      ],
+      "unity": {
+        "path": "Assets/Art/Sprites/Collectibles/pixel-adventure-cherries.png",
+        "pixelsPerUnit": 100,
+        "spriteMode": "multiple",
+        "filterMode": "Point",
+        "defaultSpriteName": "cherries_00",
+        "slicing": {
+          "mode": "grid",
+          "cell": {
+            "width": 32,
+            "height": 32
+          },
+          "pivot": "center",
+          "sprites": [
+            {
+              "name": "cherries_00",
+              "column": 0,
+              "row": 0,
+              "tags": [
+                "collectible",
+                "cherries"
+              ]
+            },
+            {
+              "name": "cherries_01",
+              "column": 1,
+              "row": 0,
+              "tags": [
+                "collectible",
+                "cherries"
+              ]
+            },
+            {
+              "name": "cherries_02",
+              "column": 2,
+              "row": 0,
+              "tags": [
+                "collectible",
+                "cherries"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "pixelfrog.pixel-adventure.collectible.melon",
+      "genre": "platformer-2d",
+      "primitive": "collectible",
+      "kind": "sprite",
+      "priority": 20,
+      "source": {
+        "title": "Pixel Adventure 1 - Melon",
+        "url": "https://pixelfrog-assets.itch.io/pixel-adventure-1",
+        "downloadPage": "https://pixelfrog-assets.itch.io/pixel-adventure-1",
+        "author": "Pixel Frog",
+        "verified": true,
+        "provenance": {
+          "verifiedAt": "2026-05-23",
+          "origin": "Pixel Frog Pixel Adventure 1 (itch.io) is published as CC0. The committed fruit strip was extracted from the official pack's Items/Fruits folder.",
+          "fixture": "asset-layer/fixtures/platformer/pixel-adventure/fruits/melon.png",
+          "notes": "Melon.png is a 544x32 horizontal strip of 17 frames at 32x32 (animated pickup loop)."
+        }
+      },
+      "license": {
+        "name": "Creative Commons CC0 1.0 Universal",
+        "spdx": "CC0-1.0",
+        "url": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "requiresAttribution": false
+      },
+      "provider": {
+        "name": "Pixel Frog",
+        "url": "https://pixelfrog-assets.itch.io/pixel-adventure-1",
+        "type": "local"
+      },
+      "files": [
+        {
+          "role": "spritesheet",
+          "format": "png",
+          "localPath": "asset-layer/fixtures/platformer/pixel-adventure/fruits/melon.png",
+          "checksum": {
+            "algorithm": "sha256",
+            "value": "35216881ce7b8f38397335ea04b159d3340e4b2096d5ba729ed4960de39de5fe"
+          }
+        }
+      ],
+      "technical": {
+        "width": 544,
+        "height": 32,
+        "pixelsPerUnit": 100,
+        "transparent": true
+      },
+      "tags": [
+        "platformer",
+        "collectible",
+        "fruit",
+        "melon",
+        "pickup",
+        "spritesheet",
+        "animation",
+        "pixel-frog",
+        "pixel-adventure",
+        "cc0"
+      ],
+      "unity": {
+        "path": "Assets/Art/Sprites/Collectibles/pixel-adventure-melon.png",
+        "pixelsPerUnit": 100,
+        "spriteMode": "multiple",
+        "filterMode": "Point",
+        "defaultSpriteName": "melon_00",
+        "slicing": {
+          "mode": "grid",
+          "cell": {
+            "width": 32,
+            "height": 32
+          },
+          "pivot": "center",
+          "sprites": [
+            {
+              "name": "melon_00",
+              "column": 0,
+              "row": 0,
+              "tags": [
+                "collectible",
+                "melon"
+              ]
+            },
+            {
+              "name": "melon_01",
+              "column": 1,
+              "row": 0,
+              "tags": [
+                "collectible",
+                "melon"
+              ]
+            },
+            {
+              "name": "melon_02",
+              "column": 2,
+              "row": 0,
+              "tags": [
+                "collectible",
+                "melon"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "pixelfrog.pixel-adventure.decor.saw",
+      "genre": "platformer-2d",
+      "primitive": "decor",
+      "kind": "sprite",
+      "priority": 20,
+      "source": {
+        "title": "Pixel Adventure 1 - Saw",
+        "url": "https://pixelfrog-assets.itch.io/pixel-adventure-1",
+        "downloadPage": "https://pixelfrog-assets.itch.io/pixel-adventure-1",
+        "author": "Pixel Frog",
+        "verified": true,
+        "provenance": {
+          "verifiedAt": "2026-05-23",
+          "origin": "Pixel Frog Pixel Adventure 1 (itch.io) is published as CC0. The committed saw strip was extracted from the official pack's Traps/Saw folder.",
+          "fixture": "asset-layer/fixtures/platformer/pixel-adventure/traps/saw.png",
+          "notes": "Saw 'On (38x38).png' is a 304x38 horizontal strip of 8 spinning-saw frames at 38x38. The Traps/Saw folder also ships Chain.png and Off.png."
+        }
+      },
+      "license": {
+        "name": "Creative Commons CC0 1.0 Universal",
+        "spdx": "CC0-1.0",
+        "url": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "requiresAttribution": false
+      },
+      "provider": {
+        "name": "Pixel Frog",
+        "url": "https://pixelfrog-assets.itch.io/pixel-adventure-1",
+        "type": "local"
+      },
+      "files": [
+        {
+          "role": "spritesheet",
+          "format": "png",
+          "localPath": "asset-layer/fixtures/platformer/pixel-adventure/traps/saw.png",
+          "checksum": {
+            "algorithm": "sha256",
+            "value": "eaa10a06c10ade360d1f5a2dde32f6cd14898232875dedaeeb5badf9d82b78e5"
+          }
+        }
+      ],
+      "technical": {
+        "width": 304,
+        "height": 38,
+        "pixelsPerUnit": 100,
+        "transparent": true
+      },
+      "tags": [
+        "platformer",
+        "decor",
+        "trap",
+        "hazard",
+        "saw",
+        "spritesheet",
+        "animation",
+        "pixel-frog",
+        "pixel-adventure",
+        "cc0"
+      ],
+      "unity": {
+        "path": "Assets/Art/Sprites/Decor/pixel-adventure-saw.png",
+        "pixelsPerUnit": 100,
+        "spriteMode": "multiple",
+        "filterMode": "Point",
+        "defaultSpriteName": "saw_00",
+        "slicing": {
+          "mode": "grid",
+          "cell": {
+            "width": 38,
+            "height": 38
+          },
+          "pivot": "center",
+          "sprites": [
+            {
+              "name": "saw_00",
+              "column": 0,
+              "row": 0,
+              "tags": [
+                "trap",
+                "saw"
+              ]
+            },
+            {
+              "name": "saw_01",
+              "column": 1,
+              "row": 0,
+              "tags": [
+                "trap",
+                "saw"
+              ]
+            },
+            {
+              "name": "saw_02",
+              "column": 2,
+              "row": 0,
+              "tags": [
+                "trap",
+                "saw"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "pixelfrog.pixel-adventure.decor.spikes",
+      "genre": "platformer-2d",
+      "primitive": "decor",
+      "kind": "sprite",
+      "priority": 20,
+      "source": {
+        "title": "Pixel Adventure 1 - Spikes",
+        "url": "https://pixelfrog-assets.itch.io/pixel-adventure-1",
+        "downloadPage": "https://pixelfrog-assets.itch.io/pixel-adventure-1",
+        "author": "Pixel Frog",
+        "verified": true,
+        "provenance": {
+          "verifiedAt": "2026-05-23",
+          "origin": "Pixel Frog Pixel Adventure 1 (itch.io) is published as CC0. The committed spikes sprite was extracted from the official pack's Traps/Spikes folder.",
+          "fixture": "asset-layer/fixtures/platformer/pixel-adventure/traps/spikes.png",
+          "notes": "Spikes 'Idle.png' is a single 16x16 static hazard tile."
+        }
+      },
+      "license": {
+        "name": "Creative Commons CC0 1.0 Universal",
+        "spdx": "CC0-1.0",
+        "url": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "requiresAttribution": false
+      },
+      "provider": {
+        "name": "Pixel Frog",
+        "url": "https://pixelfrog-assets.itch.io/pixel-adventure-1",
+        "type": "local"
+      },
+      "files": [
+        {
+          "role": "sprite",
+          "format": "png",
+          "localPath": "asset-layer/fixtures/platformer/pixel-adventure/traps/spikes.png",
+          "checksum": {
+            "algorithm": "sha256",
+            "value": "2ac00698d048ef4b41ccf05dd5409b57a4013ea2c5e8e75d1ceea91b341c3e6e"
+          }
+        }
+      ],
+      "technical": {
+        "width": 16,
+        "height": 16,
+        "pixelsPerUnit": 100,
+        "transparent": true
+      },
+      "tags": [
+        "platformer",
+        "decor",
+        "trap",
+        "hazard",
+        "spikes",
+        "pixel-frog",
+        "pixel-adventure",
+        "cc0"
+      ],
+      "unity": {
+        "path": "Assets/Art/Sprites/Decor/pixel-adventure-spikes.png",
+        "pixelsPerUnit": 100,
+        "spriteMode": "single",
+        "filterMode": "Point"
+      }
+    }
+  ]
+}

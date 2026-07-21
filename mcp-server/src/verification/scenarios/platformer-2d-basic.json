@@ -1,0 +1,52 @@
+{
+  "schemaVersion": "1",
+  "id": "platformer-2d-basic",
+  "gameKind": "platformer-2d",
+  "playMode": {
+    "enterOnce": true,
+    "resetPolicy": {
+      "type": "spawn-before-sequence",
+      "warningOnly": true
+    }
+  },
+  "measure": { "path": "/Player" },
+  "driverDefaults": {
+    "locator": { "path": "/Player" },
+    "type_name": "PlayerController",
+    "property_path": "forceHorizontal"
+  },
+  "sequences": [
+    {
+      "id": "jump-burst",
+      "driver": {
+        "locator": { "path": "/Player" },
+        "type_name": "PlayerController",
+        "property_path": "forceJump"
+      },
+      "phases": [
+        { "durationMs": 80, "value": true },
+        { "durationMs": 700, "value": false }
+      ],
+      "captures": [
+        { "id": "spawn", "trigger": "start", "view": "game", "format": "png", "maxWidth": 1280 },
+        { "id": "jump-rise", "trigger": "atMs", "atMs": 220, "view": "game", "format": "png", "maxWidth": 1280 },
+        { "id": "jump-apex", "trigger": "apexY", "view": "game", "format": "png", "maxWidth": 1280 },
+        { "id": "jump-fall", "trigger": "atMs", "atMs": 520, "view": "game", "format": "png", "maxWidth": 1280 }
+      ],
+      "captureFps": 120,
+      "includeSamples": true,
+      "resetDriversOnEnd": true
+    }
+  ],
+  "collect": {
+    "console": true,
+    "screenRects": [],
+    "runtimeAssertions": []
+  },
+  "analysis": {
+    "baselineFrameId": "spawn",
+    "stableTopFraction": 0.12,
+    "stableBottomFraction": 0.68,
+    "minLineFraction": 0.85
+  }
+}

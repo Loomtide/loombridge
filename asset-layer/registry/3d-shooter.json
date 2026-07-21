@@ -1,0 +1,460 @@
+{
+  "schemaVersion": "1",
+  "packId": "3d-shooter",
+  "name": "Curated 3D Shooter Seed Registry",
+  "description": "Minimal offline-friendly seed pack for the 3D-shooter vertical. Real curated candidates point at CC0 model/sprite sources (glb bytes are fetched at ingest); honest Unity-primitive fallbacks are kept as explicit placeholders so a build never silently ships a stub as the real model.",
+  "entries": [
+    {
+      "id": "quaternius.shooter.player.robot",
+      "genre": "3d-shooter",
+      "primitive": "player_model",
+      "kind": "model",
+      "priority": 40,
+      "placeholder": false,
+      "source": {
+        "title": "Animated Robot (Player)",
+        "url": "https://quaternius.com/packs/animatedrobots.html",
+        "author": "Quaternius",
+        "verified": true,
+        "provenance": {
+          "verifiedAt": "2026-06-26",
+          "origin": "Quaternius Animated Robots pack is released under CC0. The rigged robot mesh is used as the controllable player model.",
+          "fixture": "seed: Quaternius Animated Robots (glb fetched at ingest)"
+        }
+      },
+      "license": {
+        "name": "Creative Commons CC0 1.0 Universal",
+        "spdx": "CC0-1.0",
+        "url": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "requiresAttribution": false
+      },
+      "provider": {
+        "name": "Quaternius",
+        "url": "https://quaternius.com/",
+        "type": "http"
+      },
+      "files": [
+        {
+          "role": "model",
+          "format": "glb",
+          "url": "https://quaternius.com/packs/animatedrobots.html"
+        }
+      ],
+      "technical": {},
+      "tags": ["3d-shooter", "player", "character", "robot", "quaternius", "model"],
+      "unity": {
+        "path": "Assets/Models/Player/quaternius-robot-player.glb",
+        "pixelsPerUnit": 1,
+        "filterMode": "Bilinear"
+      }
+    },
+    {
+      "id": "loomtide.fallback.player.capsule",
+      "genre": "3d-shooter",
+      "primitive": "player_model",
+      "kind": "model",
+      "priority": 0,
+      "placeholder": true,
+      "source": {
+        "title": "Primitive Capsule (Player Fallback)",
+        "url": "https://docs.unity3d.com/Manual/PrimitiveObjects.html",
+        "author": "Loomtide",
+        "verified": true,
+        "provenance": {
+          "verifiedAt": "2026-06-26",
+          "origin": "Honest fallback: a Unity primitive capsule exported as a stub mesh, used only when no real player model is selected. Marked placeholder so it can never pass as production art.",
+          "fixture": "primitive-fallback: Unity capsule"
+        }
+      },
+      "license": {
+        "name": "Creative Commons CC0 1.0 Universal",
+        "spdx": "CC0-1.0",
+        "url": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "requiresAttribution": false
+      },
+      "provider": {
+        "name": "Loomtide",
+        "url": "https://loomtide.ai/",
+        "type": "generation"
+      },
+      "files": [
+        {
+          "role": "model",
+          "format": "glb",
+          "url": "https://loomtide.ai/fallbacks/capsule.glb"
+        }
+      ],
+      "technical": {},
+      "tags": ["3d-shooter", "player", "fallback", "placeholder", "primitive", "capsule"],
+      "unity": {
+        "path": "Assets/Models/Player/player_capsule_fallback.glb",
+        "pixelsPerUnit": 1,
+        "filterMode": "Bilinear"
+      }
+    },
+    {
+      "id": "quaternius.shooter.enemy.robot",
+      "genre": "3d-shooter",
+      "primitive": "enemy_model",
+      "kind": "model",
+      "priority": 40,
+      "placeholder": false,
+      "source": {
+        "title": "Animated Robot (Enemy)",
+        "url": "https://quaternius.com/packs/animatedrobots.html",
+        "author": "Quaternius",
+        "verified": true,
+        "provenance": {
+          "verifiedAt": "2026-06-26",
+          "origin": "Quaternius Animated Robots pack is CC0. A distinct robot variant is used as the enemy/target model.",
+          "fixture": "seed: Quaternius Animated Robots (glb fetched at ingest)"
+        }
+      },
+      "license": {
+        "name": "Creative Commons CC0 1.0 Universal",
+        "spdx": "CC0-1.0",
+        "url": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "requiresAttribution": false
+      },
+      "provider": {
+        "name": "Quaternius",
+        "url": "https://quaternius.com/",
+        "type": "http"
+      },
+      "files": [
+        {
+          "role": "model",
+          "format": "glb",
+          "url": "https://quaternius.com/packs/animatedrobots.html"
+        }
+      ],
+      "technical": {},
+      "tags": ["3d-shooter", "enemy", "target", "robot", "quaternius", "model"],
+      "unity": {
+        "path": "Assets/Models/Enemies/quaternius-robot-enemy.glb",
+        "pixelsPerUnit": 1,
+        "filterMode": "Bilinear"
+      }
+    },
+    {
+      "id": "kenney.prototype.arena.floor",
+      "genre": "3d-shooter",
+      "primitive": "arena",
+      "kind": "model",
+      "priority": 40,
+      "placeholder": false,
+      "source": {
+        "title": "Prototype Arena Floor",
+        "url": "https://www.kenney.nl/assets/prototype-kit",
+        "author": "Kenney",
+        "verified": true,
+        "provenance": {
+          "verifiedAt": "2026-06-26",
+          "origin": "Kenney Prototype Kit is CC0. A floor/arena tile mesh is used as the ground plane for the shooter arena.",
+          "fixture": "seed: Kenney Prototype Kit (glb fetched at ingest)"
+        }
+      },
+      "license": {
+        "name": "Creative Commons CC0 1.0 Universal",
+        "spdx": "CC0-1.0",
+        "url": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "requiresAttribution": false
+      },
+      "provider": {
+        "name": "Kenney",
+        "url": "https://www.kenney.nl/",
+        "type": "http"
+      },
+      "files": [
+        {
+          "role": "model",
+          "format": "glb",
+          "url": "https://www.kenney.nl/assets/prototype-kit"
+        }
+      ],
+      "technical": {},
+      "tags": ["3d-shooter", "arena", "ground", "floor", "kenney", "model"],
+      "unity": {
+        "path": "Assets/Models/Arena/kenney-prototype-arena-floor.glb",
+        "pixelsPerUnit": 1,
+        "filterMode": "Bilinear"
+      }
+    },
+    {
+      "id": "kenney.prototype.cover.crate",
+      "genre": "3d-shooter",
+      "primitive": "cover_prop",
+      "kind": "model",
+      "priority": 40,
+      "placeholder": false,
+      "source": {
+        "title": "Prototype Crate (Cover)",
+        "url": "https://www.kenney.nl/assets/prototype-kit",
+        "author": "Kenney",
+        "verified": true,
+        "provenance": {
+          "verifiedAt": "2026-06-26",
+          "origin": "Kenney Prototype Kit is CC0. A crate mesh is used as a cover prop the player can break line-of-sight behind.",
+          "fixture": "seed: Kenney Prototype Kit (glb fetched at ingest)"
+        }
+      },
+      "license": {
+        "name": "Creative Commons CC0 1.0 Universal",
+        "spdx": "CC0-1.0",
+        "url": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "requiresAttribution": false
+      },
+      "provider": {
+        "name": "Kenney",
+        "url": "https://www.kenney.nl/",
+        "type": "http"
+      },
+      "files": [
+        {
+          "role": "model",
+          "format": "glb",
+          "url": "https://www.kenney.nl/assets/prototype-kit"
+        }
+      ],
+      "technical": {},
+      "tags": ["3d-shooter", "cover", "prop", "crate", "kenney", "model"],
+      "unity": {
+        "path": "Assets/Models/Props/kenney-prototype-cover-crate.glb",
+        "pixelsPerUnit": 1,
+        "filterMode": "Bilinear"
+      }
+    },
+    {
+      "id": "loomtide.fallback.cover.cube",
+      "genre": "3d-shooter",
+      "primitive": "cover_prop",
+      "kind": "model",
+      "priority": 0,
+      "placeholder": true,
+      "source": {
+        "title": "Primitive Cube (Cover Fallback)",
+        "url": "https://docs.unity3d.com/Manual/PrimitiveObjects.html",
+        "author": "Loomtide",
+        "verified": true,
+        "provenance": {
+          "verifiedAt": "2026-06-26",
+          "origin": "Honest fallback: a Unity primitive cube exported as a stub mesh, used only when no real cover prop is selected. Marked placeholder so it can never pass as production art.",
+          "fixture": "primitive-fallback: Unity cube"
+        }
+      },
+      "license": {
+        "name": "Creative Commons CC0 1.0 Universal",
+        "spdx": "CC0-1.0",
+        "url": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "requiresAttribution": false
+      },
+      "provider": {
+        "name": "Loomtide",
+        "url": "https://loomtide.ai/",
+        "type": "generation"
+      },
+      "files": [
+        {
+          "role": "model",
+          "format": "glb",
+          "url": "https://loomtide.ai/fallbacks/cube.glb"
+        }
+      ],
+      "technical": {},
+      "tags": ["3d-shooter", "cover", "fallback", "placeholder", "primitive", "cube"],
+      "unity": {
+        "path": "Assets/Models/Props/cover_cube_fallback.glb",
+        "pixelsPerUnit": 1,
+        "filterMode": "Bilinear"
+      }
+    },
+    {
+      "id": "kenney.blaster.weapon.blaster",
+      "genre": "3d-shooter",
+      "primitive": "weapon_model",
+      "kind": "model",
+      "priority": 40,
+      "placeholder": false,
+      "source": {
+        "title": "Blaster (Weapon)",
+        "url": "https://www.kenney.nl/assets/blaster-kit",
+        "author": "Kenney",
+        "verified": true,
+        "provenance": {
+          "verifiedAt": "2026-06-26",
+          "origin": "Kenney Blaster Kit is CC0. A blaster mesh is used as the player weapon model.",
+          "fixture": "seed: Kenney Blaster Kit (glb fetched at ingest)"
+        }
+      },
+      "license": {
+        "name": "Creative Commons CC0 1.0 Universal",
+        "spdx": "CC0-1.0",
+        "url": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "requiresAttribution": false
+      },
+      "provider": {
+        "name": "Kenney",
+        "url": "https://www.kenney.nl/",
+        "type": "http"
+      },
+      "files": [
+        {
+          "role": "model",
+          "format": "glb",
+          "url": "https://www.kenney.nl/assets/blaster-kit"
+        }
+      ],
+      "technical": {},
+      "tags": ["3d-shooter", "weapon", "blaster", "gun", "kenney", "model"],
+      "unity": {
+        "path": "Assets/Models/Weapons/kenney-blaster.glb",
+        "pixelsPerUnit": 1,
+        "filterMode": "Bilinear"
+      }
+    },
+    {
+      "id": "kenney.blaster.projectile.bolt",
+      "genre": "3d-shooter",
+      "primitive": "projectile",
+      "kind": "model",
+      "priority": 40,
+      "placeholder": false,
+      "source": {
+        "title": "Blaster Bolt (Projectile)",
+        "url": "https://www.kenney.nl/assets/blaster-kit",
+        "author": "Kenney",
+        "verified": true,
+        "provenance": {
+          "verifiedAt": "2026-06-26",
+          "origin": "Kenney Blaster Kit is CC0. A bolt mesh is used as the weapon projectile/tracer.",
+          "fixture": "seed: Kenney Blaster Kit (glb fetched at ingest)"
+        }
+      },
+      "license": {
+        "name": "Creative Commons CC0 1.0 Universal",
+        "spdx": "CC0-1.0",
+        "url": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "requiresAttribution": false
+      },
+      "provider": {
+        "name": "Kenney",
+        "url": "https://www.kenney.nl/",
+        "type": "http"
+      },
+      "files": [
+        {
+          "role": "model",
+          "format": "glb",
+          "url": "https://www.kenney.nl/assets/blaster-kit"
+        }
+      ],
+      "technical": {},
+      "tags": ["3d-shooter", "projectile", "tracer", "bolt", "kenney", "model"],
+      "unity": {
+        "path": "Assets/Models/Projectiles/kenney-blaster-bolt.glb",
+        "pixelsPerUnit": 1,
+        "filterMode": "Bilinear"
+      }
+    },
+    {
+      "id": "kenney.crosshair.reticle.dot",
+      "genre": "3d-shooter",
+      "primitive": "reticle",
+      "kind": "sprite",
+      "priority": 40,
+      "placeholder": false,
+      "source": {
+        "title": "Crosshair / Reticle",
+        "url": "https://www.kenney.nl/assets/crosshair-pack",
+        "author": "Kenney",
+        "verified": true,
+        "provenance": {
+          "verifiedAt": "2026-06-26",
+          "origin": "Kenney Crosshair Pack is CC0. A centered crosshair sprite is used as the aiming reticle.",
+          "fixture": "seed: Kenney Crosshair Pack (png fetched at ingest)"
+        }
+      },
+      "license": {
+        "name": "Creative Commons CC0 1.0 Universal",
+        "spdx": "CC0-1.0",
+        "url": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "requiresAttribution": false
+      },
+      "provider": {
+        "name": "Kenney",
+        "url": "https://www.kenney.nl/",
+        "type": "http"
+      },
+      "files": [
+        {
+          "role": "sprite",
+          "format": "png",
+          "url": "https://www.kenney.nl/assets/crosshair-pack"
+        }
+      ],
+      "technical": {
+        "width": 64,
+        "height": 64,
+        "pixelsPerUnit": 100,
+        "transparent": true
+      },
+      "tags": ["3d-shooter", "reticle", "crosshair", "hud", "ui", "kenney", "sprite"],
+      "unity": {
+        "path": "Assets/Art/UI/Reticle/kenney-crosshair-dot.png",
+        "pixelsPerUnit": 100,
+        "spriteMode": "single",
+        "filterMode": "Bilinear"
+      }
+    },
+    {
+      "id": "kenney.particle.impact.spark",
+      "genre": "3d-shooter",
+      "primitive": "vfx",
+      "kind": "sprite",
+      "priority": 40,
+      "placeholder": false,
+      "source": {
+        "title": "Impact Spark (VFX)",
+        "url": "https://www.kenney.nl/assets/particle-pack",
+        "author": "Kenney",
+        "verified": true,
+        "provenance": {
+          "verifiedAt": "2026-06-26",
+          "origin": "Kenney Particle Pack is CC0. A spark/flash particle sprite is used for projectile impact feedback.",
+          "fixture": "seed: Kenney Particle Pack (png fetched at ingest)"
+        }
+      },
+      "license": {
+        "name": "Creative Commons CC0 1.0 Universal",
+        "spdx": "CC0-1.0",
+        "url": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "requiresAttribution": false
+      },
+      "provider": {
+        "name": "Kenney",
+        "url": "https://www.kenney.nl/",
+        "type": "http"
+      },
+      "files": [
+        {
+          "role": "sprite",
+          "format": "png",
+          "url": "https://www.kenney.nl/assets/particle-pack"
+        }
+      ],
+      "technical": {
+        "width": 256,
+        "height": 256,
+        "pixelsPerUnit": 100,
+        "transparent": true
+      },
+      "tags": ["3d-shooter", "vfx", "impact", "spark", "particle", "kenney", "sprite"],
+      "unity": {
+        "path": "Assets/Art/VFX/kenney-impact-spark.png",
+        "pixelsPerUnit": 100,
+        "spriteMode": "single",
+        "filterMode": "Bilinear"
+      }
+    }
+  ]
+}

@@ -1,0 +1,670 @@
+{
+  "_comment": "IMMUTABLE raw capture transcript \u2014 the verbatim runtime.capture_input_motion bridge interaction for the live ttkMs dogfood. The canonical ttk-live-capture-2026-06-25.json is ASSEMBLED from this file by generate.mjs (series copied, value derived through deriveTimeToKill); it is NOT synthesized from constants. Do not edit by hand.",
+  "op": "runtime.capture_input_motion",
+  "capturedAt": "2026-06-25T08:30:00.000Z",
+  "host": {
+    "projectName": "GameHub",
+    "projectPathCanonical": "/redacted/host-project",
+    "note": "Host-of-convenience: the only routable live editor this session. NOT a shipped 2D-shooter build. A transient DogfoodReferenceEnemy was added, captured, then deleted (scene never saved)."
+  },
+  "request": {
+    "measure": {
+      "path": "/ReferenceEnemy",
+      "scene": "GameHub"
+    },
+    "captureFps": 60,
+    "includeSamples": false,
+    "phases": [
+      {
+        "keys": [],
+        "durationMs": 200
+      },
+      {
+        "keys": [
+          "Space"
+        ],
+        "durationMs": 100
+      },
+      {
+        "keys": [],
+        "durationMs": 200
+      },
+      {
+        "keys": [
+          "Space"
+        ],
+        "durationMs": 100
+      },
+      {
+        "keys": [],
+        "durationMs": 400
+      }
+    ],
+    "sampledFields": [
+      {
+        "id": "reference-enemy-hit-count",
+        "locator": {
+          "path": "/ReferenceEnemy",
+          "scene": "GameHub"
+        },
+        "type_name": "DogfoodReferenceEnemy",
+        "property_path": "HitCount"
+      },
+      {
+        "id": "reference-enemy-is-dead",
+        "locator": {
+          "path": "/ReferenceEnemy",
+          "scene": "GameHub"
+        },
+        "type_name": "DogfoodReferenceEnemy",
+        "property_path": "IsDead"
+      }
+    ]
+  },
+  "response": {
+    "startY": 0,
+    "peakY": 0,
+    "deltaY": 0,
+    "minY": 0,
+    "timeToApexMs": 0,
+    "startX": 0,
+    "endX": 0,
+    "deltaX": 0,
+    "avgRunSpeed": 0,
+    "durationMs": 1000,
+    "sampleCount": 61,
+    "projectFixedTimestepBeforeMeasurement": 0.02,
+    "measurementFixedTimestep": 0.02,
+    "phases": [
+      {
+        "index": 0,
+        "keys": [],
+        "requestedDurationMs": 200,
+        "sampleCount": 12,
+        "fixedTickStart": 1034,
+        "fixedTickEnd": 1044,
+        "actualFixedTicks": 10,
+        "startX": 0,
+        "endX": 0,
+        "deltaX": 0,
+        "startY": 0,
+        "endY": 0,
+        "deltaY": 0,
+        "minY": 0,
+        "maxY": 0
+      },
+      {
+        "index": 1,
+        "keys": [
+          "Space"
+        ],
+        "requestedDurationMs": 100,
+        "sampleCount": 6,
+        "fixedTickStart": 1044,
+        "fixedTickEnd": 1049,
+        "actualFixedTicks": 5,
+        "startX": 0,
+        "endX": 0,
+        "deltaX": 0,
+        "startY": 0,
+        "endY": 0,
+        "deltaY": 0,
+        "minY": 0,
+        "maxY": 0
+      },
+      {
+        "index": 2,
+        "keys": [],
+        "requestedDurationMs": 200,
+        "sampleCount": 12,
+        "fixedTickStart": 1049,
+        "fixedTickEnd": 1059,
+        "actualFixedTicks": 10,
+        "startX": 0,
+        "endX": 0,
+        "deltaX": 0,
+        "startY": 0,
+        "endY": 0,
+        "deltaY": 0,
+        "minY": 0,
+        "maxY": 0
+      },
+      {
+        "index": 3,
+        "keys": [
+          "Space"
+        ],
+        "requestedDurationMs": 100,
+        "sampleCount": 6,
+        "fixedTickStart": 1059,
+        "fixedTickEnd": 1064,
+        "actualFixedTicks": 5,
+        "startX": 0,
+        "endX": 0,
+        "deltaX": 0,
+        "startY": 0,
+        "endY": 0,
+        "deltaY": 0,
+        "minY": 0,
+        "maxY": 0
+      },
+      {
+        "index": 4,
+        "keys": [],
+        "requestedDurationMs": 400,
+        "sampleCount": 25,
+        "fixedTickStart": 1064,
+        "fixedTickEnd": 1084,
+        "actualFixedTicks": 20,
+        "startX": 0,
+        "endX": 0,
+        "deltaX": 0,
+        "startY": 0,
+        "endY": 0,
+        "deltaY": 0,
+        "minY": 0,
+        "maxY": 0
+      }
+    ],
+    "fieldTimeline": [
+      {
+        "id": "reference-enemy-hit-count",
+        "samples": [
+          {
+            "tMs": 0.0,
+            "value": 0
+          },
+          {
+            "tMs": 16.67,
+            "value": 0
+          },
+          {
+            "tMs": 33.33,
+            "value": 0
+          },
+          {
+            "tMs": 50.0,
+            "value": 0
+          },
+          {
+            "tMs": 66.67,
+            "value": 0
+          },
+          {
+            "tMs": 83.33,
+            "value": 0
+          },
+          {
+            "tMs": 100.0,
+            "value": 0
+          },
+          {
+            "tMs": 116.67,
+            "value": 0
+          },
+          {
+            "tMs": 133.33,
+            "value": 0
+          },
+          {
+            "tMs": 150.0,
+            "value": 0
+          },
+          {
+            "tMs": 166.67,
+            "value": 0
+          },
+          {
+            "tMs": 183.33,
+            "value": 0
+          },
+          {
+            "tMs": 200.0,
+            "value": 0
+          },
+          {
+            "tMs": 216.67,
+            "value": 1
+          },
+          {
+            "tMs": 233.33,
+            "value": 1
+          },
+          {
+            "tMs": 250.0,
+            "value": 1
+          },
+          {
+            "tMs": 266.67,
+            "value": 1
+          },
+          {
+            "tMs": 283.33,
+            "value": 1
+          },
+          {
+            "tMs": 300.0,
+            "value": 1
+          },
+          {
+            "tMs": 316.67,
+            "value": 1
+          },
+          {
+            "tMs": 333.33,
+            "value": 1
+          },
+          {
+            "tMs": 350.0,
+            "value": 1
+          },
+          {
+            "tMs": 366.67,
+            "value": 1
+          },
+          {
+            "tMs": 383.33,
+            "value": 1
+          },
+          {
+            "tMs": 400.0,
+            "value": 1
+          },
+          {
+            "tMs": 416.67,
+            "value": 1
+          },
+          {
+            "tMs": 433.33,
+            "value": 1
+          },
+          {
+            "tMs": 450.0,
+            "value": 1
+          },
+          {
+            "tMs": 466.67,
+            "value": 1
+          },
+          {
+            "tMs": 483.33,
+            "value": 1
+          },
+          {
+            "tMs": 500.0,
+            "value": 1
+          },
+          {
+            "tMs": 516.67,
+            "value": 2
+          },
+          {
+            "tMs": 533.33,
+            "value": 2
+          },
+          {
+            "tMs": 550.0,
+            "value": 2
+          },
+          {
+            "tMs": 566.67,
+            "value": 2
+          },
+          {
+            "tMs": 583.33,
+            "value": 2
+          },
+          {
+            "tMs": 600.0,
+            "value": 2
+          },
+          {
+            "tMs": 616.67,
+            "value": 2
+          },
+          {
+            "tMs": 633.33,
+            "value": 2
+          },
+          {
+            "tMs": 650.0,
+            "value": 2
+          },
+          {
+            "tMs": 666.67,
+            "value": 2
+          },
+          {
+            "tMs": 683.33,
+            "value": 2
+          },
+          {
+            "tMs": 700.0,
+            "value": 2
+          },
+          {
+            "tMs": 716.67,
+            "value": 2
+          },
+          {
+            "tMs": 733.33,
+            "value": 2
+          },
+          {
+            "tMs": 750.0,
+            "value": 2
+          },
+          {
+            "tMs": 766.67,
+            "value": 2
+          },
+          {
+            "tMs": 783.33,
+            "value": 2
+          },
+          {
+            "tMs": 800.0,
+            "value": 2
+          },
+          {
+            "tMs": 816.67,
+            "value": 2
+          },
+          {
+            "tMs": 833.33,
+            "value": 2
+          },
+          {
+            "tMs": 850.0,
+            "value": 2
+          },
+          {
+            "tMs": 866.67,
+            "value": 2
+          },
+          {
+            "tMs": 883.33,
+            "value": 2
+          },
+          {
+            "tMs": 900.0,
+            "value": 2
+          },
+          {
+            "tMs": 916.67,
+            "value": 2
+          },
+          {
+            "tMs": 933.33,
+            "value": 2
+          },
+          {
+            "tMs": 950.0,
+            "value": 2
+          },
+          {
+            "tMs": 966.67,
+            "value": 2
+          },
+          {
+            "tMs": 983.33,
+            "value": 2
+          },
+          {
+            "tMs": 1000.0,
+            "value": 2
+          }
+        ]
+      },
+      {
+        "id": "reference-enemy-is-dead",
+        "samples": [
+          {
+            "tMs": 0.0,
+            "value": false
+          },
+          {
+            "tMs": 16.67,
+            "value": false
+          },
+          {
+            "tMs": 33.33,
+            "value": false
+          },
+          {
+            "tMs": 50.0,
+            "value": false
+          },
+          {
+            "tMs": 66.67,
+            "value": false
+          },
+          {
+            "tMs": 83.33,
+            "value": false
+          },
+          {
+            "tMs": 100.0,
+            "value": false
+          },
+          {
+            "tMs": 116.67,
+            "value": false
+          },
+          {
+            "tMs": 133.33,
+            "value": false
+          },
+          {
+            "tMs": 150.0,
+            "value": false
+          },
+          {
+            "tMs": 166.67,
+            "value": false
+          },
+          {
+            "tMs": 183.33,
+            "value": false
+          },
+          {
+            "tMs": 200.0,
+            "value": false
+          },
+          {
+            "tMs": 216.67,
+            "value": false
+          },
+          {
+            "tMs": 233.33,
+            "value": false
+          },
+          {
+            "tMs": 250.0,
+            "value": false
+          },
+          {
+            "tMs": 266.67,
+            "value": false
+          },
+          {
+            "tMs": 283.33,
+            "value": false
+          },
+          {
+            "tMs": 300.0,
+            "value": false
+          },
+          {
+            "tMs": 316.67,
+            "value": false
+          },
+          {
+            "tMs": 333.33,
+            "value": false
+          },
+          {
+            "tMs": 350.0,
+            "value": false
+          },
+          {
+            "tMs": 366.67,
+            "value": false
+          },
+          {
+            "tMs": 383.33,
+            "value": false
+          },
+          {
+            "tMs": 400.0,
+            "value": false
+          },
+          {
+            "tMs": 416.67,
+            "value": false
+          },
+          {
+            "tMs": 433.33,
+            "value": false
+          },
+          {
+            "tMs": 450.0,
+            "value": false
+          },
+          {
+            "tMs": 466.67,
+            "value": false
+          },
+          {
+            "tMs": 483.33,
+            "value": false
+          },
+          {
+            "tMs": 500.0,
+            "value": false
+          },
+          {
+            "tMs": 516.67,
+            "value": true
+          },
+          {
+            "tMs": 533.33,
+            "value": true
+          },
+          {
+            "tMs": 550.0,
+            "value": true
+          },
+          {
+            "tMs": 566.67,
+            "value": true
+          },
+          {
+            "tMs": 583.33,
+            "value": true
+          },
+          {
+            "tMs": 600.0,
+            "value": true
+          },
+          {
+            "tMs": 616.67,
+            "value": true
+          },
+          {
+            "tMs": 633.33,
+            "value": true
+          },
+          {
+            "tMs": 650.0,
+            "value": true
+          },
+          {
+            "tMs": 666.67,
+            "value": true
+          },
+          {
+            "tMs": 683.33,
+            "value": true
+          },
+          {
+            "tMs": 700.0,
+            "value": true
+          },
+          {
+            "tMs": 716.67,
+            "value": true
+          },
+          {
+            "tMs": 733.33,
+            "value": true
+          },
+          {
+            "tMs": 750.0,
+            "value": true
+          },
+          {
+            "tMs": 766.67,
+            "value": true
+          },
+          {
+            "tMs": 783.33,
+            "value": true
+          },
+          {
+            "tMs": 800.0,
+            "value": true
+          },
+          {
+            "tMs": 816.67,
+            "value": true
+          },
+          {
+            "tMs": 833.33,
+            "value": true
+          },
+          {
+            "tMs": 850.0,
+            "value": true
+          },
+          {
+            "tMs": 866.67,
+            "value": true
+          },
+          {
+            "tMs": 883.33,
+            "value": true
+          },
+          {
+            "tMs": 900.0,
+            "value": true
+          },
+          {
+            "tMs": 916.67,
+            "value": true
+          },
+          {
+            "tMs": 933.33,
+            "value": true
+          },
+          {
+            "tMs": 950.0,
+            "value": true
+          },
+          {
+            "tMs": 966.67,
+            "value": true
+          },
+          {
+            "tMs": 983.33,
+            "value": true
+          },
+          {
+            "tMs": 1000.0,
+            "value": true
+          }
+        ]
+      }
+    ]
+  }
+}

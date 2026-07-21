@@ -1,0 +1,188 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://loomtide.dev/schemas/verification-scenario.schema.json",
+  "title": "Loomtide verification scenario",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "id", "gameKind", "playMode", "measure", "sequences"],
+  "properties": {
+    "schemaVersion": { "const": "1" },
+    "id": { "type": "string", "minLength": 1 },
+    "gameKind": { "type": "string", "minLength": 1 },
+    "playMode": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enterOnce", "resetPolicy"],
+      "properties": {
+        "enterOnce": { "type": "boolean" },
+        "resetPolicy": {
+          "oneOf": [
+            { "enum": ["none", "reload-scene", "spawn-before-sequence"] },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["type"],
+              "properties": {
+                "type": { "enum": ["none", "reload-scene", "spawn-before-sequence"] },
+                "scenePath": { "type": "string", "minLength": 1 },
+                "resetOperation": { "$ref": "#/$defs/operation" },
+                "warningOnly": { "type": "boolean" }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "measure": { "$ref": "#/$defs/locator" },
+    "driverDefaults": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "locator": { "$ref": "#/$defs/locator" },
+        "type_name": { "type": "string", "minLength": 1 },
+        "property_path": { "type": "string", "minLength": 1 }
+      }
+    },
+    "sequences": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/sequence" }
+    },
+    "collect": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "screenRects": { "type": "array", "items": { "$ref": "#/$defs/locator" } },
+        "screenRectCamera": { "$ref": "#/$defs/locator" },
+        "screenRectBoundsMode": { "enum": ["opaque", "renderer", "collider"] },
+        "runtimeAssertions": { "type": "array", "items": { "$ref": "#/$defs/runtimeAssertion" } },
+        "console": { "type": "boolean" }
+      }
+    },
+    "analysis": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "baselineFrameId": { "type": "string", "minLength": 1 },
+        "stableTopFraction": { "type": "number", "minimum": 0, "maximum": 1 },
+        "stableBottomFraction": { "type": "number", "minimum": 0, "maximum": 1 },
+        "minLineFraction": { "type": "number", "minimum": 0, "maximum": 1 },
+        "darkLumaThreshold": { "type": "number", "minimum": 0, "maximum": 255 }
+      }
+    }
+  },
+  "$defs": {
+    "locator": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "scene": { "type": "string", "minLength": 1 },
+        "path": { "type": "string", "minLength": 1 },
+        "name": { "type": "string", "minLength": 1 },
+        "globalObjectId": { "type": "string", "minLength": 1 },
+        "instanceId": { "type": ["string", "number"] }
+      },
+      "anyOf": [
+        { "required": ["path"] },
+        { "required": ["name"] },
+        { "required": ["globalObjectId"] },
+        { "required": ["instanceId"] }
+      ]
+    },
+    "operation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["command"],
+      "properties": {
+        "command": { "type": "string", "minLength": 1 },
+        "params": { "type": "object", "additionalProperties": true },
+        "timeoutMs": { "type": "number", "minimum": 1 }
+      }
+    },
+    "driver": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["locator", "type_name", "property_path", "value"],
+      "properties": {
+        "locator": { "$ref": "#/$defs/locator" },
+        "type_name": { "type": "string", "minLength": 1 },
+        "property_path": { "type": "string", "minLength": 1 },
+        "value": { "type": ["number", "boolean"] }
+      }
+    },
+    "phase": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["durationMs"],
+      "properties": {
+        "durationMs": { "type": "number", "exclusiveMinimum": 0 },
+        "value": { "type": ["number", "boolean"] },
+        "drivers": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/driver" }
+        }
+      }
+    },
+    "capture": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "trigger": { "enum": ["start", "end", "atMs", "apexY"] },
+        "atMs": { "type": "number", "minimum": 0 },
+        "view": { "enum": ["scene", "game"] },
+        "maxWidth": { "type": "number", "minimum": 1 },
+        "format": { "enum": ["png", "jpeg"] },
+        "quality": { "type": "number", "minimum": 1, "maximum": 100 }
+      }
+    },
+    "sequence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "phases", "captures"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "driver": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["locator", "type_name", "property_path"],
+          "properties": {
+            "locator": { "$ref": "#/$defs/locator" },
+            "type_name": { "type": "string", "minLength": 1 },
+            "property_path": { "type": "string", "minLength": 1 }
+          }
+        },
+        "phases": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/phase" }
+        },
+        "captures": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/capture" }
+        },
+        "captureFps": { "type": "number", "minimum": 0 },
+        "includeSamples": { "type": "boolean" },
+        "resetDriversOnEnd": { "type": "boolean" }
+      }
+    },
+    "runtimeAssertion": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["id", "locator", "property_path", "operator", "expected"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "locator": { "$ref": "#/$defs/locator" },
+        "component": { "type": "string", "minLength": 1 },
+        "property_path": { "type": "string", "minLength": 1 },
+        "operator": { "enum": ["equals", "not_equals", "greater_than", "less_than", "approx", "contains"] },
+        "expected": {},
+        "tolerance": { "type": "number", "minimum": 0 },
+        "timeoutMs": { "type": "number", "minimum": 1 }
+      }
+    }
+  }
+}

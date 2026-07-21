@@ -1,0 +1,22 @@
+{
+  "sliceId": "weapon",
+  "gate": "manifest",
+  "status": "pass",
+  "roles": [
+    "player-character",
+    "weapon",
+    "reticle",
+    "player-projectile",
+    "enemy",
+    "muzzle-vfx",
+    "hit-vfx",
+    "death-vfx",
+    "combat-sfx"
+  ],
+  "notes": [
+    "Single weapon only.",
+    "Single projectile archetype only.",
+    "Single enemy impact target only.",
+    "No weapon roster, shop, unlock tree, economy, or matchmaking."
+  ]
+}

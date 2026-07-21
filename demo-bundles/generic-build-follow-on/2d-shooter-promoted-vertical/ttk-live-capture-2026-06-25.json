@@ -1,0 +1,569 @@
+{
+  "metric": "ttkMs",
+  "status": "pass",
+  "evidenceKind": "live-unity-capture",
+  "superseded": true,
+  "supersededBy": "demo-bundles/generic-build-follow-on/2d-shooter-promoted-vertical/ttk-shooter-combat-loop-2026-06-25.json",
+  "capturedAt": "2026-06-25T08:30:00.000Z",
+  "project": "GameHub (host-of-convenience; NOT a shipped 2D-shooter build)",
+  "rawCaptureSource": "demo-bundles/generic-build-follow-on/2d-shooter-promoted-vertical/ttk-live-capture-raw-2026-06-25.json",
+  "fixture": {
+    "object": "/ReferenceEnemy",
+    "component": "DogfoodReferenceEnemy",
+    "inputSystem": true,
+    "maxHits": 2,
+    "damageSignal": "DogfoodReferenceEnemy.HitCount",
+    "deathSignal": "DogfoodReferenceEnemy.IsDead",
+    "note": "SUPERSEDED: transient dogfood reference enemy hosted in a GameHub editor session. Hits were the rising edge of an injected fire key (Space), not live projectile collisions; IsDead flipped as the causal consequence of HitCount reaching MaxHits. Replaced by the real shooter-combat-loop capture against the repo-owned shooter-combat-dogfood fixture. Series copied verbatim from the raw bridge transcript."
+  },
+  "capture": {
+    "source": "runtime.capture_input_motion",
+    "captureFps": 60,
+    "durationMs": 1000,
+    "sampleCount": 61,
+    "projectFixedTimestepBeforeMeasurement": 0.02,
+    "measurementFixedTimestep": 0.02,
+    "phases": [
+      {
+        "index": 0,
+        "keys": [],
+        "requestedDurationMs": 200
+      },
+      {
+        "index": 1,
+        "keys": [
+          "Space"
+        ],
+        "requestedDurationMs": 100
+      },
+      {
+        "index": 2,
+        "keys": [],
+        "requestedDurationMs": 200
+      },
+      {
+        "index": 3,
+        "keys": [
+          "Space"
+        ],
+        "requestedDurationMs": 100
+      },
+      {
+        "index": 4,
+        "keys": [],
+        "requestedDurationMs": 400
+      }
+    ],
+    "fieldTimeline": [
+      {
+        "id": "reference-enemy-hit-count",
+        "samples": [
+          {
+            "tMs": 0,
+            "value": 0
+          },
+          {
+            "tMs": 16.67,
+            "value": 0
+          },
+          {
+            "tMs": 33.33,
+            "value": 0
+          },
+          {
+            "tMs": 50,
+            "value": 0
+          },
+          {
+            "tMs": 66.67,
+            "value": 0
+          },
+          {
+            "tMs": 83.33,
+            "value": 0
+          },
+          {
+            "tMs": 100,
+            "value": 0
+          },
+          {
+            "tMs": 116.67,
+            "value": 0
+          },
+          {
+            "tMs": 133.33,
+            "value": 0
+          },
+          {
+            "tMs": 150,
+            "value": 0
+          },
+          {
+            "tMs": 166.67,
+            "value": 0
+          },
+          {
+            "tMs": 183.33,
+            "value": 0
+          },
+          {
+            "tMs": 200,
+            "value": 0
+          },
+          {
+            "tMs": 216.67,
+            "value": 1
+          },
+          {
+            "tMs": 233.33,
+            "value": 1
+          },
+          {
+            "tMs": 250,
+            "value": 1
+          },
+          {
+            "tMs": 266.67,
+            "value": 1
+          },
+          {
+            "tMs": 283.33,
+            "value": 1
+          },
+          {
+            "tMs": 300,
+            "value": 1
+          },
+          {
+            "tMs": 316.67,
+            "value": 1
+          },
+          {
+            "tMs": 333.33,
+            "value": 1
+          },
+          {
+            "tMs": 350,
+            "value": 1
+          },
+          {
+            "tMs": 366.67,
+            "value": 1
+          },
+          {
+            "tMs": 383.33,
+            "value": 1
+          },
+          {
+            "tMs": 400,
+            "value": 1
+          },
+          {
+            "tMs": 416.67,
+            "value": 1
+          },
+          {
+            "tMs": 433.33,
+            "value": 1
+          },
+          {
+            "tMs": 450,
+            "value": 1
+          },
+          {
+            "tMs": 466.67,
+            "value": 1
+          },
+          {
+            "tMs": 483.33,
+            "value": 1
+          },
+          {
+            "tMs": 500,
+            "value": 1
+          },
+          {
+            "tMs": 516.67,
+            "value": 2
+          },
+          {
+            "tMs": 533.33,
+            "value": 2
+          },
+          {
+            "tMs": 550,
+            "value": 2
+          },
+          {
+            "tMs": 566.67,
+            "value": 2
+          },
+          {
+            "tMs": 583.33,
+            "value": 2
+          },
+          {
+            "tMs": 600,
+            "value": 2
+          },
+          {
+            "tMs": 616.67,
+            "value": 2
+          },
+          {
+            "tMs": 633.33,
+            "value": 2
+          },
+          {
+            "tMs": 650,
+            "value": 2
+          },
+          {
+            "tMs": 666.67,
+            "value": 2
+          },
+          {
+            "tMs": 683.33,
+            "value": 2
+          },
+          {
+            "tMs": 700,
+            "value": 2
+          },
+          {
+            "tMs": 716.67,
+            "value": 2
+          },
+          {
+            "tMs": 733.33,
+            "value": 2
+          },
+          {
+            "tMs": 750,
+            "value": 2
+          },
+          {
+            "tMs": 766.67,
+            "value": 2
+          },
+          {
+            "tMs": 783.33,
+            "value": 2
+          },
+          {
+            "tMs": 800,
+            "value": 2
+          },
+          {
+            "tMs": 816.67,
+            "value": 2
+          },
+          {
+            "tMs": 833.33,
+            "value": 2
+          },
+          {
+            "tMs": 850,
+            "value": 2
+          },
+          {
+            "tMs": 866.67,
+            "value": 2
+          },
+          {
+            "tMs": 883.33,
+            "value": 2
+          },
+          {
+            "tMs": 900,
+            "value": 2
+          },
+          {
+            "tMs": 916.67,
+            "value": 2
+          },
+          {
+            "tMs": 933.33,
+            "value": 2
+          },
+          {
+            "tMs": 950,
+            "value": 2
+          },
+          {
+            "tMs": 966.67,
+            "value": 2
+          },
+          {
+            "tMs": 983.33,
+            "value": 2
+          },
+          {
+            "tMs": 1000,
+            "value": 2
+          }
+        ]
+      },
+      {
+        "id": "reference-enemy-is-dead",
+        "samples": [
+          {
+            "tMs": 0,
+            "value": false
+          },
+          {
+            "tMs": 16.67,
+            "value": false
+          },
+          {
+            "tMs": 33.33,
+            "value": false
+          },
+          {
+            "tMs": 50,
+            "value": false
+          },
+          {
+            "tMs": 66.67,
+            "value": false
+          },
+          {
+            "tMs": 83.33,
+            "value": false
+          },
+          {
+            "tMs": 100,
+            "value": false
+          },
+          {
+            "tMs": 116.67,
+            "value": false
+          },
+          {
+            "tMs": 133.33,
+            "value": false
+          },
+          {
+            "tMs": 150,
+            "value": false
+          },
+          {
+            "tMs": 166.67,
+            "value": false
+          },
+          {
+            "tMs": 183.33,
+            "value": false
+          },
+          {
+            "tMs": 200,
+            "value": false
+          },
+          {
+            "tMs": 216.67,
+            "value": false
+          },
+          {
+            "tMs": 233.33,
+            "value": false
+          },
+          {
+            "tMs": 250,
+            "value": false
+          },
+          {
+            "tMs": 266.67,
+            "value": false
+          },
+          {
+            "tMs": 283.33,
+            "value": false
+          },
+          {
+            "tMs": 300,
+            "value": false
+          },
+          {
+            "tMs": 316.67,
+            "value": false
+          },
+          {
+            "tMs": 333.33,
+            "value": false
+          },
+          {
+            "tMs": 350,
+            "value": false
+          },
+          {
+            "tMs": 366.67,
+            "value": false
+          },
+          {
+            "tMs": 383.33,
+            "value": false
+          },
+          {
+            "tMs": 400,
+            "value": false
+          },
+          {
+            "tMs": 416.67,
+            "value": false
+          },
+          {
+            "tMs": 433.33,
+            "value": false
+          },
+          {
+            "tMs": 450,
+            "value": false
+          },
+          {
+            "tMs": 466.67,
+            "value": false
+          },
+          {
+            "tMs": 483.33,
+            "value": false
+          },
+          {
+            "tMs": 500,
+            "value": false
+          },
+          {
+            "tMs": 516.67,
+            "value": true
+          },
+          {
+            "tMs": 533.33,
+            "value": true
+          },
+          {
+            "tMs": 550,
+            "value": true
+          },
+          {
+            "tMs": 566.67,
+            "value": true
+          },
+          {
+            "tMs": 583.33,
+            "value": true
+          },
+          {
+            "tMs": 600,
+            "value": true
+          },
+          {
+            "tMs": 616.67,
+            "value": true
+          },
+          {
+            "tMs": 633.33,
+            "value": true
+          },
+          {
+            "tMs": 650,
+            "value": true
+          },
+          {
+            "tMs": 666.67,
+            "value": true
+          },
+          {
+            "tMs": 683.33,
+            "value": true
+          },
+          {
+            "tMs": 700,
+            "value": true
+          },
+          {
+            "tMs": 716.67,
+            "value": true
+          },
+          {
+            "tMs": 733.33,
+            "value": true
+          },
+          {
+            "tMs": 750,
+            "value": true
+          },
+          {
+            "tMs": 766.67,
+            "value": true
+          },
+          {
+            "tMs": 783.33,
+            "value": true
+          },
+          {
+            "tMs": 800,
+            "value": true
+          },
+          {
+            "tMs": 816.67,
+            "value": true
+          },
+          {
+            "tMs": 833.33,
+            "value": true
+          },
+          {
+            "tMs": 850,
+            "value": true
+          },
+          {
+            "tMs": 866.67,
+            "value": true
+          },
+          {
+            "tMs": 883.33,
+            "value": true
+          },
+          {
+            "tMs": 900,
+            "value": true
+          },
+          {
+            "tMs": 916.67,
+            "value": true
+          },
+          {
+            "tMs": 933.33,
+            "value": true
+          },
+          {
+            "tMs": 950,
+            "value": true
+          },
+          {
+            "tMs": 966.67,
+            "value": true
+          },
+          {
+            "tMs": 983.33,
+            "value": true
+          },
+          {
+            "tMs": 1000,
+            "value": true
+          }
+        ]
+      }
+    ]
+  },
+  "derived": {
+    "metric": "ttkMs",
+    "value": 300,
+    "unit": "ms",
+    "firstHitMs": 216.67,
+    "deathMs": 516.67
+  },
+  "honesty": {
+    "measures": "LIVE first-hit edge to explicit reference-enemy death edge, sampled in Play Mode through the real Loomtide bridge (both rising edges; death causal on HitCount reaching MaxHits)",
+    "doesNotMeasure": "player aim time, damage delivered by live projectile collisions, or a full shooter combat loop in a shipped 2D-shooter build (the host project is a fixture host of convenience)"
+  }
+}

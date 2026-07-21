@@ -1,0 +1,83 @@
+{
+  "schemaVersion": "1",
+  "genre": "2d-shooter",
+  "slices": [
+    {
+      "id": "arena",
+      "title": "Frame the arena (camera, aspect, framing)",
+      "dependsOn": [],
+      "skill": "shooter-arena-design",
+      "feelIntent": "Establish the static one-screen arena frame so every later slice composes inside it.",
+      "acceptance": {
+        "gates": ["framing", "console-clean"]
+      },
+      "state": "pending"
+    },
+    {
+      "id": "controller",
+      "title": "Player controller + move",
+      "dependsOn": ["arena"],
+      "skill": "shooter-controller",
+      "feelIntent": "Responsive top-down/twin-stick movement at the contract moveSpeed; no input lag.",
+      "acceptance": {
+        "gates": ["manifest", "console-clean"]
+      },
+      "state": "pending"
+    },
+    {
+      "id": "weapon",
+      "title": "Weapon core: fire -> projectile + impact",
+      "dependsOn": ["controller"],
+      "skill": "shooter-weapon",
+      "feelIntent": "Firing spawns a visible projectile with a crisp cadence and travel speed (fireIntervalMs / projectileSpeed / fireInputToSpawnLatency are measure-only).",
+      "acceptance": {
+        "gates": ["manifest", "visual-artifacts", "console-clean"]
+      },
+      "state": "pending"
+    },
+    {
+      "id": "enemy",
+      "title": "Enemy + health/damage + death",
+      "dependsOn": ["weapon"],
+      "skill": "shooter-enemy",
+      "feelIntent": "Reference enemy takes damage and dies; first-hit to death (ttkMs) is measure-only.",
+      "acceptance": {
+        "gates": ["manifest", "console-clean"]
+      },
+      "state": "pending"
+    },
+    {
+      "id": "feedback",
+      "title": "Combat feedback (muzzle / hit-spark / shake / hit-stop)",
+      "dependsOn": ["enemy"],
+      "skill": "shooter-juice",
+      "feelIntent": "Fire and impact read clearly through muzzle flash, hit spark, screen shake, and a brief hit-stop.",
+      "acceptance": {
+        "gates": ["visual-artifacts", "console-clean"]
+      },
+      "state": "pending"
+    },
+    {
+      "id": "hud",
+      "title": "HUD (score / ammo / health)",
+      "dependsOn": ["enemy"],
+      "skill": "shooter-hud",
+      "feelIntent": "Score, ammo, and health read clearly and stay inside the safe area.",
+      "acceptance": {
+        "gates": ["manifest", "ui-conformance", "console-clean"]
+      },
+      "state": "pending"
+    },
+    {
+      "id": "end-state",
+      "title": "Defeat / victory end-state",
+      "dependsOn": ["enemy"],
+      "skill": "shooter-end-state",
+      "feelIntent": "Clearing the arena (all enemies defeated) shows a clean win/end state.",
+      "acceptance": {
+        "gates": ["manifest", "console-clean"]
+      },
+      "state": "pending"
+    }
+  ]
+}

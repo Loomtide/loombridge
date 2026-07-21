@@ -1,0 +1,82 @@
+{
+  "schemaVersion": "1",
+  "id": "classic",
+  "title": "Classic Platformer",
+  "summary": "Readable, forgiving feel with a taller, floatier jump, more hang time, and broad landing readability.",
+  "exemplars": ["Super Mario Bros.", "Rayman"],
+  "metrics": {
+    "runSpeed": {
+      "target": 7,
+      "unit": "u/s",
+      "band": { "percent": 20 },
+      "whyItMatters": "A moderate top speed keeps the world readable as the player runs.",
+      "suggestion": "Set max horizontal speed near 7 u/s."
+    },
+    "runAcceleration": {
+      "target": 45,
+      "unit": "u/s^2",
+      "band": { "percent": 30 },
+      "whyItMatters": "A visible ramp-up gives weight without feeling sluggish.",
+      "suggestion": "Lower ground acceleration so the player eases up to speed."
+    },
+    "runDeceleration": {
+      "target": 35,
+      "unit": "u/s^2",
+      "band": { "percent": 30 },
+      "whyItMatters": "A short slide on release reads as classic momentum.",
+      "suggestion": "Reduce ground friction so the player skids slightly to a stop."
+    },
+    "jumpApex": {
+      "target": 3.8,
+      "unit": "u",
+      "band": { "percent": 15 },
+      "whyItMatters": "A taller arc clears generous gaps and feels classic.",
+      "suggestion": "Increase jump impulse so the apex sits near 3.8u."
+    },
+    "timeToApex": {
+      "target": 420,
+      "unit": "ms",
+      "band": { "abs": 80 },
+      "whyItMatters": "More hang time gives the player room to read and adjust mid-air.",
+      "suggestion": "Tune jump impulse and rise gravity so the apex is reached in ~0.42s."
+    },
+    "shortHopApex": {
+      "target": 1.4,
+      "unit": "u",
+      "band": { "percent": 25 },
+      "whyItMatters": "A readable short hop supports variable jump height.",
+      "suggestion": "Apply a gentle jump-cut so a tap peaks near 1.4u."
+    },
+    "fallGravityMultiplier": {
+      "target": 2,
+      "unit": "x",
+      "band": { "abs": 0.5 },
+      "whyItMatters": "The classic 'fast fall after a floaty rise' asymmetry.",
+      "suggestion": "Set fall gravity to ~2x rise gravity."
+    },
+    "coyoteTime": {
+      "target": 0.08,
+      "unit": "s",
+      "band": { "abs": 0.04 },
+      "whyItMatters": "A forgiving ledge window keeps casual play frustration-free.",
+      "suggestion": "Allow a coyote-time window of ~0.08s."
+    },
+    "jumpBuffer": {
+      "target": 0.12,
+      "unit": "s",
+      "band": { "abs": 0.05 },
+      "whyItMatters": "A generous buffer makes consecutive jumps feel reliable.",
+      "suggestion": "Buffer a jump press for ~0.12s before grounding."
+    }
+  },
+  "build": {
+    "fixedTimestep": 0.0166667,
+    "stored": {
+      "jumpCutMultiplier": 0.3
+    }
+  },
+  "mechanisms": {
+    "requires": ["variableJump"],
+    "forbids": ["airDash"]
+  }
+}

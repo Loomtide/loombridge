@@ -1,0 +1,28 @@
+# --- Node / TypeScript ---
+node_modules/
+dist/
+*.tgz
+*.log
+
+# Generated at prepack (never committed)
+mcp-server/bridge/
+mcp-server/agent-surface/
+
+# --- Unity ---
+Library/
+Logs/
+UserSettings/
+Temp/
+obj/
+Build/
+Builds/
+MemoryCaptures/
+crashlytics-build.properties
+
+# --- Loomtide per-project state ---
+.loomtide/
+!templates/create-loomtide-game/.loomtide/
+
+# --- OS ---
+.DS_Store
+Thumbs.db

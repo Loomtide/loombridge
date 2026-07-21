@@ -1,0 +1,11 @@
+{
+  "sliceId": "weapon",
+  "gate": "console-clean",
+  "status": "pass",
+  "errors": [],
+  "warnings": [],
+  "notes": [
+    "This evidence row records the follow-on proof's deterministic gate outcome.",
+    "It is not a production Unity build-verdict.json and must not be treated as one."
+  ]
+}

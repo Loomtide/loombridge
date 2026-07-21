@@ -1,0 +1,83 @@
+{
+  "schemaVersion": "1",
+  "id": "3d-topdown-arena.personas.v1",
+  "genre": "3d-topdown-arena",
+  "telemetrySchemaId": "3d-topdown-arena.telemetry.v1",
+  "personaField": "persona",
+  "implementationContract": "Game-side bot IMPLEMENTATION contract (the bot RUNTIME is C#, heuristic, NOT learned/RL): each scripted persona run MUST emit one standard telemetry summary + event stream conforming to the genre telemetry schema `3d-topdown-arena.telemetry.v1` (Wave-A: genre-packs/3d-topdown-arena/telemetry.json), and MUST stamp the summary's `persona` field with the persona id declared here (already a required, segmentable summary field in the telemetry seed — no schema change needed). Loomtide owns ONLY this contract + the deterministic `buildPersonaCohortReport` analysis; it does not run the bot. A persona's numbers may back a balance claim ONLY when `calibrated: true` with a `calibrationEvidence` pointer — the persona report flags every uncalibrated persona as a caveat about the BOT, never a game-balance claim.",
+  "note": "Persona spread for the 3D top-down extraction-shooter / greed-loop quadrant (dogfood findings; plan §8 'Bots Tune Balance, Humans Judge Fun'). The persona spread — Timid / Balanced / Greedy / Reckless — is more useful than one 'average' bot: it exposes whether the loop supports safe extraction, moderate greed, and over-greed failure. INTENT is stated BEFORE any pass rate. HONEST CALIBRATION POSTURE: every persona here ships `calibrated: false` with `calibrationEvidence: null` — these envelope bands are placeholders DERIVED FROM THE DESIGN DOC, not yet calibrated against a real bot cohort. Calibrate each persona against a fixed run-set (set calibrated:true + a report pointer) BEFORE tuning the game around its outcomes. Envelope bands are bound BY NAME to telemetry summary fields (bankedValue/lostValue means; extraction/death rates over the `outcome` field) so the two schemas stay bound; a band naming a non-existent telemetry field is refused. Rate = fraction of the persona's runs whose `outcome` equals the given value.",
+  "personas": [
+    {
+      "id": "timid",
+      "intent": "Bank early and safely: grab modest loot and extract at the first safe opportunity, disengaging from any enemy contact. Optimizes for a completed extraction over total value. Expected to almost always extract with LOW banked value and low losses.",
+      "dials": [
+        { "name": "lootGreedThreshold", "min": 20, "max": 120, "unit": "pts", "description": "Carried loot value at which the bot stops collecting and heads to extract. Low for Timid — banks small." },
+        { "name": "retreatHealthFraction", "min": 0.55, "max": 0.85, "unit": "fraction", "description": "Health fraction at which the bot breaks off and retreats. High for Timid — retreats early." },
+        { "name": "extractTriggerValue", "min": 20, "max": 100, "unit": "pts", "description": "Banked-value target that triggers an extraction attempt. Low for Timid." },
+        { "name": "engagementRange", "min": 0, "max": 6, "unit": "m", "description": "Distance at which the bot will engage an enemy rather than avoid. Small for Timid — mostly avoids." }
+      ],
+      "envelope": [
+        { "field": "outcome", "stat": "rate", "equals": "extracted", "min": 0.8, "max": 1.0, "description": "High extraction rate — Timid should bank almost every run." },
+        { "field": "outcome", "stat": "rate", "equals": "died", "min": 0.0, "max": 0.15, "description": "Low death rate." },
+        { "field": "bankedValue", "stat": "mean", "min": 0, "max": 45, "unit": "pts", "description": "Low mean banked value — extracts early with modest loot." },
+        { "field": "lostValue", "stat": "mean", "min": 0, "max": 12, "unit": "pts", "description": "Low mean lost value — rarely dies carrying loot." }
+      ],
+      "calibrated": false,
+      "calibrationEvidence": null
+    },
+    {
+      "id": "balanced",
+      "intent": "Weigh greed against risk: take moderate loot, then extract; disengage when health is low but hold position for a high-value pickup. Expected to show a MEANINGFUL success/failure spread — the loop's 'normal' player.",
+      "dials": [
+        { "name": "lootGreedThreshold", "min": 80, "max": 220, "unit": "pts", "description": "Moderate carried-loot threshold before extracting." },
+        { "name": "retreatHealthFraction", "min": 0.35, "max": 0.6, "unit": "fraction", "description": "Moderate retreat threshold." },
+        { "name": "extractTriggerValue", "min": 60, "max": 160, "unit": "pts", "description": "Moderate banked-value extraction trigger." },
+        { "name": "engagementRange", "min": 4, "max": 12, "unit": "m", "description": "Moderate engagement range." }
+      ],
+      "envelope": [
+        { "field": "outcome", "stat": "rate", "equals": "extracted", "min": 0.5, "max": 0.85, "description": "Moderate extraction rate — meaningful spread of success/failure." },
+        { "field": "outcome", "stat": "rate", "equals": "died", "min": 0.1, "max": 0.4, "description": "Moderate death rate." },
+        { "field": "bankedValue", "stat": "mean", "min": 30, "max": 95, "unit": "pts", "description": "Moderate mean banked value." },
+        { "field": "lostValue", "stat": "mean", "min": 5, "max": 45, "unit": "pts", "description": "Some lost value — takes real risk." }
+      ],
+      "calibrated": false,
+      "calibrationEvidence": null
+    },
+    {
+      "id": "greedy",
+      "intent": "Chase high-value loot before extracting, accepting higher exposure for higher upside. Expected to create HIGHER banked upside AND higher death/loss risk than Balanced — over-greed should be punished by the economy, not by confusion.",
+      "dials": [
+        { "name": "lootGreedThreshold", "min": 180, "max": 400, "unit": "pts", "description": "High carried-loot threshold — keeps collecting." },
+        { "name": "retreatHealthFraction", "min": 0.2, "max": 0.4, "unit": "fraction", "description": "Low retreat threshold — pushes deeper." },
+        { "name": "extractTriggerValue", "min": 140, "max": 320, "unit": "pts", "description": "High banked-value extraction trigger — greedy for a big bank." },
+        { "name": "engagementRange", "min": 8, "max": 20, "unit": "m", "description": "Wider engagement range — fights for loot." }
+      ],
+      "envelope": [
+        { "field": "outcome", "stat": "rate", "equals": "extracted", "min": 0.3, "max": 0.7, "description": "Lower extraction rate than Balanced — over-commits." },
+        { "field": "outcome", "stat": "rate", "equals": "died", "min": 0.25, "max": 0.6, "description": "Higher death rate — the cost of greed." },
+        { "field": "bankedValue", "stat": "mean", "min": 60, "max": 150, "unit": "pts", "description": "High mean banked value WHEN it extracts — the upside." },
+        { "field": "lostValue", "stat": "mean", "min": 20, "max": 90, "unit": "pts", "description": "High mean lost value — dies carrying more." }
+      ],
+      "calibrated": false,
+      "calibrationEvidence": null
+    },
+    {
+      "id": "reckless",
+      "intent": "Over-commit to loot and combat with little regard for extraction timing or health. Expected to USUALLY FAIL for LEGIBLE reasons (dies deep, carrying value it never banked) — a broken-over-committer used to probe whether failure is fair, NOT a reason to nerf the game.",
+      "dials": [
+        { "name": "lootGreedThreshold", "min": 350, "max": 600, "unit": "pts", "description": "Very high — almost never stops for extraction." },
+        { "name": "retreatHealthFraction", "min": 0.0, "max": 0.2, "unit": "fraction", "description": "Barely retreats." },
+        { "name": "extractTriggerValue", "min": 300, "max": 600, "unit": "pts", "description": "Very high extraction trigger — rarely reached before death." },
+        { "name": "engagementRange", "min": 16, "max": 30, "unit": "m", "description": "Engages everything." }
+      ],
+      "envelope": [
+        { "field": "outcome", "stat": "rate", "equals": "extracted", "min": 0.0, "max": 0.35, "description": "Low extraction rate — usually dies first." },
+        { "field": "outcome", "stat": "rate", "equals": "died", "min": 0.6, "max": 1.0, "description": "High death rate — over-commits to failure." },
+        { "field": "bankedValue", "stat": "mean", "min": 0, "max": 45, "unit": "pts", "description": "Low mean banked value — rarely banks." },
+        { "field": "lostValue", "stat": "mean", "min": 50, "max": 250, "unit": "pts", "description": "High mean lost value — dies carrying loot it never secured." }
+      ],
+      "calibrated": false,
+      "calibrationEvidence": null
+    }
+  ]
+}

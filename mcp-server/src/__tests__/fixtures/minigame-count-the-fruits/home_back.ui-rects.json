@@ -1,0 +1,15 @@
+{
+  "state": "home_back",
+  "source": "unity_ui_get_screen_rects (#55). origin bottom-left; screenRect px, viewportRect normalized",
+  "viewport": { "width": 1280, "height": 720, "aspect": 1.77777779 },
+  "contractRequiredInFrame_home_back": ["startButton"],
+  "objects": [
+    { "id": "startButton", "path": "/HUD/StartScreen/StartButton", "role": "image", "active": true, "isVisible": true, "visibilityReason": null, "raycastTarget": true, "spriteName": "button_peach", "screenRect": {"x":463.311,"y":95.364,"width":353.378,"height":139.273}, "viewportRect": {"x":0.36196,"y":0.13245,"width":0.27608,"height":0.19343}, "isFullyVisible": true, "centerXFraction": 0.5, "centerYFraction": 0.22917 },
+    { "id": "homeButton", "path": "/HUD/HomeButton", "role": "image", "active": false, "isVisible": false, "visibilityReason": "inactive", "screenRect": {"x":28,"y":28,"width":142,"height":108} },
+    { "id": "endSummary", "path": "/HUD/EndSummary", "role": "image", "active": false, "isVisible": false, "visibilityReason": "inactive", "screenRect": {"x":0,"y":0,"width":1280,"height":720} },
+    { "id": "answerButton0", "path": "/HUD/AnswerButton0", "role": "image", "active": false, "isVisible": false, "visibilityReason": "inactive", "screenRect": {"x":371,"y":26.582,"width":158,"height":140} },
+    { "id": "questionText", "path": "/HUD/Banner/QuestionText", "role": "text", "active": false, "isVisible": false, "visibilityReason": "inactive", "text": "How many <color=#ff5d72>apples</color>?", "fontSize": 42, "screenRect": {"x":476,"y":597,"width":420,"height":84} }
+  ],
+  "requiredInFrame_verdict": "PASS — startButton active+isVisible+isFullyVisible; gameplay + end summary all inactive (field cleared). Home returned to the Start screen.",
+  "note": "Visually identical to 'start' (correct: Home -> Start screen). StartButton rect differs slightly from start.png because of its idle pulse animation (scale oscillation), not a layout change."
+}

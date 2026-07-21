@@ -1,0 +1,27 @@
+{
+  "schemaVersion": "1",
+  "packId": "quaternius.shooter-3d.toon-shooter-kit",
+  "name": "Toon Shooter Game Kit",
+  "description": "Example pack manifest for the pack-ingest pipeline (Slice 1). Filenames here are illustrative; the real ones + sha256/sizeBytes are filled in when the pack is downloaded at apply time.",
+  "provider": { "name": "Quaternius", "url": "https://quaternius.com", "type": "http" },
+  "license": {
+    "name": "Creative Commons Zero v1.0 Universal",
+    "spdx": "CC0-1.0",
+    "url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "requiresAttribution": false
+  },
+  "source": {
+    "title": "Toon Shooter Game Kit",
+    "url": "https://quaternius.com/packs/toonshootergamekit.html",
+    "author": "Quaternius",
+    "verified": true
+  },
+  "cover": { "file": "preview.png" },
+  "assets": [
+    { "file": "Character_Soldier.glb", "kind": "model", "primitive": "character", "tags": ["character", "soldier", "player"] },
+    { "file": "Character_Enemy.glb", "kind": "model", "primitive": "character", "tags": ["character", "enemy"] },
+    { "file": "Weapon_Blaster.glb", "kind": "model", "primitive": "weapon", "tags": ["weapon", "blaster", "gun"] },
+    { "file": "Weapon_Rifle.glb", "kind": "model", "primitive": "weapon", "tags": ["weapon", "rifle", "gun"] },
+    { "file": "Prop_Crate.glb", "kind": "model", "primitive": "prop", "tags": ["prop", "cover", "crate"] }
+  ]
+}

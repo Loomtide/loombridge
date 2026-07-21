@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "loomtide": {
+      "type": "stdio",
+      "command": "loomtide-mcp",
+      "args": []
+    }
+  }
+}

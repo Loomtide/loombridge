@@ -1,0 +1,105 @@
+# Loombridge public-repo Unity EditMode tests (GameCI).
+#
+# AUTHORED in the monorepo at scripts/oss/workflows/unity-editmode.yml and
+# installed into .github/workflows/ by scripts/oss/export-loombridge.mjs.
+# Adapted from the monorepo workflow of the same name; the has-license gating is
+# KEPT so forks (and the repo itself, until UNITY_LICENSE is configured) skip
+# gracefully instead of failing. Product-name strings are written PRE-rename —
+# scripts/oss/rename-loombridge.mjs rewrites them with the rest of the tree.
+name: Unity EditMode Tests
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "packages/**"
+      - "unity-projects/loomtide-dev/**"
+      - ".github/workflows/unity-editmode.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "packages/**"
+      - "unity-projects/loomtide-dev/**"
+      - ".github/workflows/unity-editmode.yml"
+
+jobs:
+  detect-tests:
+    runs-on: ubuntu-latest
+    outputs:
+      has_tests: ${{ steps.detect.outputs.has_tests }}
+      has_license: ${{ steps.license.outputs.has_license }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Detect Unity test files
+        id: detect
+        run: |
+          if [ -d packages/com.loomtide.unitybridge/Tests/Editor ] && find packages/com.loomtide.unitybridge/Tests/Editor -type f \( -name '*Test.cs' -o -name '*Tests.cs' \) | grep -q .; then
+            echo "has_tests=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_tests=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # The `secrets` context is NOT available in job-level `if:` — referencing it
+      # there is a workflow-file validation error (every run fails at 0s with no
+      # jobs). Check the secret in a STEP and export the answer as a job output.
+      - name: Detect Unity license secret
+        id: license
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+        run: |
+          if [ -n "$UNITY_LICENSE" ]; then
+            echo "has_license=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_license=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  run-editmode-tests:
+    needs: detect-tests
+    if: ${{ needs.detect-tests.outputs.has_tests == 'true' && needs.detect-tests.outputs.has_license == 'true' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - unity_version: 6000.3.9f1
+            label: "6000.3-primary"
+          - unity_version: 2022.3.0f1
+            label: "2022.3-compat"
+    runs-on: ubuntu-latest
+    name: Unity EditMode (${{ matrix.label }})
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run Unity EditMode tests
+        uses: game-ci/unity-test-runner@v4
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+        with:
+          projectPath: unity-projects/loomtide-dev
+          unityVersion: ${{ matrix.unity_version }}
+          testMode: EditMode
+          artifactsPath: unity-test-results/${{ matrix.label }}
+
+      - name: Upload Unity test artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unity-editmode-results-${{ matrix.label }}
+          path: unity-test-results/${{ matrix.label }}
+
+  skipped:
+    needs: detect-tests
+    if: ${{ needs.detect-tests.outputs.has_tests != 'true' || needs.detect-tests.outputs.has_license != 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Explain why Unity tests were skipped
+        run: |
+          if [ "${{ needs.detect-tests.outputs.has_tests }}" != "true" ]; then
+            echo "Skipped: no Unity test files found under packages/com.loomtide.unitybridge/Tests/Editor."
+          fi
+          if [ "${{ needs.detect-tests.outputs.has_license }}" != "true" ]; then
+            echo "Skipped: UNITY_LICENSE secret is not configured (forks and fresh clones skip gracefully)."
+          fi

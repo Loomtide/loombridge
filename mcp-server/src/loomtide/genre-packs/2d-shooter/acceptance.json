@@ -1,0 +1,131 @@
+{
+  "schemaVersion": "1",
+  "game": "2d-shooter-reference",
+  "source": {
+    "note": "Minimal genre-neutral reference acceptance template for the 2d-shooter pack (genre-pack decoupling, Phase 2). It exercises the required, genre-neutral contract sections (fonts/palette/hud/framing/feel/juice/manifest/win) for a top-down/twin-stick shooter and deliberately OMITS the optional platformer-only sections (platformer/reachability/placement/render/props/physics). The shooter feel section carries the measure-only shooter metrics shipped by the shooter measurement loop; it is a seed for `plan --genre 2d-shooter`, not a hand-tuned shipping contract."
+  },
+
+  "fonts": {
+    "global": {
+      "family": "Press Start 2P",
+      "note": "HUD font; pixel display face."
+    },
+    "byRole": {
+      "score": { "family": "Press Start 2P" },
+      "ammo": { "family": "Press Start 2P" },
+      "health": { "family": "Press Start 2P" }
+    }
+  },
+
+  "palette": {
+    "entries": [
+      { "hex": "#0d1015", "roles": ["background"], "name": "ink" },
+      { "hex": "#4dd0e1", "roles": ["hud-accent"], "name": "cyan" },
+      { "hex": "#ff4d8d", "roles": ["juice", "health"], "name": "magenta" },
+      { "hex": "#ffd166", "roles": ["score", "ammo"], "name": "gold" },
+      { "hex": "#ffffff", "roles": ["reticle"], "name": "hud-white" }
+    ]
+  },
+
+  "hud": {
+    "elements": [
+      {
+        "id": "score",
+        "role": "Kill / wave score",
+        "anchor": "top-left",
+        "insetPx": 24,
+        "colorRole": "score",
+        "font": "Press Start 2P",
+        "format": "SCORE NNNN",
+        "required": true,
+        "note": "Top-left run score."
+      },
+      {
+        "id": "ammo",
+        "role": "Ammo counter",
+        "anchor": "top-center",
+        "colorRole": "ammo",
+        "font": "Press Start 2P",
+        "format": "NN / NN",
+        "required": true,
+        "note": "Current / reserve ammo."
+      },
+      {
+        "id": "health",
+        "role": "Health row",
+        "anchor": "top-right",
+        "insetPx": 24,
+        "colorRole": "health",
+        "font": "Press Start 2P",
+        "format": "3 hearts (empty pip on loss)",
+        "required": true,
+        "note": "Max 3 hearts; lost slot stays as an empty pip so layout never shifts."
+      }
+    ]
+  },
+
+  "framing": {
+    "aspect": { "w": 16, "h": 9 },
+    "nativeResolution": { "w": 256, "h": 144 },
+    "pixelScale": 5,
+    "camera": {
+      "worldPosition": { "x": 8, "y": 4.5, "z": -10 },
+      "orthographicSize": 4.5,
+      "origin": "bottom-left",
+      "backgroundColorHex": "#0d1015",
+      "note": "Static one-screen arena framing (16:9, 256x144 native @ 5x). The arena is read in one screen; no scrolling camera in the reference slice."
+    },
+    "cameraMode": "static",
+    "playerAnchor": {
+      "centerXFraction": 0.5,
+      "tolerance": 0.1,
+      "note": "Static arena camera — the player anchor is informational (centered), not a per-frame follow target."
+    },
+    "verticalPan": false,
+    "note": "16x9 arena visible, 256x144 native @ 5x = 1280x720."
+  },
+
+  "feel": {
+    "moveSpeed": { "target": 7, "unit": "u/s", "band": { "percent": 5 }, "note": "player run speed" },
+    "fireIntervalMs": { "target": 133, "unit": "ms", "band": { "percent": 10 }, "note": "cadence between shots; measure-only" },
+    "fireInputToSpawnLatency": { "target": 50, "unit": "ms", "band": { "percent": 20 }, "note": "fire input onset to projectile spawn; measure-only (aspirational target, not gate-enforced)" },
+    "projectileSpeed": { "target": 18, "unit": "u/s", "band": { "percent": 10 }, "note": "bullet travel speed; measure-only" },
+    "ttkMs": { "target": 300, "unit": "ms", "band": { "percent": 30 }, "note": "first-hit to reference-enemy death; measure-only" }
+  },
+
+  "juice": {
+    "hitStop": {
+      "ms": 80,
+      "frames": 5,
+      "playerFlashWhite": false,
+      "note": "Brief impact freeze on enemy hit/kill."
+    },
+    "screenShake": {
+      "amplitudePx": 4,
+      "decayMs": 180,
+      "trigger": "fire-and-hit",
+      "note": "Trauma model: small kick on fire and a larger one on hit/kill."
+    }
+  },
+
+  "manifest": {
+    "matching": "regex",
+    "caseSensitive": false,
+    "extrasAreFailure": false,
+    "elements": [
+      { "nameRegex": "player|hero|gunner", "type": "GameObject", "primitive": "player", "required": true },
+      { "nameRegex": "enemy|mob|drone|grunt", "type": "GameObject", "primitive": "enemy", "minCount": 1, "required": true },
+      { "nameRegex": "projectile|bullet|shot", "type": "GameObject", "primitive": "projectile", "required": true },
+      { "nameRegex": "weapon|gun|spawner", "type": "GameObject", "primitive": "weapon", "required": true },
+      { "nameRegex": "GameManager", "type": "GameObject", "required": true },
+      { "nameRegex": "SfxPlayer", "type": "GameObject", "primitive": "audio", "required": true }
+    ]
+  },
+
+  "win": {
+    "rule": "all-enemies-defeated",
+    "endStateMode": "modal",
+    "restartAction": "R",
+    "note": "Win when every reference enemy in the arena is defeated; reaching a zero-enemy state flips GameManager.isWin."
+  }
+}

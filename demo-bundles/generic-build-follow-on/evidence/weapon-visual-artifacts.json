@@ -1,0 +1,19 @@
+{
+  "sliceId": "weapon",
+  "gate": "visual-artifacts",
+  "status": "pass",
+  "observedFeedback": [
+    "muzzle flash on fire",
+    "projectile trail",
+    "impact spark on enemy contact",
+    "enemy death burst",
+    "combat SFX hook"
+  ],
+  "notClaimed": [
+    "fire interval measurement",
+    "projectile speed measurement",
+    "input-to-spawn latency measurement",
+    "TTK measurement",
+    "aiming fairness sign-off"
+  ]
+}

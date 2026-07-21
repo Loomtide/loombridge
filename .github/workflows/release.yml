@@ -1,0 +1,107 @@
+# Loombridge public-repo release pipeline.
+#
+# AUTHORED in the monorepo at scripts/oss/workflows/release.yml and installed
+# into .github/workflows/ by scripts/oss/export-loombridge.mjs. Product-name
+# strings are written PRE-rename — scripts/oss/rename-loombridge.mjs rewrites
+# them (e.g. loomtide-pack-bridge.sh -> loombridge-pack-bridge.sh,
+# loomtide-cli-<v>.tgz -> loombridge-cli-<v>.tgz) with the rest of the tree.
+#
+# On tag v*:
+#   build + unit-test -> pack the bridge UPM tarball + `npm pack` the CLI ->
+#   GitHub Release carrying both tarballs + install.sh -> npm publish, gated on
+#   the NPM_TOKEN secret being configured (skip-with-notice when absent).
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: mcp-server/package-lock.json
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Install dependencies
+        working-directory: mcp-server
+        run: npm ci
+
+      - name: Tag must match the CLI package version
+        working-directory: mcp-server
+        run: |
+          PKG_V="$(node -p "require('./package.json').version")"
+          TAG_V="${GITHUB_REF_NAME#v}"
+          if [ "$PKG_V" != "$TAG_V" ]; then
+            echo "Tag $GITHUB_REF_NAME does not match mcp-server/package.json version $PKG_V" >&2
+            exit 1
+          fi
+
+      - name: Build
+        working-directory: mcp-server
+        run: npm run build
+
+      - name: Unit tests
+        working-directory: mcp-server
+        run: npm run test:unit
+
+      - name: Pack bridge UPM tarball
+        run: bash scripts/loomtide-pack-bridge.sh --out-dir release-assets
+
+      # `npm pack` runs prepack (build + bundle the bridge tarball + agent
+      # surface), so the published CLI carries everything install-bridge and
+      # install-agent need. The pack output's filename derives from the npm
+      # scope, so it is copied to the stable installer-facing asset name.
+      - name: Pack CLI tarball
+        working-directory: mcp-server
+        run: |
+          rm -f ./*.tgz
+          npm pack
+          TAG_V="${GITHUB_REF_NAME#v}"
+          PACKED="$(ls ./*.tgz | head -1)"
+          cp "$PACKED" "../release-assets/loomtide-cli-${TAG_V}.tgz"
+          ls -l ../release-assets
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp scripts/install.sh release-assets/install.sh
+          gh release create "$GITHUB_REF_NAME" \
+            --title "$GITHUB_REF_NAME" \
+            --generate-notes \
+            release-assets/*
+
+      # The `secrets` context is not available in job/step `if:` on all paths —
+      # detect the token in a step and gate on its output.
+      - name: Detect NPM_TOKEN
+        id: npm
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [ -n "$NPM_TOKEN" ]; then
+            echo "has_token=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_token=false" >> "$GITHUB_OUTPUT"
+            echo "NOTICE: NPM_TOKEN is not configured — skipping npm publish." \
+                 "The GitHub Release assets above are still the primary install channel (install.sh)."
+          fi
+
+      - name: npm publish
+        if: steps.npm.outputs.has_token == 'true'
+        working-directory: mcp-server
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --access public

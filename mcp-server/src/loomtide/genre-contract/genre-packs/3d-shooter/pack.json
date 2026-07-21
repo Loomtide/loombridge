@@ -1,0 +1,7 @@
+{
+  "genreId": "3d-shooter",
+  "subGenres": ["first-person", "third-person", "arena"],
+  "genreClass": "twitch",
+  "requires": [],
+  "slots": ["hint-card"]
+}

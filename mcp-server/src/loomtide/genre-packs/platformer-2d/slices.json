@@ -1,0 +1,161 @@
+{
+  "schemaVersion": "1",
+  "genre": "platformer-2d",
+  "slices": [
+    {
+      "id": "framing",
+      "title": "Frame the level (camera, aspect, player anchor)",
+      "dependsOn": [],
+      "skill": "platformer-level-design",
+      "feelIntent": "Establish the static 16:9 frame and player anchor so every later slice composes inside it.",
+      "acceptance": {
+        "gates": [
+          "framing",
+          "console-clean"
+        ]
+      },
+      "state": "pending"
+    },
+    {
+      "id": "ground-tiling",
+      "title": "Ground + platform tiling",
+      "dependsOn": [
+        "framing"
+      ],
+      "skill": "platformer-level-design",
+      "feelIntent": "Solid, correctly-capped tiles with colliders that match the visible surface \u2014 no double-cap bands.",
+      "acceptance": {
+        "gates": [
+          "platform-tiles",
+          "tile-render",
+          "placement",
+          "console-clean"
+        ]
+      },
+      "state": "pending"
+    },
+    {
+      "id": "player-feel",
+      "title": "Player movement + feel",
+      "dependsOn": [
+        "ground-tiling"
+      ],
+      "skill": "unity-2d-game",
+      "feelIntent": "Responsive run/jump with apex/coyote/buffer in-band; the character feels good to move.",
+      "acceptance": {
+        "gates": [
+          "feel",
+          "feel-provenance",
+          "physics-timestep",
+          "console-clean"
+        ]
+      },
+      "state": "pending"
+    },
+    {
+      "id": "parallax",
+      "title": "Parallax background",
+      "dependsOn": [
+        "framing"
+      ],
+      "skill": "parallax-2d",
+      "feelIntent": "Seamless, edge-safe multi-layer parallax that shifts with the player and never exposes a gap.",
+      "acceptance": {
+        "gates": [
+          "coverage",
+          "parallax-motion",
+          "render-frame",
+          "visual-artifacts",
+          "console-clean"
+        ]
+      },
+      "state": "pending"
+    },
+    {
+      "id": "collectibles",
+      "title": "Collectibles on the jump arc",
+      "dependsOn": [
+        "ground-tiling",
+        "player-feel"
+      ],
+      "skill": "platformer-level-design",
+      "feelIntent": "Reachable, rewarding pickups placed along the natural movement arc.",
+      "acceptance": {
+        "gates": [
+          "reachability",
+          "placement",
+          "console-clean"
+        ]
+      },
+      "state": "pending"
+    },
+    {
+      "id": "hazards",
+      "title": "Hazards",
+      "dependsOn": [
+        "ground-tiling",
+        "player-feel"
+      ],
+      "skill": "platformer-level-design",
+      "feelIntent": "Readable threats with a clear purpose, placed to challenge without feeling unfair.",
+      "acceptance": {
+        "gates": [
+          "prop-purpose",
+          "placement",
+          "console-clean"
+        ]
+      },
+      "state": "pending"
+    },
+    {
+      "id": "hud",
+      "title": "HUD",
+      "dependsOn": [
+        "player-feel"
+      ],
+      "skill": "game-polish-2d",
+      "feelIntent": "Clean, anchored HUD elements that read at a glance and match the contract.",
+      "acceptance": {
+        "gates": [
+          "ui-conformance",
+          "console-clean"
+        ]
+      },
+      "state": "pending"
+    },
+    {
+      "id": "juice",
+      "title": "Juice (dust, hit-stop, shake)",
+      "dependsOn": [
+        "player-feel",
+        "hazards"
+      ],
+      "skill": "game-polish-2d",
+      "feelIntent": "Tactile feedback \u2014 landing dust, hit-stop, screen shake \u2014 that sells impact without artifacts.",
+      "acceptance": {
+        "gates": [
+          "visual-artifacts",
+          "console-clean"
+        ]
+      },
+      "state": "pending"
+    },
+    {
+      "id": "end-state",
+      "title": "End-state (win/lose)",
+      "dependsOn": [
+        "collectibles"
+      ],
+      "skill": "game-polish-2d",
+      "feelIntent": "A satisfying win/lose moment with a conformant end-state UI that completes the loop.",
+      "acceptance": {
+        "gates": [
+          "ui-conformance",
+          "playability",
+          "console-clean"
+        ]
+      },
+      "state": "pending"
+    }
+  ]
+}

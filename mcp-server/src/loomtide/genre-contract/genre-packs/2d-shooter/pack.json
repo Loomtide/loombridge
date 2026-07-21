@@ -1,0 +1,7 @@
+{
+  "genreId": "2d-shooter",
+  "subGenres": ["top-down", "twin-stick", "side-scroll"],
+  "genreClass": "twitch",
+  "requires": [],
+  "slots": ["hint-card"]
+}

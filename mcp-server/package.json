@@ -1,0 +1,63 @@
+{
+  "name": "@loomtide/cli",
+  "version": "0.2.0",
+  "description": "MCP server + CLI for Loomtide — game-feel engineering for AI-built games",
+  "type": "module",
+  "main": "dist/index.js",
+  "license": "Apache-2.0",
+  "homepage": "https://loomtide.ai",
+  "publishConfig": {
+    "access": "restricted"
+  },
+  "bin": {
+    "loomtide": "dist/cli.js",
+    "loomtide-mcp-server": "dist/cli.js",
+    "loomtide-mcp": "dist/index.js",
+    "loomtide-run-gates": "dist/verification/run-gates.js",
+    "loomtide-capture-runner": "dist/verification/capture-runner.js",
+    "loomtide-analyze-frames": "dist/verification/analyze-frames.js"
+  },
+  "scripts": {
+    "clean": "rm -rf dist",
+    "build": "rm -rf dist && tsc && (node ../scripts/write-build-info.mjs || true)",
+    "typecheck": "tsc --noEmit",
+    "test:unit": "node --test dist/__tests__/*.test.js",
+    "test:integration": "node --test dist/__tests__/integration/*.test.js",
+    "test": "npm run build && npm run test:unit",
+    "test:all": "npm run build && npm run test:unit && npm run test:integration",
+    "ci": "npm run typecheck && npm test",
+    "check:unity-meta": "bash ../scripts/check-unity-meta.sh",
+    "smoke:phase3:connected": "node ../scripts/phase3-mcp-smoke.mjs --expect-connected",
+    "smoke:phase3:disconnected": "node ../scripts/phase3-mcp-smoke.mjs --expect-disconnected",
+    "verify:phase3:baseline": "npm run test:all && npm run smoke:phase3:disconnected && npm run check:unity-meta",
+    "asset:handoff:check": "node dist/asset-layer/handoff-consistency.js",
+    "spike:ws": "tsx src/spike-ws-client.ts",
+    "docs:tools": "tsx src/tools-doc-gen.ts",
+    "verify:gates": "node dist/verification/run-gates.js",
+    "verify:capture-runner": "node dist/verification/capture-runner.js",
+    "verify:analyze-frames": "node dist/verification/analyze-frames.js",
+    "prepack": "npm run build && bash ../scripts/loomtide-pack-bridge.sh --out-dir bridge && node ../scripts/build-agent-surface.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.1",
+    "pngjs": "^7.0.0",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.4",
+    "@types/pngjs": "^6.0.5",
+    "@types/ws": "^8.5.14",
+    "tsx": "^4.19.3",
+    "typescript": "^5.7.3"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "files": [
+    "dist",
+    "src",
+    "bridge",
+    "agent-surface",
+    "NOTICE"
+  ]
+}

@@ -1,0 +1,149 @@
+{
+  "schemaVersion": "1",
+  "game": "3d-topdown-arena-reference",
+  "source": {
+    "note": "Genre-neutral reference acceptance template for the 3d-topdown-arena (twin-stick) SEED — the FIRST contract for the empty 3D top-down / twin-stick quadrant (dogfood findings RCL-F01/RCL-F02). The existing 3d-shooter pack hard-codes an OVER-SHOULDER THIRD-PERSON rig (framing.cameraMode: 'third-person-follow', projection: perspective, FOV 60, 'player reads near screen-center'); a top-down extraction-shooter / twin-stick arena is framed from ABOVE, looking DOWN, with the play space reading top-down and the camera leading the aim/movement vector — NOT the player parked at screen-center. This contract NAMES that top-down framing so the quadrant is no longer empty. It exercises the same required, genre-neutral contract sections (fonts/palette/hud/framing/feel/manifest/win) as 3d-shooter and validates against the SAME validateAcceptanceContract; it deliberately OMITS the platformer-only optional sections. The feel section carries the core measure-only metrics that bind to implemented calculators today (fireIntervalMs, ttkMs, cameraFollowDamping). The camera FEEL dial — cameraFollowDamping (camera half-life + look-ahead) — binds to deriveCameraFollowDamping, the calculator the dogfood 'camera half-life 0.10-0.18s, look-ahead 2-4m' spec needed and nothing could measure before. This is a seed for `plan --genre 3d-topdown-arena`, not a hand-tuned shipping contract."
+  },
+
+  "fonts": {
+    "global": {
+      "family": "Press Start 2P",
+      "note": "HUD font; pixel display face."
+    },
+    "byRole": {
+      "ammo": { "family": "Press Start 2P" },
+      "health": { "family": "Press Start 2P" },
+      "score": { "family": "Press Start 2P" }
+    }
+  },
+
+  "palette": {
+    "entries": [
+      { "hex": "#0d1015", "roles": ["background"], "name": "ink" },
+      { "hex": "#4dd0e1", "roles": ["hud-accent"], "name": "cyan" },
+      { "hex": "#ff4d8d", "roles": ["juice", "health"], "name": "magenta" },
+      { "hex": "#ffd166", "roles": ["score", "ammo"], "name": "gold" },
+      { "hex": "#ffffff", "roles": ["reticle"], "name": "hud-white" }
+    ]
+  },
+
+  "hud": {
+    "elements": [
+      {
+        "id": "score",
+        "role": "Kill score",
+        "anchor": "top-left",
+        "insetPx": 24,
+        "colorRole": "score",
+        "font": "Press Start 2P",
+        "format": "SCORE NNNN",
+        "required": true,
+        "note": "Top-left run score."
+      },
+      {
+        "id": "ammo",
+        "role": "Ammo counter",
+        "anchor": "bottom-right",
+        "insetPx": 24,
+        "colorRole": "ammo",
+        "font": "Press Start 2P",
+        "format": "NN / NN",
+        "required": true,
+        "note": "Current / reserve ammo."
+      },
+      {
+        "id": "health",
+        "role": "Health row",
+        "anchor": "bottom-left",
+        "insetPx": 24,
+        "colorRole": "health",
+        "font": "Press Start 2P",
+        "format": "3 hearts (empty pip on loss)",
+        "required": true,
+        "note": "Max 3 hearts; lost slot stays an empty pip so layout never shifts."
+      }
+    ]
+  },
+
+  "framing": {
+    "aspect": { "w": 16, "h": 9 },
+    "cameraMode": "top-down-follow",
+    "camera": {
+      "projection": "orthographic-or-high-angle",
+      "pitchDownDeg": { "min": 55, "max": 90 },
+      "orthographicSize": 9,
+      "perspectiveFallback": {
+        "fieldOfViewDeg": 40,
+        "note": "If a perspective rig is used instead of orthographic, it is a HIGH, steeply-down-tilted rig (pitch in pitchDownDeg, narrow FOV), NOT a 60 FOV over-shoulder camera. The play space must still read top-down."
+      },
+      "groundPlaneY": 0,
+      "visibleGroundWidthM": {
+        "min": 24,
+        "max": 32,
+        "note": "MACHINE-CHECKABLE FRAME SCALE: the visible ground-plane width the camera may show, in world metres (measured at frame centre). Exemplar band = the dogfood truth-sheet's ~24-32m arena read. The framing gate computes the width from the CAPTURED camera evidence — for an orthographic rig width = 2·orthographicSize·aspect (here 2·9·16/9 = 32m, at the band edge); for a perspective rig width = 2·(h/sin(pitch))·aspect·tan(FOV/2) from the captured height/pitch/FOV. This is the gate that would have caught the dogfood project's ~54m over-wide frame (character-as-a-speck) that sat unnoticed until a human eyeballed it. When this band is declared, a missing captured camera height/pitch/FOV is a REFUSAL, never a skipped check."
+      },
+      "nearClip": 0.3,
+      "farClip": 1000,
+      "backgroundColorHex": "#0d1015",
+      "note": "Top-down / high-angle rig framing a bounded arena from ABOVE looking DOWN. Either orthographic (a flat top-down read) or a high, steeply-pitched perspective rig (pitchDownDeg 55-90, where 90 is straight down). This is the empty 3D top-down / twin-stick quadrant — explicitly NOT the 3d-shooter pack's over-shoulder third-person rig (perspective, FOV 60, player near screen-center)."
+    },
+    "perspective": "top-down",
+    "playerAnchor": {
+      "centerXFraction": 0.5,
+      "tolerance": 0.35,
+      "note": "TWIN-STICK look-ahead framing: the player is NOT parked at screen-center. The camera leads the aim/movement vector, so the player rides BEHIND the look-ahead point and the loose tolerance reflects that lead. Informational; the per-frame follow behavior is measured by cameraFollowDamping, not asserted here."
+    },
+    "lookAhead": {
+      "bias": "aim-and-movement-vector",
+      "targetOffsetMeters": { "min": 2, "max": 4 },
+      "note": "The camera biases toward the aim/movement vector by ~2-4m so the player sees where they are heading/aiming. Measured by deriveCameraFollowDamping.lookAheadOffset; this is design intent, not a gate band."
+    },
+    "verticalPan": false,
+    "note": "16:9 top-down arena. The play space reads top-down (high-angle / orthographic), NOT an over-shoulder third-person frame. No 2D pixel-frame claims (no native-resolution / pixel-scale)."
+  },
+
+  "feel": {
+    "fireIntervalMs": { "target": 133, "unit": "ms", "band": { "percent": 10 }, "note": "cadence between shots; measure-only, binds to the fireIntervalMs calculator (dimension-agnostic counter edges)" },
+    "ttkMs": { "target": 300, "unit": "ms", "band": { "percent": 30 }, "note": "first-hit to reference-enemy death; measure-only, binds to the ttkMs calculator (hit/death edges)" },
+    "extra": {
+      "cameraFollowDampingHalfLifeMs": { "target": 140, "unit": "ms", "band": { "percent": 30 }, "note": "twin-stick camera CATCH-UP half-life (time to close half the gap to the follow target). dogfood spec 0.10-0.18s. Measure-only, binds to deriveCameraFollowDamping.halfLifeMs; honest-or-omit (refuses when the camera does not follow). NOT yet a gate-enforced band." },
+      "cameraLookAheadMeters": { "target": 3, "unit": "u", "band": { "percent": 35 }, "note": "twin-stick camera steady look-ahead lead toward the movement/aim vector. dogfood spec 2-4m. Measure-only, binds to deriveCameraFollowDamping.lookAheadOffset. NOT yet a gate-enforced band." },
+      "wallSlideTangentRatio": { "target": 1, "unit": "ratio", "band": { "abs": 0.4 }, "note": "WALL-SLIDE FEEL GATE (dogfood learnings §2 / backlog High #2): the fraction of the diagonal input's TANGENTIAL speed the character preserves while PINNED against a wall — 1.0 is a perfect collide-and-slide (removes only the into-wall velocity component), 0 is the FROZEN controller the dogfood project shipped by accident. Measure-only, binds to deriveWallSlideTangentRatio (dimension-agnostic on the XZ ground plane; refuses a non-into-wall input or an unpinned sample). BAND IS A DESIGN CHOICE (the doc's 'projected speed vs full-speed arcade slide' tunable): the default `abs 0.4` accepts [0.6, 1.4] — an ARCADE floor of 0.6 (still glances along the wall) up to a full-speed arcade redirect that keeps the whole input magnitude (>1.0). Tighten to `abs 0.1` ([0.9, 1.1]) for a strict PROJECTED slide that must preserve nearly the full tangential component. NOT yet a gate-enforced band. A zero-friction player collider material is the paired structural fix; deriveWallSlideTangentRatio reports collider friction when the capture carries it." }
+    }
+  },
+
+  "juice": {
+    "hitStop": {
+      "ms": 80,
+      "frames": 5,
+      "note": "Design intent — brief impact freeze on enemy hit/kill. Binds to deriveHitstopMs when captured; this ms target stays design intent, not a gate band."
+    },
+    "screenShake": {
+      "amplitudePx": 4,
+      "decayMs": 180,
+      "trigger": "fire-and-hit",
+      "note": "Design intent — small kick on fire, larger on hit/kill. The top-down camera shake is distinct from the cameraFollowDamping follow signal (a transient punch vs the steady follow); binds to deriveScreenShakeMag when captured. Design intent, not a gate band."
+    }
+  },
+
+  "manifest": {
+    "matching": "regex",
+    "caseSensitive": false,
+    "extrasAreFailure": false,
+    "elements": [
+      { "nameRegex": "player|hero|operator|courier", "type": "GameObject", "primitive": "player", "required": true },
+      { "nameRegex": "enemy|mob|drone|grunt|target", "type": "GameObject", "primitive": "enemy", "minCount": 1, "required": true },
+      { "nameRegex": "projectile|bullet|shot", "type": "GameObject", "primitive": "projectile", "required": true },
+      { "nameRegex": "weapon|gun|muzzle", "type": "GameObject", "primitive": "weapon", "required": true },
+      { "nameRegex": "Camera|FollowCamera|CameraRig", "type": "GameObject", "primitive": "camera", "required": true },
+      { "nameRegex": "GameManager|CombatController", "type": "GameObject", "required": true }
+    ]
+  },
+
+  "win": {
+    "rule": "all-enemies-defeated",
+    "endStateMode": "modal",
+    "restartAction": "R",
+    "note": "Win when every reference enemy in the arena is defeated; reaching a zero-enemy state flips the GameManager win flag. (A full extraction loop — reach-zone -> dwell -> bank, lose-on-death — binds to the extraction calculators in a later slice.)"
+  }
+}

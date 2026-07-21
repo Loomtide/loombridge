@@ -1,0 +1,551 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://loomtide.dev/schemas/acceptance.schema.json",
+  "title": "Loomtide Acceptance Contract",
+  "description": "Game-agnostic acceptance contract: the machine-checkable spec every verification gate checks against.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "game", "fonts", "palette", "hud", "framing", "feel", "juice", "manifest", "win"],
+  "properties": {
+    "schemaVersion": { "const": "1" },
+    "game": { "type": "string", "minLength": 1 },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "mock": { "type": "string" },
+        "feelDoc": { "type": "string" },
+        "note": { "type": "string" }
+      }
+    },
+
+    "fonts": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "global": { "$ref": "#/$defs/fontRequirement" },
+        "byRole": {
+          "type": "object",
+          "additionalProperties": { "$ref": "#/$defs/fontRequirement" }
+        },
+        "forbidden": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/fontRequirement" }
+        }
+      }
+    },
+
+    "palette": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["entries"],
+      "properties": {
+        "entries": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["hex", "roles"],
+            "properties": {
+              "hex": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" },
+              "roles": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+              "name": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+
+    "hud": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["elements"],
+      "properties": {
+        "elements": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "role", "anchor"],
+            "properties": {
+              "id": { "type": "string", "minLength": 1 },
+              "role": { "type": "string" },
+              "anchor": {
+                "enum": ["top-left", "top-center", "top-right", "center", "bottom-left", "bottom-center", "bottom-right"]
+              },
+              "insetPx": { "type": "number" },
+              "colorRole": { "type": "string" },
+              "font": { "type": "string" },
+              "format": { "type": "string" },
+              "required": { "type": "boolean" },
+              "note": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+
+    "framing": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["aspect", "playerAnchor"],
+      "properties": {
+        "aspect": { "$ref": "#/$defs/wh" },
+        "nativeResolution": { "$ref": "#/$defs/wh" },
+        "pixelScale": { "type": "number", "exclusiveMinimum": 0 },
+        "camera": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["worldPosition", "orthographicSize", "backgroundColorHex", "pixelPerfect"],
+          "properties": {
+            "worldPosition": { "$ref": "#/$defs/xyz" },
+            "orthographicSize": { "type": "number", "exclusiveMinimum": 0 },
+            "origin": { "type": "string" },
+            "backgroundColorHex": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" },
+            "pixelPerfect": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["assetsPPU", "refResolutionX", "refResolutionY", "upscaleRT"],
+              "properties": {
+                "assetsPPU": { "type": "integer", "minimum": 1 },
+                "refResolutionX": { "type": "integer", "minimum": 1 },
+                "refResolutionY": { "type": "integer", "minimum": 1 },
+                "upscaleRT": { "type": "boolean" },
+                "pixelSnapping": { "type": "boolean" },
+                "note": { "type": "string" }
+              }
+            },
+            "note": { "type": "string" }
+          }
+        },
+        "cameraMode": { "enum": ["static", "follow"] },
+        "playerAnchor": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["centerXFraction", "tolerance"],
+          "properties": {
+            "centerXFraction": { "type": "number", "minimum": 0, "maximum": 1 },
+            "tolerance": { "type": "number", "minimum": 0, "maximum": 1 },
+            "note": { "type": "string" }
+          }
+        },
+        "verticalPan": { "type": "boolean" },
+        "note": { "type": "string" }
+      }
+    },
+
+    "physics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["fixedTimestep"],
+      "properties": {
+        "fixedTimestep": { "type": "number", "exclusiveMinimum": 0 },
+        "note": { "type": "string" }
+      }
+    },
+
+    "feel": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "runSpeed": { "$ref": "#/$defs/numericTarget" },
+        "jumpApex": { "$ref": "#/$defs/numericTarget" },
+        "timeToApex": { "$ref": "#/$defs/numericTarget" },
+        "shortHopApex": { "$ref": "#/$defs/numericTarget" },
+        "dashDistance": { "$ref": "#/$defs/numericTarget" },
+        "dashTime": { "$ref": "#/$defs/numericTarget" },
+        "dashCooldown": { "$ref": "#/$defs/numericTarget" },
+        "coyoteTime": { "$ref": "#/$defs/numericTarget" },
+        "jumpBuffer": { "$ref": "#/$defs/numericTarget" },
+        "extra": {
+          "type": "object",
+          "additionalProperties": { "$ref": "#/$defs/numericTarget" }
+        }
+      }
+    },
+
+    "juice": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "dashTrail": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["ghosts", "opacities"],
+          "properties": {
+            "ghosts": { "type": "integer", "minimum": 0 },
+            "opacities": { "type": "array", "items": { "type": "number" } },
+            "spacingPx": { "type": "number" },
+            "holdMs": { "type": "number" },
+            "tint": { "type": "string" },
+            "note": { "type": "string" }
+          }
+        },
+        "landingDust": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["particles"],
+          "properties": {
+            "particles": { "type": "integer", "minimum": 0 },
+            "spreadXPx": { "type": "number" },
+            "fadeMs": { "type": "number" },
+            "note": { "type": "string" }
+          }
+        },
+        "fruitPop": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "frames": { "type": "integer", "minimum": 0 },
+            "scaleKeyframes": { "type": "array", "items": { "type": "number" } },
+            "sparkles": { "type": "integer", "minimum": 0 },
+            "sfx": { "type": "string" },
+            "note": { "type": "string" }
+          }
+        },
+        "hitStop": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["ms"],
+          "properties": {
+            "ms": { "type": "number", "minimum": 0 },
+            "frames": { "type": "number" },
+            "playerFlashWhite": { "type": "boolean" },
+            "note": { "type": "string" }
+          }
+        },
+        "screenShake": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["amplitudePx", "trigger"],
+          "properties": {
+            "amplitudePx": { "type": "number", "minimum": 0 },
+            "decayMs": { "type": "number" },
+            "trigger": { "type": "string" },
+            "note": { "type": "string" }
+          }
+        },
+        "parallax": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["layers"],
+          "properties": {
+            "continuityThresholdU": { "type": "number", "minimum": 0 },
+            "layers": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["name", "factor"],
+                "properties": {
+                  "name": { "type": "string" },
+                  "factor": { "type": "number" },
+                  "coversFrame": { "type": "boolean" },
+                  "coversBottom": { "type": "boolean" },
+                  "note": { "type": "string" }
+                }
+              }
+            },
+            "note": { "type": "string" }
+          }
+        }
+      }
+    },
+
+    "audio": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["cues"],
+      "properties": {
+        "playerComponent": { "type": "string", "minLength": 1 },
+        "cues": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "clip"],
+            "properties": {
+              "id": { "type": "string", "minLength": 1 },
+              "clip": { "type": "string", "minLength": 1 },
+              "trigger": { "type": "string" },
+              "required": { "type": "boolean" },
+              "note": { "type": "string" }
+            }
+          }
+        },
+        "note": { "type": "string" }
+      }
+    },
+
+    "manifest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["matching", "elements"],
+      "properties": {
+        "matching": { "enum": ["exact", "prefix", "regex"] },
+        "caseSensitive": { "type": "boolean" },
+        "extrasAreFailure": { "type": "boolean" },
+        "elements": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "anyOf": [
+              { "required": ["name"] },
+              { "required": ["nameRegex"] }
+            ],
+            "required": ["type"],
+            "properties": {
+              "name": { "type": "string" },
+              "nameRegex": { "type": "string" },
+              "type": { "enum": ["GameObject", "Sprite", "Prefab"] },
+              "primitive": { "type": "string" },
+              "minCount": { "type": "integer", "minimum": 1 },
+              "required": { "type": "boolean" }
+            }
+          }
+        }
+      }
+    },
+
+    "win": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["rule"],
+      "properties": {
+        "rule": { "type": "string", "minLength": 1 },
+        "endStateMode": { "enum": ["modal", "continuous"] },
+        "restartAction": { "type": "string" },
+        "buildRule": { "type": "string" },
+        "note": { "type": "string" }
+      }
+    },
+
+    "verification": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "gates": {
+          "type": "object",
+          "additionalProperties": {
+            "enum": ["required", "not_applicable"]
+          }
+        },
+        "requiredEvidenceClasses": {
+          "description": "Anti-compression gate (dogfood learnings §6 / High #7): each named evidence class must be \"present\" in the verdict's evidenceClasses block or `loomtide doneness` refuses. Absent = no new gate.",
+          "type": "array",
+          "items": {
+            "enum": [
+              "compile_import",
+              "console_clean",
+              "scene_validation",
+              "frame_evidence",
+              "input_exercised",
+              "play_trace",
+              "telemetry",
+              "human_notes"
+            ]
+          }
+        },
+        "note": { "type": "string" }
+      }
+    },
+
+    "art": {
+      "description": "Gray-box / feel-only declaration (RCL-D01). mode:\"deferred\" = art is intentionally not yet made (primitives are the deliverable); the hero-shot fidelity gate is NOT-APPLICABLE and doneness is satisfied by feel bands + structural assertions alone (still enforced). Absent OR mode:\"final\" = today's behaviour (hero-shot fidelity fully enforced).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode"],
+      "properties": {
+        "mode": { "enum": ["deferred", "final"] },
+        "note": { "type": "string" }
+      }
+    },
+
+    "reachability": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "verticalMarginU": { "type": "number", "minimum": 0 },
+        "horizontalMarginU": { "type": "number", "minimum": 0 },
+        "note": { "type": "string" }
+      }
+    },
+
+    "placement": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "groundedToleranceU": { "type": "number", "minimum": 0 }
+      }
+    },
+
+    "render": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "viewportMode": { "enum": ["full", "letterbox", "any"] },
+        "maxBorderFraction": { "type": "number", "minimum": 0, "maximum": 1 },
+        "expectedAspect": { "$ref": "#/$defs/wh" },
+        "maxArtifactLineFraction": { "type": "number", "minimum": 0, "maximum": 1 },
+        "maxStableRegionChangeFraction": { "type": "number", "minimum": 0, "maximum": 1 },
+        "note": { "type": "string" }
+      }
+    },
+
+    "gateTuning": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "byGate": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        },
+        "note": { "type": "string" }
+      }
+    },
+
+    "platformer": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "tileIntegerTolerance": { "type": "number", "minimum": 0 },
+        "colliderSurfaceToleranceU": { "type": "number", "minimum": 0 },
+        "tileRenderEdgeCols": { "type": "integer", "minimum": 1 },
+        "tileRenderMaxRenderers": { "type": "integer", "minimum": 1 },
+        "tileRenderSeamToleranceFactor": { "type": "number", "minimum": 0 },
+        "parallaxMotionAbsTolerance": { "type": "number", "minimum": 0 },
+        "parallaxMotionRelTolerance": { "type": "number", "minimum": 0 },
+        "parallaxMotionIdleTolerance": { "type": "number", "minimum": 0 },
+        "note": { "type": "string" }
+      }
+    },
+
+    "props": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "intentionalDecor": { "type": "array", "items": { "type": "string" } },
+        "intentionalFloating": { "type": "array", "items": { "type": "string" } },
+        "checkPlayerOverlap": { "type": "boolean" },
+        "interactableScripts": { "type": "array", "items": { "type": "string" } },
+        "purposes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["purpose"],
+            "anyOf": [
+              { "required": ["name"] },
+              { "required": ["nameRegex"] }
+            ],
+            "properties": {
+              "name": { "type": "string" },
+              "nameRegex": { "type": "string" },
+              "purpose": {
+                "enum": [
+                  "route_platform",
+                  "blocker",
+                  "hazard",
+                  "launcher",
+                  "collectible",
+                  "collectible_support",
+                  "goal",
+                  "cover",
+                  "enemy",
+                  "decor",
+                  "pickup"
+                ]
+              },
+              "required": { "type": "boolean" },
+              "evidenceRequired": { "type": "boolean" },
+              "note": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+
+    "capturePack": {
+      "description": "State-coverage capture pack (plan §3c). Named runtime states the build must capture; doneness (§3a) refuses to certify without every requiredCaptures entry present.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["states"],
+      "properties": {
+        "states": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "requiredCaptures"],
+            "properties": {
+              "name": { "type": "string", "minLength": 1 },
+              "description": { "type": "string" },
+              "probe": { "type": "string" },
+              "requiredCaptures": {
+                "type": "array",
+                "minItems": 1,
+                "items": { "type": "string", "minLength": 1 }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+
+  "$defs": {
+    "wh": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["w", "h"],
+      "properties": {
+        "w": { "type": "number", "exclusiveMinimum": 0 },
+        "h": { "type": "number", "exclusiveMinimum": 0 }
+      }
+    },
+    "xyz": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["x", "y", "z"],
+      "properties": {
+        "x": { "type": "number" },
+        "y": { "type": "number" },
+        "z": { "type": "number" }
+      }
+    },
+    "toleranceBand": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "percent": { "type": "number", "minimum": 0 },
+        "abs": { "type": "number", "minimum": 0 }
+      }
+    },
+    "numericTarget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["target", "unit"],
+      "properties": {
+        "target": { "type": "number" },
+        "unit": { "type": "string" },
+        "band": { "$ref": "#/$defs/toleranceBand" },
+        "note": { "type": "string" }
+      }
+    },
+    "fontRequirement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["family"],
+      "properties": {
+        "family": { "type": "string", "minLength": 1 },
+        "note": { "type": "string" }
+      }
+    }
+  }
+}

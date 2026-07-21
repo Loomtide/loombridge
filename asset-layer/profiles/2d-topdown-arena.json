@@ -1,0 +1,130 @@
+{
+  "schemaVersion": "1",
+  "id": "2d-topdown-arena",
+  "genre": "topdown-2d",
+  "description": "Validation and Unity placement profile for compact top-down arena/delivery prototypes.",
+  "scaleProfile": {
+    "reference": "one-room-topdown-delivery",
+    "tile": {
+      "pixels": 32,
+      "pixelsPerUnit": 100,
+      "worldSize": 0.32
+    },
+    "player": {
+      "targetWorldHeight": 0.64,
+      "screenHeightRatio": {
+        "min": 0.06,
+        "max": 0.12
+      }
+    },
+    "camera": {
+      "profile": "static-arena",
+      "orthographicSize": 5,
+      "framingOffset": {
+        "x": 0,
+        "y": 0
+      }
+    }
+  },
+  "validation": {
+    "allowedFormats": ["png", "jpg", "jpeg", "wav"],
+    "maxDimensions": {
+      "width": 2048,
+      "height": 2048
+    },
+    "maxTexturePixels": 4194304,
+    "expectedPixelsPerUnit": 100,
+    "requiredProvenanceFields": ["verifiedAt", "origin", "fixture"],
+    "allowedLicenses": ["CC0-1.0"],
+    "allowedKinds": ["sprite", "audio"],
+    "licensePolicy": {
+      "allowedSpdx": ["CC0-1.0"],
+      "deniedSpdx": ["GPL-3.0-only", "CC-BY-NC-4.0"]
+    },
+    "checksumPolicy": {
+      "requireSha256": false
+    },
+    "sourcePolicy": {
+      "requireVerified": true,
+      "minimumProvenanceFields": ["verifiedAt", "origin", "fixture"]
+    },
+    "audio": {
+      "allowedFormats": ["wav"],
+      "allowedSampleRates": [44100],
+      "allowedChannels": [1, 2],
+      "allowedBitDepths": [16],
+      "maxDurationMs": 3000
+    }
+  },
+  "primitives": {
+    "player": {
+      "description": "Top-down courier, bot, cart, or small controllable avatar.",
+      "unityFolder": "Assets/Art/Sprites/Characters",
+      "supportedKinds": ["sprite"]
+    },
+    "battery": {
+      "description": "Carryable pickup/objective item.",
+      "unityFolder": "Assets/Art/Sprites/Pickups",
+      "supportedKinds": ["sprite"]
+    },
+    "terminal": {
+      "description": "Delivery pad, socket, terminal, or deposit target.",
+      "unityFolder": "Assets/Art/Sprites/Objectives",
+      "supportedKinds": ["sprite"]
+    },
+    "arena": {
+      "description": "Arena floor, boundary, rail, or wall tile.",
+      "unityFolder": "Assets/Art/Sprites/Arena",
+      "supportedKinds": ["sprite"]
+    },
+    "hazard": {
+      "description": "Danger zone, trap, cone, arc, or warning/damage sprite.",
+      "unityFolder": "Assets/Art/Sprites/Hazards",
+      "supportedKinds": ["sprite"]
+    },
+    "vfx": {
+      "description": "Flash, puff, impact, glow, or other transient effect sprite.",
+      "unityFolder": "Assets/Art/Sprites/VFX",
+      "supportedKinds": ["sprite"]
+    },
+    "sfx_pickup": {
+      "description": "Short pickup sound effect.",
+      "unityFolder": "Assets/Audio/SFX",
+      "supportedKinds": ["audio"]
+    },
+    "sfx_deposit": {
+      "description": "Short terminal delivery or power-up sound effect.",
+      "unityFolder": "Assets/Audio/SFX",
+      "supportedKinds": ["audio"]
+    },
+    "sfx_dodge": {
+      "description": "Short dash/dodge movement cue.",
+      "unityFolder": "Assets/Audio/SFX",
+      "supportedKinds": ["audio"]
+    },
+    "sfx_hit": {
+      "description": "Short damage or hazard impact sound effect.",
+      "unityFolder": "Assets/Audio/SFX",
+      "supportedKinds": ["audio"]
+    },
+    "sfx_win": {
+      "description": "Short success or route-complete sound effect.",
+      "unityFolder": "Assets/Audio/SFX",
+      "supportedKinds": ["audio"]
+    },
+    "sfx_lose": {
+      "description": "Short fail or disabled-state sound effect.",
+      "unityFolder": "Assets/Audio/SFX",
+      "supportedKinds": ["audio"]
+    }
+  },
+  "unity": {
+    "rootFolder": "Assets/Art",
+    "defaultSpriteMode": "single",
+    "defaultFilterMode": "Point",
+    "toolArguments": {
+      "sourcePathKey": "source_path",
+      "destinationPathKey": "path"
+    }
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "state": "active",
+  "source": "synthetic negative fixture — targetButton scrolled off the right edge of the frame",
+  "viewport": { "width": 1280, "height": 720, "aspect": 1.77777779 },
+  "objects": [
+    {
+      "id": "targetButton",
+      "path": "/HUD/TargetButton",
+      "role": "image",
+      "active": true,
+      "isVisible": false,
+      "visibilityReason": "offScreen",
+      "raycastTarget": true,
+      "screenRect": { "x": 1320, "y": 300, "width": 158, "height": 140 },
+      "viewportRect": { "x": 1.03125, "y": 0.41666666, "width": 0.12343750, "height": 0.19444444 },
+      "isFullyVisible": false,
+      "isPartiallyClipped": false,
+      "isOffScreen": true,
+      "clipSide": "right"
+    }
+  ]
+}

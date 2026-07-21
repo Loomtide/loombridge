@@ -1,0 +1,212 @@
+{
+  "schemaVersion": "1",
+  "catalogId": "platformer-catalog-fixture",
+  "provider": {
+    "name": "Kenney",
+    "url": "https://kenney.nl/",
+    "type": "http",
+    "acquisitionLane": "mirror-index",
+    "termsNotes": "Fixture mirrors the hosted catalog shape without network access."
+  },
+  "pack": {
+    "packId": "kenney-all-in-one-3.5.0",
+    "name": "Kenney Game Assets All-in-1",
+    "version": "3.5.0"
+  },
+  "assets": [
+    {
+      "id": "kenney.fixture.tile.grass",
+      "genre": "platformer-2d",
+      "primitive": "tile",
+      "kind": "sprite",
+      "priority": 20,
+      "source": {
+        "title": "Pixel Platformer",
+        "url": "https://www.kenney.nl/assets/pixel-platformer",
+        "downloadPage": "https://www.kenney.nl/assets/pixel-platformer",
+        "author": "Kenney",
+        "verified": true,
+        "provenance": {
+          "verifiedAt": "2026-06-05T00:00:00.000Z",
+          "origin": "Fixture copied from hosted Kenney catalog seed.",
+          "fixture": "asset-layer/fixtures/platformer/grass-tile.png"
+        }
+      },
+      "license": {
+        "name": "Creative Commons CC0 1.0 Universal",
+        "spdx": "CC0-1.0",
+        "url": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "requiresAttribution": false
+      },
+      "provider": {
+        "name": "Kenney",
+        "url": "https://kenney.nl/",
+        "type": "http",
+        "acquisitionLane": "mirror-index"
+      },
+      "files": [
+        {
+          "role": "spritesheet",
+          "format": "png",
+          "localPath": "asset-layer/fixtures/platformer/grass-tile.png",
+          "githubRawUrl": "https://raw.githubusercontent.com/example-org/example-asset-mirror/main/assets/providers/kenney/all-in-one/3.5.0/2D%20assets/Pixel%20Platformer/Tiles/tilemap.png",
+          "githubBlobUrl": "https://github.com/example-org/example-asset-mirror/blob/main/assets/providers/kenney/all-in-one/3.5.0/2D%20assets/Pixel%20Platformer/Tiles/tilemap.png",
+          "sizeBytes": 295,
+          "checksum": {
+            "algorithm": "sha256",
+            "value": "e9d0ffd21f343c24544b6f779d4d662ac35193f3ef4b194c6225248aeeb4c823"
+          }
+        }
+      ],
+      "technical": {
+        "width": 64,
+        "height": 64,
+        "pixelsPerUnit": 100,
+        "transparent": true
+      },
+      "tags": ["platformer", "tile", "grass", "kenney", "cc0", "verified"],
+      "unity": {
+        "path": "Assets/Art/Sprites/Tiles/kenney-fixture-grass.png",
+        "pixelsPerUnit": 100,
+        "spriteMode": "single",
+        "filterMode": "Point"
+      },
+      "acquisitionLane": "mirror-index",
+      "trustTier": "trusted-default",
+      "review": {
+        "status": "verified",
+        "verifiedBy": "developer",
+        "verifiedAt": "2026-06-05T00:00:00.000Z",
+        "reviewer": "example-org"
+      },
+      "pack": {
+        "packId": "kenney-all-in-one-3.5.0",
+        "name": "Kenney Game Assets All-in-1",
+        "version": "3.5.0"
+      }
+    },
+    {
+      "id": "poly-pizza.fixture.player.robot",
+      "genre": "platformer-2d",
+      "primitive": "player",
+      "kind": "model",
+      "priority": 99,
+      "source": {
+        "title": "Fixture Robot",
+        "url": "https://poly.pizza/m/fixture-robot",
+        "author": "Example Artist",
+        "verified": true,
+        "provenance": {
+          "verifiedAt": "2026-06-05T00:00:00.000Z",
+          "origin": "Fixture API record with attribution-required license.",
+          "fixture": "asset-layer/catalog-fixtures/platformer-catalog.json"
+        }
+      },
+      "license": {
+        "name": "Creative Commons Attribution 4.0 International",
+        "spdx": "CC-BY-4.0",
+        "url": "https://creativecommons.org/licenses/by/4.0/",
+        "requiresAttribution": true
+      },
+      "provider": {
+        "name": "Poly Pizza",
+        "url": "https://poly.pizza/",
+        "type": "http",
+        "acquisitionLane": "api",
+        "termsNotes": "Attribution required; visible candidate only."
+      },
+      "files": [
+        {
+          "role": "decor",
+          "format": "png",
+          "url": "https://example.invalid/poly-pizza/fixture-robot.png",
+          "checksum": {
+            "algorithm": "sha256",
+            "value": "2222222222222222222222222222222222222222222222222222222222222222"
+          }
+        }
+      ],
+      "technical": {
+        "width": 512,
+        "height": 512,
+        "pixelsPerUnit": 100,
+        "transparent": true
+      },
+      "tags": ["platformer", "player", "robot", "attribution"],
+      "unity": {
+        "path": "Assets/Art/Sprites/Characters/poly-pizza-fixture-robot.png",
+        "pixelsPerUnit": 100,
+        "spriteMode": "single",
+        "filterMode": "Point"
+      },
+      "acquisitionLane": "api",
+      "trustTier": "attribution-required",
+      "review": {
+        "status": "verified",
+        "verifiedBy": "source-owner",
+        "verifiedAt": "2026-06-05T00:00:00.000Z",
+        "reviewer": "Poly Pizza API fixture"
+      }
+    },
+    {
+      "id": "scraped.fixture.background.candidate",
+      "genre": "platformer-2d",
+      "primitive": "background",
+      "kind": "sprite",
+      "priority": 100,
+      "source": {
+        "title": "Unreviewed Background Candidate",
+        "url": "https://example.invalid/background",
+        "author": "Unknown",
+        "verified": false,
+        "provenance": {
+          "verifiedAt": "2026-06-05T00:00:00.000Z",
+          "origin": "Scraped index discovery fixture only.",
+          "fixture": "asset-layer/catalog-fixtures/platformer-catalog.json"
+        }
+      },
+      "license": {
+        "name": "Unknown",
+        "spdx": "LicenseRef-Unknown",
+        "url": "https://example.invalid/license",
+        "requiresAttribution": false
+      },
+      "provider": {
+        "name": "Example Index",
+        "url": "https://example.invalid/",
+        "type": "http",
+        "acquisitionLane": "scraped-discovery"
+      },
+      "files": [
+        {
+          "role": "background",
+          "format": "png",
+          "url": "https://example.invalid/background.png",
+          "checksum": {
+            "algorithm": "sha256",
+            "value": "3333333333333333333333333333333333333333333333333333333333333333"
+          }
+        }
+      ],
+      "technical": {
+        "width": 1024,
+        "height": 512,
+        "pixelsPerUnit": 100,
+        "transparent": false
+      },
+      "tags": ["platformer", "background", "candidate"],
+      "unity": {
+        "path": "Assets/Art/Sprites/Backgrounds/scraped-candidate.png",
+        "pixelsPerUnit": 100,
+        "spriteMode": "single",
+        "filterMode": "Point"
+      },
+      "acquisitionLane": "scraped-discovery",
+      "trustTier": "unverified-discovery",
+      "review": {
+        "status": "needs-review",
+        "notes": "Discovery-only fixture; not selectable by default."
+      }
+    }
+  ]
+}

@@ -1,0 +1,146 @@
+{
+  "schemaVersion": "0.1.0",
+  "sourceGenreId": "2d-shooter",
+  "sourceConfidence": "experimental",
+  "generatedAcceptance": ".loomtide/ACCEPTANCE.json",
+  "generatedSlices": ".loomtide/SLICES.json",
+  "promotedCoreSlices": [
+    "arena",
+    "controller",
+    "weapon",
+    "enemy",
+    "feedback",
+    "hud",
+    "end-state"
+  ],
+  "deferredSlices": [
+    "weapon-roster",
+    "progression"
+  ],
+  "explicitGaps": {
+    "controller": [
+      "move-feel-measurement"
+    ],
+    "weapon": [
+      "spawn-aware-capture"
+    ],
+    "enemy": [
+      "ttk-live-capture"
+    ],
+    "feedback": [
+      "hitstop-measurement",
+      "screenshake-measurement"
+    ],
+    "weapon-roster": [
+      "deferred-meta"
+    ],
+    "progression": [
+      "deferred-meta"
+    ]
+  },
+  "measurability": [
+    {
+      "target": "inputToSfxLatency",
+      "tag": "measurable-now",
+      "bucket": "coreVertical",
+      "calculator": "inputToSfxLatency",
+      "targetBand": {
+        "max": 50,
+        "unit": "ms"
+      },
+      "evidenceKind": "pack-default"
+    },
+    {
+      "target": "fireIntervalMs",
+      "tag": "measurable-now",
+      "bucket": "coreVertical",
+      "calculator": "fireIntervalMs",
+      "targetBand": {
+        "min": 90,
+        "max": 140,
+        "unit": "ms"
+      },
+      "evidenceKind": "pack-default"
+    },
+    {
+      "target": "projectileSpeed",
+      "tag": "measurable-now",
+      "bucket": "coreVertical",
+      "calculator": "projectileSpeed",
+      "targetBand": {
+        "min": 18,
+        "max": 30,
+        "unit": "u/s"
+      },
+      "evidenceKind": "pack-default"
+    },
+    {
+      "target": "fireInputToSpawnLatency",
+      "tag": "measurable-now",
+      "bucket": "coreVertical",
+      "calculator": "fireInputToSpawnLatency",
+      "targetBand": {
+        "max": 50,
+        "unit": "ms"
+      },
+      "evidenceKind": "pack-default"
+    },
+    {
+      "target": "ttkMs",
+      "tag": "measurable-now",
+      "bucket": "coreVertical",
+      "calculator": "ttkMs",
+      "targetBand": {
+        "min": 150,
+        "max": 600,
+        "unit": "ms"
+      },
+      "evidenceKind": "pack-default"
+    },
+    {
+      "target": "hitstopMs",
+      "tag": "measurable-now",
+      "bucket": "coreVertical",
+      "calculator": "hitstopMs",
+      "targetBand": {
+        "min": 60,
+        "max": 180,
+        "unit": "ms"
+      },
+      "evidenceKind": "pack-default"
+    },
+    {
+      "target": "screenShakeMag",
+      "tag": "measurable-now",
+      "bucket": "coreVertical",
+      "calculator": "screenShakeMag",
+      "targetBand": {
+        "min": 0.1,
+        "max": 0.6,
+        "unit": "u"
+      },
+      "evidenceKind": "pack-default"
+    },
+    {
+      "target": "aiming-feel",
+      "tag": "judgment-only",
+      "bucket": "coreVertical"
+    }
+  ],
+  "refusalConditions": [
+    {
+      "condition": "remaining shooter feel beyond current calculators",
+      "reason": "automatic spawned-object discovery and secondary combat feel (crosshair bloom, screen-edge vignette, directional dust) have no calculator yet and are kept as methodology gaps, not faked. fireIntervalMs, fireInputToSpawnLatency, projectileSpeed, ttkMs, hitstopMs, and screenShakeMag have implemented calculators and are measured live when the build exposes the matching signals"
+    },
+    {
+      "condition": "aim-assist fairness",
+      "reason": "judgment-only; requires a human oracle"
+    }
+  ],
+  "humanOracleChecks": [
+    {
+      "check": "does aiming feel responsive and fair?",
+      "appliesTo": "aiming-feel"
+    }
+  ]
+}

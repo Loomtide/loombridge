@@ -1,0 +1,2901 @@
+{
+  "_comment": "IMMUTABLE raw capture transcript — the verbatim runtime.capture_input_motion bridge interaction for the live shooter-combat-loop ttkMs dogfood, captured against the repo-owned shooter-combat-dogfood Unity fixture. The enemy dies as the causal consequence of three DogfoodProjectile trigger collisions (ProjectileHitCount + enemy HitCount rise together, Health 3->0, IsDead false->true), never a timer. The canonical ttk-shooter-combat-loop-2026-06-25.json is ASSEMBLED from this file by generate.mjs (series copied, value derived through deriveTimeToKill); it is NOT synthesized from constants. Do not edit by hand.",
+  "op": "runtime.capture_input_motion",
+  "capturedAt": "2026-06-25T10:05:00.000Z",
+  "host": {
+    "projectName": "shooter-combat-dogfood",
+    "projectPathCanonical": "/redacted/Projects/AI/Loomtide/unity-projects/shooter-combat-dogfood",
+    "scene": "ShooterCombatDogfood",
+    "note": "Repo-owned shooter-combat fixture (Assets/Scenes/ShooterCombatDogfood.unity), NOT a host-of-convenience. FireSource at x=0 fires DogfoodProjectile (speed 18u/s) at the Enemy (DogfoodReferenceEnemy, maxHealth=3) at x=6; each projectile trigger-collision applies 1 damage. /CombatController (DogfoodCombatReset) mirrors all six sampled fields. Captured in Play Mode through the local Loomtide bridge package; no console errors; nothing saved."
+  },
+  "request": {
+    "measure": {
+      "path": "/CombatController",
+      "scene": "ShooterCombatDogfood"
+    },
+    "captureFps": 60,
+    "includeSamples": false,
+    "phases": [
+      {
+        "keys": [],
+        "durationMs": 200
+      },
+      {
+        "keys": [
+          "Space"
+        ],
+        "durationMs": 100
+      },
+      {
+        "keys": [],
+        "durationMs": 200
+      },
+      {
+        "keys": [
+          "Space"
+        ],
+        "durationMs": 100
+      },
+      {
+        "keys": [],
+        "durationMs": 200
+      },
+      {
+        "keys": [
+          "Space"
+        ],
+        "durationMs": 100
+      },
+      {
+        "keys": [],
+        "durationMs": 900
+      }
+    ],
+    "sampledFields": [
+      {
+        "id": "combat-fire-count",
+        "locator": {
+          "path": "/CombatController",
+          "scene": "ShooterCombatDogfood"
+        },
+        "type_name": "DogfoodCombatReset",
+        "property_path": "FireCount"
+      },
+      {
+        "id": "combat-projectile-spawn-count",
+        "locator": {
+          "path": "/CombatController",
+          "scene": "ShooterCombatDogfood"
+        },
+        "type_name": "DogfoodCombatReset",
+        "property_path": "ProjectileSpawnCount"
+      },
+      {
+        "id": "combat-projectile-hit-count",
+        "locator": {
+          "path": "/CombatController",
+          "scene": "ShooterCombatDogfood"
+        },
+        "type_name": "DogfoodCombatReset",
+        "property_path": "ProjectileHitCount"
+      },
+      {
+        "id": "combat-enemy-hit-count",
+        "locator": {
+          "path": "/CombatController",
+          "scene": "ShooterCombatDogfood"
+        },
+        "type_name": "DogfoodCombatReset",
+        "property_path": "HitCount"
+      },
+      {
+        "id": "combat-enemy-health",
+        "locator": {
+          "path": "/CombatController",
+          "scene": "ShooterCombatDogfood"
+        },
+        "type_name": "DogfoodCombatReset",
+        "property_path": "Health"
+      },
+      {
+        "id": "combat-enemy-is-dead",
+        "locator": {
+          "path": "/CombatController",
+          "scene": "ShooterCombatDogfood"
+        },
+        "type_name": "DogfoodCombatReset",
+        "property_path": "IsDead"
+      }
+    ]
+  },
+  "response": {
+    "startY": 0,
+    "peakY": 0,
+    "deltaY": 0,
+    "minY": 0,
+    "timeToApexMs": 0,
+    "startX": 0,
+    "endX": 0,
+    "deltaX": 0,
+    "avgRunSpeed": 0,
+    "durationMs": 1800,
+    "sampleCount": 109,
+    "projectFixedTimestepBeforeMeasurement": 0.02,
+    "measurementFixedTimestep": 0.02,
+    "phases": [
+      {
+        "index": 0,
+        "keys": [],
+        "requestedDurationMs": 200,
+        "sampleCount": 13,
+        "fixedTickStart": 1555,
+        "fixedTickEnd": 1566,
+        "actualFixedTicks": 11,
+        "startX": 0,
+        "endX": 0,
+        "deltaX": 0,
+        "startY": 0,
+        "endY": 0,
+        "deltaY": 0,
+        "minY": 0,
+        "maxY": 0
+      },
+      {
+        "index": 1,
+        "keys": [
+          "Space"
+        ],
+        "requestedDurationMs": 100,
+        "sampleCount": 6,
+        "fixedTickStart": 1566,
+        "fixedTickEnd": 1571,
+        "actualFixedTicks": 5,
+        "startX": 0,
+        "endX": 0,
+        "deltaX": 0,
+        "startY": 0,
+        "endY": 0,
+        "deltaY": 0,
+        "minY": 0,
+        "maxY": 0
+      },
+      {
+        "index": 2,
+        "keys": [],
+        "requestedDurationMs": 200,
+        "sampleCount": 11,
+        "fixedTickStart": 1571,
+        "fixedTickEnd": 1580,
+        "actualFixedTicks": 9,
+        "startX": 0,
+        "endX": 0,
+        "deltaX": 0,
+        "startY": 0,
+        "endY": 0,
+        "deltaY": 0,
+        "minY": 0,
+        "maxY": 0
+      },
+      {
+        "index": 3,
+        "keys": [
+          "Space"
+        ],
+        "requestedDurationMs": 100,
+        "sampleCount": 7,
+        "fixedTickStart": 1580,
+        "fixedTickEnd": 1586,
+        "actualFixedTicks": 6,
+        "startX": 0,
+        "endX": 0,
+        "deltaX": 0,
+        "startY": 0,
+        "endY": 0,
+        "deltaY": 0,
+        "minY": 0,
+        "maxY": 0
+      },
+      {
+        "index": 4,
+        "keys": [],
+        "requestedDurationMs": 200,
+        "sampleCount": 12,
+        "fixedTickStart": 1586,
+        "fixedTickEnd": 1596,
+        "actualFixedTicks": 10,
+        "startX": 0,
+        "endX": 0,
+        "deltaX": 0,
+        "startY": 0,
+        "endY": 0,
+        "deltaY": 0,
+        "minY": 0,
+        "maxY": 0
+      },
+      {
+        "index": 5,
+        "keys": [
+          "Space"
+        ],
+        "requestedDurationMs": 100,
+        "sampleCount": 6,
+        "fixedTickStart": 1596,
+        "fixedTickEnd": 1601,
+        "actualFixedTicks": 5,
+        "startX": 0,
+        "endX": 0,
+        "deltaX": 0,
+        "startY": 0,
+        "endY": 0,
+        "deltaY": 0,
+        "minY": 0,
+        "maxY": 0
+      },
+      {
+        "index": 6,
+        "keys": [],
+        "requestedDurationMs": 900,
+        "sampleCount": 54,
+        "fixedTickStart": 1601,
+        "fixedTickEnd": 1645,
+        "actualFixedTicks": 44,
+        "startX": 0,
+        "endX": 0,
+        "deltaX": 0,
+        "startY": 0,
+        "endY": 0,
+        "deltaY": 0,
+        "minY": 0,
+        "maxY": 0
+      }
+    ],
+    "fieldTimeline": [
+      {
+        "id": "combat-fire-count",
+        "samples": [
+          {
+            "tMs": 0,
+            "value": 0
+          },
+          {
+            "tMs": 16.67,
+            "value": 0
+          },
+          {
+            "tMs": 33.33,
+            "value": 0
+          },
+          {
+            "tMs": 50,
+            "value": 0
+          },
+          {
+            "tMs": 66.67,
+            "value": 0
+          },
+          {
+            "tMs": 83.33,
+            "value": 0
+          },
+          {
+            "tMs": 100,
+            "value": 0
+          },
+          {
+            "tMs": 116.67,
+            "value": 0
+          },
+          {
+            "tMs": 133.33,
+            "value": 0
+          },
+          {
+            "tMs": 150,
+            "value": 0
+          },
+          {
+            "tMs": 166.67,
+            "value": 0
+          },
+          {
+            "tMs": 183.33,
+            "value": 0
+          },
+          {
+            "tMs": 200,
+            "value": 0
+          },
+          {
+            "tMs": 216.67,
+            "value": 0
+          },
+          {
+            "tMs": 233.33,
+            "value": 1
+          },
+          {
+            "tMs": 250,
+            "value": 1
+          },
+          {
+            "tMs": 266.67,
+            "value": 1
+          },
+          {
+            "tMs": 283.33,
+            "value": 1
+          },
+          {
+            "tMs": 300,
+            "value": 1
+          },
+          {
+            "tMs": 316.67,
+            "value": 1
+          },
+          {
+            "tMs": 333.33,
+            "value": 1
+          },
+          {
+            "tMs": 350,
+            "value": 1
+          },
+          {
+            "tMs": 366.67,
+            "value": 1
+          },
+          {
+            "tMs": 383.33,
+            "value": 1
+          },
+          {
+            "tMs": 400,
+            "value": 1
+          },
+          {
+            "tMs": 416.67,
+            "value": 1
+          },
+          {
+            "tMs": 433.33,
+            "value": 1
+          },
+          {
+            "tMs": 450,
+            "value": 1
+          },
+          {
+            "tMs": 466.67,
+            "value": 1
+          },
+          {
+            "tMs": 483.33,
+            "value": 1
+          },
+          {
+            "tMs": 500,
+            "value": 1
+          },
+          {
+            "tMs": 516.67,
+            "value": 2
+          },
+          {
+            "tMs": 533.33,
+            "value": 2
+          },
+          {
+            "tMs": 550,
+            "value": 2
+          },
+          {
+            "tMs": 566.67,
+            "value": 2
+          },
+          {
+            "tMs": 583.33,
+            "value": 2
+          },
+          {
+            "tMs": 600,
+            "value": 2
+          },
+          {
+            "tMs": 616.67,
+            "value": 2
+          },
+          {
+            "tMs": 633.33,
+            "value": 2
+          },
+          {
+            "tMs": 650,
+            "value": 2
+          },
+          {
+            "tMs": 666.67,
+            "value": 2
+          },
+          {
+            "tMs": 683.33,
+            "value": 2
+          },
+          {
+            "tMs": 700,
+            "value": 2
+          },
+          {
+            "tMs": 716.67,
+            "value": 2
+          },
+          {
+            "tMs": 733.33,
+            "value": 2
+          },
+          {
+            "tMs": 750,
+            "value": 2
+          },
+          {
+            "tMs": 766.67,
+            "value": 2
+          },
+          {
+            "tMs": 783.33,
+            "value": 2
+          },
+          {
+            "tMs": 800,
+            "value": 2
+          },
+          {
+            "tMs": 816.67,
+            "value": 2
+          },
+          {
+            "tMs": 833.33,
+            "value": 3
+          },
+          {
+            "tMs": 850,
+            "value": 3
+          },
+          {
+            "tMs": 866.67,
+            "value": 3
+          },
+          {
+            "tMs": 883.33,
+            "value": 3
+          },
+          {
+            "tMs": 900,
+            "value": 3
+          },
+          {
+            "tMs": 916.67,
+            "value": 3
+          },
+          {
+            "tMs": 933.33,
+            "value": 3
+          },
+          {
+            "tMs": 950,
+            "value": 3
+          },
+          {
+            "tMs": 966.67,
+            "value": 3
+          },
+          {
+            "tMs": 983.33,
+            "value": 3
+          },
+          {
+            "tMs": 1000,
+            "value": 3
+          },
+          {
+            "tMs": 1016.67,
+            "value": 3
+          },
+          {
+            "tMs": 1033.33,
+            "value": 3
+          },
+          {
+            "tMs": 1050,
+            "value": 3
+          },
+          {
+            "tMs": 1066.67,
+            "value": 3
+          },
+          {
+            "tMs": 1083.33,
+            "value": 3
+          },
+          {
+            "tMs": 1100,
+            "value": 3
+          },
+          {
+            "tMs": 1116.67,
+            "value": 3
+          },
+          {
+            "tMs": 1133.33,
+            "value": 3
+          },
+          {
+            "tMs": 1150,
+            "value": 3
+          },
+          {
+            "tMs": 1166.67,
+            "value": 3
+          },
+          {
+            "tMs": 1183.33,
+            "value": 3
+          },
+          {
+            "tMs": 1200,
+            "value": 3
+          },
+          {
+            "tMs": 1216.67,
+            "value": 3
+          },
+          {
+            "tMs": 1233.33,
+            "value": 3
+          },
+          {
+            "tMs": 1250,
+            "value": 3
+          },
+          {
+            "tMs": 1266.67,
+            "value": 3
+          },
+          {
+            "tMs": 1283.33,
+            "value": 3
+          },
+          {
+            "tMs": 1300,
+            "value": 3
+          },
+          {
+            "tMs": 1316.67,
+            "value": 3
+          },
+          {
+            "tMs": 1333.33,
+            "value": 3
+          },
+          {
+            "tMs": 1350,
+            "value": 3
+          },
+          {
+            "tMs": 1366.67,
+            "value": 3
+          },
+          {
+            "tMs": 1383.33,
+            "value": 3
+          },
+          {
+            "tMs": 1400,
+            "value": 3
+          },
+          {
+            "tMs": 1416.67,
+            "value": 3
+          },
+          {
+            "tMs": 1433.33,
+            "value": 3
+          },
+          {
+            "tMs": 1450,
+            "value": 3
+          },
+          {
+            "tMs": 1466.67,
+            "value": 3
+          },
+          {
+            "tMs": 1483.33,
+            "value": 3
+          },
+          {
+            "tMs": 1500,
+            "value": 3
+          },
+          {
+            "tMs": 1516.67,
+            "value": 3
+          },
+          {
+            "tMs": 1533.33,
+            "value": 3
+          },
+          {
+            "tMs": 1550,
+            "value": 3
+          },
+          {
+            "tMs": 1566.67,
+            "value": 3
+          },
+          {
+            "tMs": 1583.33,
+            "value": 3
+          },
+          {
+            "tMs": 1600,
+            "value": 3
+          },
+          {
+            "tMs": 1616.67,
+            "value": 3
+          },
+          {
+            "tMs": 1633.33,
+            "value": 3
+          },
+          {
+            "tMs": 1650,
+            "value": 3
+          },
+          {
+            "tMs": 1666.67,
+            "value": 3
+          },
+          {
+            "tMs": 1683.33,
+            "value": 3
+          },
+          {
+            "tMs": 1700,
+            "value": 3
+          },
+          {
+            "tMs": 1716.67,
+            "value": 3
+          },
+          {
+            "tMs": 1733.33,
+            "value": 3
+          },
+          {
+            "tMs": 1750,
+            "value": 3
+          },
+          {
+            "tMs": 1766.67,
+            "value": 3
+          },
+          {
+            "tMs": 1783.33,
+            "value": 3
+          },
+          {
+            "tMs": 1800,
+            "value": 3
+          }
+        ]
+      },
+      {
+        "id": "combat-projectile-spawn-count",
+        "samples": [
+          {
+            "tMs": 0,
+            "value": 0
+          },
+          {
+            "tMs": 16.67,
+            "value": 0
+          },
+          {
+            "tMs": 33.33,
+            "value": 0
+          },
+          {
+            "tMs": 50,
+            "value": 0
+          },
+          {
+            "tMs": 66.67,
+            "value": 0
+          },
+          {
+            "tMs": 83.33,
+            "value": 0
+          },
+          {
+            "tMs": 100,
+            "value": 0
+          },
+          {
+            "tMs": 116.67,
+            "value": 0
+          },
+          {
+            "tMs": 133.33,
+            "value": 0
+          },
+          {
+            "tMs": 150,
+            "value": 0
+          },
+          {
+            "tMs": 166.67,
+            "value": 0
+          },
+          {
+            "tMs": 183.33,
+            "value": 0
+          },
+          {
+            "tMs": 200,
+            "value": 0
+          },
+          {
+            "tMs": 216.67,
+            "value": 0
+          },
+          {
+            "tMs": 233.33,
+            "value": 1
+          },
+          {
+            "tMs": 250,
+            "value": 1
+          },
+          {
+            "tMs": 266.67,
+            "value": 1
+          },
+          {
+            "tMs": 283.33,
+            "value": 1
+          },
+          {
+            "tMs": 300,
+            "value": 1
+          },
+          {
+            "tMs": 316.67,
+            "value": 1
+          },
+          {
+            "tMs": 333.33,
+            "value": 1
+          },
+          {
+            "tMs": 350,
+            "value": 1
+          },
+          {
+            "tMs": 366.67,
+            "value": 1
+          },
+          {
+            "tMs": 383.33,
+            "value": 1
+          },
+          {
+            "tMs": 400,
+            "value": 1
+          },
+          {
+            "tMs": 416.67,
+            "value": 1
+          },
+          {
+            "tMs": 433.33,
+            "value": 1
+          },
+          {
+            "tMs": 450,
+            "value": 1
+          },
+          {
+            "tMs": 466.67,
+            "value": 1
+          },
+          {
+            "tMs": 483.33,
+            "value": 1
+          },
+          {
+            "tMs": 500,
+            "value": 1
+          },
+          {
+            "tMs": 516.67,
+            "value": 2
+          },
+          {
+            "tMs": 533.33,
+            "value": 2
+          },
+          {
+            "tMs": 550,
+            "value": 2
+          },
+          {
+            "tMs": 566.67,
+            "value": 2
+          },
+          {
+            "tMs": 583.33,
+            "value": 2
+          },
+          {
+            "tMs": 600,
+            "value": 2
+          },
+          {
+            "tMs": 616.67,
+            "value": 2
+          },
+          {
+            "tMs": 633.33,
+            "value": 2
+          },
+          {
+            "tMs": 650,
+            "value": 2
+          },
+          {
+            "tMs": 666.67,
+            "value": 2
+          },
+          {
+            "tMs": 683.33,
+            "value": 2
+          },
+          {
+            "tMs": 700,
+            "value": 2
+          },
+          {
+            "tMs": 716.67,
+            "value": 2
+          },
+          {
+            "tMs": 733.33,
+            "value": 2
+          },
+          {
+            "tMs": 750,
+            "value": 2
+          },
+          {
+            "tMs": 766.67,
+            "value": 2
+          },
+          {
+            "tMs": 783.33,
+            "value": 2
+          },
+          {
+            "tMs": 800,
+            "value": 2
+          },
+          {
+            "tMs": 816.67,
+            "value": 2
+          },
+          {
+            "tMs": 833.33,
+            "value": 3
+          },
+          {
+            "tMs": 850,
+            "value": 3
+          },
+          {
+            "tMs": 866.67,
+            "value": 3
+          },
+          {
+            "tMs": 883.33,
+            "value": 3
+          },
+          {
+            "tMs": 900,
+            "value": 3
+          },
+          {
+            "tMs": 916.67,
+            "value": 3
+          },
+          {
+            "tMs": 933.33,
+            "value": 3
+          },
+          {
+            "tMs": 950,
+            "value": 3
+          },
+          {
+            "tMs": 966.67,
+            "value": 3
+          },
+          {
+            "tMs": 983.33,
+            "value": 3
+          },
+          {
+            "tMs": 1000,
+            "value": 3
+          },
+          {
+            "tMs": 1016.67,
+            "value": 3
+          },
+          {
+            "tMs": 1033.33,
+            "value": 3
+          },
+          {
+            "tMs": 1050,
+            "value": 3
+          },
+          {
+            "tMs": 1066.67,
+            "value": 3
+          },
+          {
+            "tMs": 1083.33,
+            "value": 3
+          },
+          {
+            "tMs": 1100,
+            "value": 3
+          },
+          {
+            "tMs": 1116.67,
+            "value": 3
+          },
+          {
+            "tMs": 1133.33,
+            "value": 3
+          },
+          {
+            "tMs": 1150,
+            "value": 3
+          },
+          {
+            "tMs": 1166.67,
+            "value": 3
+          },
+          {
+            "tMs": 1183.33,
+            "value": 3
+          },
+          {
+            "tMs": 1200,
+            "value": 3
+          },
+          {
+            "tMs": 1216.67,
+            "value": 3
+          },
+          {
+            "tMs": 1233.33,
+            "value": 3
+          },
+          {
+            "tMs": 1250,
+            "value": 3
+          },
+          {
+            "tMs": 1266.67,
+            "value": 3
+          },
+          {
+            "tMs": 1283.33,
+            "value": 3
+          },
+          {
+            "tMs": 1300,
+            "value": 3
+          },
+          {
+            "tMs": 1316.67,
+            "value": 3
+          },
+          {
+            "tMs": 1333.33,
+            "value": 3
+          },
+          {
+            "tMs": 1350,
+            "value": 3
+          },
+          {
+            "tMs": 1366.67,
+            "value": 3
+          },
+          {
+            "tMs": 1383.33,
+            "value": 3
+          },
+          {
+            "tMs": 1400,
+            "value": 3
+          },
+          {
+            "tMs": 1416.67,
+            "value": 3
+          },
+          {
+            "tMs": 1433.33,
+            "value": 3
+          },
+          {
+            "tMs": 1450,
+            "value": 3
+          },
+          {
+            "tMs": 1466.67,
+            "value": 3
+          },
+          {
+            "tMs": 1483.33,
+            "value": 3
+          },
+          {
+            "tMs": 1500,
+            "value": 3
+          },
+          {
+            "tMs": 1516.67,
+            "value": 3
+          },
+          {
+            "tMs": 1533.33,
+            "value": 3
+          },
+          {
+            "tMs": 1550,
+            "value": 3
+          },
+          {
+            "tMs": 1566.67,
+            "value": 3
+          },
+          {
+            "tMs": 1583.33,
+            "value": 3
+          },
+          {
+            "tMs": 1600,
+            "value": 3
+          },
+          {
+            "tMs": 1616.67,
+            "value": 3
+          },
+          {
+            "tMs": 1633.33,
+            "value": 3
+          },
+          {
+            "tMs": 1650,
+            "value": 3
+          },
+          {
+            "tMs": 1666.67,
+            "value": 3
+          },
+          {
+            "tMs": 1683.33,
+            "value": 3
+          },
+          {
+            "tMs": 1700,
+            "value": 3
+          },
+          {
+            "tMs": 1716.67,
+            "value": 3
+          },
+          {
+            "tMs": 1733.33,
+            "value": 3
+          },
+          {
+            "tMs": 1750,
+            "value": 3
+          },
+          {
+            "tMs": 1766.67,
+            "value": 3
+          },
+          {
+            "tMs": 1783.33,
+            "value": 3
+          },
+          {
+            "tMs": 1800,
+            "value": 3
+          }
+        ]
+      },
+      {
+        "id": "combat-projectile-hit-count",
+        "samples": [
+          {
+            "tMs": 0,
+            "value": 0
+          },
+          {
+            "tMs": 16.67,
+            "value": 0
+          },
+          {
+            "tMs": 33.33,
+            "value": 0
+          },
+          {
+            "tMs": 50,
+            "value": 0
+          },
+          {
+            "tMs": 66.67,
+            "value": 0
+          },
+          {
+            "tMs": 83.33,
+            "value": 0
+          },
+          {
+            "tMs": 100,
+            "value": 0
+          },
+          {
+            "tMs": 116.67,
+            "value": 0
+          },
+          {
+            "tMs": 133.33,
+            "value": 0
+          },
+          {
+            "tMs": 150,
+            "value": 0
+          },
+          {
+            "tMs": 166.67,
+            "value": 0
+          },
+          {
+            "tMs": 183.33,
+            "value": 0
+          },
+          {
+            "tMs": 200,
+            "value": 0
+          },
+          {
+            "tMs": 216.67,
+            "value": 0
+          },
+          {
+            "tMs": 233.33,
+            "value": 0
+          },
+          {
+            "tMs": 250,
+            "value": 0
+          },
+          {
+            "tMs": 266.67,
+            "value": 0
+          },
+          {
+            "tMs": 283.33,
+            "value": 0
+          },
+          {
+            "tMs": 300,
+            "value": 0
+          },
+          {
+            "tMs": 316.67,
+            "value": 0
+          },
+          {
+            "tMs": 333.33,
+            "value": 0
+          },
+          {
+            "tMs": 350,
+            "value": 0
+          },
+          {
+            "tMs": 366.67,
+            "value": 0
+          },
+          {
+            "tMs": 383.33,
+            "value": 0
+          },
+          {
+            "tMs": 400,
+            "value": 0
+          },
+          {
+            "tMs": 416.67,
+            "value": 0
+          },
+          {
+            "tMs": 433.33,
+            "value": 0
+          },
+          {
+            "tMs": 450,
+            "value": 0
+          },
+          {
+            "tMs": 466.67,
+            "value": 0
+          },
+          {
+            "tMs": 483.33,
+            "value": 0
+          },
+          {
+            "tMs": 500,
+            "value": 0
+          },
+          {
+            "tMs": 516.67,
+            "value": 0
+          },
+          {
+            "tMs": 533.33,
+            "value": 1
+          },
+          {
+            "tMs": 550,
+            "value": 1
+          },
+          {
+            "tMs": 566.67,
+            "value": 1
+          },
+          {
+            "tMs": 583.33,
+            "value": 1
+          },
+          {
+            "tMs": 600,
+            "value": 1
+          },
+          {
+            "tMs": 616.67,
+            "value": 1
+          },
+          {
+            "tMs": 633.33,
+            "value": 1
+          },
+          {
+            "tMs": 650,
+            "value": 1
+          },
+          {
+            "tMs": 666.67,
+            "value": 1
+          },
+          {
+            "tMs": 683.33,
+            "value": 1
+          },
+          {
+            "tMs": 700,
+            "value": 1
+          },
+          {
+            "tMs": 716.67,
+            "value": 1
+          },
+          {
+            "tMs": 733.33,
+            "value": 1
+          },
+          {
+            "tMs": 750,
+            "value": 1
+          },
+          {
+            "tMs": 766.67,
+            "value": 1
+          },
+          {
+            "tMs": 783.33,
+            "value": 1
+          },
+          {
+            "tMs": 800,
+            "value": 1
+          },
+          {
+            "tMs": 816.67,
+            "value": 2
+          },
+          {
+            "tMs": 833.33,
+            "value": 2
+          },
+          {
+            "tMs": 850,
+            "value": 2
+          },
+          {
+            "tMs": 866.67,
+            "value": 2
+          },
+          {
+            "tMs": 883.33,
+            "value": 2
+          },
+          {
+            "tMs": 900,
+            "value": 2
+          },
+          {
+            "tMs": 916.67,
+            "value": 2
+          },
+          {
+            "tMs": 933.33,
+            "value": 2
+          },
+          {
+            "tMs": 950,
+            "value": 2
+          },
+          {
+            "tMs": 966.67,
+            "value": 2
+          },
+          {
+            "tMs": 983.33,
+            "value": 2
+          },
+          {
+            "tMs": 1000,
+            "value": 2
+          },
+          {
+            "tMs": 1016.67,
+            "value": 2
+          },
+          {
+            "tMs": 1033.33,
+            "value": 2
+          },
+          {
+            "tMs": 1050,
+            "value": 2
+          },
+          {
+            "tMs": 1066.67,
+            "value": 2
+          },
+          {
+            "tMs": 1083.33,
+            "value": 2
+          },
+          {
+            "tMs": 1100,
+            "value": 2
+          },
+          {
+            "tMs": 1116.67,
+            "value": 2
+          },
+          {
+            "tMs": 1133.33,
+            "value": 3
+          },
+          {
+            "tMs": 1150,
+            "value": 3
+          },
+          {
+            "tMs": 1166.67,
+            "value": 3
+          },
+          {
+            "tMs": 1183.33,
+            "value": 3
+          },
+          {
+            "tMs": 1200,
+            "value": 3
+          },
+          {
+            "tMs": 1216.67,
+            "value": 3
+          },
+          {
+            "tMs": 1233.33,
+            "value": 3
+          },
+          {
+            "tMs": 1250,
+            "value": 3
+          },
+          {
+            "tMs": 1266.67,
+            "value": 3
+          },
+          {
+            "tMs": 1283.33,
+            "value": 3
+          },
+          {
+            "tMs": 1300,
+            "value": 3
+          },
+          {
+            "tMs": 1316.67,
+            "value": 3
+          },
+          {
+            "tMs": 1333.33,
+            "value": 3
+          },
+          {
+            "tMs": 1350,
+            "value": 3
+          },
+          {
+            "tMs": 1366.67,
+            "value": 3
+          },
+          {
+            "tMs": 1383.33,
+            "value": 3
+          },
+          {
+            "tMs": 1400,
+            "value": 3
+          },
+          {
+            "tMs": 1416.67,
+            "value": 3
+          },
+          {
+            "tMs": 1433.33,
+            "value": 3
+          },
+          {
+            "tMs": 1450,
+            "value": 3
+          },
+          {
+            "tMs": 1466.67,
+            "value": 3
+          },
+          {
+            "tMs": 1483.33,
+            "value": 3
+          },
+          {
+            "tMs": 1500,
+            "value": 3
+          },
+          {
+            "tMs": 1516.67,
+            "value": 3
+          },
+          {
+            "tMs": 1533.33,
+            "value": 3
+          },
+          {
+            "tMs": 1550,
+            "value": 3
+          },
+          {
+            "tMs": 1566.67,
+            "value": 3
+          },
+          {
+            "tMs": 1583.33,
+            "value": 3
+          },
+          {
+            "tMs": 1600,
+            "value": 3
+          },
+          {
+            "tMs": 1616.67,
+            "value": 3
+          },
+          {
+            "tMs": 1633.33,
+            "value": 3
+          },
+          {
+            "tMs": 1650,
+            "value": 3
+          },
+          {
+            "tMs": 1666.67,
+            "value": 3
+          },
+          {
+            "tMs": 1683.33,
+            "value": 3
+          },
+          {
+            "tMs": 1700,
+            "value": 3
+          },
+          {
+            "tMs": 1716.67,
+            "value": 3
+          },
+          {
+            "tMs": 1733.33,
+            "value": 3
+          },
+          {
+            "tMs": 1750,
+            "value": 3
+          },
+          {
+            "tMs": 1766.67,
+            "value": 3
+          },
+          {
+            "tMs": 1783.33,
+            "value": 3
+          },
+          {
+            "tMs": 1800,
+            "value": 3
+          }
+        ]
+      },
+      {
+        "id": "combat-enemy-hit-count",
+        "samples": [
+          {
+            "tMs": 0,
+            "value": 0
+          },
+          {
+            "tMs": 16.67,
+            "value": 0
+          },
+          {
+            "tMs": 33.33,
+            "value": 0
+          },
+          {
+            "tMs": 50,
+            "value": 0
+          },
+          {
+            "tMs": 66.67,
+            "value": 0
+          },
+          {
+            "tMs": 83.33,
+            "value": 0
+          },
+          {
+            "tMs": 100,
+            "value": 0
+          },
+          {
+            "tMs": 116.67,
+            "value": 0
+          },
+          {
+            "tMs": 133.33,
+            "value": 0
+          },
+          {
+            "tMs": 150,
+            "value": 0
+          },
+          {
+            "tMs": 166.67,
+            "value": 0
+          },
+          {
+            "tMs": 183.33,
+            "value": 0
+          },
+          {
+            "tMs": 200,
+            "value": 0
+          },
+          {
+            "tMs": 216.67,
+            "value": 0
+          },
+          {
+            "tMs": 233.33,
+            "value": 0
+          },
+          {
+            "tMs": 250,
+            "value": 0
+          },
+          {
+            "tMs": 266.67,
+            "value": 0
+          },
+          {
+            "tMs": 283.33,
+            "value": 0
+          },
+          {
+            "tMs": 300,
+            "value": 0
+          },
+          {
+            "tMs": 316.67,
+            "value": 0
+          },
+          {
+            "tMs": 333.33,
+            "value": 0
+          },
+          {
+            "tMs": 350,
+            "value": 0
+          },
+          {
+            "tMs": 366.67,
+            "value": 0
+          },
+          {
+            "tMs": 383.33,
+            "value": 0
+          },
+          {
+            "tMs": 400,
+            "value": 0
+          },
+          {
+            "tMs": 416.67,
+            "value": 0
+          },
+          {
+            "tMs": 433.33,
+            "value": 0
+          },
+          {
+            "tMs": 450,
+            "value": 0
+          },
+          {
+            "tMs": 466.67,
+            "value": 0
+          },
+          {
+            "tMs": 483.33,
+            "value": 0
+          },
+          {
+            "tMs": 500,
+            "value": 0
+          },
+          {
+            "tMs": 516.67,
+            "value": 0
+          },
+          {
+            "tMs": 533.33,
+            "value": 1
+          },
+          {
+            "tMs": 550,
+            "value": 1
+          },
+          {
+            "tMs": 566.67,
+            "value": 1
+          },
+          {
+            "tMs": 583.33,
+            "value": 1
+          },
+          {
+            "tMs": 600,
+            "value": 1
+          },
+          {
+            "tMs": 616.67,
+            "value": 1
+          },
+          {
+            "tMs": 633.33,
+            "value": 1
+          },
+          {
+            "tMs": 650,
+            "value": 1
+          },
+          {
+            "tMs": 666.67,
+            "value": 1
+          },
+          {
+            "tMs": 683.33,
+            "value": 1
+          },
+          {
+            "tMs": 700,
+            "value": 1
+          },
+          {
+            "tMs": 716.67,
+            "value": 1
+          },
+          {
+            "tMs": 733.33,
+            "value": 1
+          },
+          {
+            "tMs": 750,
+            "value": 1
+          },
+          {
+            "tMs": 766.67,
+            "value": 1
+          },
+          {
+            "tMs": 783.33,
+            "value": 1
+          },
+          {
+            "tMs": 800,
+            "value": 1
+          },
+          {
+            "tMs": 816.67,
+            "value": 2
+          },
+          {
+            "tMs": 833.33,
+            "value": 2
+          },
+          {
+            "tMs": 850,
+            "value": 2
+          },
+          {
+            "tMs": 866.67,
+            "value": 2
+          },
+          {
+            "tMs": 883.33,
+            "value": 2
+          },
+          {
+            "tMs": 900,
+            "value": 2
+          },
+          {
+            "tMs": 916.67,
+            "value": 2
+          },
+          {
+            "tMs": 933.33,
+            "value": 2
+          },
+          {
+            "tMs": 950,
+            "value": 2
+          },
+          {
+            "tMs": 966.67,
+            "value": 2
+          },
+          {
+            "tMs": 983.33,
+            "value": 2
+          },
+          {
+            "tMs": 1000,
+            "value": 2
+          },
+          {
+            "tMs": 1016.67,
+            "value": 2
+          },
+          {
+            "tMs": 1033.33,
+            "value": 2
+          },
+          {
+            "tMs": 1050,
+            "value": 2
+          },
+          {
+            "tMs": 1066.67,
+            "value": 2
+          },
+          {
+            "tMs": 1083.33,
+            "value": 2
+          },
+          {
+            "tMs": 1100,
+            "value": 2
+          },
+          {
+            "tMs": 1116.67,
+            "value": 2
+          },
+          {
+            "tMs": 1133.33,
+            "value": 3
+          },
+          {
+            "tMs": 1150,
+            "value": 3
+          },
+          {
+            "tMs": 1166.67,
+            "value": 3
+          },
+          {
+            "tMs": 1183.33,
+            "value": 3
+          },
+          {
+            "tMs": 1200,
+            "value": 3
+          },
+          {
+            "tMs": 1216.67,
+            "value": 3
+          },
+          {
+            "tMs": 1233.33,
+            "value": 3
+          },
+          {
+            "tMs": 1250,
+            "value": 3
+          },
+          {
+            "tMs": 1266.67,
+            "value": 3
+          },
+          {
+            "tMs": 1283.33,
+            "value": 3
+          },
+          {
+            "tMs": 1300,
+            "value": 3
+          },
+          {
+            "tMs": 1316.67,
+            "value": 3
+          },
+          {
+            "tMs": 1333.33,
+            "value": 3
+          },
+          {
+            "tMs": 1350,
+            "value": 3
+          },
+          {
+            "tMs": 1366.67,
+            "value": 3
+          },
+          {
+            "tMs": 1383.33,
+            "value": 3
+          },
+          {
+            "tMs": 1400,
+            "value": 3
+          },
+          {
+            "tMs": 1416.67,
+            "value": 3
+          },
+          {
+            "tMs": 1433.33,
+            "value": 3
+          },
+          {
+            "tMs": 1450,
+            "value": 3
+          },
+          {
+            "tMs": 1466.67,
+            "value": 3
+          },
+          {
+            "tMs": 1483.33,
+            "value": 3
+          },
+          {
+            "tMs": 1500,
+            "value": 3
+          },
+          {
+            "tMs": 1516.67,
+            "value": 3
+          },
+          {
+            "tMs": 1533.33,
+            "value": 3
+          },
+          {
+            "tMs": 1550,
+            "value": 3
+          },
+          {
+            "tMs": 1566.67,
+            "value": 3
+          },
+          {
+            "tMs": 1583.33,
+            "value": 3
+          },
+          {
+            "tMs": 1600,
+            "value": 3
+          },
+          {
+            "tMs": 1616.67,
+            "value": 3
+          },
+          {
+            "tMs": 1633.33,
+            "value": 3
+          },
+          {
+            "tMs": 1650,
+            "value": 3
+          },
+          {
+            "tMs": 1666.67,
+            "value": 3
+          },
+          {
+            "tMs": 1683.33,
+            "value": 3
+          },
+          {
+            "tMs": 1700,
+            "value": 3
+          },
+          {
+            "tMs": 1716.67,
+            "value": 3
+          },
+          {
+            "tMs": 1733.33,
+            "value": 3
+          },
+          {
+            "tMs": 1750,
+            "value": 3
+          },
+          {
+            "tMs": 1766.67,
+            "value": 3
+          },
+          {
+            "tMs": 1783.33,
+            "value": 3
+          },
+          {
+            "tMs": 1800,
+            "value": 3
+          }
+        ]
+      },
+      {
+        "id": "combat-enemy-health",
+        "samples": [
+          {
+            "tMs": 0,
+            "value": 3
+          },
+          {
+            "tMs": 16.67,
+            "value": 3
+          },
+          {
+            "tMs": 33.33,
+            "value": 3
+          },
+          {
+            "tMs": 50,
+            "value": 3
+          },
+          {
+            "tMs": 66.67,
+            "value": 3
+          },
+          {
+            "tMs": 83.33,
+            "value": 3
+          },
+          {
+            "tMs": 100,
+            "value": 3
+          },
+          {
+            "tMs": 116.67,
+            "value": 3
+          },
+          {
+            "tMs": 133.33,
+            "value": 3
+          },
+          {
+            "tMs": 150,
+            "value": 3
+          },
+          {
+            "tMs": 166.67,
+            "value": 3
+          },
+          {
+            "tMs": 183.33,
+            "value": 3
+          },
+          {
+            "tMs": 200,
+            "value": 3
+          },
+          {
+            "tMs": 216.67,
+            "value": 3
+          },
+          {
+            "tMs": 233.33,
+            "value": 3
+          },
+          {
+            "tMs": 250,
+            "value": 3
+          },
+          {
+            "tMs": 266.67,
+            "value": 3
+          },
+          {
+            "tMs": 283.33,
+            "value": 3
+          },
+          {
+            "tMs": 300,
+            "value": 3
+          },
+          {
+            "tMs": 316.67,
+            "value": 3
+          },
+          {
+            "tMs": 333.33,
+            "value": 3
+          },
+          {
+            "tMs": 350,
+            "value": 3
+          },
+          {
+            "tMs": 366.67,
+            "value": 3
+          },
+          {
+            "tMs": 383.33,
+            "value": 3
+          },
+          {
+            "tMs": 400,
+            "value": 3
+          },
+          {
+            "tMs": 416.67,
+            "value": 3
+          },
+          {
+            "tMs": 433.33,
+            "value": 3
+          },
+          {
+            "tMs": 450,
+            "value": 3
+          },
+          {
+            "tMs": 466.67,
+            "value": 3
+          },
+          {
+            "tMs": 483.33,
+            "value": 3
+          },
+          {
+            "tMs": 500,
+            "value": 3
+          },
+          {
+            "tMs": 516.67,
+            "value": 3
+          },
+          {
+            "tMs": 533.33,
+            "value": 2
+          },
+          {
+            "tMs": 550,
+            "value": 2
+          },
+          {
+            "tMs": 566.67,
+            "value": 2
+          },
+          {
+            "tMs": 583.33,
+            "value": 2
+          },
+          {
+            "tMs": 600,
+            "value": 2
+          },
+          {
+            "tMs": 616.67,
+            "value": 2
+          },
+          {
+            "tMs": 633.33,
+            "value": 2
+          },
+          {
+            "tMs": 650,
+            "value": 2
+          },
+          {
+            "tMs": 666.67,
+            "value": 2
+          },
+          {
+            "tMs": 683.33,
+            "value": 2
+          },
+          {
+            "tMs": 700,
+            "value": 2
+          },
+          {
+            "tMs": 716.67,
+            "value": 2
+          },
+          {
+            "tMs": 733.33,
+            "value": 2
+          },
+          {
+            "tMs": 750,
+            "value": 2
+          },
+          {
+            "tMs": 766.67,
+            "value": 2
+          },
+          {
+            "tMs": 783.33,
+            "value": 2
+          },
+          {
+            "tMs": 800,
+            "value": 2
+          },
+          {
+            "tMs": 816.67,
+            "value": 1
+          },
+          {
+            "tMs": 833.33,
+            "value": 1
+          },
+          {
+            "tMs": 850,
+            "value": 1
+          },
+          {
+            "tMs": 866.67,
+            "value": 1
+          },
+          {
+            "tMs": 883.33,
+            "value": 1
+          },
+          {
+            "tMs": 900,
+            "value": 1
+          },
+          {
+            "tMs": 916.67,
+            "value": 1
+          },
+          {
+            "tMs": 933.33,
+            "value": 1
+          },
+          {
+            "tMs": 950,
+            "value": 1
+          },
+          {
+            "tMs": 966.67,
+            "value": 1
+          },
+          {
+            "tMs": 983.33,
+            "value": 1
+          },
+          {
+            "tMs": 1000,
+            "value": 1
+          },
+          {
+            "tMs": 1016.67,
+            "value": 1
+          },
+          {
+            "tMs": 1033.33,
+            "value": 1
+          },
+          {
+            "tMs": 1050,
+            "value": 1
+          },
+          {
+            "tMs": 1066.67,
+            "value": 1
+          },
+          {
+            "tMs": 1083.33,
+            "value": 1
+          },
+          {
+            "tMs": 1100,
+            "value": 1
+          },
+          {
+            "tMs": 1116.67,
+            "value": 1
+          },
+          {
+            "tMs": 1133.33,
+            "value": 0
+          },
+          {
+            "tMs": 1150,
+            "value": 0
+          },
+          {
+            "tMs": 1166.67,
+            "value": 0
+          },
+          {
+            "tMs": 1183.33,
+            "value": 0
+          },
+          {
+            "tMs": 1200,
+            "value": 0
+          },
+          {
+            "tMs": 1216.67,
+            "value": 0
+          },
+          {
+            "tMs": 1233.33,
+            "value": 0
+          },
+          {
+            "tMs": 1250,
+            "value": 0
+          },
+          {
+            "tMs": 1266.67,
+            "value": 0
+          },
+          {
+            "tMs": 1283.33,
+            "value": 0
+          },
+          {
+            "tMs": 1300,
+            "value": 0
+          },
+          {
+            "tMs": 1316.67,
+            "value": 0
+          },
+          {
+            "tMs": 1333.33,
+            "value": 0
+          },
+          {
+            "tMs": 1350,
+            "value": 0
+          },
+          {
+            "tMs": 1366.67,
+            "value": 0
+          },
+          {
+            "tMs": 1383.33,
+            "value": 0
+          },
+          {
+            "tMs": 1400,
+            "value": 0
+          },
+          {
+            "tMs": 1416.67,
+            "value": 0
+          },
+          {
+            "tMs": 1433.33,
+            "value": 0
+          },
+          {
+            "tMs": 1450,
+            "value": 0
+          },
+          {
+            "tMs": 1466.67,
+            "value": 0
+          },
+          {
+            "tMs": 1483.33,
+            "value": 0
+          },
+          {
+            "tMs": 1500,
+            "value": 0
+          },
+          {
+            "tMs": 1516.67,
+            "value": 0
+          },
+          {
+            "tMs": 1533.33,
+            "value": 0
+          },
+          {
+            "tMs": 1550,
+            "value": 0
+          },
+          {
+            "tMs": 1566.67,
+            "value": 0
+          },
+          {
+            "tMs": 1583.33,
+            "value": 0
+          },
+          {
+            "tMs": 1600,
+            "value": 0
+          },
+          {
+            "tMs": 1616.67,
+            "value": 0
+          },
+          {
+            "tMs": 1633.33,
+            "value": 0
+          },
+          {
+            "tMs": 1650,
+            "value": 0
+          },
+          {
+            "tMs": 1666.67,
+            "value": 0
+          },
+          {
+            "tMs": 1683.33,
+            "value": 0
+          },
+          {
+            "tMs": 1700,
+            "value": 0
+          },
+          {
+            "tMs": 1716.67,
+            "value": 0
+          },
+          {
+            "tMs": 1733.33,
+            "value": 0
+          },
+          {
+            "tMs": 1750,
+            "value": 0
+          },
+          {
+            "tMs": 1766.67,
+            "value": 0
+          },
+          {
+            "tMs": 1783.33,
+            "value": 0
+          },
+          {
+            "tMs": 1800,
+            "value": 0
+          }
+        ]
+      },
+      {
+        "id": "combat-enemy-is-dead",
+        "samples": [
+          {
+            "tMs": 0,
+            "value": false
+          },
+          {
+            "tMs": 16.67,
+            "value": false
+          },
+          {
+            "tMs": 33.33,
+            "value": false
+          },
+          {
+            "tMs": 50,
+            "value": false
+          },
+          {
+            "tMs": 66.67,
+            "value": false
+          },
+          {
+            "tMs": 83.33,
+            "value": false
+          },
+          {
+            "tMs": 100,
+            "value": false
+          },
+          {
+            "tMs": 116.67,
+            "value": false
+          },
+          {
+            "tMs": 133.33,
+            "value": false
+          },
+          {
+            "tMs": 150,
+            "value": false
+          },
+          {
+            "tMs": 166.67,
+            "value": false
+          },
+          {
+            "tMs": 183.33,
+            "value": false
+          },
+          {
+            "tMs": 200,
+            "value": false
+          },
+          {
+            "tMs": 216.67,
+            "value": false
+          },
+          {
+            "tMs": 233.33,
+            "value": false
+          },
+          {
+            "tMs": 250,
+            "value": false
+          },
+          {
+            "tMs": 266.67,
+            "value": false
+          },
+          {
+            "tMs": 283.33,
+            "value": false
+          },
+          {
+            "tMs": 300,
+            "value": false
+          },
+          {
+            "tMs": 316.67,
+            "value": false
+          },
+          {
+            "tMs": 333.33,
+            "value": false
+          },
+          {
+            "tMs": 350,
+            "value": false
+          },
+          {
+            "tMs": 366.67,
+            "value": false
+          },
+          {
+            "tMs": 383.33,
+            "value": false
+          },
+          {
+            "tMs": 400,
+            "value": false
+          },
+          {
+            "tMs": 416.67,
+            "value": false
+          },
+          {
+            "tMs": 433.33,
+            "value": false
+          },
+          {
+            "tMs": 450,
+            "value": false
+          },
+          {
+            "tMs": 466.67,
+            "value": false
+          },
+          {
+            "tMs": 483.33,
+            "value": false
+          },
+          {
+            "tMs": 500,
+            "value": false
+          },
+          {
+            "tMs": 516.67,
+            "value": false
+          },
+          {
+            "tMs": 533.33,
+            "value": false
+          },
+          {
+            "tMs": 550,
+            "value": false
+          },
+          {
+            "tMs": 566.67,
+            "value": false
+          },
+          {
+            "tMs": 583.33,
+            "value": false
+          },
+          {
+            "tMs": 600,
+            "value": false
+          },
+          {
+            "tMs": 616.67,
+            "value": false
+          },
+          {
+            "tMs": 633.33,
+            "value": false
+          },
+          {
+            "tMs": 650,
+            "value": false
+          },
+          {
+            "tMs": 666.67,
+            "value": false
+          },
+          {
+            "tMs": 683.33,
+            "value": false
+          },
+          {
+            "tMs": 700,
+            "value": false
+          },
+          {
+            "tMs": 716.67,
+            "value": false
+          },
+          {
+            "tMs": 733.33,
+            "value": false
+          },
+          {
+            "tMs": 750,
+            "value": false
+          },
+          {
+            "tMs": 766.67,
+            "value": false
+          },
+          {
+            "tMs": 783.33,
+            "value": false
+          },
+          {
+            "tMs": 800,
+            "value": false
+          },
+          {
+            "tMs": 816.67,
+            "value": false
+          },
+          {
+            "tMs": 833.33,
+            "value": false
+          },
+          {
+            "tMs": 850,
+            "value": false
+          },
+          {
+            "tMs": 866.67,
+            "value": false
+          },
+          {
+            "tMs": 883.33,
+            "value": false
+          },
+          {
+            "tMs": 900,
+            "value": false
+          },
+          {
+            "tMs": 916.67,
+            "value": false
+          },
+          {
+            "tMs": 933.33,
+            "value": false
+          },
+          {
+            "tMs": 950,
+            "value": false
+          },
+          {
+            "tMs": 966.67,
+            "value": false
+          },
+          {
+            "tMs": 983.33,
+            "value": false
+          },
+          {
+            "tMs": 1000,
+            "value": false
+          },
+          {
+            "tMs": 1016.67,
+            "value": false
+          },
+          {
+            "tMs": 1033.33,
+            "value": false
+          },
+          {
+            "tMs": 1050,
+            "value": false
+          },
+          {
+            "tMs": 1066.67,
+            "value": false
+          },
+          {
+            "tMs": 1083.33,
+            "value": false
+          },
+          {
+            "tMs": 1100,
+            "value": false
+          },
+          {
+            "tMs": 1116.67,
+            "value": false
+          },
+          {
+            "tMs": 1133.33,
+            "value": true
+          },
+          {
+            "tMs": 1150,
+            "value": true
+          },
+          {
+            "tMs": 1166.67,
+            "value": true
+          },
+          {
+            "tMs": 1183.33,
+            "value": true
+          },
+          {
+            "tMs": 1200,
+            "value": true
+          },
+          {
+            "tMs": 1216.67,
+            "value": true
+          },
+          {
+            "tMs": 1233.33,
+            "value": true
+          },
+          {
+            "tMs": 1250,
+            "value": true
+          },
+          {
+            "tMs": 1266.67,
+            "value": true
+          },
+          {
+            "tMs": 1283.33,
+            "value": true
+          },
+          {
+            "tMs": 1300,
+            "value": true
+          },
+          {
+            "tMs": 1316.67,
+            "value": true
+          },
+          {
+            "tMs": 1333.33,
+            "value": true
+          },
+          {
+            "tMs": 1350,
+            "value": true
+          },
+          {
+            "tMs": 1366.67,
+            "value": true
+          },
+          {
+            "tMs": 1383.33,
+            "value": true
+          },
+          {
+            "tMs": 1400,
+            "value": true
+          },
+          {
+            "tMs": 1416.67,
+            "value": true
+          },
+          {
+            "tMs": 1433.33,
+            "value": true
+          },
+          {
+            "tMs": 1450,
+            "value": true
+          },
+          {
+            "tMs": 1466.67,
+            "value": true
+          },
+          {
+            "tMs": 1483.33,
+            "value": true
+          },
+          {
+            "tMs": 1500,
+            "value": true
+          },
+          {
+            "tMs": 1516.67,
+            "value": true
+          },
+          {
+            "tMs": 1533.33,
+            "value": true
+          },
+          {
+            "tMs": 1550,
+            "value": true
+          },
+          {
+            "tMs": 1566.67,
+            "value": true
+          },
+          {
+            "tMs": 1583.33,
+            "value": true
+          },
+          {
+            "tMs": 1600,
+            "value": true
+          },
+          {
+            "tMs": 1616.67,
+            "value": true
+          },
+          {
+            "tMs": 1633.33,
+            "value": true
+          },
+          {
+            "tMs": 1650,
+            "value": true
+          },
+          {
+            "tMs": 1666.67,
+            "value": true
+          },
+          {
+            "tMs": 1683.33,
+            "value": true
+          },
+          {
+            "tMs": 1700,
+            "value": true
+          },
+          {
+            "tMs": 1716.67,
+            "value": true
+          },
+          {
+            "tMs": 1733.33,
+            "value": true
+          },
+          {
+            "tMs": 1750,
+            "value": true
+          },
+          {
+            "tMs": 1766.67,
+            "value": true
+          },
+          {
+            "tMs": 1783.33,
+            "value": true
+          },
+          {
+            "tMs": 1800,
+            "value": true
+          }
+        ]
+      }
+    ]
+  }
+}

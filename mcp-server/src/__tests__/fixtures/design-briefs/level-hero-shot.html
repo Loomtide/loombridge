@@ -1,0 +1,835 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Level 1-2 — Hero Shot · PixelGameShot</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Press+Start+2P&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #0d1015;
+    --paper: #14181f;
+    --paper-2: #1a1f29;
+    --line: #262c38;
+    --text: #e8eaed;
+    --muted: #7e8898;
+    --dim: #4d5666;
+    --hud: #4dd0e1;     /* cyan  */
+    --juice: #ff4d8d;   /* magenta */
+    --camera: #ffc857;  /* gold */
+    --para: #b388ff;    /* lavender */
+  }
+
+  html, body { margin: 0; padding: 0; background: var(--ink); color: var(--text); font-family: 'Space Grotesk', system-ui, sans-serif; }
+  body { min-height: 100vh; display: flex; align-items: flex-start; justify-content: center; }
+
+  /* ---------- Page scale wrapper (fits 1920 design into viewport) ---------- */
+  .scale-wrap { width: 1920px; transform-origin: top center; }
+
+  .doc {
+    width: 1920px;
+    min-height: 1200px;
+    position: relative;
+    padding: 56px 80px 64px;
+    box-sizing: border-box;
+    background:
+      radial-gradient(1200px 600px at 50% -10%, rgba(179,136,255,0.06), transparent 60%),
+      var(--ink);
+  }
+
+  /* ---------- Header ---------- */
+  .head { display: flex; align-items: flex-start; justify-content: space-between; gap: 32px; margin-bottom: 28px; }
+  .head h1 {
+    font-family: 'Space Grotesk', sans-serif;
+    font-weight: 600;
+    font-size: 34px;
+    letter-spacing: -0.01em;
+    margin: 0 0 6px;
+  }
+  .head .sub {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    color: var(--muted);
+    letter-spacing: 0.02em;
+  }
+  .head .kicker {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--juice);
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    margin-bottom: 12px;
+  }
+  .meta {
+    display: flex; gap: 10px; flex-wrap: wrap; justify-content: flex-end;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+  }
+  .meta .chip {
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 7px 10px;
+    color: var(--muted);
+    background: var(--paper);
+    white-space: nowrap;
+  }
+  .meta .chip b { color: var(--text); font-weight: 600; }
+
+  /* ---------- Stage: viewport + annotations ---------- */
+  .stage {
+    position: relative;
+    width: 1760px;
+    height: 920px;
+    margin: 0 auto;
+  }
+
+  /* The game viewport sits centered. 1280×720, framed by margins for callouts. */
+  .viewport-wrap {
+    position: absolute;
+    left: 240px;
+    top: 60px;
+    width: 1280px;
+    height: 720px;
+  }
+  .viewport {
+    position: relative;
+    width: 1280px;
+    height: 720px;
+    overflow: hidden;
+    background: #1b1733;
+    border-radius: 4px;
+    box-shadow:
+      0 0 0 1px #262c38,
+      0 20px 60px -20px rgba(0,0,0,0.7),
+      inset 0 0 0 1px rgba(255,255,255,0.02);
+  }
+
+  /* The "world" is native pixel art at 256×144, scaled 5×. */
+  .world {
+    position: absolute;
+    left: 0; top: 0;
+    width: 256px;
+    height: 144px;
+    transform: scale(5);
+    transform-origin: 0 0;
+    image-rendering: pixelated;
+  }
+  .world * { position: absolute; image-rendering: pixelated; }
+
+  /* ---- Parallax background ---- */
+  .bg-far {
+    inset: 0;
+    background-color: #2a1f4d;
+    background-image:
+      radial-gradient(circle at 18% 22%, #fff8 1px, transparent 1.5px),
+      radial-gradient(circle at 72% 14%, #fff7 1px, transparent 1.5px),
+      radial-gradient(circle at 44% 60%, #fff6 1px, transparent 1.5px),
+      radial-gradient(circle at 88% 78%, #fff8 1px, transparent 1.5px),
+      radial-gradient(circle at 12% 88%, #fff5 1px, transparent 1.5px),
+      radial-gradient(circle at 30% 40%, #fff7 1px, transparent 1.5px),
+      radial-gradient(circle at 60% 35%, #fff5 1px, transparent 1.5px),
+      radial-gradient(ellipse at 50% 110%, #6b3fb8 0%, #2a1f4d 60%);
+    background-size: 64px 64px, 64px 64px, 64px 64px, 64px 64px, 64px 64px, 64px 64px, 64px 64px, 100% 100%;
+    animation: bgdrift 30s linear infinite;
+  }
+  @keyframes bgdrift {
+    from { background-position: 0 0, 0 0, 0 0, 0 0, 0 0, 0 0, 0 0, 0 0; }
+    to   { background-position: -64px 0, -64px 0, -64px 0, -64px 0, -64px 0, -64px 0, -64px 0, 0 0; }
+  }
+  /* mid layer — stepped silhouette via gradient */
+  .bg-mid {
+    inset: 64px 0 0 0;
+    background:
+      linear-gradient(180deg, transparent 0%, transparent 30%, rgba(20,12,40,0.55) 30%, rgba(20,12,40,0.55) 100%);
+    mask:
+      linear-gradient(90deg,
+        #000 0%, #000 6%, transparent 6%, transparent 8%,
+        #000 8%, #000 18%, transparent 18%, transparent 20%,
+        #000 20%, #000 34%, transparent 34%, transparent 36%,
+        #000 36%, #000 50%, transparent 50%, transparent 52%,
+        #000 52%, #000 70%, transparent 70%, transparent 72%,
+        #000 72%, #000 86%, transparent 86%, transparent 88%,
+        #000 88%, #000 100%);
+    -webkit-mask:
+      linear-gradient(90deg,
+        #000 0%, #000 6%, transparent 6%, transparent 8%,
+        #000 8%, #000 18%, transparent 18%, transparent 20%,
+        #000 20%, #000 34%, transparent 34%, transparent 36%,
+        #000 36%, #000 50%, transparent 50%, transparent 52%,
+        #000 52%, #000 70%, transparent 70%, transparent 72%,
+        #000 72%, #000 86%, transparent 86%, transparent 88%,
+        #000 88%, #000 100%);
+  }
+
+  /* ---- Terrain tile sprite ---- */
+  .tile {
+    width: 16px; height: 16px;
+    background-image: url(assets/terrain.png);
+    background-repeat: no-repeat;
+  }
+  /* Green grass set tile coords (col,row in 16px) */
+  .t-gtl  { background-position: -96px   0px; } /* (6,0) grass top-left */
+  .t-gtm  { background-position: -112px  0px; } /* (7,0) grass top */
+  .t-gtr  { background-position: -128px  0px; } /* (8,0) grass top-right */
+  .t-dl   { background-position: -96px  -16px;} /* (6,1) dirt left */
+  .t-dm   { background-position: -112px -16px;} /* (7,1) dirt mid */
+  .t-dr   { background-position: -128px -16px;} /* (8,1) dirt right */
+  .t-dl2  { background-position: -96px  -32px;} /* (6,2) dirt left lower */
+  .t-dm2  { background-position: -112px -32px;} /* (7,2) dirt mid lower */
+  .t-dr2  { background-position: -128px -32px;} /* (8,2) dirt right lower */
+
+  /* ---- Props ---- */
+  .box      { width: 28px; height: 28px; background-image: url(assets/box1.png); background-position: 0 0; }
+  .tramp    { width: 28px; height: 28px; background-image: url(assets/trampoline.png); background-position: 0 0; }
+  .flag     { width: 64px; height: 64px; background-image: url(assets/checkpoint.png); background-position: 0 0; }
+  .spikes   { width: 16px; height: 16px; background-image: url(assets/spikes.png); background-position: 0 0; }
+
+  /* Saw — 8 frames at 38x38 */
+  .saw {
+    width: 38px; height: 38px;
+    background-image: url(assets/saw-on.png);
+    animation: sawspin 0.5s steps(8) infinite;
+  }
+  @keyframes sawspin { from { background-position: 0 0; } to { background-position: -304px 0; } }
+  .saw-chain { width: 6px; height: 6px; background-image: url(assets/saw-chain.png); background-position: 0 0; }
+
+  /* Fruits — 17 frames at 32x32 */
+  .fruit {
+    width: 32px; height: 32px;
+    animation: fruitbob 1.36s steps(17) infinite;
+  }
+  .f-apple      { background-image: url(assets/fruit-apple.png); }
+  .f-cherries   { background-image: url(assets/fruit-cherries.png); }
+  .f-strawberry { background-image: url(assets/fruit-strawberry.png); }
+  .f-bananas    { background-image: url(assets/fruit-bananas.png); }
+  .f-kiwi       { background-image: url(assets/fruit-kiwi.png); }
+  @keyframes fruitbob { from { background-position: 0 0; } to { background-position: -544px 0; } }
+
+  /* Collected pop — 6 frames at 32x32 */
+  .collected {
+    width: 32px; height: 32px;
+    background-image: url(assets/fruit-collected.png);
+    animation: collected-pop 0.5s steps(6) infinite;
+  }
+  @keyframes collected-pop { from { background-position: 0 0; } to { background-position: -192px 0; } }
+
+  /* ---- Ninja Frog ---- */
+  .ninja-shadow {
+    width: 24px; height: 8px;
+    background-image: url(assets/shadow.png);
+    background-position: 0 0;
+    opacity: 0.5;
+  }
+  .ninja {
+    width: 32px; height: 32px;
+    background-image: url(assets/ninja-run.png);
+    animation: ninja-run 0.96s steps(12) infinite;
+  }
+  @keyframes ninja-run { from { background-position: 0 0; } to { background-position: -384px 0; } }
+
+  /* Ghost afterimages — cyan-tinted ninja, drifting */
+  .ghost {
+    width: 32px; height: 32px;
+    background-image: url(assets/ninja-run.png);
+    animation: ninja-run 0.96s steps(12) infinite;
+    filter: brightness(1.4) sepia(1) hue-rotate(150deg) saturate(3);
+    mix-blend-mode: screen;
+  }
+
+  /* Dust particles */
+  .dust {
+    width: 16px; height: 16px;
+    background-image: url(assets/dust.png);
+    opacity: 0.85;
+  }
+
+  /* ---- Fruit pop sparkle (CSS) ---- */
+  .sparkle {
+    width: 2px; height: 2px;
+    background: #fff7c4;
+    box-shadow:
+      6px -3px 0 #fff7c4,
+      -7px -2px 0 #ffd166,
+      4px 5px 0 #ffd166,
+      -5px 4px 0 #fff7c4,
+      0 -8px 0 #fff7c4,
+      8px 2px 0 #ffd166;
+    animation: sparkle-blink 0.6s steps(2) infinite;
+  }
+  @keyframes sparkle-blink { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.4; transform: scale(0.7); } }
+
+  /* ---------- HUD (overlays viewport, NOT in pixel world) ---------- */
+  .hud {
+    position: absolute; inset: 0;
+    pointer-events: none;
+    font-family: 'Press Start 2P', monospace;
+    color: #fff;
+    text-shadow: 0 3px 0 #000a, 2px 0 0 #000a, -2px 0 0 #000a, 0 -2px 0 #000a;
+  }
+  .hud .score {
+    position: absolute; left: 24px; top: 20px;
+    display: flex; align-items: center; gap: 12px;
+    font-size: 22px;
+  }
+  .hud .score .icon {
+    width: 40px; height: 40px;
+    background: url(assets/fruit-apple.png) 0 0 / 680px 40px;
+    image-rendering: pixelated;
+    animation: hud-apple 1.36s steps(17) infinite;
+  }
+  @keyframes hud-apple { from { background-position: 0 0; } to { background-position: -680px 0; } }
+  .hud .score .x { color: #ffd166; font-size: 18px; opacity: 0.8; }
+  .hud .score .total { color: #ffd166; font-size: 14px; opacity: 0.6; margin-left: 4px; }
+
+  .hud .timer {
+    position: absolute; left: 50%; top: 20px; transform: translateX(-50%);
+    font-size: 22px;
+    letter-spacing: 0.05em;
+    color: #fff;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .hud .timer .dot {
+    width: 8px; height: 8px; border-radius: 50%; background: #ff4d6d;
+    box-shadow: 0 0 0 3px #ff4d6d40;
+    animation: timer-pulse 1s ease-in-out infinite;
+  }
+  @keyframes timer-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+  .hud .lives {
+    position: absolute; right: 24px; top: 20px;
+    display: flex; gap: 8px;
+  }
+  .hud .lives .heart {
+    width: 32px; height: 28px;
+    background: var(--juice);
+    -webkit-mask: radial-gradient(circle at 30% 40%, #000 22%, transparent 23%) 0 0/100% 100%, radial-gradient(circle at 70% 40%, #000 22%, transparent 23%) 0 0/100% 100%, conic-gradient(from -45deg at 50% 65%, #000 0deg 90deg, transparent 90deg) 50% 65%/72% 60% no-repeat;
+    -webkit-mask-composite: source-over;
+    /* Fallback: just a square pip */
+    border-radius: 4px;
+  }
+  .hud .lives .heart.empty { background: #2a2f3a; }
+
+  /* ---------- Camera framing overlay (yellow brackets) ---------- */
+  .camera-frame {
+    position: absolute; inset: 28px;
+    pointer-events: none;
+  }
+  .camera-frame::before, .camera-frame::after,
+  .camera-frame > .br, .camera-frame > .tr {
+    content: ""; position: absolute; width: 56px; height: 56px;
+    border: 2px solid var(--camera);
+  }
+  .camera-frame::before { top: 0; left: 0; border-right: none; border-bottom: none; }
+  .camera-frame::after  { bottom: 0; left: 0; border-right: none; border-top: none; }
+  .camera-frame > .tr   { top: 0; right: 0; border-left: none; border-bottom: none; }
+  .camera-frame > .br   { bottom: 0; right: 0; border-left: none; border-top: none; }
+
+  /* Center crosshair + ninja-anchor line */
+  .anchor-line {
+    position: absolute;
+    left: 40%;
+    top: 0; bottom: 0;
+    border-left: 1px dashed var(--camera);
+    opacity: 0.45;
+  }
+  .anchor-label {
+    position: absolute; left: 40%; bottom: 12px;
+    transform: translateX(-50%);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--camera);
+    letter-spacing: 0.08em;
+    background: rgba(13,16,21,0.7);
+    padding: 4px 8px;
+    border: 1px solid var(--camera);
+    border-radius: 3px;
+    white-space: nowrap;
+  }
+
+  /* Screen shake arrows on corners */
+  .shake-arrow {
+    position: absolute;
+    color: var(--juice);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 14px;
+    font-weight: 700;
+    animation: shake-pulse 0.7s ease-in-out infinite;
+  }
+  @keyframes shake-pulse {
+    0%, 100% { transform: translate(0,0); opacity: 0.85; }
+    25% { transform: translate(-3px, -3px); opacity: 1; }
+    50% { transform: translate(3px, -2px); }
+    75% { transform: translate(-2px, 3px); }
+  }
+
+  /* ---------- Annotation system ---------- */
+  .svg-overlay {
+    position: absolute; inset: 0;
+    pointer-events: none;
+    width: 100%; height: 100%;
+  }
+  .note {
+    position: absolute;
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--text);
+    width: 220px;
+    padding: 10px 12px 11px 16px;
+    background: linear-gradient(180deg, rgba(20,24,31,0.95), rgba(20,24,31,0.85));
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    box-shadow: 0 6px 18px -8px rgba(0,0,0,0.7);
+  }
+  .note::before {
+    content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
+    background: var(--cat, var(--muted));
+  }
+  .note .tag {
+    display: inline-block;
+    font-size: 10px; font-weight: 600;
+    color: var(--cat, var(--muted));
+    letter-spacing: 0.18em;
+    margin-bottom: 4px;
+  }
+  .note .tag .id {
+    display: inline-block;
+    width: 16px; height: 16px;
+    line-height: 16px;
+    text-align: center;
+    border-radius: 2px;
+    color: var(--ink);
+    background: var(--cat, var(--muted));
+    font-weight: 700;
+    margin-right: 6px;
+    font-size: 10px;
+  }
+  .note .title { font-size: 13px; font-weight: 600; color: var(--text); margin: 0 0 4px; letter-spacing: 0.01em; }
+  .note .body  { font-size: 11px; color: var(--muted); line-height: 1.5; }
+  .note .body b { color: var(--text); font-weight: 600; }
+
+  .note.hud    { --cat: var(--hud); }
+  .note.juice  { --cat: var(--juice); }
+  .note.camera { --cat: var(--camera); }
+  .note.para   { --cat: var(--para); }
+
+  /* End-of-leader dot */
+  .leader-dot {
+    position: absolute;
+    width: 9px; height: 9px;
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    background: var(--cat, #fff);
+    box-shadow: 0 0 0 2px rgba(13,16,21,0.9), 0 0 0 3px var(--cat, #fff);
+    pointer-events: none;
+  }
+
+  /* ---------- Footer legend ---------- */
+  .legend {
+    margin-top: 24px;
+    display: flex;
+    gap: 32px;
+    justify-content: center;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 0.06em;
+  }
+  .legend .sw { display: inline-flex; align-items: center; gap: 8px; }
+  .legend .sw .d { width: 10px; height: 10px; border-radius: 50%; }
+  .legend .footnote { color: var(--dim); font-size: 10px; }
+</style>
+</head>
+<body>
+<div class="scale-wrap" id="scale-wrap">
+<div class="doc" data-screen-label="01 Level Hero Shot">
+
+  <!-- ============================ HEADER ============================ -->
+  <header class="head">
+    <div>
+      <div class="kicker">Hero shot · Vertical slice · Level 1-2</div>
+      <h1>Ninja Frog — &ldquo;Saw-Pit Hop&rdquo;</h1>
+      <div class="sub">Annotated reference: HUD layout · juice cues · camera framing · parallax stack</div>
+    </div>
+    <div class="meta">
+      <span class="chip">VIEWPORT&nbsp;&nbsp;<b>1280 × 720</b></span>
+      <span class="chip">NATIVE&nbsp;&nbsp;<b>256 × 144 px</b></span>
+      <span class="chip">SCALE&nbsp;&nbsp;<b>5×</b> pixel-perfect</span>
+      <span class="chip">TILE&nbsp;&nbsp;<b>16 px</b> · 16w × 9h</span>
+      <span class="chip">TARGET&nbsp;&nbsp;<b>60 fps</b></span>
+    </div>
+  </header>
+
+  <!-- ============================ STAGE ============================ -->
+  <div class="stage" id="stage">
+
+    <!-- Game viewport -->
+    <div class="viewport-wrap">
+      <div class="viewport" id="vp">
+
+        <!-- ====== PIXEL WORLD (256×144 native, ×5) ====== -->
+        <div class="world">
+
+          <!-- Parallax background -->
+          <div class="bg-far"  style="width:256px; height:144px"></div>
+          <div class="bg-mid"  style="left:0; top:80px; width:256px; height:64px;"></div>
+
+          <!-- ============ LEFT GROUND PLATFORM ============ -->
+          <!-- left grass strip x=0..80, y=96..144 (5 tiles wide × 3 tall) -->
+          <div class="tile t-gtl"  style="left:0px;   top:96px"></div>
+          <div class="tile t-gtm"  style="left:16px;  top:96px"></div>
+          <div class="tile t-gtm"  style="left:32px;  top:96px"></div>
+          <div class="tile t-gtm"  style="left:48px;  top:96px"></div>
+          <div class="tile t-gtr"  style="left:64px;  top:96px"></div>
+          <div class="tile t-dl"   style="left:0px;   top:112px"></div>
+          <div class="tile t-dm"   style="left:16px;  top:112px"></div>
+          <div class="tile t-dm"   style="left:32px;  top:112px"></div>
+          <div class="tile t-dm"   style="left:48px;  top:112px"></div>
+          <div class="tile t-dr"   style="left:64px;  top:112px"></div>
+          <div class="tile t-dl2"  style="left:0px;   top:128px"></div>
+          <div class="tile t-dm2"  style="left:16px;  top:128px"></div>
+          <div class="tile t-dm2"  style="left:32px;  top:128px"></div>
+          <div class="tile t-dm2"  style="left:48px;  top:128px"></div>
+          <div class="tile t-dr2"  style="left:64px;  top:128px"></div>
+
+          <!-- ============ RIGHT GROUND PLATFORM (higher) ============ -->
+          <!-- right grass strip x=144..256, y=80..144 -->
+          <div class="tile t-gtl"  style="left:144px; top:80px"></div>
+          <div class="tile t-gtm"  style="left:160px; top:80px"></div>
+          <div class="tile t-gtm"  style="left:176px; top:80px"></div>
+          <div class="tile t-gtm"  style="left:192px; top:80px"></div>
+          <div class="tile t-gtm"  style="left:208px; top:80px"></div>
+          <div class="tile t-gtm"  style="left:224px; top:80px"></div>
+          <div class="tile t-gtr"  style="left:240px; top:80px"></div>
+          <div class="tile t-dl"   style="left:144px; top:96px"></div>
+          <div class="tile t-dm"   style="left:160px; top:96px"></div>
+          <div class="tile t-dm"   style="left:176px; top:96px"></div>
+          <div class="tile t-dm"   style="left:192px; top:96px"></div>
+          <div class="tile t-dm"   style="left:208px; top:96px"></div>
+          <div class="tile t-dm"   style="left:224px; top:96px"></div>
+          <div class="tile t-dr"   style="left:240px; top:96px"></div>
+          <div class="tile t-dl2"  style="left:144px; top:112px"></div>
+          <div class="tile t-dm2"  style="left:160px; top:112px"></div>
+          <div class="tile t-dm2"  style="left:176px; top:112px"></div>
+          <div class="tile t-dm2"  style="left:192px; top:112px"></div>
+          <div class="tile t-dm2"  style="left:208px; top:112px"></div>
+          <div class="tile t-dm2"  style="left:224px; top:112px"></div>
+          <div class="tile t-dr2"  style="left:240px; top:112px"></div>
+          <div class="tile t-dl2"  style="left:144px; top:128px"></div>
+          <div class="tile t-dm2"  style="left:160px; top:128px"></div>
+          <div class="tile t-dm2"  style="left:176px; top:128px"></div>
+          <div class="tile t-dm2"  style="left:192px; top:128px"></div>
+          <div class="tile t-dm2"  style="left:208px; top:128px"></div>
+          <div class="tile t-dm2"  style="left:224px; top:128px"></div>
+          <div class="tile t-dr2"  style="left:240px; top:128px"></div>
+
+          <!-- Spikes lining the pit at the bottom -->
+          <div class="spikes" style="left:80px;  top:128px"></div>
+          <div class="spikes" style="left:96px;  top:128px"></div>
+          <div class="spikes" style="left:112px; top:128px"></div>
+          <div class="spikes" style="left:128px; top:128px"></div>
+
+          <!-- ====== Props ====== -->
+          <!-- Box on left ground -->
+          <div class="box"   style="left:14px; top:68px"></div>
+
+          <!-- Trampoline at right edge of left platform -->
+          <div class="tramp" style="left:50px; top:68px"></div>
+
+          <!-- Saw chain + saw in the pit -->
+          <div class="saw-chain" style="left:111px; top:80px"></div>
+          <div class="saw-chain" style="left:111px; top:86px"></div>
+          <div class="saw-chain" style="left:111px; top:92px"></div>
+          <div class="saw-chain" style="left:111px; top:98px"></div>
+          <div class="saw" id="saw" style="left:95px; top:104px"></div>
+
+          <!-- Checkpoint flag at far right -->
+          <div class="flag" style="left:194px; top:18px"></div>
+
+          <!-- ====== Fruits ====== -->
+          <!-- Apple over the pit (high arc point) -->
+          <div class="fruit f-apple" id="fruit-apple" style="left:108px; top:34px"></div>
+          <!-- Cherries on the right platform near edge -->
+          <div class="fruit f-cherries" style="left:150px; top:48px"></div>
+          <!-- Strawberry up high -->
+          <div class="fruit f-strawberry" style="left:176px; top:30px"></div>
+          <!-- Bananas above left ground -->
+          <div class="fruit f-bananas" style="left:26px; top:34px"></div>
+
+          <!-- A recently-collected sparkle near where the player picked a fruit -->
+          <div class="collected" id="collected-sparkle" style="left:60px; top:44px"></div>
+
+          <!-- ====== Ninja Frog mid-dash ====== -->
+          <!-- Shadow on ground below ninja -->
+          <div class="ninja-shadow" style="left:108px; top:90px"></div>
+
+          <!-- Dash afterimages (3 ghosts, decreasing opacity, behind-left) -->
+          <div class="ghost" style="left:78px;  top:60px; opacity:0.18"></div>
+          <div class="ghost" style="left:88px;  top:58px; opacity:0.32"></div>
+          <div class="ghost" style="left:98px;  top:56px; opacity:0.52"></div>
+
+          <!-- The hero -->
+          <div class="ninja" id="ninja" style="left:108px; top:54px"></div>
+
+          <!-- Trampoline dust (landing/launch) -->
+          <div class="dust" style="left:44px; top:62px; opacity:0.7"></div>
+          <div class="dust" style="left:60px; top:64px; opacity:0.5"></div>
+          <div class="dust" style="left:70px; top:60px; opacity:0.35"></div>
+
+          <!-- Fruit-pop sparkle (over the just-collected slot) -->
+          <div class="sparkle" style="left:66px; top:50px"></div>
+
+        </div><!-- /.world -->
+
+        <!-- ============ HUD overlay (screen-space, not pixel world) ============ -->
+        <div class="hud">
+          <div class="score">
+            <div class="icon"></div>
+            <span class="x">×</span>
+            <span>04</span>
+            <span class="total">/12</span>
+          </div>
+          <div class="timer">
+            <span class="dot"></span>
+            <span>00:23:45</span>
+          </div>
+          <div class="lives">
+            <div class="heart"></div>
+            <div class="heart"></div>
+            <div class="heart empty"></div>
+          </div>
+        </div>
+
+        <!-- Camera framing brackets + 40% anchor line -->
+        <div class="camera-frame">
+          <div class="tr"></div>
+          <div class="br"></div>
+          <div class="anchor-line"></div>
+          <div class="anchor-label">PLAYER ANCHOR · 40% W</div>
+        </div>
+
+        <!-- Screen-shake arrows at corners -->
+        <div class="shake-arrow" style="left:8px;  top:8px;">↖</div>
+        <div class="shake-arrow" style="right:8px; top:8px;">↗</div>
+        <div class="shake-arrow" style="left:8px;  bottom:8px;">↙</div>
+        <div class="shake-arrow" style="right:8px; bottom:8px;">↘</div>
+
+      </div><!-- /.viewport -->
+    </div>
+
+    <!-- ============================ ANNOTATIONS ============================ -->
+
+    <!-- SVG overlay for leader lines (drawn dynamically) -->
+    <svg class="svg-overlay" id="leaders" viewBox="0 0 1760 920" preserveAspectRatio="none"></svg>
+
+    <!-- A · Score (HUD) -->
+    <div class="note hud" data-leader="A" style="left:0; top:38px;">
+      <div class="tag"><span class="id">A</span>HUD · SCORE</div>
+      <div class="title">Fruit counter</div>
+      <div class="body">Top-left, <b>24 px</b> inset. Press Start 2P, 22 px, white w/ 3 px black drop. Apple icon plays its idle bob — never freezes. <b>×NN / total</b> in <b>#ffd166</b>.</div>
+    </div>
+
+    <!-- C · Timer (HUD) -->
+    <div class="note hud" data-leader="C" style="left:760px; top:0px;">
+      <div class="tag"><span class="id">C</span>HUD · TIMER (OPT)</div>
+      <div class="title">Run timer</div>
+      <div class="body">Top-center, hidden in story mode. <b>mm:ss:ff</b>. Red pulse dot when last 10 s. Speedrun mode: also shows split delta.</div>
+    </div>
+
+    <!-- B · Lives (HUD) -->
+    <div class="note hud" data-leader="B" style="left:1530px; top:38px;">
+      <div class="tag"><span class="id">B</span>HUD · LIVES</div>
+      <div class="title">Heart row</div>
+      <div class="body">Top-right, <b>24 px</b> inset. Max 3 hearts; lost slot stays as empty pip so layout never shifts. Magenta fill on damage flash.</div>
+    </div>
+
+    <!-- J · Parallax (Para) -->
+    <div class="note para" data-leader="J" style="left:0; top:240px;">
+      <div class="tag"><span class="id">J</span>PARALLAX · 3-LAYER</div>
+      <div class="title">Background stack</div>
+      <div class="body"><b>Sky × 0.3</b> (stars, slow drift) → <b>Hills × 0.6</b> (silhouette) → <b>Foreground × 1.0</b> (tiles + actors). Vertical drift on far layer only.</div>
+    </div>
+
+    <!-- E · Landing dust -->
+    <div class="note juice" data-leader="E" style="left:0; top:430px;">
+      <div class="tag"><span class="id">E</span>JUICE · LANDING DUST</div>
+      <div class="title">Trampoline launch</div>
+      <div class="body">Emit <b>4 dust particles</b> on touchdown / launch. Spread <b>±6 px</b> X, upward velocity, fade over <b>240 ms</b>. Same FX on every grounded landing.</div>
+    </div>
+
+    <!-- F · Fruit pop (collected sparkle) -->
+    <div class="note juice" data-leader="F" style="left:0; top:600px;">
+      <div class="tag"><span class="id">F</span>JUICE · FRUIT POP</div>
+      <div class="title">Collect feedback</div>
+      <div class="body">On pickup: swap to <b>Collected.png</b> 6-frame burst, scale <b>1.0 → 1.4 → 0</b>, +1 score punch, gold sparkles (6) radial. SFX: <b>coin_05.wav</b>.</div>
+    </div>
+
+    <!-- D · Dash trail -->
+    <div class="note juice" data-leader="D" style="left:1530px; top:240px;">
+      <div class="tag"><span class="id">D</span>JUICE · DASH TRAIL</div>
+      <div class="title">Afterimage ghosts</div>
+      <div class="body"><b>3 ghost copies</b> behind the player while dash is active. Cyan tint (screen blend), opacities <b>52 / 32 / 18 %</b>, spaced <b>10 px</b>, hold <b>80 ms</b> each.</div>
+    </div>
+
+    <!-- G · Hit-stop -->
+    <div class="note juice" data-leader="G" style="left:1530px; top:430px;">
+      <div class="tag"><span class="id">G</span>JUICE · HIT-STOP</div>
+      <div class="title">Damage freeze</div>
+      <div class="body">On contact with saw / spikes: pause all tweens for <b>6 frames (100 ms)</b>. Player flashes white 1 frame. Then screen shake fires (see H).</div>
+    </div>
+
+    <!-- H · Screen shake -->
+    <div class="note juice" data-leader="H" style="left:1530px; top:600px;">
+      <div class="tag"><span class="id">H</span>JUICE · SCREEN SHAKE</div>
+      <div class="title">Damage shake</div>
+      <div class="body">Trauma model: amplitude <b>4 px</b>, perlin-noise XY offset, <b>180 ms</b> exponential decay. Triggers on hit only — NOT on landing.</div>
+    </div>
+
+    <!-- I · Camera framing -->
+    <div class="note camera" data-leader="I" style="left:660px; top:830px;">
+      <div class="tag"><span class="id">I</span>CAMERA · FRAMING</div>
+      <div class="title">1 screen vertical slice</div>
+      <div class="body"><b>16 × 9 tiles</b> visible · <b>256 × 144 native</b> @ <b>5× pixel scale</b> = <b>1280 × 720</b>. Player anchored at <b>40 %</b> width (lead-the-look). No vertical pan — slice reads in one screen.</div>
+    </div>
+
+  </div><!-- /.stage -->
+
+  <!-- ============================ LEGEND ============================ -->
+  <div class="legend">
+    <span class="sw"><span class="d" style="background:var(--hud)"></span>HUD</span>
+    <span class="sw"><span class="d" style="background:var(--juice)"></span>JUICE</span>
+    <span class="sw"><span class="d" style="background:var(--camera)"></span>CAMERA</span>
+    <span class="sw"><span class="d" style="background:var(--para)"></span>PARALLAX</span>
+    <span class="footnote">// assets · Pixel Adventure (Pixel Frog) · CC0-style free asset pack</span>
+  </div>
+
+</div><!-- /.doc -->
+</div><!-- /.scale-wrap -->
+
+<script>
+  // ---------------- Scale page to viewport width ----------------
+  function fit() {
+    const wrap = document.getElementById('scale-wrap');
+    const s = Math.min(1, window.innerWidth / 1920);
+    wrap.style.transform = `scale(${s})`;
+    document.body.style.height = (1200 * s + 40) + 'px';
+  }
+  window.addEventListener('resize', fit);
+  fit();
+
+  // ---------------- Draw dashed leader lines ----------------
+  // Each .note[data-leader] has a target point computed from a map below.
+  // Leader is drawn from the note's edge nearest the target.
+  const STAGE = () => document.getElementById('stage').getBoundingClientRect();
+  const VP    = () => document.getElementById('vp').getBoundingClientRect();
+
+  // Target points are in stage coords (relative to .stage origin).
+  // Viewport occupies stage coords (240, 60) -> (1520, 780). Width 1280, height 720.
+  // World native = 256x144 → display scale = 5×. So pixelX,Y in world maps to viewport (px*5, py*5).
+  // World → stage: stageX = 240 + worldX*5, stageY = 60 + worldY*5
+
+  const W = (wx, wy) => ({ x: 240 + wx * 5, y: 60 + wy * 5 });
+
+  // Targets per leader ID
+  const TARGETS = {
+    A: { x: 240 + 60,  y: 60 + 40 },                           // HUD score area, top-left of viewport
+    B: { x: 240 + 1220, y: 60 + 40 },                          // HUD lives, top-right
+    C: { x: 240 + 640,  y: 60 + 32 },                          // HUD timer, top-center
+    D: W(94, 64),                                              // ghost trail
+    E: W(54, 76),                                              // trampoline dust
+    F: W(60, 50),                                              // collected sparkle / fruit-pop
+    G: W(112, 120),                                            // saw blade in pit
+    H: { x: 240 + 1232, y: 60 + 700 },                         // viewport bottom-right corner (shake arrow)
+    I: { x: 240 + 640,  y: 60 + 720 - 8 },                     // bottom-center anchor line label
+    J: W(28, 12),                                              // far parallax sky
+  };
+
+  const COLORS = { A: 'var(--hud)', B: 'var(--hud)', C: 'var(--hud)',
+                   D: 'var(--juice)', E: 'var(--juice)', F: 'var(--juice)',
+                   G: 'var(--juice)', H: 'var(--juice)',
+                   I: 'var(--camera)', J: 'var(--para)' };
+  const COLOR_HEX = { A:'#4dd0e1', B:'#4dd0e1', C:'#4dd0e1',
+                      D:'#ff4d8d', E:'#ff4d8d', F:'#ff4d8d', G:'#ff4d8d', H:'#ff4d8d',
+                      I:'#ffc857', J:'#b388ff' };
+
+  function buildLeaders() {
+    const svg = document.getElementById('leaders');
+    svg.innerHTML = '';
+    const stageRect = STAGE();
+
+    document.querySelectorAll('.note[data-leader]').forEach(note => {
+      const id = note.dataset.leader;
+      const target = TARGETS[id];
+      if (!target) return;
+
+      const nr = note.getBoundingClientRect();
+      // Note bbox in stage coords
+      const nx = nr.left - stageRect.left;
+      const ny = nr.top  - stageRect.top;
+      const nw = nr.width;
+      const nh = nr.height;
+
+      // Pick the note edge midpoint closest to target
+      const candidates = [
+        { x: nx + nw/2, y: ny      },       // top
+        { x: nx + nw/2, y: ny + nh },       // bottom
+        { x: nx,         y: ny + nh/2 },    // left
+        { x: nx + nw,    y: ny + nh/2 },    // right
+      ];
+      let best = candidates[0], bestD = Infinity;
+      for (const c of candidates) {
+        const d = (c.x - target.x)**2 + (c.y - target.y)**2;
+        if (d < bestD) { bestD = d; best = c; }
+      }
+
+      // Elbow path: go horizontally first if far horizontally, then vertically
+      const dx = target.x - best.x;
+      const dy = target.y - best.y;
+      let mid;
+      if (Math.abs(dx) > Math.abs(dy)) {
+        mid = { x: best.x + dx * 0.65, y: best.y };
+      } else {
+        mid = { x: best.x, y: best.y + dy * 0.65 };
+      }
+
+      // SVG namespace
+      const NS = 'http://www.w3.org/2000/svg';
+      const path = document.createElementNS(NS, 'path');
+      const d = `M ${best.x} ${best.y} L ${mid.x} ${mid.y} L ${target.x} ${target.y}`;
+      path.setAttribute('d', d);
+      path.setAttribute('stroke', COLOR_HEX[id]);
+      path.setAttribute('stroke-width', '1.25');
+      path.setAttribute('stroke-dasharray', '4 4');
+      path.setAttribute('fill', 'none');
+      path.setAttribute('opacity', '0.85');
+      svg.appendChild(path);
+
+      // Endpoint dot
+      const dot = document.createElementNS(NS, 'circle');
+      dot.setAttribute('cx', target.x);
+      dot.setAttribute('cy', target.y);
+      dot.setAttribute('r', '4');
+      dot.setAttribute('fill', COLOR_HEX[id]);
+      dot.setAttribute('stroke', '#0d1015');
+      dot.setAttribute('stroke-width', '2');
+      svg.appendChild(dot);
+
+      // Start nub on note edge
+      const nub = document.createElementNS(NS, 'circle');
+      nub.setAttribute('cx', best.x);
+      nub.setAttribute('cy', best.y);
+      nub.setAttribute('r', '2.5');
+      nub.setAttribute('fill', COLOR_HEX[id]);
+      svg.appendChild(nub);
+    });
+  }
+
+  // Build after fonts load so note sizes are stable
+  if (document.fonts && document.fonts.ready) {
+    document.fonts.ready.then(buildLeaders);
+  } else {
+    setTimeout(buildLeaders, 250);
+  }
+  window.addEventListener('resize', () => setTimeout(buildLeaders, 80));
+</script>
+</body>
+</html>

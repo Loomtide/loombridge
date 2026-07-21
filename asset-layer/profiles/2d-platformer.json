@@ -1,0 +1,148 @@
+{
+  "schemaVersion": "1",
+  "id": "2d-platformer",
+  "genre": "platformer-2d",
+  "description": "Validation and Unity placement profile for curated 2D platformer sprite assets.",
+  "scaleProfile": {
+    "reference": "tight-precision-platformer",
+    "referenceGames": ["Celeste", "Super Meat Boy"],
+    "tile": {
+      "pixels": 32,
+      "pixelsPerUnit": 100,
+      "worldSize": 0.32
+    },
+    "player": {
+      "visualHeightTiles": 2,
+      "targetWorldHeight": 0.64,
+      "screenHeightRatio": {
+        "min": 0.12,
+        "max": 0.16
+      }
+    },
+    "camera": {
+      "profile": "platformer-follow",
+      "orthographicSize": 2.1,
+      "verticalTilesVisible": 13.125,
+      "framingOffset": {
+        "x": 0,
+        "y": -0.25
+      }
+    }
+  },
+  "validation": {
+    "allowedFormats": ["png", "jpg", "jpeg", "wav"],
+    "maxDimensions": {
+      "width": 2048,
+      "height": 2048
+    },
+    "maxTexturePixels": 4194304,
+    "expectedPixelsPerUnit": 100,
+    "requiredProvenanceFields": ["verifiedAt", "origin"],
+    "allowedLicenses": ["CC0-1.0"],
+    "allowedKinds": ["sprite", "audio"],
+    "licensePolicy": {
+      "allowedSpdx": ["CC0-1.0"],
+      "deniedSpdx": ["GPL-3.0-only", "CC-BY-NC-4.0"]
+    },
+    "checksumPolicy": {
+      "requireSha256": false
+    },
+    "sourcePolicy": {
+      "requireVerified": true,
+      "minimumProvenanceFields": ["verifiedAt", "origin"]
+    },
+    "audio": {
+      "allowedFormats": ["wav"],
+      "allowedSampleRates": [44100],
+      "allowedChannels": [1, 2],
+      "allowedBitDepths": [16],
+      "maxDurationMs": 3000
+    }
+  },
+  "primitives": {
+    "player": {
+      "description": "Controllable character or character spritesheet.",
+      "unityFolder": "Assets/Art/Sprites/Characters",
+      "supportedKinds": ["sprite"]
+    },
+    "enemy": {
+      "description": "Enemy, hazard character, or enemy animation spritesheet.",
+      "unityFolder": "Assets/Art/Sprites/Enemies",
+      "supportedKinds": ["sprite"]
+    },
+    "tile": {
+      "description": "Ground or platform tile sprite.",
+      "unityFolder": "Assets/Art/Sprites/Tiles",
+      "supportedKinds": ["sprite"]
+    },
+    "collectible": {
+      "description": "Coin, gem, pickup, or scoring object.",
+      "unityFolder": "Assets/Art/Sprites/Collectibles",
+      "supportedKinds": ["sprite"]
+    },
+    "background": {
+      "description": "Skyline, backdrop, or large background image.",
+      "unityFolder": "Assets/Art/Backgrounds",
+      "supportedKinds": ["sprite"]
+    },
+    "parallax_background": {
+      "description": "Layered background plate intended for parallax scrolling.",
+      "unityFolder": "Assets/Art/Backgrounds/Parallax",
+      "supportedKinds": ["sprite"]
+    },
+    "decor": {
+      "description": "Small non-interactive visual decoration.",
+      "unityFolder": "Assets/Art/Sprites/Decor",
+      "supportedKinds": ["sprite"]
+    },
+    "vfx": {
+      "description": "Single-frame or animated visual effect sprites such as smoke, flash, and explosions.",
+      "unityFolder": "Assets/Art/Sprites/VFX",
+      "supportedKinds": ["sprite"]
+    },
+    "sfx_jump": {
+      "description": "Short player jump sound effect.",
+      "unityFolder": "Assets/Audio/SFX",
+      "supportedKinds": ["audio"]
+    },
+    "sfx_dash": {
+      "description": "Short player dash or air-whoosh sound effect.",
+      "unityFolder": "Assets/Audio/SFX",
+      "supportedKinds": ["audio"]
+    },
+    "sfx_collect": {
+      "description": "Short collectible pickup sound effect.",
+      "unityFolder": "Assets/Audio/SFX",
+      "supportedKinds": ["audio"]
+    },
+    "sfx_hit": {
+      "description": "Short player damage, death, or hazard impact sound effect.",
+      "unityFolder": "Assets/Audio/SFX",
+      "supportedKinds": ["audio"]
+    },
+    "sfx_bounce": {
+      "description": "Short trampoline, spring, or launcher bounce sound effect.",
+      "unityFolder": "Assets/Audio/SFX",
+      "supportedKinds": ["audio"]
+    },
+    "sfx_win": {
+      "description": "Short level-complete, success, or win celebration sound effect.",
+      "unityFolder": "Assets/Audio/SFX",
+      "supportedKinds": ["audio"]
+    },
+    "sfx_collectible": {
+      "description": "Legacy collectible pickup sound effect primitive retained for older reports.",
+      "unityFolder": "Assets/Audio/SFX",
+      "supportedKinds": ["audio"]
+    }
+  },
+  "unity": {
+    "rootFolder": "Assets/Art",
+    "defaultSpriteMode": "single",
+    "defaultFilterMode": "Bilinear",
+    "toolArguments": {
+      "sourcePathKey": "source_path",
+      "destinationPathKey": "path"
+    }
+  }
+}

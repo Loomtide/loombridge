@@ -1,0 +1,1396 @@
+{
+  "schemaVersion": "1",
+  "packId": "switchyard-2d",
+  "name": "Switchyard Courier Seed Registry",
+  "description": "Switchyard Courier registry with verified CC0 top-down visual candidates plus explicit offline fallback placeholders.",
+  "entries": [
+    {
+      "id": "kenney.topdown-shooter.robot.player",
+      "genre": "topdown-2d",
+      "primitive": "player",
+      "kind": "sprite",
+      "priority": 95,
+      "placeholder": false,
+      "source": {
+        "title": "Top-down Shooter",
+        "url": "https://kenney.nl/assets/top-down-shooter",
+        "downloadPage": "https://kenney.nl/assets/top-down-shooter",
+        "author": "Kenney",
+        "verified": true,
+        "provenance": {
+          "verifiedAt": "2026-05-26",
+          "origin": "Kenney Top-down Shooter CC0 pack; selected robot standing sprite from downloaded ZIP.",
+          "fixture": "asset-layer/fixtures/switchyard/kenney-topdown-shooter/robot1_stand.png",
+          "notes": "Top-down robot/courier avatar candidate for Switchyard proof."
+        }
+      },
+      "license": {
+        "name": "Creative Commons CC0 1.0 Universal",
+        "spdx": "CC0-1.0",
+        "url": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "requiresAttribution": false
+      },
+      "provider": {
+        "name": "Kenney",
+        "url": "https://kenney.nl/assets/top-down-shooter",
+        "type": "local"
+      },
+      "files": [
+        {
+          "role": "sprite",
+          "format": "png",
+          "localPath": "asset-layer/fixtures/switchyard/kenney-topdown-shooter/robot1_stand.png",
+          "checksum": {
+            "algorithm": "sha256",
+            "value": "1a307cd6405ade9b1c341eacc4b1234490d6e66305839de86517e2eeeede997c"
+          }
+        }
+      ],
+      "technical": {
+        "width": 33,
+        "height": 43,
+        "pixelsPerUnit": 100,
+        "transparent": true
+      },
+      "tags": [
+        "topdown",
+        "player",
+        "robot",
+        "courier",
+        "kenney",
+        "cc0"
+      ],
+      "unity": {
+        "path": "Assets/Art/Sprites/Characters/kenney-robot-courier.png",
+        "pixelsPerUnit": 100,
+        "spriteMode": "single",
+        "filterMode": "Point"
+      }
+    },
+    {
+      "id": "ansimuz.warped-tech-lab.tileset.arena",
+      "genre": "topdown-2d",
+      "primitive": "arena",
+      "kind": "sprite",
+      "priority": 92,
+      "placeholder": false,
+      "source": {
+        "title": "Warped Top-Down Tech Lab",
+        "url": "https://opengameart.org/content/warped-top-down-tech-lab",
+        "downloadPage": "https://opengameart.org/content/warped-top-down-tech-lab",
+        "author": "ansimuz",
+        "verified": true,
+        "provenance": {
+          "verifiedAt": "2026-05-26",
+          "origin": "OpenGameArt page lists CC0; selected Tileset.png from downloaded top_down_lab_files.zip.",
+          "fixture": "asset-layer/fixtures/switchyard/ansimuz-topdown-tech-lab/Tileset.png",
+          "notes": "Sci-fi lab tileset candidate for arena floor, walls, rails, sockets, and terminals; needs slicing before final import."
+        }
+      },
+      "license": {
+        "name": "Creative Commons CC0 1.0 Universal",
+        "spdx": "CC0-1.0",
+        "url": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "requiresAttribution": false
+      },
+      "provider": {
+        "name": "OpenGameArt",
+        "url": "https://opengameart.org/content/warped-top-down-tech-lab",
+        "type": "local"
+      },
+      "files": [
+        {
+          "role": "spritesheet",
+          "format": "png",
+          "localPath": "asset-layer/fixtures/switchyard/ansimuz-topdown-tech-lab/Tileset.png",
+          "checksum": {
+            "algorithm": "sha256",
+            "value": "2dbbdcd06e9f7aa97c7e6d7ea27281fcbe5af7bdf7067fb0d37bcf37659faaf4"
+          }
+        }
+      ],
+      "technical": {
+        "width": 240,
+        "height": 176,
+        "pixelsPerUnit": 100,
+        "transparent": true
+      },
+      "tags": [
+        "topdown",
+        "arena",
+        "industrial",
+        "lab",
+        "tech",
+        "tileset",
+        "cc0"
+      ],
+      "unity": {
+        "path": "Assets/Art/Sprites/Arena/ansimuz-warped-tech-lab-tileset.png",
+        "pixelsPerUnit": 100,
+        "spriteMode": "single",
+        "filterMode": "Point"
+      }
+    },
+    {
+      "id": "kenney.topdown-shooter.orange-pad.hazard",
+      "genre": "topdown-2d",
+      "primitive": "hazard",
+      "kind": "sprite",
+      "priority": 84,
+      "placeholder": false,
+      "source": {
+        "title": "Top-down Shooter",
+        "url": "https://kenney.nl/assets/top-down-shooter",
+        "downloadPage": "https://kenney.nl/assets/top-down-shooter",
+        "author": "Kenney",
+        "verified": true,
+        "provenance": {
+          "verifiedAt": "2026-05-26",
+          "origin": "Kenney Top-down Shooter CC0 pack; selected circular orange tile from downloaded ZIP.",
+          "fixture": "asset-layer/fixtures/switchyard/kenney-topdown-shooter/tile_197.png",
+          "notes": "Readable orange circular pad candidate for telegraphed danger zones, pressure plates, or delivery sockets."
+        }
+      },
+      "license": {
+        "name": "Creative Commons CC0 1.0 Universal",
+        "spdx": "CC0-1.0",
+        "url": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "requiresAttribution": false
+      },
+      "provider": {
+        "name": "Kenney",
+        "url": "https://kenney.nl/assets/top-down-shooter",
+        "type": "local"
+      },
+      "files": [
+        {
+          "role": "sprite",
+          "format": "png",
+          "localPath": "asset-layer/fixtures/switchyard/kenney-topdown-shooter/tile_197.png",
+          "checksum": {
+            "algorithm": "sha256",
+            "value": "f5561b5cf4539da0789edc7017ef4a25084b5cd28c6b673a07a85edcb7f50ef9"
+          }
+        }
+      ],
+      "technical": {
+        "width": 64,
+        "height": 64,
+        "pixelsPerUnit": 100,
+        "transparent": true
+      },
+      "tags": [
+        "topdown",
+        "hazard",
+        "telegraph",
+        "pad",
+        "kenney",
+        "cc0"
+      ],
+      "unity": {
+        "path": "Assets/Art/Sprites/Hazards/kenney-orange-pad.png",
+        "pixelsPerUnit": 100,
+        "spriteMode": "single",
+        "filterMode": "Point"
+      }
+    },
+    {
+      "id": "kenney.topdown-shooter.blue-socket.terminal",
+      "genre": "topdown-2d",
+      "primitive": "terminal",
+      "kind": "sprite",
+      "priority": 82,
+      "placeholder": false,
+      "source": {
+        "title": "Top-down Shooter",
+        "url": "https://kenney.nl/assets/top-down-shooter",
+        "downloadPage": "https://kenney.nl/assets/top-down-shooter",
+        "author": "Kenney",
+        "verified": true,
+        "provenance": {
+          "verifiedAt": "2026-05-26",
+          "origin": "Kenney Top-down Shooter CC0 pack; selected blue socket/floor tile from downloaded ZIP.",
+          "fixture": "asset-layer/fixtures/switchyard/kenney-topdown-shooter/tile_131.png",
+          "notes": "Simple readable blue socket/delivery pad candidate; final game may prefer Ansimuz terminal slices."
+        }
+      },
+      "license": {
+        "name": "Creative Commons CC0 1.0 Universal",
+        "spdx": "CC0-1.0",
+        "url": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "requiresAttribution": false
+      },
+      "provider": {
+        "name": "Kenney",
+        "url": "https://kenney.nl/assets/top-down-shooter",
+        "type": "local"
+      },
+      "files": [
+        {
+          "role": "sprite",
+          "format": "png",
+          "localPath": "asset-layer/fixtures/switchyard/kenney-topdown-shooter/tile_131.png",
+          "checksum": {
+            "algorithm": "sha256",
+            "value": "2fcdf2c2be795a7718c1abdab413877b71e965c26a46368260a70543993e6619"
+          }
+        }
+      ],
+      "technical": {
+        "width": 64,
+        "height": 64,
+        "pixelsPerUnit": 100,
+        "transparent": true
+      },
+      "tags": [
+        "topdown",
+        "terminal",
+        "socket",
+        "delivery",
+        "kenney",
+        "cc0"
+      ],
+      "unity": {
+        "path": "Assets/Art/Sprites/Objectives/kenney-blue-socket.png",
+        "pixelsPerUnit": 100,
+        "spriteMode": "single",
+        "filterMode": "Point"
+      }
+    },
+    {
+      "id": "opengameart.airos.electronics.usb-charge.battery",
+      "genre": "topdown-2d",
+      "primitive": "battery",
+      "kind": "sprite",
+      "priority": 90,
+      "placeholder": false,
+      "source": {
+        "title": "32px Electronics",
+        "url": "https://opengameart.org/content/32px-electronics",
+        "downloadPage": "https://opengameart.org/content/32px-electronics",
+        "author": "Airos",
+        "verified": true,
+        "provenance": {
+          "verifiedAt": "2026-05-26",
+          "origin": "OpenGameArt 32px Electronics page lists CC0 and provides electronics_full_sheet.png plus per-item ZIPs; selected and cropped a red USB-stick sprite as a readable charge pickup.",
+          "fixture": "asset-layer/fixtures/switchyard/airos-32px-electronics/usb-red-charge.png",
+          "notes": "Carryable charge/battery pickup candidate for Switchyard Courier. Source sheet is also committed for audit."
+        }
+      },
+      "license": {
+        "name": "Creative Commons CC0 1.0 Universal",
+        "spdx": "CC0-1.0",
+        "url": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "requiresAttribution": false
+      },
+      "provider": {
+        "name": "OpenGameArt",
+        "url": "https://opengameart.org/content/32px-electronics",
+        "type": "local"
+      },
+      "files": [
+        {
+          "role": "sprite",
+          "format": "png",
+          "localPath": "asset-layer/fixtures/switchyard/airos-32px-electronics/usb-red-charge.png",
+          "checksum": {
+            "algorithm": "sha256",
+            "value": "bd24bdfb0ae67fdd709a384076314d6e2701b3c9f320efece36b8b847ab42637"
+          }
+        }
+      ],
+      "technical": {
+        "width": 32,
+        "height": 32,
+        "pixelsPerUnit": 100,
+        "transparent": true
+      },
+      "tags": [
+        "topdown",
+        "battery",
+        "pickup",
+        "charge",
+        "usb",
+        "electronics",
+        "cc0"
+      ],
+      "unity": {
+        "path": "Assets/Art/Sprites/Pickups/airos-usb-red-charge.png",
+        "pixelsPerUnit": 100,
+        "spriteMode": "single",
+        "filterMode": "Point"
+      }
+    },
+    {
+      "id": "opengameart.reactorcore.plasma-electric.electrical-zap.vfx",
+      "genre": "topdown-2d",
+      "primitive": "vfx",
+      "kind": "sprite",
+      "priority": 88,
+      "placeholder": false,
+      "source": {
+        "title": "Plasma Electric Effect Animations",
+        "url": "https://opengameart.org/content/plasma-electric-effect-animations",
+        "downloadPage": "https://opengameart.org/content/plasma-electric-effect-animations",
+        "author": "Reactorcore",
+        "verified": true,
+        "provenance": {
+          "verifiedAt": "2026-05-26",
+          "origin": "OpenGameArt Plasma Electric Effect Animations page lists CC0 and says the ZIP includes sheets and individual PNG images with transparent backgrounds; selected Electrical Zap.png from the downloaded archive.",
+          "fixture": "asset-layer/fixtures/switchyard/reactorcore-plasma-electric/Electrical Zap.png",
+          "notes": "Small electric zap frame candidate for hazard warning/damage VFX. Larger animation frames are available in the source ZIP if the importer later supports multi-frame extraction."
+        }
+      },
+      "license": {
+        "name": "Creative Commons CC0 1.0 Universal",
+        "spdx": "CC0-1.0",
+        "url": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "requiresAttribution": false
+      },
+      "provider": {
+        "name": "OpenGameArt",
+        "url": "https://opengameart.org/content/plasma-electric-effect-animations",
+        "type": "local"
+      },
+      "files": [
+        {
+          "role": "sprite",
+          "format": "png",
+          "localPath": "asset-layer/fixtures/switchyard/reactorcore-plasma-electric/Electrical Zap.png",
+          "checksum": {
+            "algorithm": "sha256",
+            "value": "5072a60ce204b3b24c102073d3f0a3d6793e27c2764091c24433e5878889e33e"
+          }
+        }
+      ],
+      "technical": {
+        "width": 36,
+        "height": 6,
+        "pixelsPerUnit": 100,
+        "transparent": true
+      },
+      "tags": [
+        "topdown",
+        "vfx",
+        "electric",
+        "zap",
+        "hazard",
+        "warning",
+        "plasma",
+        "cc0"
+      ],
+      "unity": {
+        "path": "Assets/Art/Sprites/VFX/reactorcore-electrical-zap.png",
+        "pixelsPerUnit": 100,
+        "spriteMode": "single",
+        "filterMode": "Point"
+      }
+    },
+    {
+      "id": "opengameart.fupi.switchyard.sfx.pickup",
+      "genre": "topdown-2d",
+      "primitive": "sfx_pickup",
+      "kind": "audio",
+      "priority": 87,
+      "placeholder": false,
+      "source": {
+        "title": "Plingy Coin",
+        "url": "https://opengameart.org/content/plingy-coin",
+        "downloadPage": "https://opengameart.org/content/plingy-coin",
+        "author": "Fupi",
+        "verified": true,
+        "provenance": {
+          "verifiedAt": "2026-05-26",
+          "origin": "OpenGameArt entry 'Plingy Coin' by Fupi is listed under CC0 and provides a short WAV pickup cue.",
+          "fixture": "asset-layer/fixtures/platformer/sfx/fupi-plingy-coin/coin.wav",
+          "notes": "Short bright pickup cue for collecting a charge."
+        }
+      },
+      "license": {
+        "name": "Creative Commons CC0 1.0 Universal",
+        "spdx": "CC0-1.0",
+        "url": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "requiresAttribution": false
+      },
+      "provider": {
+        "name": "OpenGameArt",
+        "url": "https://opengameart.org/",
+        "type": "local"
+      },
+      "files": [
+        {
+          "role": "audio",
+          "format": "wav",
+          "localPath": "asset-layer/fixtures/platformer/sfx/fupi-plingy-coin/coin.wav",
+          "checksum": {
+            "algorithm": "sha256",
+            "value": "d0a0a830ec4e2ed70d58d065edf7136ef5db45f0f977238be3b0ba8cf9fdc3f8"
+          }
+        }
+      ],
+      "technical": {
+        "sampleRate": 44100,
+        "channels": 2,
+        "bitDepth": 16,
+        "durationMs": 904
+      },
+      "tags": [
+        "topdown",
+        "switchyard",
+        "audio",
+        "sfx",
+        "pickup",
+        "collect",
+        "collectible",
+        "coin",
+        "cc0"
+      ],
+      "unity": {
+        "path": "Assets/Audio/SFX/switchyard-pickup.wav",
+        "pixelsPerUnit": 100
+      }
+    },
+    {
+      "id": "opengameart.fupi.switchyard.sfx.deposit",
+      "genre": "topdown-2d",
+      "primitive": "sfx_deposit",
+      "kind": "audio",
+      "priority": 86,
+      "placeholder": false,
+      "source": {
+        "title": "Plingy Coin",
+        "url": "https://opengameart.org/content/plingy-coin",
+        "downloadPage": "https://opengameart.org/content/plingy-coin",
+        "author": "Fupi",
+        "verified": true,
+        "provenance": {
+          "verifiedAt": "2026-05-26",
+          "origin": "OpenGameArt entry 'Plingy Coin' by Fupi is listed under CC0 and provides a short WAV pickup cue.",
+          "fixture": "asset-layer/fixtures/platformer/sfx/fupi-plingy-coin/coin.wav",
+          "notes": "Short bright terminal deposit cue; reuses the CC0 coin chime until a dedicated power-terminal cue is curated."
+        }
+      },
+      "license": {
+        "name": "Creative Commons CC0 1.0 Universal",
+        "spdx": "CC0-1.0",
+        "url": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "requiresAttribution": false
+      },
+      "provider": {
+        "name": "OpenGameArt",
+        "url": "https://opengameart.org/",
+        "type": "local"
+      },
+      "files": [
+        {
+          "role": "audio",
+          "format": "wav",
+          "localPath": "asset-layer/fixtures/platformer/sfx/fupi-plingy-coin/coin.wav",
+          "checksum": {
+            "algorithm": "sha256",
+            "value": "d0a0a830ec4e2ed70d58d065edf7136ef5db45f0f977238be3b0ba8cf9fdc3f8"
+          }
+        }
+      ],
+      "technical": {
+        "sampleRate": 44100,
+        "channels": 2,
+        "bitDepth": 16,
+        "durationMs": 904
+      },
+      "tags": [
+        "topdown",
+        "switchyard",
+        "audio",
+        "sfx",
+        "deposit",
+        "collect",
+        "collectible",
+        "coin",
+        "pickup",
+        "cc0"
+      ],
+      "unity": {
+        "path": "Assets/Audio/SFX/switchyard-deposit.wav",
+        "pixelsPerUnit": 100
+      }
+    },
+    {
+      "id": "opengameart.moxiecat.switchyard.sfx.dodge",
+      "genre": "topdown-2d",
+      "primitive": "sfx_dodge",
+      "kind": "audio",
+      "priority": 85,
+      "placeholder": false,
+      "source": {
+        "title": "8-bit Platformer SFX",
+        "url": "https://opengameart.org/content/8-bit-platformer-sfx-0",
+        "downloadPage": "https://opengameart.org/content/8-bit-platformer-sfx-0",
+        "author": "MoxieCat",
+        "verified": true,
+        "provenance": {
+          "verifiedAt": "2026-05-26",
+          "origin": "OpenGameArt entry '8-bit Platformer SFX' by MoxieCat is listed under CC0 and includes individual WAV cues for platformer actions.",
+          "fixture": "asset-layer/fixtures/platformer/sfx/moxiecat-8bit-platformer/dashwoosh.wav",
+          "notes": "Whoosh-style movement cue for dodge/dash."
+        }
+      },
+      "license": {
+        "name": "Creative Commons CC0 1.0 Universal",
+        "spdx": "CC0-1.0",
+        "url": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "requiresAttribution": false
+      },
+      "provider": {
+        "name": "OpenGameArt",
+        "url": "https://opengameart.org/",
+        "type": "local"
+      },
+      "files": [
+        {
+          "role": "audio",
+          "format": "wav",
+          "localPath": "asset-layer/fixtures/platformer/sfx/moxiecat-8bit-platformer/dashwoosh.wav",
+          "checksum": {
+            "algorithm": "sha256",
+            "value": "6e699ad9333fd2cf8fd455ec3ff8f27bca406634c29e68c895d359bbbd9db211"
+          }
+        }
+      ],
+      "technical": {
+        "sampleRate": 44100,
+        "channels": 1,
+        "bitDepth": 16,
+        "durationMs": 2300
+      },
+      "tags": [
+        "topdown",
+        "switchyard",
+        "audio",
+        "sfx",
+        "dodge",
+        "dash",
+        "whoosh",
+        "player",
+        "8bit",
+        "cc0"
+      ],
+      "unity": {
+        "path": "Assets/Audio/SFX/switchyard-dodge.wav",
+        "pixelsPerUnit": 100
+      }
+    },
+    {
+      "id": "opengameart.moxiecat.switchyard.sfx.hit",
+      "genre": "topdown-2d",
+      "primitive": "sfx_hit",
+      "kind": "audio",
+      "priority": 84,
+      "placeholder": false,
+      "source": {
+        "title": "8-bit Platformer SFX",
+        "url": "https://opengameart.org/content/8-bit-platformer-sfx-0",
+        "downloadPage": "https://opengameart.org/content/8-bit-platformer-sfx-0",
+        "author": "MoxieCat",
+        "verified": true,
+        "provenance": {
+          "verifiedAt": "2026-05-26",
+          "origin": "OpenGameArt entry '8-bit Platformer SFX' by MoxieCat is listed under CC0 and includes individual WAV cues for platformer actions.",
+          "fixture": "asset-layer/fixtures/platformer/sfx/moxiecat-8bit-platformer/playerhurt.wav",
+          "notes": "Damage/hazard impact cue."
+        }
+      },
+      "license": {
+        "name": "Creative Commons CC0 1.0 Universal",
+        "spdx": "CC0-1.0",
+        "url": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "requiresAttribution": false
+      },
+      "provider": {
+        "name": "OpenGameArt",
+        "url": "https://opengameart.org/",
+        "type": "local"
+      },
+      "files": [
+        {
+          "role": "audio",
+          "format": "wav",
+          "localPath": "asset-layer/fixtures/platformer/sfx/moxiecat-8bit-platformer/playerhurt.wav",
+          "checksum": {
+            "algorithm": "sha256",
+            "value": "a572bed733d262ee92bc55a5d0781e1a19d7458c39438e41e5357338a2aa93a8"
+          }
+        }
+      ],
+      "technical": {
+        "sampleRate": 44100,
+        "channels": 1,
+        "bitDepth": 16,
+        "durationMs": 501
+      },
+      "tags": [
+        "topdown",
+        "switchyard",
+        "audio",
+        "sfx",
+        "hit",
+        "hurt",
+        "hazard",
+        "player",
+        "8bit",
+        "cc0"
+      ],
+      "unity": {
+        "path": "Assets/Audio/SFX/switchyard-hit.wav",
+        "pixelsPerUnit": 100
+      }
+    },
+    {
+      "id": "opengameart.greyfroggames.switchyard.sfx.win",
+      "genre": "topdown-2d",
+      "primitive": "sfx_win",
+      "kind": "audio",
+      "priority": 83,
+      "placeholder": false,
+      "source": {
+        "title": "Level Complete Splash",
+        "url": "https://opengameart.org/content/level-complete-splash",
+        "downloadPage": "https://opengameart.org/content/level-complete-splash",
+        "author": "GreyFrogGames",
+        "verified": true,
+        "provenance": {
+          "verifiedAt": "2026-05-26",
+          "origin": "OpenGameArt entry 'Level Complete Splash' by GreyFrogGames is listed under CC0 and provides a short WAV level-complete cue.",
+          "fixture": "asset-layer/fixtures/platformer/sfx/greyfroggames-level-complete/levelcompletesplash.wav",
+          "notes": "Route-complete success cue."
+        }
+      },
+      "license": {
+        "name": "Creative Commons CC0 1.0 Universal",
+        "spdx": "CC0-1.0",
+        "url": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "requiresAttribution": false
+      },
+      "provider": {
+        "name": "OpenGameArt",
+        "url": "https://opengameart.org/",
+        "type": "local"
+      },
+      "files": [
+        {
+          "role": "audio",
+          "format": "wav",
+          "localPath": "asset-layer/fixtures/platformer/sfx/greyfroggames-level-complete/levelcompletesplash.wav",
+          "checksum": {
+            "algorithm": "sha256",
+            "value": "b8fff267e855bba495d7dce90a1c0f44e9d5e76fe9a27908bad830c57fa53afb"
+          }
+        }
+      ],
+      "technical": {
+        "sampleRate": 44100,
+        "channels": 2,
+        "bitDepth": 16,
+        "durationMs": 2065
+      },
+      "tags": [
+        "topdown",
+        "switchyard",
+        "audio",
+        "sfx",
+        "win",
+        "level-complete",
+        "success",
+        "cc0"
+      ],
+      "unity": {
+        "path": "Assets/Audio/SFX/switchyard-win.wav",
+        "pixelsPerUnit": 100
+      }
+    },
+    {
+      "id": "opengameart.moxiecat.switchyard.sfx.lose",
+      "genre": "topdown-2d",
+      "primitive": "sfx_lose",
+      "kind": "audio",
+      "priority": 82,
+      "placeholder": false,
+      "source": {
+        "title": "8-bit Platformer SFX",
+        "url": "https://opengameart.org/content/8-bit-platformer-sfx-0",
+        "downloadPage": "https://opengameart.org/content/8-bit-platformer-sfx-0",
+        "author": "MoxieCat",
+        "verified": true,
+        "provenance": {
+          "verifiedAt": "2026-05-26",
+          "origin": "OpenGameArt entry '8-bit Platformer SFX' by MoxieCat is listed under CC0 and includes individual WAV cues for platformer actions.",
+          "fixture": "asset-layer/fixtures/platformer/sfx/moxiecat-8bit-platformer/playerhurt.wav",
+          "notes": "Short fail/disabled cue; reuses the CC0 hurt cue until a dedicated fail cue is curated."
+        }
+      },
+      "license": {
+        "name": "Creative Commons CC0 1.0 Universal",
+        "spdx": "CC0-1.0",
+        "url": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "requiresAttribution": false
+      },
+      "provider": {
+        "name": "OpenGameArt",
+        "url": "https://opengameart.org/",
+        "type": "local"
+      },
+      "files": [
+        {
+          "role": "audio",
+          "format": "wav",
+          "localPath": "asset-layer/fixtures/platformer/sfx/moxiecat-8bit-platformer/playerhurt.wav",
+          "checksum": {
+            "algorithm": "sha256",
+            "value": "a572bed733d262ee92bc55a5d0781e1a19d7458c39438e41e5357338a2aa93a8"
+          }
+        }
+      ],
+      "technical": {
+        "sampleRate": 44100,
+        "channels": 1,
+        "bitDepth": 16,
+        "durationMs": 501
+      },
+      "tags": [
+        "topdown",
+        "switchyard",
+        "audio",
+        "sfx",
+        "lose",
+        "hit",
+        "hurt",
+        "hazard",
+        "player",
+        "8bit",
+        "cc0"
+      ],
+      "unity": {
+        "path": "Assets/Audio/SFX/switchyard-lose.wav",
+        "pixelsPerUnit": 100
+      }
+    },
+    {
+      "id": "loomtide.switchyard.placeholder.player",
+      "genre": "topdown-2d",
+      "primitive": "player",
+      "kind": "sprite",
+      "priority": 10,
+      "placeholder": true,
+      "source": {
+        "title": "Loomtide procedural player fixture",
+        "url": "https://loomtide.local/assets/procedural-fixtures",
+        "author": "Loomtide",
+        "verified": true,
+        "provenance": {
+          "verifiedAt": "2026-05-26",
+          "origin": "Local CC0-style fixture kept for disconnected registry flow validation; not intended as final polished art.",
+          "fixture": "asset-layer/fixtures/platformer/player-blue.png",
+          "notes": "Temporary cart/player stand-in for top-down proof runs."
+        }
+      },
+      "license": {
+        "name": "Creative Commons CC0 1.0 Universal",
+        "spdx": "CC0-1.0",
+        "url": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "requiresAttribution": false
+      },
+      "provider": {
+        "name": "Loomtide",
+        "url": "https://loomtide.local/",
+        "type": "local"
+      },
+      "files": [
+        {
+          "role": "sprite",
+          "format": "png",
+          "localPath": "asset-layer/fixtures/platformer/player-blue.png"
+        }
+      ],
+      "technical": {
+        "width": 64,
+        "height": 64,
+        "pixelsPerUnit": 100,
+        "transparent": true
+      },
+      "tags": [
+        "topdown",
+        "player",
+        "cart",
+        "placeholder",
+        "cc0"
+      ],
+      "unity": {
+        "path": "Assets/Art/Sprites/Characters/switchyard-player-placeholder.png",
+        "pixelsPerUnit": 100,
+        "spriteMode": "single",
+        "filterMode": "Point"
+      }
+    },
+    {
+      "id": "loomtide.switchyard.placeholder.battery",
+      "genre": "topdown-2d",
+      "primitive": "battery",
+      "kind": "sprite",
+      "priority": 10,
+      "placeholder": true,
+      "source": {
+        "title": "Loomtide procedural pickup fixture",
+        "url": "https://loomtide.local/assets/procedural-fixtures",
+        "author": "Loomtide",
+        "verified": true,
+        "provenance": {
+          "verifiedAt": "2026-05-26",
+          "origin": "Local CC0-style fixture kept for disconnected registry flow validation; not intended as final polished art.",
+          "fixture": "asset-layer/fixtures/platformer/coin-gold.png",
+          "notes": "Temporary battery/charge pickup stand-in."
+        }
+      },
+      "license": {
+        "name": "Creative Commons CC0 1.0 Universal",
+        "spdx": "CC0-1.0",
+        "url": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "requiresAttribution": false
+      },
+      "provider": {
+        "name": "Loomtide",
+        "url": "https://loomtide.local/",
+        "type": "local"
+      },
+      "files": [
+        {
+          "role": "sprite",
+          "format": "png",
+          "localPath": "asset-layer/fixtures/platformer/coin-gold.png"
+        }
+      ],
+      "technical": {
+        "width": 32,
+        "height": 32,
+        "pixelsPerUnit": 100,
+        "transparent": true
+      },
+      "tags": [
+        "topdown",
+        "battery",
+        "pickup",
+        "placeholder",
+        "cc0"
+      ],
+      "unity": {
+        "path": "Assets/Art/Sprites/Pickups/switchyard-battery-placeholder.png",
+        "pixelsPerUnit": 100,
+        "spriteMode": "single",
+        "filterMode": "Point"
+      }
+    },
+    {
+      "id": "loomtide.switchyard.placeholder.arena",
+      "genre": "topdown-2d",
+      "primitive": "arena",
+      "kind": "sprite",
+      "priority": 10,
+      "placeholder": true,
+      "source": {
+        "title": "Loomtide procedural arena fixture",
+        "url": "https://loomtide.local/assets/procedural-fixtures",
+        "author": "Loomtide",
+        "verified": true,
+        "provenance": {
+          "verifiedAt": "2026-05-26",
+          "origin": "Local CC0-style fixture kept for disconnected registry flow validation; not intended as final polished art.",
+          "fixture": "asset-layer/fixtures/platformer/grass-tile.png",
+          "notes": "Temporary floor/boundary stand-in."
+        }
+      },
+      "license": {
+        "name": "Creative Commons CC0 1.0 Universal",
+        "spdx": "CC0-1.0",
+        "url": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "requiresAttribution": false
+      },
+      "provider": {
+        "name": "Loomtide",
+        "url": "https://loomtide.local/",
+        "type": "local"
+      },
+      "files": [
+        {
+          "role": "sprite",
+          "format": "png",
+          "localPath": "asset-layer/fixtures/platformer/grass-tile.png"
+        }
+      ],
+      "technical": {
+        "width": 64,
+        "height": 64,
+        "pixelsPerUnit": 100,
+        "transparent": true
+      },
+      "tags": [
+        "topdown",
+        "arena",
+        "floor",
+        "placeholder",
+        "cc0"
+      ],
+      "unity": {
+        "path": "Assets/Art/Sprites/Arena/switchyard-arena-placeholder.png",
+        "pixelsPerUnit": 100,
+        "spriteMode": "single",
+        "filterMode": "Point"
+      }
+    },
+    {
+      "id": "loomtide.switchyard.placeholder.terminal",
+      "genre": "topdown-2d",
+      "primitive": "terminal",
+      "kind": "sprite",
+      "priority": 10,
+      "placeholder": true,
+      "source": {
+        "title": "Loomtide procedural terminal fixture",
+        "url": "https://loomtide.local/assets/procedural-fixtures",
+        "author": "Loomtide",
+        "verified": true,
+        "provenance": {
+          "verifiedAt": "2026-05-26",
+          "origin": "Local CC0-style fixture kept for disconnected registry flow validation; not intended as final polished art.",
+          "fixture": "asset-layer/fixtures/platformer/tree-decor.png",
+          "notes": "Temporary terminal/delivery pad stand-in."
+        }
+      },
+      "license": {
+        "name": "Creative Commons CC0 1.0 Universal",
+        "spdx": "CC0-1.0",
+        "url": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "requiresAttribution": false
+      },
+      "provider": {
+        "name": "Loomtide",
+        "url": "https://loomtide.local/",
+        "type": "local"
+      },
+      "files": [
+        {
+          "role": "sprite",
+          "format": "png",
+          "localPath": "asset-layer/fixtures/platformer/tree-decor.png"
+        }
+      ],
+      "technical": {
+        "width": 64,
+        "height": 96,
+        "pixelsPerUnit": 100,
+        "transparent": true
+      },
+      "tags": [
+        "topdown",
+        "terminal",
+        "delivery",
+        "placeholder",
+        "cc0"
+      ],
+      "unity": {
+        "path": "Assets/Art/Sprites/Objectives/switchyard-terminal-placeholder.png",
+        "pixelsPerUnit": 100,
+        "spriteMode": "single",
+        "filterMode": "Point"
+      }
+    },
+    {
+      "id": "loomtide.switchyard.placeholder.hazard",
+      "genre": "topdown-2d",
+      "primitive": "hazard",
+      "kind": "sprite",
+      "priority": 10,
+      "placeholder": true,
+      "source": {
+        "title": "Pixel Adventure 1 - Spikes fixture",
+        "url": "https://pixelfrog-assets.itch.io/pixel-adventure-1",
+        "downloadPage": "https://pixelfrog-assets.itch.io/pixel-adventure-1",
+        "author": "Pixel Frog",
+        "verified": true,
+        "provenance": {
+          "verifiedAt": "2026-05-26",
+          "origin": "Local fixture extracted from Pixel Adventure 1's CC0 trap art; used here only as a temporary hazard stand-in.",
+          "fixture": "asset-layer/fixtures/platformer/pixel-adventure/traps/spikes.png",
+          "notes": "Placeholder for security cone/electric hazard until top-down-specific art is curated."
+        }
+      },
+      "license": {
+        "name": "Creative Commons CC0 1.0 Universal",
+        "spdx": "CC0-1.0",
+        "url": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "requiresAttribution": false
+      },
+      "provider": {
+        "name": "Pixel Frog",
+        "url": "https://pixelfrog-assets.itch.io/pixel-adventure-1",
+        "type": "local"
+      },
+      "files": [
+        {
+          "role": "sprite",
+          "format": "png",
+          "localPath": "asset-layer/fixtures/platformer/pixel-adventure/traps/spikes.png"
+        }
+      ],
+      "technical": {
+        "width": 16,
+        "height": 16,
+        "pixelsPerUnit": 100,
+        "transparent": true
+      },
+      "tags": [
+        "topdown",
+        "hazard",
+        "placeholder",
+        "cc0"
+      ],
+      "unity": {
+        "path": "Assets/Art/Sprites/Hazards/switchyard-hazard-placeholder.png",
+        "pixelsPerUnit": 100,
+        "spriteMode": "single",
+        "filterMode": "Point"
+      }
+    },
+    {
+      "id": "loomtide.switchyard.placeholder.pickup-sfx",
+      "genre": "topdown-2d",
+      "primitive": "sfx_pickup",
+      "kind": "audio",
+      "priority": 10,
+      "placeholder": true,
+      "source": {
+        "title": "Loomtide pickup SFX fixture",
+        "url": "https://loomtide.local/assets/procedural-fixtures",
+        "author": "Loomtide",
+        "verified": true,
+        "provenance": {
+          "verifiedAt": "2026-05-26",
+          "origin": "Local CC0-style fixture kept for disconnected registry flow validation; not intended as final polished audio.",
+          "fixture": "asset-layer/fixtures/platformer/sfx-coin.wav",
+          "notes": "Temporary pickup cue."
+        }
+      },
+      "license": {
+        "name": "Creative Commons CC0 1.0 Universal",
+        "spdx": "CC0-1.0",
+        "url": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "requiresAttribution": false
+      },
+      "provider": {
+        "name": "Loomtide",
+        "url": "https://loomtide.local/",
+        "type": "local"
+      },
+      "files": [
+        {
+          "role": "audio",
+          "format": "wav",
+          "localPath": "asset-layer/fixtures/platformer/sfx-coin.wav"
+        }
+      ],
+      "technical": {
+        "sampleRate": 44100,
+        "channels": 1,
+        "bitDepth": 16,
+        "durationMs": 250
+      },
+      "tags": [
+        "topdown",
+        "audio",
+        "pickup",
+        "placeholder",
+        "cc0"
+      ],
+      "unity": {
+        "path": "Assets/Audio/SFX/switchyard-pickup-placeholder.wav",
+        "pixelsPerUnit": 100
+      }
+    },
+    {
+      "id": "loomtide.switchyard.placeholder.deposit-sfx",
+      "genre": "topdown-2d",
+      "primitive": "sfx_deposit",
+      "kind": "audio",
+      "priority": 10,
+      "placeholder": true,
+      "source": {
+        "title": "Loomtide deposit SFX fixture",
+        "url": "https://loomtide.local/assets/procedural-fixtures",
+        "author": "Loomtide",
+        "verified": true,
+        "provenance": {
+          "verifiedAt": "2026-05-26",
+          "origin": "Local CC0-style fixture kept for disconnected registry flow validation; not intended as final polished audio.",
+          "fixture": "asset-layer/fixtures/platformer/sfx-coin.wav",
+          "notes": "Temporary terminal deposit cue."
+        }
+      },
+      "license": {
+        "name": "Creative Commons CC0 1.0 Universal",
+        "spdx": "CC0-1.0",
+        "url": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "requiresAttribution": false
+      },
+      "provider": {
+        "name": "Loomtide",
+        "url": "https://loomtide.local/",
+        "type": "local"
+      },
+      "files": [
+        {
+          "role": "audio",
+          "format": "wav",
+          "localPath": "asset-layer/fixtures/platformer/sfx-coin.wav"
+        }
+      ],
+      "technical": {
+        "sampleRate": 44100,
+        "channels": 1,
+        "bitDepth": 16,
+        "durationMs": 250
+      },
+      "tags": [
+        "topdown",
+        "audio",
+        "deposit",
+        "placeholder",
+        "cc0"
+      ],
+      "unity": {
+        "path": "Assets/Audio/SFX/switchyard-deposit-placeholder.wav",
+        "pixelsPerUnit": 100
+      }
+    },
+    {
+      "id": "loomtide.switchyard.placeholder.dodge-sfx",
+      "genre": "topdown-2d",
+      "primitive": "sfx_dodge",
+      "kind": "audio",
+      "priority": 10,
+      "placeholder": true,
+      "source": {
+        "title": "8-bit Platformer SFX - dash fixture",
+        "url": "https://opengameart.org/content/8-bit-platformer-sfx-0",
+        "downloadPage": "https://opengameart.org/content/8-bit-platformer-sfx-0",
+        "author": "MoxieCat",
+        "verified": true,
+        "provenance": {
+          "verifiedAt": "2026-05-26",
+          "origin": "Local CC0 fixture from MoxieCat's OpenGameArt pack; temporary dodge cue for the top-down proof.",
+          "fixture": "asset-layer/fixtures/platformer/sfx/moxiecat-8bit-platformer/dashwoosh.wav",
+          "notes": "Placeholder until top-down movement SFX are curated."
+        }
+      },
+      "license": {
+        "name": "Creative Commons CC0 1.0 Universal",
+        "spdx": "CC0-1.0",
+        "url": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "requiresAttribution": false
+      },
+      "provider": {
+        "name": "OpenGameArt",
+        "url": "https://opengameart.org/",
+        "type": "local"
+      },
+      "files": [
+        {
+          "role": "audio",
+          "format": "wav",
+          "localPath": "asset-layer/fixtures/platformer/sfx/moxiecat-8bit-platformer/dashwoosh.wav"
+        }
+      ],
+      "technical": {
+        "sampleRate": 44100,
+        "channels": 1,
+        "bitDepth": 16,
+        "durationMs": 300
+      },
+      "tags": [
+        "topdown",
+        "audio",
+        "dodge",
+        "placeholder",
+        "cc0"
+      ],
+      "unity": {
+        "path": "Assets/Audio/SFX/switchyard-dodge-placeholder.wav",
+        "pixelsPerUnit": 100
+      }
+    },
+    {
+      "id": "loomtide.switchyard.placeholder.hit-sfx",
+      "genre": "topdown-2d",
+      "primitive": "sfx_hit",
+      "kind": "audio",
+      "priority": 10,
+      "placeholder": true,
+      "source": {
+        "title": "8-bit Platformer SFX - hurt fixture",
+        "url": "https://opengameart.org/content/8-bit-platformer-sfx-0",
+        "downloadPage": "https://opengameart.org/content/8-bit-platformer-sfx-0",
+        "author": "MoxieCat",
+        "verified": true,
+        "provenance": {
+          "verifiedAt": "2026-05-26",
+          "origin": "Local CC0 fixture from MoxieCat's OpenGameArt pack; temporary hit cue for the top-down proof.",
+          "fixture": "asset-layer/fixtures/platformer/sfx/moxiecat-8bit-platformer/playerhurt.wav",
+          "notes": "Placeholder until top-down hazard impact SFX are curated."
+        }
+      },
+      "license": {
+        "name": "Creative Commons CC0 1.0 Universal",
+        "spdx": "CC0-1.0",
+        "url": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "requiresAttribution": false
+      },
+      "provider": {
+        "name": "OpenGameArt",
+        "url": "https://opengameart.org/",
+        "type": "local"
+      },
+      "files": [
+        {
+          "role": "audio",
+          "format": "wav",
+          "localPath": "asset-layer/fixtures/platformer/sfx/moxiecat-8bit-platformer/playerhurt.wav"
+        }
+      ],
+      "technical": {
+        "sampleRate": 44100,
+        "channels": 1,
+        "bitDepth": 16,
+        "durationMs": 300
+      },
+      "tags": [
+        "topdown",
+        "audio",
+        "hit",
+        "placeholder",
+        "cc0"
+      ],
+      "unity": {
+        "path": "Assets/Audio/SFX/switchyard-hit-placeholder.wav",
+        "pixelsPerUnit": 100
+      }
+    },
+    {
+      "id": "loomtide.switchyard.placeholder-win-sfx",
+      "genre": "topdown-2d",
+      "primitive": "sfx_win",
+      "kind": "audio",
+      "priority": 10,
+      "placeholder": true,
+      "source": {
+        "title": "Level complete fixture",
+        "url": "https://opengameart.org/content/level-complete-splash",
+        "downloadPage": "https://opengameart.org/content/level-complete-splash",
+        "author": "GreyFrogGames",
+        "verified": true,
+        "provenance": {
+          "verifiedAt": "2026-05-26",
+          "origin": "Local CC0 fixture from OpenGameArt level-complete audio; temporary win cue.",
+          "fixture": "asset-layer/fixtures/platformer/sfx/greyfroggames-level-complete/levelcompletesplash.wav",
+          "notes": "Placeholder until top-down route-complete SFX are curated."
+        }
+      },
+      "license": {
+        "name": "Creative Commons CC0 1.0 Universal",
+        "spdx": "CC0-1.0",
+        "url": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "requiresAttribution": false
+      },
+      "provider": {
+        "name": "OpenGameArt",
+        "url": "https://opengameart.org/",
+        "type": "local"
+      },
+      "files": [
+        {
+          "role": "audio",
+          "format": "wav",
+          "localPath": "asset-layer/fixtures/platformer/sfx/greyfroggames-level-complete/levelcompletesplash.wav"
+        }
+      ],
+      "technical": {
+        "sampleRate": 44100,
+        "channels": 1,
+        "bitDepth": 16,
+        "durationMs": 1000
+      },
+      "tags": [
+        "topdown",
+        "audio",
+        "win",
+        "placeholder",
+        "cc0"
+      ],
+      "unity": {
+        "path": "Assets/Audio/SFX/switchyard-win-placeholder.wav",
+        "pixelsPerUnit": 100
+      }
+    },
+    {
+      "id": "loomtide.switchyard.placeholder.lose-sfx",
+      "genre": "topdown-2d",
+      "primitive": "sfx_lose",
+      "kind": "audio",
+      "priority": 10,
+      "placeholder": true,
+      "source": {
+        "title": "Loomtide lose SFX fixture",
+        "url": "https://loomtide.local/assets/procedural-fixtures",
+        "author": "Loomtide",
+        "verified": true,
+        "provenance": {
+          "verifiedAt": "2026-05-26",
+          "origin": "Local CC0-style fixture kept for disconnected registry flow validation; not intended as final polished audio.",
+          "fixture": "asset-layer/fixtures/platformer/sfx/moxiecat-8bit-platformer/playerhurt.wav",
+          "notes": "Temporary lose cue."
+        }
+      },
+      "license": {
+        "name": "Creative Commons CC0 1.0 Universal",
+        "spdx": "CC0-1.0",
+        "url": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "requiresAttribution": false
+      },
+      "provider": {
+        "name": "Loomtide",
+        "url": "https://loomtide.local/",
+        "type": "local"
+      },
+      "files": [
+        {
+          "role": "audio",
+          "format": "wav",
+          "localPath": "asset-layer/fixtures/platformer/sfx/moxiecat-8bit-platformer/playerhurt.wav"
+        }
+      ],
+      "technical": {
+        "sampleRate": 44100,
+        "channels": 1,
+        "bitDepth": 16,
+        "durationMs": 300
+      },
+      "tags": [
+        "topdown",
+        "audio",
+        "lose",
+        "placeholder",
+        "cc0"
+      ],
+      "unity": {
+        "path": "Assets/Audio/SFX/switchyard-lose-placeholder.wav",
+        "pixelsPerUnit": 100
+      }
+    }
+  ]
+}

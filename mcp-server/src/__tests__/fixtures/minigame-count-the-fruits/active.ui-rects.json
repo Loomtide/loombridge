@@ -1,0 +1,20 @@
+{
+  "state": "active",
+  "source": "unity_ui_get_screen_rects (#55). origin bottom-left; screenRect px, viewportRect normalized",
+  "viewport": { "width": 1280, "height": 720, "aspect": 1.77777779 },
+  "contractRequiredInFrame_active": ["questionText","answerButton0","answerButton1","answerButton2","homeButton","countChip","progress"],
+  "objects": [
+    { "id": "questionText", "path": "/HUD/Banner/QuestionText", "role": "text", "active": true, "isVisible": true, "visibilityReason": null, "raycastTarget": true, "text": "How many <color=#ff5d72>apples</color>?", "fontSize": 42, "screenRect": {"x":476,"y":597,"width":420,"height":84}, "viewportRect": {"x":0.37188,"y":0.82917,"width":0.32813,"height":0.11667}, "isFullyVisible": true, "isPartiallyClipped": false, "clipSide": null, "centerXFraction": 0.53594, "centerYFraction": 0.8875 },
+    { "id": "countChip", "path": "/HUD/CountChip", "role": "image", "active": true, "isVisible": true, "visibilityReason": null, "spriteName": "card_white", "screenRect": {"x":24,"y":600,"width":220,"height":96}, "isFullyVisible": true, "centerXFraction": 0.10469, "centerYFraction": 0.9 },
+    { "id": "progress", "path": "/HUD/Progress", "role": "image", "active": true, "isVisible": true, "visibilityReason": null, "spriteName": "card_white", "screenRect": {"x":1000,"y":592,"width":256,"height":104}, "isFullyVisible": true, "centerXFraction": 0.88125, "centerYFraction": 0.89444 },
+    { "id": "answerButton0", "path": "/HUD/AnswerButton0", "role": "image", "active": true, "isVisible": true, "visibilityReason": null, "raycastTarget": true, "spriteName": "button_peach", "screenRect": {"x":371,"y":21.093,"width":158,"height":140}, "isFullyVisible": true, "centerXFraction": 0.35156, "centerYFraction": 0.12652 },
+    { "id": "answerButton1", "path": "/HUD/AnswerButton1", "role": "image", "active": true, "isVisible": true, "visibilityReason": null, "raycastTarget": true, "spriteName": "button_mint", "screenRect": {"x":561,"y":20.020,"width":158,"height":140}, "isFullyVisible": true, "centerXFraction": 0.5, "centerYFraction": 0.12503 },
+    { "id": "answerButton2", "path": "/HUD/AnswerButton2", "role": "image", "active": true, "isVisible": true, "visibilityReason": null, "raycastTarget": true, "spriteName": "button_lav", "screenRect": {"x":751,"y":27.052,"width":158,"height":140}, "isFullyVisible": true, "centerXFraction": 0.64844, "centerYFraction": 0.13479 },
+    { "id": "homeButton", "path": "/HUD/HomeButton", "role": "image", "active": true, "isVisible": true, "visibilityReason": null, "raycastTarget": true, "spriteName": "button_lav", "screenRect": {"x":28,"y":28,"width":142,"height":108}, "isFullyVisible": true, "centerXFraction": 0.07734, "centerYFraction": 0.11389 },
+    { "id": "startButton", "path": "/HUD/StartScreen/StartButton", "role": "image", "active": false, "isVisible": false, "visibilityReason": "inactive", "screenRect": {"x":466.876,"y":96.769,"width":346.248,"height":136.462} },
+    { "id": "endSummary", "path": "/HUD/EndSummary", "role": "image", "active": false, "isVisible": false, "visibilityReason": "inactive", "screenRect": {"x":0,"y":0,"width":1280,"height":720} }
+  ],
+  "requiredInFrame_verdict": "PASS — all 7 active-state required objects active+isVisible+isFullyVisible (none clipped/offscreen).",
+  "tapTarget_note": "answer buttons 158x140px, home 142x108px (raw px; dp conversion is the S6c gate's job vs contract minSizeDp=96).",
+  "controlOverlap_note": "answer button screenRects are disjoint horizontally (x:371-529 / 561-719 / 751-909) — no overlap."
+}

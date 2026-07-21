@@ -1,0 +1,15 @@
+{
+  "name": "Toon Shooter Game Kit",
+  "description": "Low-poly toon shooter characters + weapons.",
+  "provider": { "name": "Quaternius", "url": "https://quaternius.com" },
+  "license": { "spdx": "CC0-1.0" },
+  "source": {
+    "url": "https://quaternius.com/packs/toonshootergamekit.html",
+    "author": "Quaternius"
+  },
+  "cover": { "file": "preview.png" },
+  "assets": [
+    { "file": "Character_Soldier.glb", "primitive": "character", "tags": ["character", "soldier"] },
+    { "file": "Weapon_Blaster.glb", "primitive": "weapon", "tags": ["weapon", "blaster"] }
+  ]
+}

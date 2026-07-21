@@ -1,0 +1,7 @@
+{
+  "genreId": "hybrid-rungun",
+  "subGenres": ["run-and-gun", "side-scroll-platformer", "light-weapon-upgrade-meta"],
+  "genreClass": "hybrid",
+  "requires": [],
+  "slots": ["hint-card"]
+}

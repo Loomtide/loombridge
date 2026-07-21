@@ -1,0 +1,353 @@
+{
+  "state": "success_reward",
+  "source": "unity_ui_get_screen_rects (explicit contract locators)",
+  "viewport": {
+    "width": 1280,
+    "height": 720,
+    "aspect": 1.77777779
+  },
+  "objects": [
+    {
+      "id": "startButton",
+      "path": "/HUD/StartScreen/StartButton",
+      "role": "image",
+      "active": false,
+      "isVisible": false,
+      "visibilityReason": "inactive",
+      "raycastTarget": true,
+      "screenRect": {
+        "x": 466.917725,
+        "y": 96.78522,
+        "width": 346.164551,
+        "height": 136.42955
+      },
+      "viewportRect": {
+        "x": 0.364779472,
+        "y": 0.134423912,
+        "width": 0.270441055,
+        "height": 0.18948549
+      },
+      "isFullyVisible": true,
+      "isPartiallyClipped": false,
+      "clipSide": null,
+      "centerXFraction": 0.5,
+      "centerYFraction": 0.229166657
+    },
+    {
+      "id": "homeButton",
+      "path": "/HUD/HomeButton",
+      "role": "image",
+      "active": true,
+      "isVisible": true,
+      "visibilityReason": null,
+      "raycastTarget": true,
+      "screenRect": {
+        "x": 28.00003,
+        "y": 27.9999886,
+        "width": 142,
+        "height": 108
+      },
+      "viewportRect": {
+        "x": 0.0218750238,
+        "y": 0.03888887,
+        "width": 0.1109375,
+        "height": 0.15
+      },
+      "isFullyVisible": true,
+      "isPartiallyClipped": false,
+      "clipSide": null,
+      "centerXFraction": 0.07734378,
+      "centerYFraction": 0.113888867
+    },
+    {
+      "id": "questionText",
+      "path": "/HUD/Banner/QuestionText",
+      "role": "text",
+      "active": false,
+      "isVisible": false,
+      "visibilityReason": "inactive",
+      "raycastTarget": true,
+      "screenRect": {
+        "x": 476,
+        "y": 597,
+        "width": 420,
+        "height": 84
+      },
+      "viewportRect": {
+        "x": 0.371875,
+        "y": 0.829166651,
+        "width": 0.328125,
+        "height": 0.116666667
+      },
+      "isFullyVisible": true,
+      "isPartiallyClipped": false,
+      "clipSide": null,
+      "centerXFraction": 0.5359375,
+      "centerYFraction": 0.8875,
+      "text": "How many <color=#ff5d72>apples</color>?",
+      "fontSize": 42
+    },
+    {
+      "id": "countChip",
+      "path": "/HUD/CountChip",
+      "role": "image",
+      "active": false,
+      "isVisible": false,
+      "visibilityReason": "inactive",
+      "raycastTarget": true,
+      "screenRect": {
+        "x": 24.0000153,
+        "y": 600,
+        "width": 220,
+        "height": 96
+      },
+      "viewportRect": {
+        "x": 0.0187500119,
+        "y": 0.8333333,
+        "width": 0.171875,
+        "height": 0.13333334
+      },
+      "isFullyVisible": true,
+      "isPartiallyClipped": false,
+      "clipSide": null,
+      "centerXFraction": 0.104687512,
+      "centerYFraction": 0.9
+    },
+    {
+      "id": "progress",
+      "path": "/HUD/Progress",
+      "role": "image",
+      "active": false,
+      "isVisible": false,
+      "visibilityReason": "inactive",
+      "raycastTarget": true,
+      "screenRect": {
+        "x": 1000,
+        "y": 592,
+        "width": 256,
+        "height": 104
+      },
+      "viewportRect": {
+        "x": 0.78125,
+        "y": 0.822222233,
+        "width": 0.2,
+        "height": 0.144444451
+      },
+      "isFullyVisible": true,
+      "isPartiallyClipped": false,
+      "clipSide": null,
+      "centerXFraction": 0.88125,
+      "centerYFraction": 0.894444466
+    },
+    {
+      "id": "answerButton0",
+      "path": "/HUD/AnswerButton0",
+      "role": "image",
+      "active": false,
+      "isVisible": false,
+      "visibilityReason": "inactive",
+      "raycastTarget": true,
+      "screenRect": {
+        "x": 371,
+        "y": 20.1203232,
+        "width": 158,
+        "height": 140.000031
+      },
+      "viewportRect": {
+        "x": 0.289843738,
+        "y": 0.0279448926,
+        "width": 0.1234375,
+        "height": 0.194444492
+      },
+      "isFullyVisible": true,
+      "isPartiallyClipped": false,
+      "clipSide": null,
+      "centerXFraction": 0.3515625,
+      "centerYFraction": 0.125167146
+    },
+    {
+      "id": "answerButton1",
+      "path": "/HUD/AnswerButton1",
+      "role": "image",
+      "active": false,
+      "isVisible": false,
+      "visibilityReason": "inactive",
+      "raycastTarget": true,
+      "screenRect": {
+        "x": 546.887756,
+        "y": 36.5045,
+        "width": 186.224426,
+        "height": 114.991
+      },
+      "viewportRect": {
+        "x": 0.427256048,
+        "y": 0.050700698,
+        "width": 0.14548783,
+        "height": 0.159709722
+      },
+      "isFullyVisible": true,
+      "isPartiallyClipped": false,
+      "clipSide": null,
+      "centerXFraction": 0.49999997,
+      "centerYFraction": 0.130555555
+    },
+    {
+      "id": "answerButton2",
+      "path": "/HUD/AnswerButton2",
+      "role": "image",
+      "active": false,
+      "isVisible": false,
+      "visibilityReason": "inactive",
+      "raycastTarget": true,
+      "screenRect": {
+        "x": 751,
+        "y": 22.23326,
+        "width": 158,
+        "height": 140.000015
+      },
+      "viewportRect": {
+        "x": 0.586718738,
+        "y": 0.0308795273,
+        "width": 0.1234375,
+        "height": 0.194444463
+      },
+      "isFullyVisible": true,
+      "isPartiallyClipped": false,
+      "clipSide": null,
+      "centerXFraction": 0.6484375,
+      "centerYFraction": 0.128101766
+    },
+    {
+      "id": "endSummary",
+      "path": "/HUD/EndSummary",
+      "role": "image",
+      "active": true,
+      "isVisible": true,
+      "visibilityReason": null,
+      "raycastTarget": true,
+      "screenRect": {
+        "x": 0,
+        "y": 0,
+        "width": 1280,
+        "height": 720
+      },
+      "viewportRect": {
+        "x": 0,
+        "y": 0,
+        "width": 1,
+        "height": 1
+      },
+      "isFullyVisible": true,
+      "isPartiallyClipped": false,
+      "clipSide": null,
+      "centerXFraction": 0.5,
+      "centerYFraction": 0.5
+    },
+    {
+      "id": "endCard",
+      "path": "/HUD/EndSummary/Card",
+      "role": "image",
+      "active": true,
+      "isVisible": true,
+      "visibilityReason": null,
+      "raycastTarget": true,
+      "screenRect": {
+        "x": 340,
+        "y": 119.999992,
+        "width": 600,
+        "height": 480
+      },
+      "viewportRect": {
+        "x": 0.265625,
+        "y": 0.166666657,
+        "width": 0.46875,
+        "height": 0.6666667
+      },
+      "isFullyVisible": true,
+      "isPartiallyClipped": false,
+      "clipSide": null,
+      "centerXFraction": 0.5,
+      "centerYFraction": 0.5
+    },
+    {
+      "id": "scoreText",
+      "path": "/HUD/EndSummary/Card/Score",
+      "role": "text",
+      "active": true,
+      "isVisible": true,
+      "visibilityReason": null,
+      "raycastTarget": true,
+      "screenRect": {
+        "x": 490,
+        "y": 354,
+        "width": 300,
+        "height": 55.99997
+      },
+      "viewportRect": {
+        "x": 0.3828125,
+        "y": 0.491666675,
+        "width": 0.234375,
+        "height": 0.0777777359
+      },
+      "isFullyVisible": true,
+      "isPartiallyClipped": false,
+      "clipSide": null,
+      "centerXFraction": 0.5,
+      "centerYFraction": 0.530555546,
+      "text": "5 / 5",
+      "fontSize": 38
+    },
+    {
+      "id": "rewardStars",
+      "path": "/HUD/EndSummary/Card/RewardStars",
+      "role": "container",
+      "active": true,
+      "isVisible": true,
+      "visibilityReason": null,
+      "raycastTarget": false,
+      "screenRect": {
+        "x": 340,
+        "y": 119.999992,
+        "width": 600,
+        "height": 480
+      },
+      "viewportRect": {
+        "x": 0.265625,
+        "y": 0.166666657,
+        "width": 0.46875,
+        "height": 0.6666667
+      },
+      "isFullyVisible": true,
+      "isPartiallyClipped": false,
+      "clipSide": null,
+      "centerXFraction": 0.5,
+      "centerYFraction": 0.5
+    },
+    {
+      "id": "replayButton",
+      "path": "/HUD/EndSummary/Card/ReplayButton",
+      "role": "image",
+      "active": true,
+      "isVisible": true,
+      "visibilityReason": null,
+      "raycastTarget": true,
+      "screenRect": {
+        "x": 480,
+        "y": 125.999985,
+        "width": 320,
+        "height": 104
+      },
+      "viewportRect": {
+        "x": 0.375,
+        "y": 0.174999982,
+        "width": 0.25,
+        "height": 0.144444451
+      },
+      "isFullyVisible": true,
+      "isPartiallyClipped": false,
+      "clipSide": null,
+      "centerXFraction": 0.5,
+      "centerYFraction": 0.2472222
+    }
+  ]
+}

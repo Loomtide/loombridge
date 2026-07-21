@@ -1,0 +1,119 @@
+{
+  "schemaVersion": "1",
+  "genre": "2d-shooter",
+  "slices": [
+    {
+      "id": "arena",
+      "title": "Arena + framing",
+      "dependsOn": [],
+      "skill": "genre-2d-shooter-arena",
+      "feelIntent": "Arena + framing.",
+      "acceptance": {
+        "gates": [
+          "manifest",
+          "framing",
+          "console-clean"
+        ]
+      },
+      "state": "pending"
+    },
+    {
+      "id": "controller",
+      "title": "Player controller + move",
+      "dependsOn": [
+        "arena"
+      ],
+      "skill": "genre-2d-shooter-controller",
+      "feelIntent": "Player controller + move. Explicit gaps: move-feel-measurement.",
+      "acceptance": {
+        "gates": [
+          "manifest",
+          "console-clean"
+        ]
+      },
+      "state": "pending"
+    },
+    {
+      "id": "weapon",
+      "title": "Weapon core: fire -> projectile + impact",
+      "dependsOn": [
+        "controller"
+      ],
+      "skill": "genre-2d-shooter-weapon",
+      "feelIntent": "Weapon core: fire -> projectile + impact. Explicit gaps: spawn-aware-capture.",
+      "acceptance": {
+        "gates": [
+          "manifest",
+          "console-clean"
+        ]
+      },
+      "state": "pending"
+    },
+    {
+      "id": "enemy",
+      "title": "Enemy + health/damage + death",
+      "dependsOn": [
+        "weapon"
+      ],
+      "skill": "genre-2d-shooter-enemy",
+      "feelIntent": "Enemy + health/damage + death. Explicit gaps: ttk-live-capture.",
+      "acceptance": {
+        "gates": [
+          "manifest",
+          "console-clean"
+        ]
+      },
+      "state": "pending"
+    },
+    {
+      "id": "feedback",
+      "title": "Combat feedback (muzzle/hitmarker/shake/hitstop)",
+      "dependsOn": [
+        "enemy"
+      ],
+      "skill": "genre-2d-shooter-feedback",
+      "feelIntent": "Combat feedback (muzzle/hitmarker/shake/hitstop). Explicit gaps: hitstop-measurement, screenshake-measurement.",
+      "acceptance": {
+        "gates": [
+          "manifest",
+          "console-clean",
+          "visual-artifacts"
+        ]
+      },
+      "state": "pending"
+    },
+    {
+      "id": "hud",
+      "title": "HUD (health/ammo/score)",
+      "dependsOn": [
+        "enemy"
+      ],
+      "skill": "genre-2d-shooter-hud",
+      "feelIntent": "HUD (health/ammo/score).",
+      "acceptance": {
+        "gates": [
+          "manifest",
+          "ui-conformance",
+          "console-clean"
+        ]
+      },
+      "state": "pending"
+    },
+    {
+      "id": "end-state",
+      "title": "Death / victory end-state",
+      "dependsOn": [
+        "enemy"
+      ],
+      "skill": "genre-2d-shooter-end-state",
+      "feelIntent": "Death / victory end-state.",
+      "acceptance": {
+        "gates": [
+          "manifest",
+          "console-clean"
+        ]
+      },
+      "state": "pending"
+    }
+  ]
+}

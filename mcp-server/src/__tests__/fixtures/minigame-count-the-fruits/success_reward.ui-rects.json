@@ -1,0 +1,17 @@
+{
+  "state": "success_reward",
+  "source": "unity_ui_get_screen_rects (#55). origin bottom-left; screenRect px, viewportRect normalized",
+  "viewport": { "width": 1280, "height": 720, "aspect": 1.77777779 },
+  "contractRequiredInFrame_success_reward": ["endSummary","endCard","scoreText","rewardStars","replayButton"],
+  "objects": [
+    { "id": "endSummary", "path": "/HUD/EndSummary", "role": "image", "active": true, "isVisible": true, "visibilityReason": null, "screenRect": {"x":0,"y":0,"width":1280,"height":720}, "isFullyVisible": true, "centerXFraction": 0.5, "centerYFraction": 0.5 },
+    { "id": "endCard", "path": "/HUD/EndSummary/Card", "role": "image", "active": true, "isVisible": true, "visibilityReason": null, "spriteName": "card_white", "screenRect": {"x":340,"y":120,"width":600,"height":480}, "isFullyVisible": true, "centerXFraction": 0.5, "centerYFraction": 0.5 },
+    { "id": "title", "path": "/HUD/EndSummary/Card/Title", "role": "text", "active": true, "isVisible": true, "visibilityReason": null, "text": "Great job!", "fontSize": 62, "screenRect": {"x":370,"y":478,"width":540,"height":100}, "isFullyVisible": true, "centerXFraction": 0.5, "centerYFraction": 0.73333 },
+    { "id": "scoreText", "path": "/HUD/EndSummary/Card/Score", "role": "text", "active": true, "isVisible": true, "visibilityReason": null, "text": "5 / 5", "fontSize": 38, "screenRect": {"x":490,"y":354,"width":300,"height":56}, "isFullyVisible": true, "centerXFraction": 0.5, "centerYFraction": 0.53056 },
+    { "id": "rewardStars", "path": "/HUD/EndSummary/Card/RewardStars", "role": "container", "active": true, "isVisible": true, "visibilityReason": null, "raycastTarget": false, "screenRect": {"x":340,"y":120,"width":600,"height":480}, "isFullyVisible": true, "centerXFraction": 0.5, "centerYFraction": 0.5 },
+    { "id": "replayButton", "path": "/HUD/EndSummary/Card/ReplayButton", "role": "image", "active": true, "isVisible": true, "visibilityReason": null, "raycastTarget": true, "spriteName": "button_mint", "screenRect": {"x":480,"y":126,"width":320,"height":104}, "isFullyVisible": true, "centerXFraction": 0.5, "centerYFraction": 0.24722 },
+    { "id": "homeButton", "path": "/HUD/HomeButton", "role": "image", "active": true, "isVisible": true, "visibilityReason": null, "raycastTarget": true, "spriteName": "button_lav", "screenRect": {"x":28,"y":28,"width":142,"height":108}, "isFullyVisible": true }
+  ],
+  "requiredInFrame_verdict": "PASS — all 5 success_reward required objects active+isVisible+isFullyVisible (Title 'Great job!', Score '5 / 5').",
+  "visualObservation": "Per the rects, EndSummary covers the full frame and Card is centered; the screenshot (success_reward.png) shows the round-5 question banner + apples still rendered behind the card (EndGame overlays without clearing the field) — minor layering/polish note (F5), not a required-in-frame failure."
+}

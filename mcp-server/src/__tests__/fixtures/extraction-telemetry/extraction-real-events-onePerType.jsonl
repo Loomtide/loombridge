@@ -1,0 +1,17 @@
+{"t":0.0,"type":"player_pos","x":-30.0,"z":-30.0,"stash":0,"heat":0.00,"holdKind":"none","holdProgress":0.00,"nearestEnemyDist":-1.0}
+{"t":8.0,"type":"enemy_pos","id":-76844,"kind":"chaser","x":1.9,"z":3.6,"dist":27.6}
+{"t":13.6,"type":"shot_fired","x":-29.2,"z":15.4}
+{"t":14.1,"type":"shot_hit","target":"enemy","x":-19.1,"z":7.5}
+{"t":29.3,"type":"damage","amount":10.0,"source":"shooter","x":3.1,"z":10.6,"duringHold":true}
+{"t":7.4,"type":"enemy_spawn","kind":"chaser","x":4.0,"z":4.0}
+{"t":23.5,"type":"enemy_death","kind":"chaser","x":-9.0,"z":19.7}
+{"t":6.3,"type":"loot_start","id":"Loot_High_03","tier":"high","value":30,"x":-25.0,"z":-1.4}
+{"t":7.5,"type":"loot_complete","id":"Loot_High_03","tier":"high","value":30,"stash":30,"x":-24.0,"z":0.0}
+{"t":9.8,"type":"loot_cancel","id":"Loot_Low_02","x":-28.5,"z":6.2}
+{"t":7.4,"type":"pressure_start","reason":"high_rush","afterLootDelay":-1.0}
+{"t":23.9,"type":"death","lost":0,"x":-30.0,"z":-30.0}
+{"t":52.1,"type":"extract_hold_start","id":"Extract","tier":"","value":0,"x":27.5,"z":28.1}
+{"t":83.6,"type":"extract_hold_cancel","id":"Extract","x":25.9,"z":28.4}
+{"t":55.6,"type":"extract_complete","banked":135,"x":27.5,"z":28.1}
+{"t":0.0,"type":"bot_state","persona":"Balanced","from":"AcquireTarget","to":"MoveToLoot","reason":"loot_target_selected","x":-30.0,"z":-30.0,"stash":0,"hp":100.0,"nearestEnemyDist":-1.0,"targetKind":"loot","targetId":"Loot_Low"}
+{"t":0.0,"type":"bot_target","persona":"Balanced","targetKind":"loot","targetId":"Loot_Low","tier":"low","value":10,"dist":28.1,"score":-39.1,"x":-2.0,"z":-28.4}

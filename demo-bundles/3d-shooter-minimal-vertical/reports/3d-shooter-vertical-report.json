@@ -1,0 +1,176 @@
+{
+  "pack": "3d-shooter",
+  "title": "3D shooter — minimal vertical run",
+  "status": "experimental-green",
+  "productionReady": false,
+  "generatedAt": "2026-06-26T06:14:27.737Z",
+  "verdict": "experimental-green: 11 supported capabilities are each backed by a live Unity capture and re-derived through production calculators. This is a minimal vertical builder, NOT a production-ready 3D shooter — every unsupported/unmeasured feature is listed below and none is wired into a green row.",
+  "measured": [
+    {
+      "capability": "core-loop fire cadence",
+      "metric": "fireIntervalMs",
+      "value": 150,
+      "unit": "ms",
+      "status": "measured",
+      "evidence": "demo-bundles/3d-shooter-minimal-vertical/vertical-run-raw-2026-06-26.json",
+      "phase": "vertical run (this bundle; the core loop first proven in #316)"
+    },
+    {
+      "capability": "core-loop fire-input → projectile-spawn latency",
+      "metric": "fireInputToSpawnLatency",
+      "value": 16.67,
+      "unit": "ms",
+      "status": "measured",
+      "evidence": "demo-bundles/3d-shooter-minimal-vertical/vertical-run-raw-2026-06-26.json",
+      "phase": "vertical run (this bundle; the core loop first proven in #316)"
+    },
+    {
+      "capability": "core-loop time-to-kill (first hit → death)",
+      "metric": "ttkMs",
+      "value": 300,
+      "unit": "ms",
+      "status": "measured",
+      "evidence": "demo-bundles/3d-shooter-minimal-vertical/vertical-run-raw-2026-06-26.json",
+      "phase": "vertical run (this bundle; the core loop first proven in #316)"
+    },
+    {
+      "capability": "true-3D projectile speed",
+      "metric": "projectileSpeed",
+      "value": 17.996412717456398,
+      "unit": "u/s",
+      "status": "measured",
+      "evidence": "demo-bundles/3d-projectile-speed-substrate/shooter-3d-projectile-speed-raw-2026-06-25.json",
+      "phase": "#320 measurement substrate v1"
+    },
+    {
+      "capability": "true-3D aim turn rate",
+      "metric": "aimTurnRateDegPerSec",
+      "value": 119.97605878824234,
+      "unit": "deg/s",
+      "status": "measured",
+      "evidence": "demo-bundles/3d-aim-turn-rate-substrate/shooter-3d-aim-turn-rate-raw-2026-06-26.json",
+      "phase": "#325 measurement substrate v2"
+    },
+    {
+      "capability": "impact hit-stop window",
+      "metric": "hitstopMs",
+      "value": 116.66999999999996,
+      "unit": "ms",
+      "status": "measured",
+      "evidence": "demo-bundles/3d-impact-feedback/3d-impact-feedback-raw-2026-06-26.json",
+      "phase": "#328 impact feedback"
+    },
+    {
+      "capability": "true-3D screen-shake magnitude",
+      "metric": "screenShakeMag",
+      "value": 0.28848699999999994,
+      "unit": "u",
+      "status": "measured",
+      "evidence": "demo-bundles/3d-impact-feedback/3d-impact-feedback-raw-2026-06-26.json",
+      "phase": "#328 impact feedback"
+    },
+    {
+      "capability": "hitscan impact latency (fire → raycast-hit → damage)",
+      "metric": "hitscanImpactLatencyMs",
+      "value": 16.67,
+      "unit": "ms",
+      "status": "measured",
+      "evidence": "demo-bundles/3d-hitscan-weapon/3d-hitscan-raw-2026-06-26.json",
+      "phase": "#331 hitscan weapon"
+    },
+    {
+      "capability": "enemy AI reaction (LOS perception → reaction)",
+      "metric": "enemyReactionLatencyMs",
+      "value": 200.00000000000003,
+      "unit": "ms",
+      "status": "measured",
+      "evidence": "demo-bundles/3d-ai-reaction/3d-ai-reaction-raw-2026-06-26.json",
+      "phase": "#333 AI reaction"
+    },
+    {
+      "capability": "cover blocks LOS + damage",
+      "metric": "coverBlocksDamage",
+      "value": true,
+      "unit": null,
+      "status": "measured",
+      "evidence": [
+        "demo-bundles/3d-cover-proof/3d-cover-covered-raw-2026-06-26.json",
+        "demo-bundles/3d-cover-proof/3d-cover-exposed-raw-2026-06-26.json"
+      ],
+      "phase": "#338 cover proof"
+    },
+    {
+      "capability": "wave/objective (spawn N → kill all → complete)",
+      "metric": "waveObjectiveComplete",
+      "value": true,
+      "unit": null,
+      "status": "measured",
+      "evidence": "demo-bundles/3d-wave-objective/3d-wave-objective-raw-2026-06-26.json",
+      "phase": "#342 wave/objective"
+    }
+  ],
+  "gaps": [
+    {
+      "item": "look responsiveness / latency",
+      "tag": "needs-new-bridge-capability",
+      "status": "not_measured",
+      "note": "needs an aim-input-onset binding (the rotation analog of inputLatency)"
+    },
+    {
+      "item": "recoil kick / recovery",
+      "tag": "needs-new-calculator",
+      "status": "not_measured",
+      "note": "the rotation sampler exists; no kick-then-recover calculator yet"
+    },
+    {
+      "item": "ADS transition / aim spread",
+      "tag": "needs-new-bridge-capability",
+      "status": "not_measured",
+      "note": "no ADS state/FOV/reticle transition sampling"
+    },
+    {
+      "item": "hit-stop / screen-shake FEEL QUALITY",
+      "tag": "judgment-only",
+      "status": "unsupported",
+      "note": "freeze/trauma curves, shake shape, kickback readability — not deterministic"
+    },
+    {
+      "item": "broader hitscan weapon features",
+      "tag": "needs-new-calculator",
+      "status": "not_measured",
+      "note": "penetration, spread, recoil, reload, ADS, tracer/decal, body-part multipliers, lag compensation"
+    },
+    {
+      "item": "enemy AI behavior beyond reaction",
+      "tag": "needs-new-calculator",
+      "status": "not_measured",
+      "note": "behavior trees, tactical movement, squads, target prioritization, pathfinding quality"
+    },
+    {
+      "item": "advanced cover beyond LOS/damage",
+      "tag": "needs-new-calculator",
+      "status": "not_measured",
+      "note": "tactical planning, cover-point generation, navmesh safe areas, peeking, AI cover selection"
+    },
+    {
+      "item": "wave pacing / mission design beyond one wave",
+      "tag": "needs-new-calculator",
+      "status": "not_measured",
+      "note": "multi-wave pacing, difficulty curves, spawn directors, boss waves, loot, mission design"
+    },
+    {
+      "item": "aiming-feel (fairness/readability)",
+      "tag": "judgment-only",
+      "status": "unsupported",
+      "note": "pairs with a human/VLM oracle, never a Tier-1 verdict"
+    },
+    {
+      "item": "Fusion / multiplayer / netcode",
+      "tag": "engine-unsupported-today",
+      "status": "unsupported",
+      "note": "no OnInput injection, network-tick sampling, or interpolation-aware motion sampler; single-player/local only"
+    }
+  ],
+  "notMeasuredCount": 7,
+  "unsupportedCount": 3
+}

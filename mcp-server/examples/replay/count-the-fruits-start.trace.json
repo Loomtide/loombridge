@@ -1,0 +1,26 @@
+{
+  "schemaVersion": "0.1",
+  "id": "count-the-fruits-start",
+  "title": "Start screen → active question",
+  "intent": "Tapping Start transitions from the start screen to the active question view.",
+  "start": { "scene": "Assets/Scenes/CountTheFruits.unity", "reset": "scene-load" },
+  "input": { "backend": "ui-events" },
+  "segments": [
+    {
+      "id": "start-to-question",
+      "actions": [
+        { "do": "tap", "locator": { "path": "/HUD/StartScreen/StartButton" } }
+      ],
+      "anchors": [
+        {
+          "id": "question-shown",
+          "kind": "ui-visible",
+          "locator": { "path": "/HUD/Banner/QuestionText" },
+          "timeoutMs": 4000
+        }
+      ],
+      "captures": [{ "id": "question", "atAnchor": "question-shown" }]
+    }
+  ],
+  "outcome": { "expected": "success" }
+}

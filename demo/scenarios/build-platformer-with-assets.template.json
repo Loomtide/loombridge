@@ -1,0 +1,18 @@
+{
+  "schemaVersion": "1",
+  "name": "build-platformer-with-assets",
+  "description": "End-to-end platformer scenario generated from the curated asset-layer report. Uses generic Loomtide tools only and imports prepared sprites from Assets/Art.",
+  "baseScenario": "build-fresh-platformer.json",
+  "scenePath": "Assets/FreshPlatformerWithAssets.unity",
+  "solidSpriteStepIds": [
+    "create-sprite-green",
+    "create-sprite-blue",
+    "create-sprite-yellow"
+  ],
+  "spriteAssignments": {
+    "Assets/Sprites/Green.png": "tile",
+    "Assets/Sprites/Blue.png": "player",
+    "Assets/Sprites/Yellow.png": "collectible"
+  },
+  "includeBackground": true
+}

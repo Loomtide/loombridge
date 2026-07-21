@@ -1,0 +1,7 @@
+{
+  "genreId": "systems-rts",
+  "subGenres": ["skirmish-rts", "base-building", "resource-economy"],
+  "genreClass": "systems",
+  "requires": [],
+  "slots": ["hint-card"]
+}

@@ -1,0 +1,22 @@
+{
+  "schemaVersion": "1",
+  "name": "generic-smoke",
+  "description": "Minimal generic scenario to validate orchestration wiring and deterministic report output.",
+  "steps": [
+    {
+      "id": "editor-state",
+      "name": "Query editor state",
+      "kind": "tool_call",
+      "tool": "unity_editor_get_state",
+      "arguments": {}
+    },
+    {
+      "id": "scene-screenshot",
+      "name": "Capture scene view screenshot",
+      "kind": "capture_screenshot",
+      "view": "scene",
+      "format": "jpeg",
+      "quality": 70
+    }
+  ]
+}

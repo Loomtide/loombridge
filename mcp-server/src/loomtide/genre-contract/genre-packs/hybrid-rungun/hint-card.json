@@ -1,0 +1,168 @@
+{
+  "genreId": "hybrid-rungun",
+  "genreClass": "hybrid",
+  "subGenres": ["run-and-gun", "side-scroll-platformer", "light-weapon-upgrade-meta"],
+  "perspectives": ["side-scroll"],
+  "canonicalTunables": [
+    { "id": "runSpeed", "unit": "u/s", "description": "player horizontal run speed through the combat lane" },
+    { "id": "runAcceleration", "unit": "u/s^2", "description": "time/force curve from idle to full run speed" },
+    { "id": "runDeceleration", "unit": "u/s^2", "description": "stop responsiveness when releasing movement" },
+    { "id": "jumpApex", "unit": "u", "description": "peak jump height above takeoff" },
+    { "id": "timeToApex", "unit": "s", "description": "time from takeoff to jump apex" },
+    { "id": "fireIntervalMs", "unit": "ms", "description": "time between shots while fire is held" },
+    { "id": "fireInputToSpawnLatency", "unit": "ms", "description": "latency from fire input onset to an explicit projectile-spawn signal" },
+    { "id": "projectileSpeed", "unit": "u/s", "description": "player bullet travel speed" },
+    { "id": "hitstopMs", "unit": "ms", "description": "impact freeze on enemy hit/kill" },
+    { "id": "screenShakeMag", "unit": "px", "description": "camera shake amplitude on fire, hit, damage, and landing" },
+    { "id": "knockbackImpulse", "unit": "u/s", "description": "damage-reaction velocity impulse applied to the player" }
+  ],
+  "assetRoles": [
+    "player-character",
+    "weapon",
+    "muzzle-vfx",
+    "player-projectile",
+    "enemy",
+    "enemy-projectile",
+    "hazard",
+    "ground-tile",
+    "platform-tile",
+    "parallax-backdrop",
+    "impact-vfx",
+    "death-vfx",
+    "landing-dust-vfx",
+    "health-hud",
+    "ammo-hud",
+    "current-weapon-hud",
+    "upgrade-choice-ui",
+    "level-clear-ui",
+    "combat-sfx",
+    "jump-land-sfx"
+  ],
+  "coreHooks": [
+    {
+      "id": "minimal-between-level-weapon-upgrade",
+      "triggerTerms": ["between-level weapon upgrade", "weapon-upgrade choice", "upgrade choice", "choose a weapon upgrade"],
+      "coreContentKind": "upgradeChoice",
+      "coreSliceTitle": "Minimal between-level weapon upgrade choice: choose one of two modifiers for the next level",
+      "deferredRemainder": ["weapon-upgrade-tree", "meta-currency", "between-level-shop", "run-to-run-progression", "full-weapon-roster"]
+    }
+  ],
+  "defaultBands": [
+    {
+      "target": "runSpeed",
+      "band": { "min": 7, "max": 12, "unit": "u/s" },
+      "evidenceKind": "pack-default",
+      "measurabilityTag": "measurable-now",
+      "calculator": "runSpeed"
+    },
+    {
+      "target": "runAcceleration",
+      "band": { "min": 45, "max": 90, "unit": "u/s^2" },
+      "evidenceKind": "pack-default",
+      "measurabilityTag": "measurable-now",
+      "calculator": "runAcceleration"
+    },
+    {
+      "target": "runDeceleration",
+      "band": { "min": 50, "max": 110, "unit": "u/s^2" },
+      "evidenceKind": "pack-default",
+      "measurabilityTag": "measurable-now",
+      "calculator": "runDeceleration"
+    },
+    {
+      "target": "jumpApex",
+      "band": { "min": 3, "max": 5.5, "unit": "u" },
+      "evidenceKind": "pack-default",
+      "measurabilityTag": "measurable-now",
+      "calculator": "jumpApex"
+    },
+    {
+      "target": "timeToApex",
+      "band": { "min": 0.22, "max": 0.42, "unit": "s" },
+      "evidenceKind": "pack-default",
+      "measurabilityTag": "measurable-now",
+      "calculator": "timeToApex"
+    },
+    {
+      "target": "inputLatency",
+      "band": { "max": 80, "unit": "ms" },
+      "evidenceKind": "pack-default",
+      "measurabilityTag": "measurable-now",
+      "calculator": "inputLatency"
+    },
+    {
+      "target": "fireInputToSfxLatency",
+      "band": { "max": 50, "unit": "ms" },
+      "evidenceKind": "pack-default",
+      "measurabilityTag": "measurable-now",
+      "calculator": "inputToSfxLatency"
+    },
+    {
+      "target": "fireIntervalMs",
+      "band": { "min": 90, "max": 180, "unit": "ms" },
+      "evidenceKind": "pack-default",
+      "measurabilityTag": "measurable-now",
+      "calculator": "fireIntervalMs"
+    },
+    {
+      "target": "fireInputToSpawnLatency",
+      "band": { "max": 60, "unit": "ms" },
+      "evidenceKind": "pack-default",
+      "measurabilityTag": "measurable-now",
+      "calculator": "fireInputToSpawnLatency"
+    },
+    {
+      "target": "projectileSpeed",
+      "band": { "min": 18, "max": 32, "unit": "u/s" },
+      "evidenceKind": "pack-default",
+      "measurabilityTag": "measurable-now",
+      "calculator": "projectileSpeed"
+    },
+    {
+      "target": "hitstopMs",
+      "band": { "min": 20, "max": 70, "unit": "ms" },
+      "evidenceKind": "pack-default",
+      "measurabilityTag": "needs-new-calculator",
+      "calculator": "impact freeze duration from time-scale / motion-pause sampling (none today)"
+    },
+    {
+      "target": "screenShakeMag",
+      "band": { "min": 2, "max": 7, "unit": "px" },
+      "evidenceKind": "pack-default",
+      "measurabilityTag": "needs-new-calculator",
+      "calculator": "camera-transform shake amplitude sampler (none today)"
+    },
+    {
+      "target": "knockbackImpulse",
+      "band": { "min": 5, "max": 12, "unit": "u/s" },
+      "evidenceKind": "pack-default",
+      "measurabilityTag": "needs-new-bridge-capability",
+      "calculator": "per-tick velocity-vector sampling after a damage event"
+    },
+    {
+      "target": "aiming-and-shooting-feel",
+      "band": { "qualitative": "responsive, punchy, readable while moving and jumping" },
+      "evidenceKind": "pack-default",
+      "measurabilityTag": "judgment-only"
+    },
+    {
+      "target": "upgrade-choice-meaningfulness",
+      "band": { "qualitative": "each between-level option clearly changes the next level's combat style" },
+      "evidenceKind": "pack-default",
+      "measurabilityTag": "judgment-only"
+    },
+    {
+      "target": "minimal-upgrade-choice-presence",
+      "band": { "qualitative": "one simple between-level choice is playable in the core vertical when the brief makes upgrades genre-defining" },
+      "evidenceKind": "pack-default",
+      "measurabilityTag": "judgment-only"
+    }
+  ],
+  "exemplars": [
+    "Contra (side-scroll run-and-gun cadence)",
+    "Metal Slug (combat readability + impact feedback)",
+    "Cuphead (twitch shooting while platforming)",
+    "Mega Man X (movement feel + weapon acquisition pacing)"
+  ],
+  "notes": "Hybrid run-and-gun contracts should preserve the platforming measurable-now spine (run/jump/input/fire-SFX) and use measurable-now rows for fireIntervalMs/fireInputToSpawnLatency/projectileSpeed/ttkMs when the relevant fire/spawn counter, projectile trajectory, or reference-enemy hit/death signals can be sampled (ttkMs is measured first-hit→death, independent of aim time). Keep honest needs-new-calculator rows for hit-stop, screen shake, and automatic spawned-object discovery. If the brief explicitly names a between-level weapon-upgrade choice, keep one minimal representative upgradeChoice slice in coreVertical so the genre hook is visible; defer the full weapon tree, economy, shop, roster, and run-to-run progression."
+}

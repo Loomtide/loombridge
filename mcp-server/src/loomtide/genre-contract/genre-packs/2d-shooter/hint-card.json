@@ -1,0 +1,96 @@
+{
+  "genreId": "2d-shooter",
+  "genreClass": "twitch",
+  "subGenres": ["top-down", "twin-stick", "side-scroll"],
+  "perspectives": ["top-down", "twin-stick", "side-scroll"],
+  "canonicalTunables": [
+    { "id": "fireIntervalMs", "unit": "ms", "description": "time between shots (cadence); the spine of weapon feel" },
+    { "id": "fireInputToSpawnLatency", "unit": "ms", "description": "latency from fire input onset to an explicit projectile-spawn signal" },
+    { "id": "projectileSpeed", "unit": "u/s", "description": "bullet travel speed" },
+    { "id": "ttkMs", "unit": "ms", "description": "time to kill the reference enemy" },
+    { "id": "recoilKickDeg", "description": "per-shot recoil kick in degrees (no supported angular unit today — left unitless)" },
+    { "id": "adsTransitionMs", "unit": "ms", "description": "aim-down-sights / focus transition time (side-scroll + twin-stick aim modes)" },
+    { "id": "screenShakeMag", "unit": "px", "description": "screen-shake amplitude on fire / hit / kill" },
+    { "id": "hitstopMs", "unit": "ms", "description": "hit-stop freeze on impact / kill for weight" },
+    { "id": "moveSpeed", "unit": "u/s", "description": "player run speed" }
+  ],
+  "assetRoles": [
+    "player-character",
+    "weapon",
+    "reticle",
+    "player-projectile",
+    "enemy",
+    "arena-floor",
+    "arena-wall",
+    "muzzle-vfx",
+    "hit-vfx",
+    "death-vfx",
+    "health-hud",
+    "ammo-hud",
+    "wave-score-hud",
+    "combat-sfx"
+  ],
+  "defaultBands": [
+    {
+      "target": "inputToSfxLatency",
+      "band": { "max": 50, "unit": "ms" },
+      "evidenceKind": "pack-default",
+      "measurabilityTag": "measurable-now",
+      "calculator": "inputToSfxLatency"
+    },
+    {
+      "target": "fireIntervalMs",
+      "band": { "min": 90, "max": 140, "unit": "ms" },
+      "evidenceKind": "pack-default",
+      "measurabilityTag": "measurable-now",
+      "calculator": "fireIntervalMs"
+    },
+    {
+      "target": "fireInputToSpawnLatency",
+      "band": { "max": 50, "unit": "ms" },
+      "evidenceKind": "pack-default",
+      "measurabilityTag": "measurable-now",
+      "calculator": "fireInputToSpawnLatency"
+    },
+    {
+      "target": "ttkMs",
+      "band": { "min": 150, "max": 600, "unit": "ms" },
+      "evidenceKind": "pack-default",
+      "measurabilityTag": "measurable-now",
+      "calculator": "ttkMs"
+    },
+    {
+      "target": "projectileSpeed",
+      "band": { "min": 18, "max": 30, "unit": "u/s" },
+      "evidenceKind": "pack-default",
+      "measurabilityTag": "measurable-now",
+      "calculator": "projectileSpeed"
+    },
+    {
+      "target": "screenShakeMag",
+      "band": { "min": 2, "max": 8, "unit": "px" },
+      "evidenceKind": "pack-default",
+      "measurabilityTag": "needs-new-calculator",
+      "calculator": "screen-shake amplitude from camera-transform sampling (none today)"
+    },
+    {
+      "target": "hitstopMs",
+      "band": { "min": 30, "max": 90, "unit": "ms" },
+      "evidenceKind": "pack-default",
+      "measurabilityTag": "needs-new-calculator",
+      "calculator": "hit-stop window from time-scale / motion-pause sampling (none today)"
+    },
+    {
+      "target": "aiming-feel",
+      "band": { "qualitative": "responsive, fair, and readable at twin-stick + side-scroll aim ranges" },
+      "evidenceKind": "pack-default",
+      "measurabilityTag": "judgment-only"
+    }
+  ],
+  "exemplars": [
+    "Enter the Gungeon (twin-stick reference)",
+    "Nuclear Throne (top-down twitch reference)",
+    "Metal Slug (side-scroll reference)"
+  ],
+  "notes": "twitch shooter feel. Bands are pack-default/exemplar-set; inputToSfxLatency, fireIntervalMs, fireInputToSpawnLatency, projectileSpeed, and ttkMs are verifiable today when the weapon exposes a sampled SFX/fire/spawn counter, the projectile can be bound as the measured trajectory subject, or the reference enemy exposes sampled hit/death signals (ttkMs is measured first-hit→death, independent of aim time). screen-shake / hit-stop are tagged needs-new-calculator; automatic runtime-spawned object discovery remains separate from the explicit spawn-signal metric. aiming-feel is judgment-only and pairs with a humanOracleCheck in the contract. recoilKickDeg has no supported angular unit today, so it is seeded unitless."
+}

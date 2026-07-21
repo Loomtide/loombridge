@@ -1,0 +1,103 @@
+{
+  "schemaVersion": "1",
+  "id": "precision",
+  "title": "Precision Platformer",
+  "summary": "Tight, low-latency, responsive control with a short, snappy jump and explicit forgiveness windows.",
+  "exemplars": ["Celeste", "Super Meat Boy"],
+  "metrics": {
+    "runSpeed": {
+      "target": 9,
+      "unit": "u/s",
+      "band": { "percent": 15 },
+      "whyItMatters": "Fast enough to clear precise gaps without feeling sluggish; not so fast it overshoots.",
+      "suggestion": "Raise/lower the controller's max horizontal speed toward 9 u/s."
+    },
+    "runAcceleration": {
+      "target": 90,
+      "unit": "u/s^2",
+      "band": { "percent": 25 },
+      "whyItMatters": "Near-instant ground acceleration is the signature of precision control.",
+      "suggestion": "Increase ground acceleration so the player reaches top speed in ~0.1s."
+    },
+    "runDeceleration": {
+      "target": 120,
+      "unit": "u/s^2",
+      "band": { "percent": 25 },
+      "whyItMatters": "Quick stop lets the player line up pixel-perfect landings.",
+      "suggestion": "Raise ground friction/deceleration so the player halts almost immediately on release."
+    },
+    "jumpApex": {
+      "target": 3,
+      "unit": "u",
+      "band": { "percent": 12 },
+      "whyItMatters": "A controlled, repeatable apex height the player can internalize.",
+      "suggestion": "Tune jump impulse and gravity together to hit a 3u apex."
+    },
+    "timeToApex": {
+      "target": 280,
+      "unit": "ms",
+      "band": { "abs": 60 },
+      "whyItMatters": "A short rise keeps the jump feeling responsive rather than floaty.",
+      "suggestion": "Tune jump impulse and rise gravity so the apex is reached in ~0.28s."
+    },
+    "shortHopApex": {
+      "target": 1.1,
+      "unit": "u",
+      "band": { "percent": 20 },
+      "whyItMatters": "A meaningful jump-cut gives the player fine vertical control.",
+      "suggestion": "Apply a jump-cut multiplier on button release so a tap peaks near 1.1u."
+    },
+    "fallGravityMultiplier": {
+      "target": 1.6,
+      "unit": "x",
+      "band": { "abs": 0.4 },
+      "whyItMatters": "A heavier fall than rise makes the jump land crisply.",
+      "suggestion": "Set fall gravity to ~1.6x rise gravity."
+    },
+    "coyoteTime": {
+      "target": 0.1,
+      "unit": "s",
+      "band": { "abs": 0.03 },
+      "whyItMatters": "A small explicit grace window absorbs late jump presses off ledges.",
+      "suggestion": "Add/clamp a coyote-time window of ~0.1s after leaving the ground."
+    },
+    "jumpBuffer": {
+      "target": 0.1,
+      "unit": "s",
+      "band": { "abs": 0.03 },
+      "whyItMatters": "Buffering an early press makes landing-then-jumping feel instant.",
+      "suggestion": "Buffer a jump press for ~0.1s before grounding."
+    },
+    "dashDistance": {
+      "target": 4,
+      "unit": "u",
+      "band": { "percent": 15 },
+      "whyItMatters": "A fixed, learnable dash distance is core to precision traversal.",
+      "suggestion": "Tune dash speed×duration so the dash covers ~4u."
+    },
+    "dashTime": {
+      "target": 0.15,
+      "unit": "s",
+      "band": { "abs": 0.05 },
+      "whyItMatters": "A short dash keeps control tight and the window readable.",
+      "suggestion": "Hold dash for ~0.15s."
+    },
+    "dashCooldown": {
+      "target": 0.2,
+      "unit": "s",
+      "band": { "abs": 0.1 },
+      "whyItMatters": "A brief cooldown gates dash spam without breaking flow.",
+      "suggestion": "Gate the next dash by ~0.2s (or until grounded)."
+    }
+  },
+  "build": {
+    "fixedTimestep": 0.0166667,
+    "stored": {
+      "jumpCutMultiplier": 0.08
+    }
+  },
+  "mechanisms": {
+    "requires": ["airDash", "variableJump"],
+    "forbids": []
+  }
+}

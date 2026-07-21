@@ -1,0 +1,142 @@
+{
+  "genreId": "3d-shooter",
+  "genreClass": "twitch",
+  "subGenres": ["first-person", "third-person", "arena"],
+  "perspectives": ["first-person", "third-person"],
+  "canonicalTunables": [
+    { "id": "fireIntervalMs", "unit": "ms", "description": "time between shots (cadence); the spine of weapon feel" },
+    { "id": "fireInputToSpawnLatency", "unit": "ms", "description": "latency from fire input onset to an explicit projectile-spawn signal" },
+    { "id": "ttkMs", "unit": "ms", "description": "time to kill the reference enemy (first-hit to death)" },
+    { "id": "projectileSpeed", "unit": "u/s", "description": "3D projectile travel speed from a true {x,y,z} trajectory" },
+    { "id": "aimTurnRateDegPerSec", "description": "constant yaw turn rate in degrees/second (no supported angular unit today — left unitless)" },
+    { "id": "lookInputToYawLatencyMs", "unit": "ms", "description": "look-input onset to the first player yaw response in a 3C controller/camera slice" },
+    { "id": "shotAimAlignmentDeg", "description": "angular error between aim/camera forward and the fired shot direction (degrees; unitless until angular units exist)" },
+    { "id": "hitscanImpactLatencyMs", "unit": "ms", "description": "fire input to raycast-hit impact latency for an instantaneous (hitscan) weapon; live-proven in 3D" },
+    { "id": "enemyReactionLatencyMs", "unit": "ms", "description": "enemy reaction time from line-of-sight perception to first reaction (aim/fire); live-proven in 3D" },
+    { "id": "screenShakeMag", "unit": "u", "description": "peak camera-transform displacement (world units) on hit / kill; live-proven in true 3D" },
+    { "id": "hitstopMs", "unit": "ms", "description": "hit-stop freeze WINDOW duration on impact / kill for weight; live-proven in the 3D fixture" },
+    { "id": "recoilKickDeg", "description": "per-shot recoil kick in degrees (needs a recoil pulse calculator; no supported angular unit today — left unitless)" },
+    { "id": "adsTransitionMs", "unit": "ms", "description": "aim-down-sights transition time" },
+    { "id": "moveSpeed", "unit": "u/s", "description": "player planar move speed (no 3D move-speed calculator yet)" }
+  ],
+  "assetRoles": [
+    "player-character",
+    "weapon",
+    "muzzle",
+    "reticle",
+    "player-projectile",
+    "enemy-target",
+    "arena-floor",
+    "arena-backstop",
+    "muzzle-vfx",
+    "hit-vfx",
+    "death-vfx",
+    "health-hud",
+    "ammo-hud",
+    "score-hud",
+    "combat-sfx"
+  ],
+  "defaultBands": [
+    {
+      "target": "fireIntervalMs",
+      "band": { "min": 90, "max": 140, "unit": "ms" },
+      "evidenceKind": "pack-default",
+      "measurabilityTag": "measurable-now",
+      "calculator": "fireIntervalMs"
+    },
+    {
+      "target": "fireInputToSpawnLatency",
+      "band": { "max": 50, "unit": "ms" },
+      "evidenceKind": "pack-default",
+      "measurabilityTag": "measurable-now",
+      "calculator": "fireInputToSpawnLatency"
+    },
+    {
+      "target": "ttkMs",
+      "band": { "min": 150, "max": 600, "unit": "ms" },
+      "evidenceKind": "pack-default",
+      "measurabilityTag": "measurable-now",
+      "calculator": "ttkMs"
+    },
+    {
+      "target": "projectileSpeed",
+      "band": { "min": 18, "max": 40, "unit": "u/s" },
+      "evidenceKind": "pack-default",
+      "measurabilityTag": "measurable-now",
+      "calculator": "projectileSpeed"
+    },
+    {
+      "target": "aimTurnRateDegPerSec",
+      "band": { "min": 90, "max": 180 },
+      "evidenceKind": "pack-default",
+      "measurabilityTag": "measurable-now",
+      "calculator": "aimTurnRateDegPerSec"
+    },
+    {
+      "target": "lookInputToYawLatencyMs",
+      "band": { "max": 50, "unit": "ms" },
+      "evidenceKind": "pack-default",
+      "measurabilityTag": "measurable-now",
+      "calculator": "lookInputToYawLatencyMs"
+    },
+    {
+      "target": "shotAimAlignmentDeg",
+      "band": { "max": 5 },
+      "evidenceKind": "pack-default",
+      "measurabilityTag": "measurable-now",
+      "calculator": "shotAimAlignmentDeg"
+    },
+    {
+      "target": "hitscanImpactLatencyMs",
+      "band": { "max": 50, "unit": "ms" },
+      "evidenceKind": "pack-default",
+      "measurabilityTag": "measurable-now",
+      "calculator": "hitscanImpactLatencyMs"
+    },
+    {
+      "target": "enemyReactionLatencyMs",
+      "band": { "min": 100, "max": 400, "unit": "ms" },
+      "evidenceKind": "pack-default",
+      "measurabilityTag": "measurable-now",
+      "calculator": "enemyReactionLatencyMs"
+    },
+    {
+      "target": "screenShakeMag",
+      "band": { "min": 0.05, "max": 0.5, "unit": "u" },
+      "evidenceKind": "pack-default",
+      "measurabilityTag": "measurable-now",
+      "calculator": "screenShakeMag"
+    },
+    {
+      "target": "hitstopMs",
+      "band": { "min": 30, "max": 120, "unit": "ms" },
+      "evidenceKind": "pack-default",
+      "measurabilityTag": "measurable-now",
+      "calculator": "hitstopMs"
+    },
+    {
+      "target": "recoilKickDeg",
+      "band": { "qualitative": "controllable per-shot kick with a readable recovery" },
+      "evidenceKind": "pack-default",
+      "measurabilityTag": "needs-new-calculator"
+    },
+    {
+      "target": "adsTransitionMs",
+      "band": { "min": 120, "max": 260, "unit": "ms" },
+      "evidenceKind": "pack-default",
+      "measurabilityTag": "needs-new-bridge-capability"
+    },
+    {
+      "target": "aiming-feel",
+      "band": { "qualitative": "responsive, fair, and readable aim at the named perspective" },
+      "evidenceKind": "pack-default",
+      "measurabilityTag": "judgment-only"
+    }
+  ],
+  "exemplars": [
+    "DOOM (2016) (first-person arena reference)",
+    "Quake III Arena (twitch arena reference)",
+    "Halo (combat-loop reference)"
+  ],
+  "notes": "First 3D-shooter SEED, widened by the productization phases. Honestly measurable TODAY (each binds an implemented calculator, all live-proven or phase-proven in unity-projects/shooter-3d-combat-dogfood when the build exposes the corresponding sampled fields): fireIntervalMs, fireInputToSpawnLatency, ttkMs, true-3D projectileSpeed, constant yaw aimTurnRateDegPerSec, hitscanImpactLatencyMs (fire -> raycast-hit -> damage), enemyReactionLatencyMs (LOS perception -> reaction), true-3D screenShakeMag (peak camera displacement, world units), hitstopMs (hit-stop window duration), and the 3C controller/camera pair lookInputToYawLatencyMs (look-input onset -> first sampled /Player yaw response) + shotAimAlignmentDeg (angle between AimForward and the fired shot direction). The 3C pair was promoted from needs-new-bridge-capability once committed live evidence proved it: demo-bundles/3d-shooter-3c-controller-camera carries the raw runtime.capture_input_motion artifacts (look sweep + aim-then-fire) whose generator re-derives both through the production deriveLookInputToYawLatencyMs / deriveShotAimAlignmentDeg calculators (16.66ms look latency; 0deg shot/aim alignment at 86deg yaw). Still explicit gaps, NOT measurable-now claims: recoil needs a kick-then-recover calculator; ADS needs state/FOV/reticle transition sampling. Hit-stop / screen-shake FEEL QUALITY (curves, shake shape), broader hitscan features (penetration/spread/recoil/ADS/tracer), and broad enemy AI (behavior trees, tactical movement, cover, waves, pathfinding, aim fairness) remain gaps. Angular metrics remain unitless until the supported profile-unit vocabulary grows an angular unit. aiming-feel is judgment-only and pairs with a humanOracleCheck. See genre-packs/3d-shooter/methodology-gaps.md for raw live evidence."
+}

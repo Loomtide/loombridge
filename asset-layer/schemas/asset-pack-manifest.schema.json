@@ -1,0 +1,81 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://loomtide.ai/schemas/asset-pack-manifest.schema.json",
+  "title": "AssetPackManifest",
+  "description": "Human-authored manifest for ingesting a NEW asset pack into the hosted registry. Pack-level license/provider/source are declared once and inherited by every asset. Expanded into an AssetRegistryPack (then catalog records) by mcp-server/src/asset-authoring/pack-ingest.ts. The packId is the binding R2-key convention: provider.genre.slug maps 1:1 to the R2 directory provider/genre/slug (see Docs/Assets/AssetIngestionPipeline.md §8).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "packId", "name", "provider", "license", "source", "assets"],
+  "properties": {
+    "schemaVersion": { "const": "1" },
+    "packId": {
+      "type": "string",
+      "description": "provider.genre.slug — exactly three lowercase [a-z0-9-] segments, no dots within a segment (so the website can split it back into the R2 directory).",
+      "pattern": "^[a-z0-9][a-z0-9-]*\\.[a-z0-9][a-z0-9-]*\\.[a-z0-9][a-z0-9-]*$"
+    },
+    "name": { "type": "string", "minLength": 1 },
+    "description": { "type": "string" },
+    "provider": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "url"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "url": { "type": "string", "format": "uri" },
+        "type": { "enum": ["local", "http", "generation"] },
+        "termsNotes": { "type": "string" }
+      }
+    },
+    "license": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "spdx", "url", "requiresAttribution"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "spdx": { "type": "string", "minLength": 1 },
+        "url": { "type": "string", "format": "uri" },
+        "requiresAttribution": { "type": "boolean" }
+      }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["title", "url", "author"],
+      "properties": {
+        "title": { "type": "string", "minLength": 1 },
+        "url": { "type": "string", "format": "uri" },
+        "downloadPage": { "type": "string", "format": "uri" },
+        "author": { "type": "string", "minLength": 1 },
+        "verified": { "type": "boolean" }
+      }
+    },
+    "cover": {
+      "type": "object",
+      "description": "The pack-level cover image to publish as preview.png. Source-provided in Slice 1; auto-composited in Slice 2.",
+      "additionalProperties": false,
+      "required": ["file"],
+      "properties": {
+        "file": { "type": "string", "minLength": 1 },
+        "sample": { "type": "string", "description": "Optional second pack-level shot, published as sample.png." }
+      }
+    },
+    "assets": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["file", "kind"],
+        "properties": {
+          "file": { "type": "string", "minLength": 1, "description": "Filename relative to the pack's local source directory; its basename becomes the R2 object name." },
+          "kind": { "enum": ["sprite", "audio", "material", "model", "vector"] },
+          "primitive": { "type": "string", "description": "e.g. character, weapon, prop, tile. Defaults to 'decor'." },
+          "tags": { "type": "array", "items": { "type": "string" } },
+          "name": { "type": "string", "description": "Optional display title for this asset." },
+          "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+          "sizeBytes": { "type": "integer", "minimum": 0 }
+        }
+      }
+    }
+  }
+}

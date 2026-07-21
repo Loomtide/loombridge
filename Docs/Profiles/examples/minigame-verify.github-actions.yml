@@ -1,0 +1,100 @@
+# Example: run the Loomtide mini-game release check in GitHub Actions.
+#
+# This is a REFERENCE file (it lives under Docs/, not .github/workflows/, so it does
+# not run in the Loomtide repo). Copy it into YOUR game repo's .github/workflows/ and
+# adjust the marked spots. See Docs/Profiles/MiniGameVerifyCI.md for the full guide.
+#
+# What it does: install loomtide (no ~/.claude) -> print the build (stale-runtime
+# guard) -> produce/restore the capture pack -> verify --minigame --strict -> upload
+# the report -> a job summary that distinguishes exit 1 (fix the game) from exit 2
+# (fix the test setup).
+
+name: minigame-verify
+
+on:
+  workflow_dispatch: {}
+  pull_request:
+    paths:
+      - "Assets/**"          # adjust to your game's source paths
+      - ".loomtide/minigame/**"
+
+env:
+  # The mini-game contract + the per-state capture pack (see MiniGameVerifyCI.md §3).
+  CONTRACT: .loomtide/minigame/contracts/shape-match.minigame.json
+  CAPTURES: .loomtide/minigame/captures/shape-match
+  LOOMTIDE_REF: main        # PIN to a SHA/tag for reproducible runs
+
+jobs:
+  release-check:
+    runs-on: ubuntu-latest   # use a Unity-equipped/self-hosted runner if you LIVE-capture (§3)
+    steps:
+      - name: Checkout the game
+        uses: actions/checkout@v4
+
+      # --- install loomtide (CLI only — no ~/.claude) ---
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Install loomtide
+        run: |
+          # Clone into a SRC dir (distinct name) so it can't collide with the wrapper.
+          git clone https://github.com/Loomtide/loombridge "$RUNNER_TEMP/loomtide-src"
+          cd "$RUNNER_TEMP/loomtide-src" && git checkout "$LOOMTIDE_REF"
+          cd mcp-server && npm ci && npm run build
+          # Expose a `loomtide` command (a bin dir added to PATH for later steps).
+          mkdir -p "$RUNNER_TEMP/bin"
+          cat > "$RUNNER_TEMP/bin/loomtide" <<EOF
+          #!/usr/bin/env bash
+          exec node "$RUNNER_TEMP/loomtide-src/mcp-server/dist/cli.js" "\$@"
+          EOF
+          chmod +x "$RUNNER_TEMP/bin/loomtide"
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+
+      - name: Print the loomtide build (stale-runtime guard)
+        run: loomtide --version
+
+      # --- produce the capture pack (§3) ---
+      # OPTION A (shown): re-grade a capture pack committed to the repo.
+      # OPTION B: on a Unity-equipped runner, drive the build through the bridge here
+      #           to produce $CAPTURES live (the full release check). See the capture runbook.
+      - name: Capture pack present
+        run: |
+          if [ ! -d "$CAPTURES" ]; then
+            echo "::error::No capture pack at $CAPTURES — produce it first (see MiniGameVerifyCI.md §3)."
+            exit 1
+          fi
+
+      # --- the release check ---
+      - name: Verify mini-game (--strict)
+        id: verify
+        run: |
+          set +e
+          loomtide verify --minigame --contract "$CONTRACT" --captures "$CAPTURES" --strict \
+            --output "$RUNNER_TEMP/minigame-verification.json"
+          CODE=$?
+          set -e
+          echo "exit_code=$CODE" >> "$GITHUB_OUTPUT"
+          {
+            echo "## Mini-game release check"
+            case "$CODE" in
+              0) echo "✅ **READY** — all tested screens passed. Ship." ;;
+              1) echo "⛔ **NOT READY** — a game/asset defect or a baseline drift. Fix the game, or re-approve the baseline if the change was intended." ;;
+              2) echo "⚠️ **CAN'T VERIFY** — the build wasn't honestly tested (capture/test-setup gap). Fix the harness, **not** the game." ;;
+              *) echo "Unexpected exit code $CODE." ;;
+            esac
+            echo ""
+            echo "See the uploaded \`minigame-verification.html\` for the full report."
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit "$CODE"
+
+      # --- always upload the report (even on failure) ---
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: minigame-verification
+          path: |
+            ${{ runner.temp }}/minigame-verification.html
+            ${{ runner.temp }}/minigame-verification.md
+            ${{ runner.temp }}/minigame-verification.json
+          if-no-files-found: warn
