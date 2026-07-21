@@ -1,0 +1,48 @@
+name: Feature request
+description: Suggest a capability for the Loombridge bridge, MCP server, or CLI
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the idea. Before filing, please check the declared **non-goals** in the
+        [README](../blob/main/README.md#roadmap--non-goals) — an arbitrary code-execution op,
+        telemetry, and a cloud requirement are intentional non-goals and won't be added.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem / motivation
+      description: What are you trying to do that Loombridge can't do today? What's the underlying goal?
+      placeholder: When building a top-down shooter I can't measure...
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: |
+        What would the tool / CLI verb / gate do? If it's a new bridge op, note that capabilities
+        are added as *typed* ops (never a raw-eval escape hatch).
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Workarounds you've tried, or other designs you weighed.
+    validations:
+      required: false
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - "Unity bridge (C# op / tool)"
+        - "MCP server"
+        - "loombridge CLI / verification pipeline"
+        - "Genre pack / feel coverage"
+        - "Asset layer"
+        - "Docs"
+        - "Other"
+    validations:
+      required: true

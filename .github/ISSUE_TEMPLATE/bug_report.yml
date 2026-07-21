@@ -1,0 +1,84 @@
+name: Bug report
+description: Report a defect in the Loombridge bridge, MCP server, or CLI
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for filing a bug. Please fill in the environment fields — most bridge
+        issues are transport/version specific and we can't triage without them.
+
+        **Do not report security vulnerabilities here** — use the private channel in
+        [SECURITY.md](../blob/main/SECURITY.md) instead.
+  - type: textarea
+    id: summary
+    attributes:
+      label: What happened
+      description: A clear description of the bug and what you expected instead.
+      placeholder: doneness exits green even though...
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: Exact commands / MCP tool calls, in order. Minimal repro preferred.
+      placeholder: |
+        1. loombridge plan --genre platformer-2d --engine unity
+        2. ...
+        3. loombridge doneness
+    validations:
+      required: true
+  - type: input
+    id: unity-version
+    attributes:
+      label: Unity version
+      description: e.g. 6000.3.20f1 or 2022.3.x (from Help → About Unity or ProjectVersion.txt)
+      placeholder: "6000.3.20f1"
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: Operating system
+      description: e.g. macOS 15.6 (arm64), Windows 11, Ubuntu 24.04
+      placeholder: "macOS 15.6 (arm64)"
+    validations:
+      required: true
+  - type: dropdown
+    id: transport
+    attributes:
+      label: Transport mode
+      description: From the `live.transport` line of `loombridge doctor --project <p> --live` (or `--ci` JSON).
+      options:
+        - "tcp (loopback)"
+        - "ipc (named pipe / unix socket)"
+        - "not connected / doctor could not reach the bridge"
+        - "unknown"
+    validations:
+      required: true
+  - type: input
+    id: versions
+    attributes:
+      label: Bridge & CLI versions
+      description: CLI from `loombridge --version`; bridge package version from `Packages/manifest.json` or `loombridge doctor`.
+      placeholder: "CLI: loombridge 0.2.0 (<commit>) · bridge: com.loomtide.loombridge 0.2.0"
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Console / Editor.log excerpt
+      description: |
+        Relevant Unity Console output (especially lines with the `[Loombridge]` prefix) and/or
+        `Editor.log`, plus CLI stderr. Trim to the relevant portion.
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else
+      description: Screenshots, doctor output, `.loombridge/` report excerpts, workarounds tried.
+    validations:
+      required: false
