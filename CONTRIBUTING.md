@@ -28,6 +28,14 @@ npm ci
 npm run build
 ```
 
+A fresh clone doesn't ship the packed bridge tarball that `install-bridge` / `doctor`
+need, so build it once (re-run after any change under `packages/com.loomtide.loombridge/`).
+Without it, `doctor` exits 1 and `install-bridge` refuses with "no bundled bridge tarball":
+
+```bash
+bash ../scripts/loombridge-pack-bridge.sh   # writes dist/bridge/com.loomtide.loombridge-<ver>.tgz
+```
+
 To run **unreleased CLI changes** as `loombridge` on your PATH, link the dev bin (it
 follows every `npm run build`):
 

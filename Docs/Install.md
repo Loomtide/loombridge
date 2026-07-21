@@ -1,9 +1,11 @@
 # Install Loombridge on a new machine
 
-The simplest end-to-end setup. There are two tracks — pick one:
+The simplest end-to-end setup. There are two tracks:
 
-- **Track A — Partner install** (one command; installs **and** updates). The recommended path.
-- **Track B — From source** (works from a clone of this monorepo — the contributor/maintainer path).
+- **Track B — From source** (clone + build). **This is the install path today** — use it until the
+  first Loombridge release is tagged.
+- **Track A — One-command install** via `get.loomtide.ai`. **Not live for Loombridge yet** (see the
+  warning under Track A); it becomes the recommended path from the first tagged release on.
 
 Both end at the same place: a `loombridge` command on your PATH and the Unity bridge installed into your project as a
 versioned tarball dependency, verified by `loombridge doctor`.
@@ -20,11 +22,16 @@ versioned tarball dependency, verified by `loombridge doctor`.
 
 ---
 
-## Track A — Partner install (one command)
+## Track A — One-command install (from the first tagged release)
 
-Loombridge ships through **public GitHub Releases** on this repo (`Loomtide/loombridge`) — the release
-assets carry the packed CLI and installer. No npm account, no registry config, and no repository access to
-grant. Install (and later update) with a single command.
+> **Not live yet.** `get.loomtide.ai` does not serve Loombridge today — the one-liner currently
+> resolves a different, legacy CLI and would **silently install the wrong binary**, not Loombridge.
+> Use **Track B (from source)** below until the first Loombridge release is tagged. Everything in this
+> section describes how the one-command path will work **from that release on**.
+
+From the first tagged release, Loombridge ships through **public GitHub Releases** on this repo
+(`Loomtide/loombridge`) — the release assets carry the packed CLI and installer. No npm account, no
+registry config, and no repository access to grant. Install (and later update) with a single command.
 
 #### Fresh machine? One bootstrap command (installs the prerequisites too)
 
@@ -130,40 +137,51 @@ one dev decides and everyone's `loombridge update` behaves identically after a p
 
 ---
 
-## Track B — From source (contributors/maintainers)
+## Track B — From source (the install path today)
 
-Even from a clone, the **CLI on your PATH should come from the release channel** (Track A's one-liner) — it's
-the same build partners run. Track B adds the two source-only pieces on top: a linked dev bin for testing
-unreleased CLI changes, and the agent surface (slash commands, skills, aux harness wrappers).
+This is how you install Loombridge until the first release is tagged: a clone builds the CLI, `npm link`
+puts it on your PATH, and you pack the bundled bridge tarball the install/health commands need.
 
 ```bash
 # 1. Clone + build
 git clone https://github.com/Loomtide/loombridge.git
-cd Loombridge/mcp-server
+cd loombridge/mcp-server
 npm ci
 npm run build
 
-# 2a. CLI for everyday use — same as Track A (release build, updates with the same command):
-curl -fsSL https://get.loomtide.ai | sh
+# 2. Put `loombridge` on your PATH — link the dev bin (follows every `npm run build`):
+npm link                    # `loombridge --version` shows your local commit (+dirty)
 
-# 2b. OR, to run your UNRELEASED CLI changes: link the dev bin (follows every `npm run build`):
-npm link                    # `loombridge --version` will show your local commit (+dirty)
+# 3. Pack the bundled bridge tarball. install-bridge/doctor NEED it, and a fresh clone lacks it —
+#    without it, doctor exits 1 and install-bridge refuses ("no bundled bridge tarball"):
+bash ../scripts/loombridge-pack-bridge.sh   # writes dist/bridge/com.loomtide.loombridge-<ver>.tgz
 
-# 3. Agent surface (slash commands, skills, aux harness wrappers -> ~/.local/bin/loombridge-*):
+# 4. Agent surface (slash commands, skills, aux harness wrappers -> ~/.local/bin/loombridge-*):
 cd ..
 ./scripts/loombridge-install-locally.sh
 
-# 4. Install the Unity bridge into YOUR Unity project + verify (same as Track A):
+# 5. Install the Unity bridge into YOUR Unity project + verify:
 loombridge install-bridge --project /path/to/UnityProject
 loombridge doctor --project /path/to/UnityProject
 ```
 
+> **No Unity project handy?** `install-bridge` and offline `doctor` only touch three paths, so a
+> throwaway project works fully offline (no Unity install needed):
+> ```bash
+> mkdir -p MyProject/Assets MyProject/Packages MyProject/ProjectSettings
+> echo '{"dependencies":{}}' > MyProject/Packages/manifest.json
+> echo 'm_EditorVersion: 6000.3.20f1' > MyProject/ProjectSettings/ProjectVersion.txt   # your installed version
+> ```
+> `loombridge doctor --project MyProject` reports `healthy` against this without Unity running; only
+> `--live` needs the project actually open in Unity.
+
 Notes for Track B:
 
 - `loombridge-install-locally.sh` deliberately does **not** install a `loombridge` bin — a `~/.local/bin`
-  wrapper would shadow the released CLI on PATH. It even removes such wrappers left by older versions.
-- With `npm link`, `npm run build` is all a rebuild takes; `loombridge --version` tells you which build
-  (release commit vs your local `+dirty`) you're actually running.
+  wrapper would shadow the `npm link`ed (later, released) CLI on PATH. It even removes such wrappers left by older versions.
+- With `npm link`, `npm run build` is all a rebuild takes; re-run `bash scripts/loombridge-pack-bridge.sh`
+  after any bridge change so `install-bridge`/`update` pick up the new tarball. `loombridge --version` tells
+  you which build (`+dirty` local vs a release commit) you're actually running.
 - To push your checkout's **bridge** into a consumer project without a release, see the dev short path
   under [Keeping it up to date](#keeping-it-up-to-date).
 

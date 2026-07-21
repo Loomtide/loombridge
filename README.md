@@ -28,12 +28,13 @@ stop at *actuation* — move an object, run some C#, take a screenshot. The hard
 AI-built games isn't building them; it's knowing whether the result feels good and
 telling the difference between a real "done" and a confident hallucination.
 
-Loombridge is the first Unity bridge with a **verification layer** underneath the
-actuation:
+Loombridge adds a **verification layer** underneath the actuation that other Unity
+bridges don't have:
 
 - **Runtime input injection** — inject real Input System key/pointer events into the
   running game, not fake serialized-field pokes.
-- **Deterministic waits** — `wait_for(condition)`, never `sleep()`. No flaky timing.
+- **Deterministic waits** — `wait_for(condition)`, never `sleep()`: deterministic waits
+  instead of sleeps, so no timing races by construction.
 - **Motion / feel measurement** — sample position, velocity, animator state, and derived
   feel metrics (jump height, coyote time, fire cadence, hitstop, screen shake) from the
   running game, on real axes.
@@ -48,9 +49,12 @@ actuation:
 
 Two design choices set the safety floor:
 
-- **No arbitrary code execution.** Every tool routes through a typed op registry — there
-  is no "run this C#/shell string" op. That's a deliberate departure from bridges that
-  expose a raw eval. See [`Docs/ThreatModel.md`](Docs/ThreatModel.md).
+- **No raw-eval op.** There is no eval / "run this C# or shell string" op — every tool is
+  typed and schema-validated. Code can still enter the project the auditable way:
+  `code.create_script` writes C# that Unity compiles, and `invoke_static` /
+  `execute_menu_item` run project code behind a refuse-by-default allowlist. That's a
+  deliberate departure from bridges that expose a raw eval. See
+  [`Docs/ThreatModel.md`](Docs/ThreatModel.md).
 - **No telemetry.** Loombridge phones home to nothing. It's a local editor tool talking to
   your own Unity Editor over loopback; there is no analytics endpoint, no usage
   beacon, no account required to run it.
@@ -71,7 +75,7 @@ $ loombridge plan --genre platformer-2d --name DemoGame --engine unity
 [loombridge plan] Roadmap: none yet (design phase).
 [loombridge plan] design target: missing
 [loombridge plan] asset manifest: missing
-[loombridge plan] NOT ready — no approved Design Target (annotated hero shot). Establish/re-approve via `loombridge design set/approve` (see commands/loombridge/plan.md §3c), then re-run.
+[loombridge plan] NOT ready — no approved Design Target (annotated hero shot). Establish/re-approve via `loombridge design set/approve` (see commands/loombridge/plan.md §3c), then re-run. (Use --allow-missing-design-target only for early scaffolding — `build` will still block.)
 ; exit 1
 
 $ loombridge doneness
@@ -89,31 +93,66 @@ whose `runId` matches the in-flight build, a `producedAt` on/after the build's
 
 ## Quickstart
 
-Full setup — new machine, both tracks, transport notes — is in
-[`Docs/Install.md`](Docs/Install.md). The short path:
+Full setup — both install tracks, transport notes, the fresh-machine bootstrap — is in
+[`Docs/Install.md`](Docs/Install.md). The short path below is **from source**, which is how
+you install Loombridge today.
 
-**1. Install the CLI** (public GitHub Releases on this repo; no npm account). This same
-command later *updates* it — just re-run it:
+> **`get.loomtide.ai` doesn't serve Loombridge yet.** Don't run
+> `curl -fsSL https://get.loomtide.ai | sh` today — it currently resolves a different,
+> legacy CLI and would *silently* install the wrong binary, not Loombridge. Install from
+> source (below) until the first tagged release lands. **From that first release on**, the
+> installer at `get.loomtide.ai` will fetch Loombridge and self-update it, and this section
+> will switch to the one-liner.
+
+**1. Build the CLI from source** and put `loombridge` on your PATH via the dev bin (it
+follows every `npm run build`):
 
 ```bash
-curl -fsSL https://get.loomtide.ai | sh          # macOS / Linux
-```
-```powershell
-irm https://get.loomtide.ai/win | iex            # Windows (PowerShell 5.1 or 7; no Git Bash)
-loombridge --version
+git clone https://github.com/Loomtide/loombridge.git
+cd loombridge/mcp-server
+npm ci
+npm run build
+npm link                                       # `loombridge` now on your PATH
 ```
 
-On a fresh box, the bootstrap installs the missing prerequisites (Node.js LTS + GitHub
-CLI) too — see [`Docs/Install.md`](Docs/Install.md) for the elevation notes.
+Verify it (works on any OS):
 
-**2. Wire the bridge into your Unity project** (no repo clone; it's added as an immutable
-`file:` tarball dependency under `Packages/tarballs/`):
+```bash
+loombridge --version                           # loombridge <version> (<commit>, built <iso>)
+```
+
+**2. Pack the bundled bridge tarball.** `install-bridge` and `doctor` need a packed bridge
+`.tgz`, which a fresh clone doesn't ship — build it once (re-run after any bridge change).
+Skip this and `doctor` exits 1 while `install-bridge` refuses with "no bundled bridge tarball":
+
+```bash
+bash ../scripts/loombridge-pack-bridge.sh      # writes dist/bridge/com.loomtide.loombridge-<ver>.tgz
+```
+
+**3. Wire the bridge into your Unity project** (added as an immutable `file:` tarball
+dependency under `Packages/tarballs/` — no repo copy, no git needed):
 
 ```bash
 loombridge install-bridge --project /path/to/UnityProject
 ```
 
-**3. Open that project in Unity**, let it finish compiling, then health-check:
+<details>
+<summary>No Unity project handy? A minimal one is enough for <code>install-bridge</code> / offline <code>doctor</code>.</summary>
+
+`install-bridge` and offline `doctor` only touch three paths, so a throwaway project works
+fully offline (no Unity install needed):
+
+```bash
+mkdir -p MyProject/Assets MyProject/Packages MyProject/ProjectSettings
+echo '{"dependencies":{}}' > MyProject/Packages/manifest.json
+echo 'm_EditorVersion: 6000.3.20f1' > MyProject/ProjectSettings/ProjectVersion.txt   # your installed version
+```
+
+`loombridge doctor --project MyProject` reports `healthy` against this without Unity running;
+`--live` is the only step that needs the project actually open in Unity.
+</details>
+
+**4. Open that project in Unity**, let it finish compiling, then health-check:
 
 ```bash
 loombridge doctor --project /path/to/UnityProject         # offline install + wiring health
@@ -123,7 +162,7 @@ loombridge doctor --project /path/to/UnityProject --live  # also connect to the 
 `doctor` prints `healthy`, and `--live` reports the transport it settled on
 (`live.transport`). Every failed row prints the exact command that fixes it.
 
-**4. Connect your agent (Claude Code / Codex).** Point your MCP client at the server the
+**5. Connect your agent (Claude Code / Codex).** Point your MCP client at the server the
 CLI ships:
 
 - command: `loombridge`
@@ -133,15 +172,8 @@ For multiple open Unity projects and per-session routing, set `LOOMBRIDGE_UNITY_
 per session, or switch at runtime with the `loombridge_editor_list` /
 `loombridge_editor_use` tools. See [Transport modes](#transport-modes) below.
 
-### Building from a clone (contributors)
-
-```bash
-git clone https://github.com/Loomtide/loombridge.git
-cd loombridge/mcp-server && npm ci && npm run build
-```
-
-See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the dev bin (`npm link`), the agent surface,
-and the test suite.
+See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the agent surface (slash commands + skills),
+the test suite, and PR conventions.
 
 ## Tool surface
 
@@ -211,8 +243,11 @@ Deeper reading:
 Loombridge is a **local, single-developer editor tool**. An AI agent talks to the MCP
 server over stdio; the MCP server talks to a bridge plugin inside *your* Unity Editor over
 **loopback only** (localhost WebSocket, or a local named pipe on Windows). There is **no
-arbitrary code execution** — every tool routes through a typed op registry, so there is no
-op that runs an attacker-supplied C#/shell string — and **no telemetry**. Deliberately
+raw-eval op** — every tool is typed and schema-validated, so no op runs an
+attacker-supplied C#/shell string (code enters the project only the auditable way:
+`code.create_script` writes C# Unity compiles; `invoke_static` / `execute_menu_item` run
+project code behind a refuse-by-default allowlist — see
+[`Docs/ThreatModel.md`](Docs/ThreatModel.md)) — and **no telemetry**. Deliberately
 exposing the bridge to a network is an unsupported configuration, not a supported feature:
 the bridge has no authentication for hostile-local-network use because it isn't meant to
 leave loopback. Report vulnerabilities privately per [`SECURITY.md`](SECURITY.md); the full
@@ -250,8 +285,9 @@ non-goals**, not missing features:
 
 ## Asset layer & hosted catalog (optional)
 
-A public, read-only hosted asset catalog is available (66,859 CC0 records — PNG sprites,
-OGG audio, self-contained GLB models, SVG vectors) and browsable in-editor via **Window →
+A public, read-only hosted asset catalog is available (66,859 records, predominantly CC0
+with a clearly-flagged attribution-required tier — PNG sprites, OGG audio, self-contained
+GLB models, SVG vectors) and browsable in-editor via **Window →
 Loombridge → Asset Browser**. It's a convenience for sourcing art, not a requirement.
 External quickstart (no credentials):
 [`Docs/Assets/PublicCatalogQuickstart.md`](Docs/Assets/PublicCatalogQuickstart.md). The

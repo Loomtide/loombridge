@@ -33,10 +33,10 @@ body:
     id: unity-version
     attributes:
       label: Unity version
-      description: e.g. 6000.3.20f1 or 2022.3.x (from Help → About Unity or ProjectVersion.txt)
+      description: e.g. 6000.3.20f1 or 2022.3.x (from Help → About Unity or ProjectVersion.txt). Enter "N/A" for a CLI / install-only bug with no Unity involved.
       placeholder: "6000.3.20f1"
     validations:
-      required: true
+      required: false
   - type: input
     id: os
     attributes:
@@ -71,10 +71,11 @@ body:
       label: Console / Editor.log excerpt
       description: |
         Relevant Unity Console output (especially lines with the `[Loombridge]` prefix) and/or
-        `Editor.log`, plus CLI stderr. Trim to the relevant portion.
+        `Editor.log`, plus CLI stderr. Trim to the relevant portion. Leave blank (or "N/A") for a
+        CLI / install-only bug with no Unity logs.
       render: shell
     validations:
-      required: true
+      required: false
   - type: textarea
     id: extra
     attributes:
