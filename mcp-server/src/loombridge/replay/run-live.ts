@@ -24,6 +24,15 @@ export interface RunLiveReplayOptions {
   captureDir: string;
   /** Inject a client (tests); defaults to a fresh auto-discovering `UnityClient`. */
   client?: UnityClient;
+  /**
+   * The Unity project this replay belongs to. REQUIRED for correctness whenever more than
+   * one editor is running: an unpinned client resolves through the shared
+   * `endpoint-discovery-latest.json`, which every editor overwrites on its heartbeat, so
+   * the same command would replay against whichever editor published last. Observed live:
+   * identical invocations alternating between PASS and BLOCKED (reset-unavailable) as the
+   * pointer flapped between two projects.
+   */
+  projectPathCanonical?: string;
 }
 
 /** Replay a trace against the running editor and return the stamped artifact. */
@@ -31,7 +40,13 @@ export async function runLiveReplay(
   trace: ReplayTrace,
   options: RunLiveReplayOptions,
 ): Promise<ReplayRunArtifact> {
-  const client = options.client ?? new UnityClient();
+  const client =
+    options.client
+    ?? new UnityClient(
+      options.projectPathCanonical
+        ? { targetIdentity: { projectPathCanonical: options.projectPathCanonical } }
+        : {},
+    );
   const startedAt = new Date().toISOString();
   const startMs = Date.now();
 

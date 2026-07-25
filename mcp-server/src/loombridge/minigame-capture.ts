@@ -70,6 +70,7 @@ import { ICON, unityConnectionHint } from "./cli-ui.js";
 import { printNextStep } from "./minigame-next.js";
 import type { FlowActuation } from "./minigame-gates/flow-evidence.js";
 import { UnityClient } from "../unity-client.js";
+import { resolveCliProjectPin } from "./cli-project-pin.js";
 import { resilientSend } from "./replay/resilient-send.js";
 import { endLiveSession } from "./replay/session.js";
 import { UnityDriver } from "./replay/unity-driver.js";
@@ -93,6 +94,8 @@ interface CaptureArgs {
   capturesDir: string;
   traceId?: string;
   settleMs: number;
+  /** Unity project to drive. Absent → inferred from cwd; see resolveCliProjectPin. */
+  project?: string;
 }
 
 function parseArgs(argv: string[]): CaptureArgs | { error: string } {
@@ -101,6 +104,7 @@ function parseArgs(argv: string[]): CaptureArgs | { error: string } {
   let capturesDir: string | undefined;
   let traceId: string | undefined;
   let settleMs = 500;
+  let project: string | undefined;
   const take = (i: number, name: string): string | { error: string } => {
     const v = argv[i];
     if (v === undefined || v.startsWith("--")) return { error: `${name} requires a value` };
@@ -130,6 +134,11 @@ function parseArgs(argv: string[]): CaptureArgs | { error: string } {
         if (typeof v !== "string") return v;
         traceId = v;
         break;
+      case "--project":
+        v = take((i += 1), arg);
+        if (typeof v !== "string") return v;
+        project = path.resolve(v);
+        break;
       case "--settle":
         v = take((i += 1), arg);
         if (typeof v !== "string") return v;
@@ -143,7 +152,7 @@ function parseArgs(argv: string[]): CaptureArgs | { error: string } {
   if (!contractPath) return { error: "--contract <path> is required" };
   if (!traceRoot) return { error: "--trace-root <dir> is required" };
   if (!capturesDir) return { error: "--captures <dir> is required" };
-  return { contractPath, traceRoot, capturesDir, traceId, settleMs };
+  return { contractPath, traceRoot, capturesDir, traceId, settleMs, project };
 }
 
 async function loadContract(contractPath: string): Promise<MinigameContract> {
@@ -523,9 +532,15 @@ async function captureLive(
   plan: CapturePlan,
   capturesDir: string,
   settleMs: number,
+  projectPathCanonical: string | undefined,
 ): Promise<{ captured: string[]; notReached: { stateId: string; reason: string }[]; partial: { stateId: string; missing: string[]; sequential: string[] }[]; response?: ResponseObservation; candidates?: BackgroundCandidates } | { blocked: string }> {
   await fs.mkdir(capturesDir, { recursive: true });
-  const client = new UnityClient();
+  // Pin the editor explicitly: an unpinned client follows endpoint-discovery-latest.json,
+  // which every running editor overwrites on its heartbeat, so with two editors open a
+  // capture can drive the wrong game and file the pack under the intended one.
+  const client = new UnityClient(
+    projectPathCanonical ? { targetIdentity: { projectPathCanonical } } : {},
+  );
   await client.connect();
   const send = resilientSend(client);
   const driver = new UnityDriver(send, { captureDir: capturesDir });
@@ -775,7 +790,14 @@ export async function runCapture(argv: string[], root: string = process.cwd()): 
 
   let result: { captured: string[]; notReached: { stateId: string; reason: string }[]; partial: { stateId: string; missing: string[]; sequential: string[] }[]; response?: ResponseObservation; candidates?: BackgroundCandidates } | { blocked: string };
   try {
-    result = await captureLive(contract, trace, plan, parsed.capturesDir, parsed.settleMs);
+    result = await captureLive(
+      contract,
+      trace,
+      plan,
+      parsed.capturesDir,
+      parsed.settleMs,
+      resolveCliProjectPin({ project: parsed.project, root }),
+    );
   } catch (error) {
     const hint = unityConnectionHint(error);
     console.error(hint ? hint.join("\n") : `[loombridge minigame] capture: drive failed: ${message(error)}`);

@@ -32,6 +32,7 @@ import {
 import { observeRecordLive } from "./replay/observe-record-live.js";
 import { isScenePath } from "./minigame-profiles/types.js";
 import { runLiveReplay } from "./replay/run-live.js";
+import { resolveCliProjectPin } from "./cli-project-pin.js";
 import {
   flatReplayLayout,
   standardReplayLayout,
@@ -135,6 +136,7 @@ async function runReplay(args: TraceArgs): Promise<number> {
   const { artifact, reportJson, htmlPath } = await replayOneTrace(paths, args.id, {
     tracePath: args.tracePath,
     html: args.html,
+    projectPathCanonical: resolveCliProjectPin({ root: args.root }),
   });
   printSummary(args.root, args.id, artifact, reportJson, htmlPath);
   // In the mini-game workspace flow (--flat), print the EXACT next command to run.
@@ -182,7 +184,11 @@ async function runRecord(args: TraceArgs): Promise<number> {
   console.error(
     `[loombridge trace] recording "${args.id}" — resetting ${args.scene ?? "the current scene"} to a clean Play-Mode start…`,
   );
-  const { trace, droppedNoTarget } = await observeRecordLive(meta, { waitForStop, outcomes });
+  const { trace, droppedNoTarget } = await observeRecordLive(meta, {
+    waitForStop,
+    outcomes,
+    projectPathCanonical: resolveCliProjectPin({ root: args.root }),
+  });
 
   await fs.mkdir(paths.replayTraces, { recursive: true });
   const traceFile = path.join(paths.replayTraces, `${args.id}.trace.json`);
@@ -299,7 +305,7 @@ function sleep(ms: number): Promise<void> {
 async function replayOneTrace(
   paths: ReplayLayout,
   id: string,
-  opts: { tracePath?: string; html: boolean },
+  opts: { tracePath?: string; html: boolean; projectPathCanonical?: string },
 ): Promise<{ artifact: ReplayRunArtifact; reportJson: string; htmlPath?: string }> {
   await fs.mkdir(paths.replayTraces, { recursive: true });
   await fs.mkdir(paths.replayReports, { recursive: true });
@@ -313,7 +319,10 @@ async function replayOneTrace(
   }
 
   const captureDir = path.join(paths.replayReports, id, "actual");
-  const artifact = await runLiveReplay(trace, { captureDir });
+  const artifact = await runLiveReplay(trace, {
+    captureDir,
+    projectPathCanonical: opts.projectPathCanonical,
+  });
   // Visual regression: compare each capture to its approved baseline (if any).
   await applyVisualDiff(paths, id, artifact);
 
@@ -341,7 +350,10 @@ async function runReplayAll(args: TraceArgs): Promise<number> {
   const results: FleetTraceResult[] = [];
   for (const id of ids) {
     try {
-      const { artifact, reportJson, htmlPath } = await replayOneTrace(paths, id, { html: args.html });
+      const { artifact, reportJson, htmlPath } = await replayOneTrace(paths, id, {
+        html: args.html,
+        projectPathCanonical: resolveCliProjectPin({ root: args.root }),
+      });
       results.push({
         id,
         status: artifact.status,

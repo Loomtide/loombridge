@@ -19,6 +19,12 @@ export interface RecordLiveOptions {
   /** Where capture PNGs go during the demonstration (under an allowed root). */
   captureDir: string;
   client?: UnityClient;
+  /**
+   * Unity project to pin. Without it the client follows the shared
+   * endpoint-discovery-latest.json pointer, which every running editor overwrites on its
+   * heartbeat — so with two editors open the verb can drive the wrong project.
+   */
+  projectPathCanonical?: string;
 }
 
 export async function recordLive(
@@ -26,7 +32,13 @@ export async function recordLive(
   demonstrate: (session: RecordingSession) => Promise<void>,
   options: RecordLiveOptions,
 ): Promise<ReplayTrace> {
-  const client = options.client ?? new UnityClient();
+  const client =
+    options.client
+    ?? new UnityClient(
+      options.projectPathCanonical
+        ? { targetIdentity: { projectPathCanonical: options.projectPathCanonical } }
+        : {},
+    );
   await client.connect();
   const send = resilientSend(client);
   try {

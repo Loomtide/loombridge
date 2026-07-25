@@ -557,6 +557,17 @@ namespace UnityBridge.Introspection
                 Canvas.ForceUpdateCanvases();
                 RenderTexture.active = previousActive;
                 if (uiTex != null) UnityEngine.Object.DestroyImmediate(uiTex);
+                // Unbind BEFORE releasing. Unity logs "Releasing render texture that is set as
+                // Camera.targetTexture!" as an ERROR when the texture is still the camera's
+                // target, and that error landed in the very console this capture exists to
+                // observe: a play-mode screenshot took editor.get_state's error_count from 0 to
+                // 1, so gathering evidence corrupted the evidence. The world-frame path above
+                // already unbinds first (cam.targetTexture = previousTarget); this one did not.
+                if (camGo != null)
+                {
+                    Camera uiCamForCleanup = camGo.GetComponent<Camera>();
+                    if (uiCamForCleanup != null) uiCamForCleanup.targetTexture = null;
+                }
                 if (uiRt != null) { uiRt.Release(); UnityEngine.Object.DestroyImmediate(uiRt); }
                 UnityEngine.Object.DestroyImmediate(camGo);
             }
