@@ -98,7 +98,13 @@ test("UnityDriver.reset: a failing scene load → reset-unavailable", async () =
   const driver = new UnityDriver(send, driverOpts);
 
   const result = await driver.reset({ scene: "Missing", reset: "scene-load" });
-  assert.deepEqual(result, { ok: false, reason: "reset-unavailable" });
+  assert.equal(result.ok, false);
+  assert.equal(result.reason, "reset-unavailable");
+  // A blocked reset must say WHICH step failed — the bare enum sent users to a dead end.
+  assert.ok(
+    typeof result.detail === "string" && result.detail.length > 0,
+    "a failed reset must carry a diagnostic detail",
+  );
 });
 
 test("UnityDriver.reset: relaunch runs the full cycle and reports tier relaunch", async () => {
@@ -137,7 +143,13 @@ test("UnityDriver.reset: a tap hook that does not actuate → reset-unavailable"
     scene: "S",
     reset: { hook: { do: "tap", locator: { path: "/Gone" } } },
   });
-  assert.deepEqual(result, { ok: false, reason: "reset-unavailable" });
+  assert.equal(result.ok, false);
+  assert.equal(result.reason, "reset-unavailable");
+  // A blocked reset must say WHICH step failed — the bare enum sent users to a dead end.
+  assert.ok(
+    typeof result.detail === "string" && result.detail.length > 0,
+    "a failed reset must carry a diagnostic detail",
+  );
 });
 
 test("UnityDriver.reset: a tap hook target that never appears → reset-unavailable", async () => {
@@ -149,7 +161,13 @@ test("UnityDriver.reset: a tap hook target that never appears → reset-unavaila
     scene: "S",
     reset: { hook: { do: "tap", locator: { path: "/NeverShows" } } },
   });
-  assert.deepEqual(result, { ok: false, reason: "reset-unavailable" });
+  assert.equal(result.ok, false);
+  assert.equal(result.reason, "reset-unavailable");
+  // A blocked reset must say WHICH step failed — the bare enum sent users to a dead end.
+  assert.ok(
+    typeof result.detail === "string" && result.detail.length > 0,
+    "a failed reset must carry a diagnostic detail",
+  );
 });
 
 test("UnityDriver.reset: a hook verify that isn't reached → reset-unavailable (no silent green)", async () => {
@@ -170,7 +188,13 @@ test("UnityDriver.reset: a hook verify that isn't reached → reset-unavailable 
       },
     },
   });
-  assert.deepEqual(result, { ok: false, reason: "reset-unavailable" });
+  assert.equal(result.ok, false);
+  assert.equal(result.reason, "reset-unavailable");
+  // A blocked reset must say WHICH step failed — the bare enum sent users to a dead end.
+  assert.ok(
+    typeof result.detail === "string" && result.detail.length > 0,
+    "a failed reset must carry a diagnostic detail",
+  );
 });
 
 test("UnityDriver.reset: a hook verify that IS reached → ok, tier hook", async () => {
@@ -222,7 +246,13 @@ test("UnityDriver.reset: a hook op error → reset-unavailable", async () => {
     scene: "S",
     reset: { hook: { do: "set", locator: { path: "/X" }, component: "C", property: "p" } },
   });
-  assert.deepEqual(result, { ok: false, reason: "reset-unavailable" });
+  assert.equal(result.ok, false);
+  assert.equal(result.reason, "reset-unavailable");
+  // A blocked reset must say WHICH step failed — the bare enum sent users to a dead end.
+  assert.ok(
+    typeof result.detail === "string" && result.detail.length > 0,
+    "a failed reset must carry a diagnostic detail",
+  );
 });
 
 test("UnityDriver.reset: a transport failure rethrows (not dressed up as reset-unavailable)", async () => {

@@ -330,6 +330,11 @@ export interface ReplayReport {
   /** The reset strategy used, or null if replay never reset (blocked early). */
   resetTier: ResetTier | null;
   blockedReason?: BlockedReason;
+  /**
+   * Free-text detail for a blocked run: WHICH underlying step failed and why. The enum
+   * alone ("reset-unavailable") tells a user nothing they can act on.
+   */
+  blockedDetail?: string;
   firstDivergence?: FirstDivergence;
   /** True if any captured screenshot drifted from its approved baseline. */
   visualDrift?: boolean;

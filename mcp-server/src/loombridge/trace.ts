@@ -636,6 +636,9 @@ function printSummary(
 ): void {
   const blocked = artifact.blockedReason ? ` (${artifact.blockedReason})` : "";
   console.error(`[loombridge trace] ${id}: ${artifact.status.toUpperCase()}${blocked}`);
+  if (artifact.blockedDetail) {
+    console.error(`[loombridge trace]   cause: ${artifact.blockedDetail}`);
+  }
   if (artifact.firstDivergence) {
     const d = artifact.firstDivergence;
     console.error(

@@ -177,7 +177,11 @@ export class UnityDriver implements ReplayDriver {
       // A dead bridge is a harness failure, not a "the game couldn't reset"
       // verdict — rethrow it rather than dressing it up as a tidy `blocked`.
       if (isConnectionError(error)) throw error;
-      return { ok: false, reason: "reset-unavailable" };
+      return {
+        ok: false,
+        reason: "reset-unavailable",
+        detail: error instanceof Error ? error.message : String(error),
+      };
     }
   }
 

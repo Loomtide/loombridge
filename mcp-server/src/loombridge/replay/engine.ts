@@ -66,7 +66,7 @@ async function runReplay(
   // 2. Reset to a known start state.
   const reset = await driver.reset(trace.start);
   if (!reset.ok) {
-    return blockedReport(trace, reset.reason ?? "reset-unavailable");
+    return blockedReport(trace, reset.reason ?? "reset-unavailable", reset.detail);
   }
 
   const segments: SegmentResult[] = [];
@@ -263,12 +263,14 @@ async function runReplay(
 function blockedReport(
   trace: ReplayTrace,
   reason: ReplayReport["blockedReason"] & string,
+  detail?: string,
 ): ReplayReport {
   return {
     traceId: trace.id,
     status: "blocked",
     resetTier: null,
     blockedReason: reason,
+    ...(detail ? { blockedDetail: detail } : {}),
     segments: trace.segments.map((s) => ({
       id: s.id,
       status: "not_reached",

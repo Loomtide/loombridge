@@ -37,6 +37,13 @@ export interface ResetResult {
   tier?: ResetTier;
   /** Present (and `reset-unavailable`) when `ok` is false. */
   reason?: BlockedReason;
+  /**
+   * WHICH step of the reset cycle failed, and why. The bare enum reason says only that a
+   * reset did not happen; diagnosing a real case (the driver was talking to a different
+   * editor, so opening the scene failed) meant reading the source and hand-driving the
+   * five ops. Carry the underlying error so the report can say it.
+   */
+  detail?: string;
 }
 
 export interface DispatchResult {
