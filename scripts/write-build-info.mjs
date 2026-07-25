@@ -20,7 +20,19 @@ function sh(cmd) {
 }
 
 const commit = sh("git rev-parse --short HEAD") || "unknown";
-const dirty = commit !== "unknown" && sh("git status --porcelain") !== "" ? "+dirty" : "";
+
+// Only TRACKED modifications make a build "dirty". Untracked files are build output and
+// scratch — they say nothing about whether the source differs from the commit, and letting
+// them count made the stamp meaningless: a release build stamped "+dirty" purely because
+// the packaging steps had produced their own artifacts, so a genuinely modified tree was
+// indistinguishable from a clean release. Print WHAT is dirty, so a surprising stamp in a
+// CI log explains itself instead of needing to be reverse-engineered.
+const modified = commit !== "unknown" ? sh("git status --porcelain --untracked-files=no") : "";
+const dirty = modified !== "" ? "+dirty" : "";
+if (dirty) {
+  const paths = modified.split("\n").slice(0, 10).join("\n  ");
+  console.error(`[write-build-info] tree has uncommitted TRACKED changes:\n  ${paths}`);
+}
 const info = {
   commit: `${commit}${dirty}`,
   builtAt: new Date().toISOString(),
