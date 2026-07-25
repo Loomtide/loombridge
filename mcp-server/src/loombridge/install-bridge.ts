@@ -41,6 +41,7 @@ import {
   InstallMetadata,
   METADATA_RELPATH,
   PKG_ID,
+  SUPERSEDED_PKG_IDS,
   looksLikeUnityProject,
   readTarballVersion,
   resolveBundledTarball as resolveBundledTarballShared,
@@ -119,6 +120,8 @@ interface ManifestEdit {
   before?: string;
   after: string;
   removedStaleFolderRef: boolean;
+  /** Superseded bridge package ids cleared from the manifest (see SUPERSEDED_PKG_IDS). */
+  removedSupersededIds: string[];
 }
 
 /** Add/replace the file: dependency for the bridge id; report a replaced stale ref. */
@@ -135,12 +138,21 @@ function upsertManifestDependency(project: string, fileRef: string, dryRun: bool
   manifest.dependencies ??= {};
   const before = manifest.dependencies[PKG_ID];
   const removedStaleFolderRef = typeof before === "string" && before.startsWith("file:") && !before.endsWith(".tgz");
+  // Clear any predecessor bridge BEFORE adding ours: leaving both declared installs two
+  // packages that each define namespace UnityBridge with an [InitializeOnLoad] bootstrap.
+  const removedSupersededIds: string[] = [];
+  for (const legacy of SUPERSEDED_PKG_IDS) {
+    if (legacy in manifest.dependencies) {
+      delete manifest.dependencies[legacy];
+      removedSupersededIds.push(legacy);
+    }
+  }
   manifest.dependencies[PKG_ID] = fileRef;
   if (!dryRun) {
     mkdirSync(path.dirname(manifestPath), { recursive: true });
     writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
   }
-  return { before, after: fileRef, removedStaleFolderRef };
+  return { before, after: fileRef, removedStaleFolderRef, removedSupersededIds };
 }
 
 /**
@@ -263,6 +275,10 @@ async function installTarball(a: InstallArgs): Promise<number> {
     if (edit.removedStaleFolderRef) console.log(`     (replaced a stale file:-folder reference)`);
   } else {
     console.log(`  -> manifest dependency: "${PKG_ID}": "${fileRef}"`);
+  }
+  for (const legacy of edit.removedSupersededIds) {
+    console.log(`  -> removed superseded bridge dependency: "${legacy}"`);
+    console.log(`     (it declares the same UnityBridge types — keeping both starts two bridges)`);
   }
 
   // 4. The agent-routing front door (LOOMBRIDGE.md) — install the workflow, not just the wiring.

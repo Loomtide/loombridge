@@ -23,6 +23,7 @@ import {
   InstallMetadata,
   METADATA_RELPATH,
   PKG_ID,
+  SUPERSEDED_PKG_IDS,
   looksLikeUnityProject,
   readInstallMetadata,
   readTarballVersion,
@@ -317,12 +318,31 @@ function checkTarballWiring(
   // Manifest file: dependency present and pointing at the recorded tarball.
   const manifestPath = path.join(project, "Packages", "manifest.json");
   let dep: string | undefined;
+  let declaredSuperseded: string[] = [];
   if (existsSync(manifestPath)) {
     try {
-      dep = JSON.parse(readFileSync(manifestPath, "utf8"))?.dependencies?.[PKG_ID];
+      const deps = JSON.parse(readFileSync(manifestPath, "utf8"))?.dependencies ?? {};
+      dep = deps[PKG_ID];
+      declaredSuperseded = SUPERSEDED_PKG_IDS.filter((id) => id in deps);
     } catch {
       /* reported below as a missing dep */
     }
+  }
+
+  // A predecessor bridge declared alongside ours is not a warning: both packages define
+  // namespace UnityBridge with an [InitializeOnLoad] bootstrap, so Unity starts two bridge
+  // servers on the same port and CS0433s on the duplicated types. Such a project cannot
+  // compile, and doctor previously called it "healthy (0 warnings)".
+  if (declaredSuperseded.length > 0) {
+    checks.push({
+      id: "manifest.superseded-bridge",
+      label: "Conflicting bridge package",
+      status: "fail",
+      detail:
+        `manifest.json also declares ${declaredSuperseded.map((id) => `"${id}"`).join(", ")} — ` +
+        `two bridges define the same UnityBridge types and both auto-start`,
+      remediation: `remove the ${declaredSuperseded.join(", ")} dependency from Packages/manifest.json, or re-run: ${installCmd}`,
+    });
   }
   const expectedRef = meta.tarball ? `file:${meta.tarball}` : undefined;
   checks.push({

@@ -76,6 +76,9 @@ import {
 import { resolveMcpStartupProjectBinding } from "./startup-binding.js";
 import { collectSiblingServers, formatDoctorLines } from "./diagnostics.js";
 import { InputSessionKeepalive } from "./input-keepalive.js";
+import { resolveBuildStamp } from "./loombridge/build-stamp.js";
+import { resolveTraceDirectory } from "./trace-directory.js";
+import { validateOpArguments } from "./arg-validation.js";
 
 // ─────────────────────────────────────────────
 // Response Formatting (exported for testing)
@@ -726,14 +729,16 @@ export const LOOMBRIDGE_CORE_TOOLS = [
 ];
 
 const SERVER_NAME = "loombridge";
-const SERVER_VERSION = "0.2.0";
+// Read from package.json rather than hand-maintained: a literal here silently went
+// stale at 0.2.0 while the package shipped 0.3.0, so every MCP client saw the wrong
+// version. resolveBuildStamp() resolves package.json relative to its OWN compiled
+// location (dist/loombridge/), so it is correct regardless of this module's depth.
+const SERVER_VERSION = resolveBuildStamp().version;
 
 // Exported so the `loombridge` CLI dispatcher (cli.ts) can boot the server via the
 // `mcp` subcommand. The main-module guard below still auto-runs it when the file
 // is the entry point (e.g. the `node dist/index.js` form in every .mcp.json).
 export async function main(): Promise<void> {
-  // Create instances
-  const traceRecorder = new TraceRecorder();
   const opRegistry = new OpRegistry();
 
   // Infer the session's Unity project once at boot so untargeted calls auto-bind without a
@@ -744,6 +749,14 @@ export async function main(): Promise<void> {
     env: process.env,
     cwd: process.cwd(),
   });
+
+  // Traces belong to the bound project's .loombridge/, NOT to a CWD-relative ./trace.
+  // The old default wrote wherever the MCP client happened to launch the server —
+  // normally the user's project root — so trace JSONL and screenshot artifacts piled
+  // up unbounded outside the documented state directory (73 MB observed in one
+  // consumer project) and every consumer had to discover it and add their own
+  // .gitignore rule. Resolved AFTER the binding so we know which project we serve.
+  const traceRecorder = new TraceRecorder(resolveTraceDirectory(startupBinding, process.env));
   if (startupBinding.kind === "strict") {
     console.error(
       `[loombridge] Auto-binding to Unity project (LOOMBRIDGE_UNITY_PROJECT): ${startupBinding.target}`,
@@ -967,6 +980,18 @@ export async function main(): Promise<void> {
 
     const params = (request.params.arguments ?? {}) as Record<string, unknown>;
     const { unityParams, project, outputPath } = stripRoutingParams(params);
+
+    // Reject provably-wrong arguments HERE rather than letting Unity throw. Forwarding a
+    // schema-invalid value produced an opaque INTERNAL_ERROR (a C# cast exception) that
+    // read like a bridge defect instead of a correctable caller mistake.
+    const argProblems = validateOpArguments(unityParams, op.inputSchema);
+    if (argProblems.length > 0) {
+      return formatErrorResult(
+        `${toolName}: ${argProblems.join("; ")}. Call unity_ops_describe with toolName="${toolName}" for the expected shape.`,
+        "INVALID_ARGUMENT",
+      ) as CallToolResult;
+    }
+
     const startTime = Date.now();
 
     // RCL-T11: ops.batch accepts `operations` as a native array OR a JSON-encoded string (clients
@@ -1346,6 +1371,7 @@ export async function main(): Promise<void> {
   await server.connect(transport);
 
   console.error(`[loombridge] MCP server started (${SERVER_NAME} v${SERVER_VERSION})`);
+  console.error(`[loombridge] Trace output: ${traceRecorder.traceDirectory}`);
 
   // ─── Startup diagnostics ───
   // One-line environment health snapshot so a dirty machine (orphaned sibling servers,

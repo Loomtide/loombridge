@@ -62,6 +62,11 @@ export class TraceRecorder {
     this._traceDir = traceDir;
   }
 
+  /** Where traces and artifacts are written. Reported at boot so it is never a mystery. */
+  get traceDirectory(): string {
+    return this._traceDir;
+  }
+
   /** The current session ID. */
   get sessionId(): string {
     return this._sessionId;

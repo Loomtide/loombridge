@@ -8,6 +8,11 @@ dist/
 mcp-server/bridge/
 mcp-server/agent-surface/
 
+# Trace recorder output. Left untracked this made `git status --porcelain` dirty
+# after any test run, which made write-build-info stamp every released artifact
+# "+dirty" — the provenance stamp could never distinguish a real dirty build.
+trace/
+
 # --- Unity ---
 Library/
 Logs/

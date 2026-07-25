@@ -16,6 +16,16 @@ import { readTarballFile } from "./tarball.js";
 
 export const PKG_ID = "com.loomtide.loombridge";
 
+/**
+ * Package ids this bridge REPLACES. A project that still declares one of these alongside
+ * PKG_ID loads two bridges: both define `namespace UnityBridge` with an
+ * `[InitializeOnLoad] UnityBridgeBootstrap`, so Unity starts two bridge servers racing for
+ * the same port and the duplicated types raise CS0433. Installing must clear them, and
+ * doctor must fail on them — a project in that state cannot compile, and reporting it
+ * "healthy" is worse than not checking at all.
+ */
+export const SUPERSEDED_PKG_IDS = ["com.loomtide.unitybridge"] as const;
+
 /** Raised for a genuine runtime/filesystem failure (exit 1), vs a usage error (exit 2). */
 export class BridgeInstallError extends Error {}
 
