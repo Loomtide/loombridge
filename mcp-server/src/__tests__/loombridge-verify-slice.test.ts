@@ -17,6 +17,7 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 
 import { runVerify } from "../capabilities/verification/verify.js";
+import { REPO_ROOT as REPO_ROOT_SUPPORT } from "./_support/paths.js";
 import {
   ensureScaffold,
   loombridgePaths,
@@ -38,8 +39,7 @@ import {
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const acceptancePath = path.resolve(
-  __dirname,
-  "../../..",
+  REPO_ROOT_SUPPORT,
   "mcp-server/src/capabilities/verification/tiderunner.acceptance.json",
 );
 

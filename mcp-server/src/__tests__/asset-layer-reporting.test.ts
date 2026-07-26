@@ -7,10 +7,11 @@ import { fileURLToPath } from "node:url";
 import { prepareAssets } from "../capabilities/assets/prepare-cli.js";
 import { buildPrepareDiagnostics, renderAttributionMarkdown, writeAttributionMarkdown } from "../capabilities/assets/reporting.js";
 import type { AssetPrepareReport, PreparedAsset } from "../capabilities/assets/types.js";
+import { REPO_ROOT } from "./_support/paths.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const repoRoot = path.resolve(__dirname, "../../..");
+const repoRoot = REPO_ROOT;
 const profilePath = path.join(repoRoot, "asset-layer/profiles/2d-platformer.json");
 const registryPath = path.join(repoRoot, "asset-layer/registry/platformer-2d.json");
 

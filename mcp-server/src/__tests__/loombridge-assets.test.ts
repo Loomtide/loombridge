@@ -17,10 +17,11 @@ import type { CatalogFetch } from "../capabilities/assets/catalog-source.js";
 import { buildRegistrySelectionPlan } from "../capabilities/assets/manifest-selection.js";
 import { loadAssetProfile, loadRegistryPack } from "../capabilities/assets/registry.js";
 import { evaluateAssetSourceFidelity } from "../capabilities/verification/gates/asset-source-fidelity.js";
+import { REPO_ROOT } from "./_support/paths.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const repoRoot = path.resolve(__dirname, "../../..");
+const repoRoot = REPO_ROOT;
 const APPROVED_AT = "2026-06-05T00:00:00.000Z";
 
 async function tmpRoot(): Promise<string> {

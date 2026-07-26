@@ -17,10 +17,11 @@ import { catalogRecordToRegistryEntry, normalizeCatalogRecord } from "../capabil
 import { selectCatalogAssets } from "../capabilities/assets/registry.js";
 import { trustTierForEntry } from "../capabilities/assets/trust.js";
 import type { AssetCatalogRecord } from "../capabilities/assets/types.js";
+import { REPO_ROOT } from "./_support/paths.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const repoRoot = path.resolve(__dirname, "../../..");
+const repoRoot = REPO_ROOT;
 const fixturePath = path.join(repoRoot, "asset-layer/catalog-fixtures/platformer-catalog.json");
 
 function candidate(overrides: Partial<AssetCatalogRecord>): AssetCatalogRecord {

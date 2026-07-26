@@ -42,6 +42,7 @@ import {
 } from "../capabilities/minigame/index.js";
 import type { GateReport } from "../capabilities/verification/gates/types.js";
 import { assertValidMinigameContract } from "../capabilities/minigame/profiles/validator.js";
+import { REPO_ROOT as REPO_ROOT_SUPPORT } from "./_support/paths.js";
 import type {
   MinigameContainerBinding,
   MinigameContract,
@@ -52,19 +53,16 @@ import type {
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const FIXTURES_DIR = path.resolve(
-  __dirname,
-  "../../..",
+  REPO_ROOT_SUPPORT,
   "mcp-server/src/__tests__/fixtures/minigame-count-the-fruits",
 );
 const FRAME_FIXTURES_DIR = path.resolve(
-  __dirname,
-  "../../..",
+  REPO_ROOT_SUPPORT,
   "mcp-server/src/__tests__/fixtures/minigame-frame-facts",
 );
 // The CountTheFruits captures AFTER the builder's 9-slice + field-clear fix (S7).
 const FIXED_FIXTURES_DIR = path.resolve(
-  __dirname,
-  "../../..",
+  REPO_ROOT_SUPPORT,
   "mcp-server/src/__tests__/fixtures/minigame-count-the-fruits-fixed",
 );
 

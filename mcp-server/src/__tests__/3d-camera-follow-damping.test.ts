@@ -33,6 +33,7 @@ import {
 import type { FeelTrajectorySample } from "../capabilities/verification/gates/feel.js";
 import { validateAcceptanceContract } from "../capabilities/verification/validator.js";
 import type { AcceptanceContract } from "../capabilities/verification/types.js";
+import { REPO_ROOT } from "./_support/paths.js";
 
 const DT_MS = 1000 / 60; // 60 fps capture
 const HALF_LIFE_MS = 140; // target catch-up half-life (in the dogfood 0.10-0.18s band)
@@ -226,7 +227,7 @@ test("(extra) player returns home (no net direction) → refuse (no look-ahead a
 test("(e) 3d-topdown-arena framing profile validates and declares TOP-DOWN (not over-shoulder)", async () => {
   const __filename = fileURLToPath(import.meta.url);
   const __dirname = path.dirname(__filename);
-  const repoRoot = path.resolve(__dirname, "../../..");
+  const repoRoot = REPO_ROOT;
   const acceptancePath = path.join(
     repoRoot,
     "mcp-server/src/capabilities/genre/genre-packs/3d-topdown-arena/acceptance.json",

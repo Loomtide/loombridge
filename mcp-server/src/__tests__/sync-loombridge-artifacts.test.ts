@@ -4,10 +4,11 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { REPO_ROOT as SUPPORT_REPO_ROOT } from "./_support/paths.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // dist/__tests__ -> repo root is three up.
-const REPO_ROOT = path.resolve(__dirname, "..", "..", "..");
+const REPO_ROOT = SUPPORT_REPO_ROOT;
 const GEN_URL = pathToFileURL(path.join(REPO_ROOT, "scripts", "sync-loombridge-artifacts.mjs")).href;
 
 interface Artifact {

@@ -45,17 +45,16 @@ import { run as verifyRun } from "../capabilities/verification/verify.js";
 import { assertValidMinigameContract } from "../capabilities/minigame/profiles/validator.js";
 import type { MinigameContract } from "../capabilities/minigame/profiles/types.js";
 import { makeGateReport, type GateReport } from "../capabilities/verification/gates/types.js";
+import { REPO_ROOT as REPO_ROOT_SUPPORT } from "./_support/paths.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const FIXED_FIXTURES_DIR = path.resolve(
-  __dirname,
-  "../../..",
+  REPO_ROOT_SUPPORT,
   "mcp-server/src/__tests__/fixtures/minigame-count-the-fruits-fixed",
 );
 const NEGATIVE_FIXTURE_DIR = path.resolve(
-  __dirname,
-  "../../..",
+  REPO_ROOT_SUPPORT,
   "mcp-server/src/__tests__/fixtures/minigame-offscreen-negative",
 );
 

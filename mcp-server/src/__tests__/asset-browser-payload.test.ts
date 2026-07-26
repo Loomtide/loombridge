@@ -11,10 +11,11 @@ import {
 } from "../capabilities/assets/browser-payload.js";
 import type { CatalogFetch } from "../capabilities/assets/catalog-source.js";
 import { loadRegistryPack } from "../capabilities/assets/registry.js";
+import { REPO_ROOT } from "./_support/paths.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const repoRoot = path.resolve(__dirname, "../../..");
+const repoRoot = REPO_ROOT;
 const registryPath = path.join(repoRoot, "asset-layer/registry/platformer-2d.json");
 const profilePath = path.join(repoRoot, "asset-layer/profiles/2d-platformer.json");
 const catalogPath = path.join(repoRoot, "asset-layer/catalog-fixtures/platformer-catalog.json");

@@ -6,10 +6,11 @@ import { fileURLToPath } from "node:url";
 
 import { validateAcceptanceContract } from "../capabilities/verification/validator.js";
 import type { AcceptanceContract } from "../capabilities/verification/types.js";
+import { REPO_ROOT } from "./_support/paths.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const repoRoot = path.resolve(__dirname, "../../..");
+const repoRoot = REPO_ROOT;
 const acceptancePath = path.join(
   repoRoot,
   "mcp-server/src/capabilities/verification/switchyard-courier.acceptance.json",

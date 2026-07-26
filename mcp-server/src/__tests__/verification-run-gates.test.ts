@@ -17,17 +17,16 @@ import { fileURLToPath } from "node:url";
 import { runGates, isGateInStage, VERIFY_STAGES, type ReviewFindings } from "../capabilities/verification/run-gates.js";
 import type { AcceptanceContract } from "../capabilities/verification/types.js";
 import { createDraftAssetManifest, type AssetManifest } from "../capabilities/assets/asset-manifest.js";
+import { REPO_ROOT as REPO_ROOT_SUPPORT } from "./_support/paths.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const acceptancePath = path.resolve(
-  __dirname,
-  "../../..",
+  REPO_ROOT_SUPPORT,
   "mcp-server/src/capabilities/verification/tiderunner.acceptance.json",
 );
 const switchyardAcceptancePath = path.resolve(
-  __dirname,
-  "../../..",
+  REPO_ROOT_SUPPORT,
   "mcp-server/src/capabilities/verification/switchyard-courier.acceptance.json",
 );
 

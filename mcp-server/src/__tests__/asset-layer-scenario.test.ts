@@ -8,10 +8,11 @@ import { buildScenarioDryRunResult } from "../capabilities/scenario/runner.js";
 import { validateScenarioDocument } from "../capabilities/scenario/validator.js";
 import { generatePlatformerAssetScenario } from "../capabilities/assets/platformer-scenario.js";
 import type { AssetPrepareReport } from "../capabilities/assets/types.js";
+import { REPO_ROOT } from "./_support/paths.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const repoRoot = path.resolve(__dirname, "../../..");
+const repoRoot = REPO_ROOT;
 
 function asset(id: string, primitive: string, unityPath: string, defaultSpriteName?: string): AssetPrepareReport["assets"][number] {
   return {

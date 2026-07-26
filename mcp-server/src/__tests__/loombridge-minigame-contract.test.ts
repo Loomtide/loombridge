@@ -3,6 +3,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
+import { REPO_ROOT as REPO_ROOT_SUPPORT } from "./_support/paths.js";
 
 import {
   validateMinigameContract,
@@ -27,8 +28,7 @@ import {
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SCHEMA_PATH = path.resolve(
-  __dirname,
-  "../../..",
+  REPO_ROOT_SUPPORT,
   "mcp-server/src/domain/schemas/minigame-contract.schema.json",
 );
 

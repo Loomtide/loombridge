@@ -16,6 +16,7 @@ import { fileURLToPath } from "node:url";
 import { validateGenreContract } from "../capabilities/genre/genre-contract/validator.js";
 import type { GenreContract, ProductThesis } from "../capabilities/genre/genre-contract/types.js";
 import { EVIDENCE_CLASSES } from "../capabilities/verification/gates/evidence-classes.js";
+import { PKG_ROOT as SUPPORT_PKG_ROOT } from "./_support/paths.js";
 import {
   checkScaleSanity,
   buildDesignDocCoverageReport,
@@ -27,7 +28,7 @@ import {
 } from "../capabilities/genre/genre-contract/design-hardening.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const PKG_ROOT = path.resolve(__dirname, "..", "..");
+const PKG_ROOT = SUPPORT_PKG_ROOT;
 const EXAMPLES = path.join(PKG_ROOT, "src", "capabilities", "genre", "genre-contract", "examples");
 
 /** A minimal valid twitch contract — mirrors the base in loombridge-genre-contract.test.ts. */

@@ -21,11 +21,12 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
+import { REPO_ROOT } from "./_support/paths.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 // dist/__tests__/ → repo root is three up.
-const repoRoot = path.resolve(__dirname, "..", "..", "..");
+const repoRoot = REPO_ROOT;
 
 interface PluginManifest {
   commands: string[];

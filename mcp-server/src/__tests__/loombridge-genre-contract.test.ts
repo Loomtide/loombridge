@@ -10,9 +10,10 @@ import {
   IMPLEMENTED_CALCULATOR_IDS,
 } from "../capabilities/genre/genre-contract/validator.js";
 import type { GenreContract } from "../capabilities/genre/genre-contract/types.js";
+import { PKG_ROOT as SUPPORT_PKG_ROOT } from "./_support/paths.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const PKG_ROOT = path.resolve(__dirname, "..", ".."); // dist/__tests__ -> mcp-server
+const PKG_ROOT = SUPPORT_PKG_ROOT;
 const EXAMPLES = path.join(PKG_ROOT, "src", "capabilities", "genre", "genre-contract", "examples");
 
 /** A minimal, valid twitch contract used as the base for mutation-based negative tests. */

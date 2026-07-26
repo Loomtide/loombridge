@@ -3,6 +3,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
+import { REPO_ROOT as REPO_ROOT_SUPPORT } from "./_support/paths.js";
 
 import {
   assertValidVerificationScenario,
@@ -14,8 +15,7 @@ import {
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const fixturePath = path.resolve(
-  __dirname,
-  "../../..",
+  REPO_ROOT_SUPPORT,
   "mcp-server/src/capabilities/verification/scenarios/platformer-2d-basic.json",
 );
 

@@ -3,6 +3,7 @@ import test from "node:test";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { PKG_ROOT as SUPPORT_PKG_ROOT } from "./_support/paths.js";
 
 import {
   validateHintCard,
@@ -12,7 +13,7 @@ import {
 } from "../capabilities/genre/genre-contract/hint-card.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const PKG_ROOT = path.resolve(__dirname, "..", ".."); // dist/__tests__ -> mcp-server
+const PKG_ROOT = SUPPORT_PKG_ROOT;
 const PACK_ROOT = path.join(PKG_ROOT, "src", "capabilities", "genre", "genre-contract", "genre-packs");
 
 function readJson(genreId: string, file: string): unknown {

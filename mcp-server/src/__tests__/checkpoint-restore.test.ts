@@ -6,11 +6,12 @@ import { spawnSync } from "node:child_process";
 import test, { after, before, describe } from "node:test";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
+import { REPO_ROOT as SUPPORT_REPO_ROOT } from "./_support/paths.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 // dist/__tests__ -> repo root is three levels up.
-const REPO_ROOT = resolve(__dirname, "../../..");
+const REPO_ROOT = SUPPORT_REPO_ROOT;
 const CHECKPOINT = resolve(REPO_ROOT, "scripts/loombridge-checkpoint.sh");
 const RESTORE = resolve(REPO_ROOT, "scripts/loombridge-restore.sh");
 

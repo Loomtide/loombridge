@@ -24,12 +24,12 @@ import {
 } from "../capabilities/verification/capture-runner.js";
 import type { AcceptanceContract } from "../capabilities/verification/types.js";
 import type { VerificationScenario } from "../capabilities/verification/scenario.js";
+import { REPO_ROOT as REPO_ROOT_SUPPORT } from "./_support/paths.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const fixturePath = path.resolve(
-  __dirname,
-  "../../..",
+  REPO_ROOT_SUPPORT,
   "mcp-server/src/capabilities/verification/scenarios/platformer-2d-basic.json",
 );
 

@@ -19,10 +19,11 @@ import { StubGenerationProvider } from "../capabilities/assets/providers/stub-ge
 import { HttpCatalogSource, selectAssetsFromCatalog } from "../capabilities/assets/catalog-source.js";
 import type { AssetCatalogRecord } from "../capabilities/assets/types.js";
 import { LocalCatalogSource } from "../capabilities/assets/catalog-source.js";
+import { REPO_ROOT } from "./_support/paths.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const repoRoot = path.resolve(__dirname, "../../..");
+const repoRoot = REPO_ROOT;
 
 const catalogPath = path.join(repoRoot, "asset-layer/catalog-public/2d-platformer/part-00000.jsonl");
 const profilePath = path.join(repoRoot, "asset-layer/profiles/2d-platformer.json");

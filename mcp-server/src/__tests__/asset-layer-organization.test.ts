@@ -4,10 +4,11 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { planUnitySpriteImport } from "../capabilities/assets/organization.js";
 import { loadAssetProfile, loadRegistryPack } from "../capabilities/assets/registry.js";
+import { REPO_ROOT } from "./_support/paths.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const repoRoot = path.resolve(__dirname, "../../..");
+const repoRoot = REPO_ROOT;
 
 test("planUnitySpriteImport routes primitives to deterministic Assets/Art folders", async () => {
   const profile = await loadAssetProfile(path.join(repoRoot, "asset-layer/profiles/2d-platformer.json"));

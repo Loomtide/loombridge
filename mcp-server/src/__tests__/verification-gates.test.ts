@@ -53,12 +53,12 @@ import {
 } from "../capabilities/verification/gates/index.js";
 import type { AcceptanceContract } from "../capabilities/verification/types.js";
 import { createDraftAssetManifest, type AssetManifest } from "../capabilities/assets/asset-manifest.js";
+import { REPO_ROOT as REPO_ROOT_SUPPORT } from "./_support/paths.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const acceptancePath = path.resolve(
-  __dirname,
-  "../../..",
+  REPO_ROOT_SUPPORT,
   "mcp-server/src/capabilities/verification/tiderunner.acceptance.json",
 );
 

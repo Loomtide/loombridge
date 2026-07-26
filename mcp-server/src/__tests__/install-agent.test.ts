@@ -7,12 +7,13 @@ import os from "node:os";
 import path from "node:path";
 import test, { after, before, describe } from "node:test";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { CLI_DIST, PKG_ROOT, REPO_ROOT as SUPPORT_REPO_ROOT } from "./_support/paths.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // dist/__tests__ -> mcp-server is two up; repo root is three up.
-const CLI = path.resolve(__dirname, "../surfaces/cli.js");
-const MCP_SERVER = path.resolve(__dirname, "../..");
-const REPO_ROOT = path.resolve(__dirname, "../../..");
+const CLI = CLI_DIST;
+const MCP_SERVER = PKG_ROOT;
+const REPO_ROOT = SUPPORT_REPO_ROOT;
 const PACK_SCRIPT = path.resolve(REPO_ROOT, "scripts/loombridge-pack-bridge.sh");
 const BUILD_SURFACE = path.resolve(REPO_ROOT, "scripts/build-agent-surface.mjs");
 const SCRUB_LIB = path.resolve(REPO_ROOT, "scripts/agent-surface-lib.mjs");

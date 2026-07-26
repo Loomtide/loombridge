@@ -46,6 +46,7 @@ import { fileURLToPath } from "node:url";
 import { deriveWallSlideTangentRatio } from "../capabilities/verification/feel-derive.js";
 import type { FeelTrajectorySample } from "../capabilities/verification/gates/feel.js";
 import { validateAcceptanceContract } from "../capabilities/verification/validator.js";
+import { REPO_ROOT } from "./_support/paths.js";
 
 // The canonical wall + diagonal-input geometry all cases share (see file header).
 const WALL_NORMAL = { x: 1, z: 0 } as const; // outward normal, +X
@@ -441,7 +442,7 @@ test("refuses a window whose in-window samples SPAN under 100ms (enough samples,
 
 test("edited genre packs (3d-topdown-arena + 3d-shooter) validate; arena carries the wall-slide band", async () => {
   const __dirname = path.dirname(fileURLToPath(import.meta.url));
-  const repoRoot = path.resolve(__dirname, "../../..");
+  const repoRoot = REPO_ROOT;
   const load = async (rel: string) =>
     JSON.parse(await fs.readFile(path.join(repoRoot, rel), "utf-8")) as Record<string, unknown>;
 

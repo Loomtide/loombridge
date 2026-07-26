@@ -10,10 +10,11 @@ import {
   validatePublicCatalogRecord,
 } from "../capabilities/assets/catalog.js";
 import type { AssetCatalogRecord } from "../capabilities/assets/types.js";
+import { REPO_ROOT } from "./_support/paths.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const repoRoot = path.resolve(__dirname, "../../..");
+const repoRoot = REPO_ROOT;
 const seedPath = path.join(repoRoot, "asset-layer/catalog-public/2d-platformer/part-00000.jsonl");
 
 const EXPECTED_PRIMITIVES = ["tile", "player", "background", "collectible"];

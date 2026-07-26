@@ -13,10 +13,11 @@ import {
 } from "../capabilities/verification/tiderunner-mock-oracle.js";
 import { validateAcceptanceContract } from "../capabilities/verification/validator.js";
 import type { AcceptanceContract } from "../capabilities/verification/types.js";
+import { REPO_ROOT } from "./_support/paths.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const repoRoot = path.resolve(__dirname, "../../..");
+const repoRoot = REPO_ROOT;
 const mockPath = path.join(
   repoRoot,
   "mcp-server/src/__tests__/fixtures/design-briefs/level-hero-shot.html",

@@ -8,10 +8,11 @@ import { readWavMetadata } from "../capabilities/assets/audio-metadata.js";
 import { prepareAssets } from "../capabilities/assets/prepare-cli.js";
 import { loadAssetProfile, loadRegistryPack } from "../capabilities/assets/registry.js";
 import { validatePreparedAudio } from "../capabilities/assets/validator.js";
+import { REPO_ROOT } from "./_support/paths.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const repoRoot = path.resolve(__dirname, "../../..");
+const repoRoot = REPO_ROOT;
 const profilePath = path.join(repoRoot, "asset-layer/profiles/2d-platformer.json");
 const registryPath = path.join(repoRoot, "asset-layer/registry/platformer-2d.json");
 const audioPath = path.join(repoRoot, "asset-layer/fixtures/platformer/sfx/fupi-plingy-coin/coin.wav");

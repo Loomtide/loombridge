@@ -12,10 +12,11 @@ import {
 import { loadAssetProfile, loadRegistryPack } from "../capabilities/assets/registry.js";
 import { createDraftAssetManifest, validateAssetManifest } from "../capabilities/assets/asset-manifest.js";
 import { evaluateAssetSourceFidelity } from "../capabilities/verification/gates/asset-source-fidelity.js";
+import { REPO_ROOT } from "./_support/paths.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const repoRoot = path.resolve(__dirname, "../../..");
+const repoRoot = REPO_ROOT;
 const HASH = "b".repeat(64);
 
 async function fixture() {

@@ -3,10 +3,11 @@ import fs from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
+import { REPO_ROOT } from "./_support/paths.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const repoRoot = path.resolve(__dirname, "../../..");
+const repoRoot = REPO_ROOT;
 
 // Literal substrings (NOT regex) — compared with String.includes so dots are not wildcards.
 const HOSTED_STORE = "https://assetstore.loomtide.ai";

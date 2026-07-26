@@ -10,10 +10,11 @@ import { loadAssetProfile, loadRegistryPack, selectAssets } from "../capabilitie
 import { prepareAssets } from "../capabilities/assets/prepare-cli.js";
 import type { CatalogFetch } from "../capabilities/assets/catalog-source.js";
 import type { AssetProviderAdapter } from "../capabilities/assets/providers/types.js";
+import { REPO_ROOT } from "./_support/paths.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const repoRoot = path.resolve(__dirname, "../../..");
+const repoRoot = REPO_ROOT;
 
 test("asset resolver selects deterministic platformer entries by primitive and license", async () => {
   const registry = await loadRegistryPack(path.join(repoRoot, "asset-layer/registry/platformer-2d.json"));
