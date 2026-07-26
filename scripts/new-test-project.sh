@@ -5,14 +5,14 @@
 #
 # Usage:
 #   scripts/new-test-project.sh [name] [--force] [--brief=PATH] [--output=PATH]
-#     name         project folder under unity-projects/ (default: platformer-clean)
+#     name         project folder under unity-dev-project/ (default: platformer-clean)
 #     --force      delete and recreate if it already exists
 #     --brief=PATH build brief to copy in as BUILD-BRIEF.md (no default shipped in this repo;
 #                  relative paths resolve from repo root — omit to skip the brief copy)
 #     --output=PATH absolute or relative Unity project folder. Use this for true clean-room
 #                  runs outside the Loombridge repo so parent repo state/memory is not inherited.
 #
-# Produces unity-projects/<name>/ with:
+# Produces unity-dev-project/<name>/ with:
 #   - Packages/manifest.json   bridge (relative file: ref) + the known-good dependency set
 #   - ProjectSettings/         copied from demo-platformer (Input System enabled, 2D, built-in RP)
 #   - Assets/.gitkeep          empty assets
@@ -22,7 +22,7 @@
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-TEMPLATE="$REPO_ROOT/unity-projects/demo-platformer"
+TEMPLATE="$REPO_ROOT/demos/unity-platformer"
 BRIEF=""
 
 NAME="platformer-clean"
@@ -41,7 +41,7 @@ done
 if [ -n "$OUTPUT" ]; then
   PROJ="$OUTPUT"
 else
-  PROJ="$REPO_ROOT/unity-projects/$NAME"
+  PROJ="$REPO_ROOT/unity-dev-project/$NAME"
 fi
 
 if [ ! -d "$TEMPLATE/ProjectSettings" ]; then
@@ -67,7 +67,7 @@ mkdir -p "$PROJ/Assets" "$PROJ/Packages" "$PROJ/ProjectSettings"
 # ref; external clean-room projects use an absolute file: ref so they cannot inherit parent repo
 # instructions just to resolve the bridge package.
 case "$PROJ" in
-  "$REPO_ROOT"/unity-projects/*) BRIDGE_PACKAGE_REF="file:../../../packages/com.loomtide.loombridge" ;;
+  "$REPO_ROOT"/unity-dev-project/*) BRIDGE_PACKAGE_REF="file:../../../packages/com.loomtide.loombridge" ;;
   *) BRIDGE_PACKAGE_REF="file:$REPO_ROOT/packages/com.loomtide.loombridge" ;;
 esac
 cat > "$PROJ/Packages/manifest.json" <<JSON

@@ -56,7 +56,7 @@ test("validatePreparedAudio accepts profile-compliant optional audio", async () 
 test("prepareAssets reports accepted audio separately from sprite imports", async () => {
   // Write the report/cache into a throwaway temp dir. The prepare report embeds
   // absolute machine paths (outputPath/cacheDir), so writing it into the tracked
-  // demo/.artifacts tree would leak a developer's home path into a committed file.
+  // demos/.artifacts tree would leak a developer's home path into a committed file.
   const outDir = mkdtempSync(path.join(tmpdir(), "loombridge-audio-test-"));
   const report = await prepareAssets({
     profilePath,

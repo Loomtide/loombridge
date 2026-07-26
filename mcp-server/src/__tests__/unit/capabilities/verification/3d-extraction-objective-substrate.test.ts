@@ -14,7 +14,7 @@
  * Both are dimension-agnostic (they count edges/levels on sampled scalar `fieldTimeline` series),
  * honest-or-refuse, and re-derivable. LIVE Unity capture evidence is DEFERRED: a real reach-zone →
  * dwell → bank (and a death-wipe) capture needs a built extraction scene (no committed
- * demo-bundles/* transcript yet, unlike the cover/wave substrates). The calculators plus these
+ * demos/evidence-bundles/* transcript yet, unlike the cover/wave substrates). The calculators plus these
  * synthetic-trace tests are the slice deliverable.
  */
 

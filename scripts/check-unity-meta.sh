@@ -6,7 +6,7 @@ default_repo_root="$(cd "$script_dir/.." && pwd)"
 repo_root="$(cd "${1:-$default_repo_root}" && pwd)"
 
 package_root="$repo_root/packages/com.loomtide.loombridge"
-asset_roots=( "$repo_root"/unity-projects/*/Assets )
+asset_roots=( "$repo_root"/unity-dev-project/*/Assets )
 
 missing_meta=()
 orphaned_meta=()
@@ -76,7 +76,7 @@ if [[ -d "$package_root" ]]; then
 fi
 
 if [[ ${#asset_roots[@]} -eq 0 ]]; then
-  echo "unity-projects/*/Assets not found; skipping Unity metadata check."
+  echo "unity-dev-project/*/Assets not found; skipping Unity metadata check."
   exit 0
 fi
 

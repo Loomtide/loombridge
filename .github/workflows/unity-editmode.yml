@@ -9,14 +9,14 @@ on:
   pull_request:
     paths:
       - "packages/**"
-      - "unity-projects/loombridge-dev/**"
+      - "unity-dev-project/**"
       - ".github/workflows/unity-editmode.yml"
   push:
     branches:
       - main
     paths:
       - "packages/**"
-      - "unity-projects/loombridge-dev/**"
+      - "unity-dev-project/**"
       - ".github/workflows/unity-editmode.yml"
 
 jobs:
@@ -74,7 +74,7 @@ jobs:
         env:
           UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
         with:
-          projectPath: unity-projects/loombridge-dev
+          projectPath: unity-dev-project
           unityVersion: ${{ matrix.unity_version }}
           testMode: EditMode
           artifactsPath: unity-test-results/${{ matrix.label }}

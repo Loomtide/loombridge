@@ -32,7 +32,7 @@ describe("Scenario CLI integration", { timeout: 30000 }, () => {
       [
         "dist/surfaces/scenario-cli.js",
         "--scenario",
-        "../demo/scenarios/generic-smoke.json",
+        "../demos/scenarios/generic-smoke.json",
         "--dry-run",
         "--output",
         outputPath,

@@ -10,7 +10,7 @@ import { deriveAimTurnRateDegPerSec } from "../../../../capabilities/verificatio
 import { REPO_ROOT as REPO_ROOT_SUPPORT } from "../../../_support/paths.js";
 
 const repoRoot = REPO_ROOT_SUPPORT;
-const bundleRoot = join(repoRoot, "demo-bundles/3d-aim-turn-rate-substrate");
+const bundleRoot = join(repoRoot, "demos/evidence-bundles/3d-aim-turn-rate-substrate");
 const RAW_NAME = "shooter-3d-aim-turn-rate-raw-2026-06-26.json";
 const DERIVED_NAME = "shooter-3d-aim-turn-rate-derived-2026-06-26.json";
 

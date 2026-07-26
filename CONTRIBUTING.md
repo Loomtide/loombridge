@@ -77,7 +77,7 @@ environment blocker preserved as evidence — not a product pass, and not a fail
 ### EditMode (C#) tests
 
 The Unity package tests live in `packages/com.loomtide.loombridge/Tests/` and run headless
-from `unity-projects/loombridge-dev` via Unity batchmode. **They require a Unity install and
+from `unity-dev-project` via Unity batchmode. **They require a Unity install and
 a valid Unity license**, so they don't run on a plain `npm` checkout. The same suite runs in
 CI (`.github/workflows/unity-editmode.yml`); if your change touches C# in the bridge
 package, describe how you exercised it (headless batchmode, or a live editor) in the PR.

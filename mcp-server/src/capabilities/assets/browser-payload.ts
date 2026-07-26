@@ -150,8 +150,8 @@ function parseArgs(argv: string[]): CliArgs {
   const args: CliArgs = {
     registryPath: "",
     profilePath: "",
-    outputPath: "../demo/.artifacts/platformer-asset-browser-payload.json",
-    previewCacheDir: "../demo/.artifacts/asset-cache/browser-previews",
+    outputPath: "../demos/.artifacts/platformer-asset-browser-payload.json",
+    previewCacheDir: "../demos/.artifacts/asset-cache/browser-previews",
     help: false,
   };
 

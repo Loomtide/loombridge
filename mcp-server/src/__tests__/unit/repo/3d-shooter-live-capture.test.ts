@@ -8,7 +8,7 @@ import { fileURLToPath } from "node:url";
 import { REPO_ROOT as REPO_ROOT_SUPPORT } from "../../_support/paths.js";
 
 const repoRoot = REPO_ROOT_SUPPORT;
-const bundleRoot = join(repoRoot, "demo-bundles/3d-shooter-first-live-capture");
+const bundleRoot = join(repoRoot, "demos/evidence-bundles/3d-shooter-first-live-capture");
 
 function readJson<T>(name: string): T {
   return JSON.parse(readFileSync(join(bundleRoot, name), "utf8")) as T;

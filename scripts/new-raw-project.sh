@@ -26,7 +26,7 @@
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-TEMPLATE="$REPO_ROOT/unity-projects/demo-platformer"
+TEMPLATE="$REPO_ROOT/demos/unity-platformer"
 ART_SRC="$REPO_ROOT/asset-layer/incoming/Free"
 MOCK_SRC=""
 BRIEF=""

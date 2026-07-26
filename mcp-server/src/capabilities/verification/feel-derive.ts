@@ -56,7 +56,7 @@ export const REDERIVABLE_METRICS = [
   "inputLatency",
   // 3C controller/camera: lookInputToYawLatencyMs is the rotation analog of
   // inputLatency. It re-derives from sampled yaw (ry) + a recorded look-input onset.
-  // Promoted with committed live evidence: demo-bundles/3d-shooter-3c-controller-camera.
+  // Promoted with committed live evidence: demos/evidence-bundles/3d-shooter-3c-controller-camera.
   "lookInputToYawLatencyMs",
 ] as const;
 export type RederivableMetric = (typeof REDERIVABLE_METRICS)[number];

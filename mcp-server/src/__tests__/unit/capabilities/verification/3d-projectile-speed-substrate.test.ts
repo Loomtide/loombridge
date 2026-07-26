@@ -10,7 +10,7 @@ import { deriveProjectileSpeed } from "../../../../capabilities/verification/fee
 import { REPO_ROOT as REPO_ROOT_SUPPORT } from "../../../_support/paths.js";
 
 const repoRoot = REPO_ROOT_SUPPORT;
-const bundleRoot = join(repoRoot, "demo-bundles/3d-projectile-speed-substrate");
+const bundleRoot = join(repoRoot, "demos/evidence-bundles/3d-projectile-speed-substrate");
 const RAW_NAME = "shooter-3d-projectile-speed-raw-2026-06-25.json";
 const DERIVED_NAME = "shooter-3d-projectile-speed-derived-2026-06-25.json";
 

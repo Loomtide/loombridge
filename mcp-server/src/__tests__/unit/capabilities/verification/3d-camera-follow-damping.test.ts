@@ -15,7 +15,7 @@
  * Plus a contract test: the new `3d-topdown-arena` framing profile VALIDATES against the
  * production validateAcceptanceContract and declares TOP-DOWN framing (not over-shoulder).
  *
- * LIVE Unity capture is DEFERRED (no committed demo-bundles/* transcript yet — like the
+ * LIVE Unity capture is DEFERRED (no committed demos/evidence-bundles/* transcript yet — like the
  * hold-channel / move-speed / extraction substrates): a real twin-stick follow capture needs
  * a built top-down scene. The calculator + these synthetic tests are the slice deliverable.
  */

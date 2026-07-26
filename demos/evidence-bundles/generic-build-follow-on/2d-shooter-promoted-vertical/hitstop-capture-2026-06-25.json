@@ -1,0 +1,1366 @@
+{
+  "metric": "hitstopMs",
+  "status": "pass",
+  "evidenceKind": "live-unity-capture",
+  "capturedAt": "2026-06-25T11:00:00.000Z",
+  "project": "shooter-combat-dogfood (repo-owned 2D-shooter combat fixture; unity-dev-project/shooter-combat-dogfood, scene Assets/Scenes/ShooterCombatDogfood.unity)",
+  "rawCaptureSource": "demos/evidence-bundles/generic-build-follow-on/2d-shooter-promoted-vertical/impact-feedback-raw-2026-06-25.json",
+  "fixture": {
+    "object": "/CombatController",
+    "component": "DogfoodCombatReset",
+    "feedbackComponent": "DogfoodImpactFeedback (on /Main Camera)",
+    "scene": "ShooterCombatDogfood",
+    "inputSystem": true,
+    "hitStopSignal": "DogfoodCombatReset.IsHitStopped",
+    "note": "hitstopMs is the duration of the FIRST impact hit-stop window — the rising edge (window opens on a registered projectile hit) to the following falling edge (window closes) of the IsHitStopped signal. The window advances on Time.deltaTime (the fixture never alters Time.timeScale), so a pinned Loombridge capture gives it a deterministic, capture-clock-aligned duration. Series copied verbatim from the raw bridge transcript; not synthesized."
+  },
+  "causality": {
+    "firstProjectileHitMs": 516.67,
+    "firstEnemyHitMs": 516.67,
+    "hitStopRiseMs": 516.67,
+    "shakeRiseMs": 516.67,
+    "sampleIntervalMs": 16.67,
+    "note": "The hit-stop window and the camera shake both open WITHIN ONE captured frame of the first projectile-collision hit (here on the SAME frame, 516.67ms) — DogfoodImpactFeedback watches the enemy HitCount rise, so the feedback is the immediate causal consequence of a real collision, never input, never a timer, never a delayed/independent effect. screenShakeMag additionally requires the camera to be at rest BEFORE the hit and measures the peak displacement only at/after it."
+  },
+  "capture": {
+    "source": "runtime.capture_input_motion",
+    "captureFps": 60,
+    "durationMs": 1800,
+    "sampleCount": 109,
+    "fieldTimeline": [
+      {
+        "id": "combat-enemy-hit-count",
+        "samples": [
+          {
+            "tMs": 0,
+            "value": 0
+          },
+          {
+            "tMs": 16.67,
+            "value": 0
+          },
+          {
+            "tMs": 33.33,
+            "value": 0
+          },
+          {
+            "tMs": 50,
+            "value": 0
+          },
+          {
+            "tMs": 66.67,
+            "value": 0
+          },
+          {
+            "tMs": 83.33,
+            "value": 0
+          },
+          {
+            "tMs": 100,
+            "value": 0
+          },
+          {
+            "tMs": 116.67,
+            "value": 0
+          },
+          {
+            "tMs": 133.33,
+            "value": 0
+          },
+          {
+            "tMs": 150,
+            "value": 0
+          },
+          {
+            "tMs": 166.67,
+            "value": 0
+          },
+          {
+            "tMs": 183.33,
+            "value": 0
+          },
+          {
+            "tMs": 200,
+            "value": 0
+          },
+          {
+            "tMs": 216.67,
+            "value": 0
+          },
+          {
+            "tMs": 233.33,
+            "value": 0
+          },
+          {
+            "tMs": 250,
+            "value": 0
+          },
+          {
+            "tMs": 266.67,
+            "value": 0
+          },
+          {
+            "tMs": 283.33,
+            "value": 0
+          },
+          {
+            "tMs": 300,
+            "value": 0
+          },
+          {
+            "tMs": 316.67,
+            "value": 0
+          },
+          {
+            "tMs": 333.33,
+            "value": 0
+          },
+          {
+            "tMs": 350,
+            "value": 0
+          },
+          {
+            "tMs": 366.67,
+            "value": 0
+          },
+          {
+            "tMs": 383.33,
+            "value": 0
+          },
+          {
+            "tMs": 400,
+            "value": 0
+          },
+          {
+            "tMs": 416.67,
+            "value": 0
+          },
+          {
+            "tMs": 433.33,
+            "value": 0
+          },
+          {
+            "tMs": 450,
+            "value": 0
+          },
+          {
+            "tMs": 466.67,
+            "value": 0
+          },
+          {
+            "tMs": 483.33,
+            "value": 0
+          },
+          {
+            "tMs": 500,
+            "value": 0
+          },
+          {
+            "tMs": 516.67,
+            "value": 1
+          },
+          {
+            "tMs": 533.33,
+            "value": 1
+          },
+          {
+            "tMs": 550,
+            "value": 1
+          },
+          {
+            "tMs": 566.67,
+            "value": 1
+          },
+          {
+            "tMs": 583.33,
+            "value": 1
+          },
+          {
+            "tMs": 600,
+            "value": 1
+          },
+          {
+            "tMs": 616.67,
+            "value": 1
+          },
+          {
+            "tMs": 633.33,
+            "value": 1
+          },
+          {
+            "tMs": 650,
+            "value": 1
+          },
+          {
+            "tMs": 666.67,
+            "value": 1
+          },
+          {
+            "tMs": 683.33,
+            "value": 1
+          },
+          {
+            "tMs": 700,
+            "value": 1
+          },
+          {
+            "tMs": 716.67,
+            "value": 1
+          },
+          {
+            "tMs": 733.33,
+            "value": 1
+          },
+          {
+            "tMs": 750,
+            "value": 1
+          },
+          {
+            "tMs": 766.67,
+            "value": 1
+          },
+          {
+            "tMs": 783.33,
+            "value": 1
+          },
+          {
+            "tMs": 800,
+            "value": 1
+          },
+          {
+            "tMs": 816.67,
+            "value": 2
+          },
+          {
+            "tMs": 833.33,
+            "value": 2
+          },
+          {
+            "tMs": 850,
+            "value": 2
+          },
+          {
+            "tMs": 866.67,
+            "value": 2
+          },
+          {
+            "tMs": 883.33,
+            "value": 2
+          },
+          {
+            "tMs": 900,
+            "value": 2
+          },
+          {
+            "tMs": 916.67,
+            "value": 2
+          },
+          {
+            "tMs": 933.33,
+            "value": 2
+          },
+          {
+            "tMs": 950,
+            "value": 2
+          },
+          {
+            "tMs": 966.67,
+            "value": 2
+          },
+          {
+            "tMs": 983.33,
+            "value": 2
+          },
+          {
+            "tMs": 1000,
+            "value": 2
+          },
+          {
+            "tMs": 1016.67,
+            "value": 2
+          },
+          {
+            "tMs": 1033.33,
+            "value": 2
+          },
+          {
+            "tMs": 1050,
+            "value": 2
+          },
+          {
+            "tMs": 1066.67,
+            "value": 2
+          },
+          {
+            "tMs": 1083.33,
+            "value": 2
+          },
+          {
+            "tMs": 1100,
+            "value": 2
+          },
+          {
+            "tMs": 1116.67,
+            "value": 3
+          },
+          {
+            "tMs": 1133.33,
+            "value": 3
+          },
+          {
+            "tMs": 1150,
+            "value": 3
+          },
+          {
+            "tMs": 1166.67,
+            "value": 3
+          },
+          {
+            "tMs": 1183.33,
+            "value": 3
+          },
+          {
+            "tMs": 1200,
+            "value": 3
+          },
+          {
+            "tMs": 1216.67,
+            "value": 3
+          },
+          {
+            "tMs": 1233.33,
+            "value": 3
+          },
+          {
+            "tMs": 1250,
+            "value": 3
+          },
+          {
+            "tMs": 1266.67,
+            "value": 3
+          },
+          {
+            "tMs": 1283.33,
+            "value": 3
+          },
+          {
+            "tMs": 1300,
+            "value": 3
+          },
+          {
+            "tMs": 1316.67,
+            "value": 3
+          },
+          {
+            "tMs": 1333.33,
+            "value": 3
+          },
+          {
+            "tMs": 1350,
+            "value": 3
+          },
+          {
+            "tMs": 1366.67,
+            "value": 3
+          },
+          {
+            "tMs": 1383.33,
+            "value": 3
+          },
+          {
+            "tMs": 1400,
+            "value": 3
+          },
+          {
+            "tMs": 1416.67,
+            "value": 3
+          },
+          {
+            "tMs": 1433.33,
+            "value": 3
+          },
+          {
+            "tMs": 1450,
+            "value": 3
+          },
+          {
+            "tMs": 1466.67,
+            "value": 3
+          },
+          {
+            "tMs": 1483.33,
+            "value": 3
+          },
+          {
+            "tMs": 1500,
+            "value": 3
+          },
+          {
+            "tMs": 1516.67,
+            "value": 3
+          },
+          {
+            "tMs": 1533.33,
+            "value": 3
+          },
+          {
+            "tMs": 1550,
+            "value": 3
+          },
+          {
+            "tMs": 1566.67,
+            "value": 3
+          },
+          {
+            "tMs": 1583.33,
+            "value": 3
+          },
+          {
+            "tMs": 1600,
+            "value": 3
+          },
+          {
+            "tMs": 1616.67,
+            "value": 3
+          },
+          {
+            "tMs": 1633.33,
+            "value": 3
+          },
+          {
+            "tMs": 1650,
+            "value": 3
+          },
+          {
+            "tMs": 1666.67,
+            "value": 3
+          },
+          {
+            "tMs": 1683.33,
+            "value": 3
+          },
+          {
+            "tMs": 1700,
+            "value": 3
+          },
+          {
+            "tMs": 1716.67,
+            "value": 3
+          },
+          {
+            "tMs": 1733.33,
+            "value": 3
+          },
+          {
+            "tMs": 1750,
+            "value": 3
+          },
+          {
+            "tMs": 1766.67,
+            "value": 3
+          },
+          {
+            "tMs": 1783.33,
+            "value": 3
+          },
+          {
+            "tMs": 1800,
+            "value": 3
+          }
+        ]
+      },
+      {
+        "id": "combat-projectile-hit-count",
+        "samples": [
+          {
+            "tMs": 0,
+            "value": 0
+          },
+          {
+            "tMs": 16.67,
+            "value": 0
+          },
+          {
+            "tMs": 33.33,
+            "value": 0
+          },
+          {
+            "tMs": 50,
+            "value": 0
+          },
+          {
+            "tMs": 66.67,
+            "value": 0
+          },
+          {
+            "tMs": 83.33,
+            "value": 0
+          },
+          {
+            "tMs": 100,
+            "value": 0
+          },
+          {
+            "tMs": 116.67,
+            "value": 0
+          },
+          {
+            "tMs": 133.33,
+            "value": 0
+          },
+          {
+            "tMs": 150,
+            "value": 0
+          },
+          {
+            "tMs": 166.67,
+            "value": 0
+          },
+          {
+            "tMs": 183.33,
+            "value": 0
+          },
+          {
+            "tMs": 200,
+            "value": 0
+          },
+          {
+            "tMs": 216.67,
+            "value": 0
+          },
+          {
+            "tMs": 233.33,
+            "value": 0
+          },
+          {
+            "tMs": 250,
+            "value": 0
+          },
+          {
+            "tMs": 266.67,
+            "value": 0
+          },
+          {
+            "tMs": 283.33,
+            "value": 0
+          },
+          {
+            "tMs": 300,
+            "value": 0
+          },
+          {
+            "tMs": 316.67,
+            "value": 0
+          },
+          {
+            "tMs": 333.33,
+            "value": 0
+          },
+          {
+            "tMs": 350,
+            "value": 0
+          },
+          {
+            "tMs": 366.67,
+            "value": 0
+          },
+          {
+            "tMs": 383.33,
+            "value": 0
+          },
+          {
+            "tMs": 400,
+            "value": 0
+          },
+          {
+            "tMs": 416.67,
+            "value": 0
+          },
+          {
+            "tMs": 433.33,
+            "value": 0
+          },
+          {
+            "tMs": 450,
+            "value": 0
+          },
+          {
+            "tMs": 466.67,
+            "value": 0
+          },
+          {
+            "tMs": 483.33,
+            "value": 0
+          },
+          {
+            "tMs": 500,
+            "value": 0
+          },
+          {
+            "tMs": 516.67,
+            "value": 1
+          },
+          {
+            "tMs": 533.33,
+            "value": 1
+          },
+          {
+            "tMs": 550,
+            "value": 1
+          },
+          {
+            "tMs": 566.67,
+            "value": 1
+          },
+          {
+            "tMs": 583.33,
+            "value": 1
+          },
+          {
+            "tMs": 600,
+            "value": 1
+          },
+          {
+            "tMs": 616.67,
+            "value": 1
+          },
+          {
+            "tMs": 633.33,
+            "value": 1
+          },
+          {
+            "tMs": 650,
+            "value": 1
+          },
+          {
+            "tMs": 666.67,
+            "value": 1
+          },
+          {
+            "tMs": 683.33,
+            "value": 1
+          },
+          {
+            "tMs": 700,
+            "value": 1
+          },
+          {
+            "tMs": 716.67,
+            "value": 1
+          },
+          {
+            "tMs": 733.33,
+            "value": 1
+          },
+          {
+            "tMs": 750,
+            "value": 1
+          },
+          {
+            "tMs": 766.67,
+            "value": 1
+          },
+          {
+            "tMs": 783.33,
+            "value": 1
+          },
+          {
+            "tMs": 800,
+            "value": 1
+          },
+          {
+            "tMs": 816.67,
+            "value": 2
+          },
+          {
+            "tMs": 833.33,
+            "value": 2
+          },
+          {
+            "tMs": 850,
+            "value": 2
+          },
+          {
+            "tMs": 866.67,
+            "value": 2
+          },
+          {
+            "tMs": 883.33,
+            "value": 2
+          },
+          {
+            "tMs": 900,
+            "value": 2
+          },
+          {
+            "tMs": 916.67,
+            "value": 2
+          },
+          {
+            "tMs": 933.33,
+            "value": 2
+          },
+          {
+            "tMs": 950,
+            "value": 2
+          },
+          {
+            "tMs": 966.67,
+            "value": 2
+          },
+          {
+            "tMs": 983.33,
+            "value": 2
+          },
+          {
+            "tMs": 1000,
+            "value": 2
+          },
+          {
+            "tMs": 1016.67,
+            "value": 2
+          },
+          {
+            "tMs": 1033.33,
+            "value": 2
+          },
+          {
+            "tMs": 1050,
+            "value": 2
+          },
+          {
+            "tMs": 1066.67,
+            "value": 2
+          },
+          {
+            "tMs": 1083.33,
+            "value": 2
+          },
+          {
+            "tMs": 1100,
+            "value": 2
+          },
+          {
+            "tMs": 1116.67,
+            "value": 3
+          },
+          {
+            "tMs": 1133.33,
+            "value": 3
+          },
+          {
+            "tMs": 1150,
+            "value": 3
+          },
+          {
+            "tMs": 1166.67,
+            "value": 3
+          },
+          {
+            "tMs": 1183.33,
+            "value": 3
+          },
+          {
+            "tMs": 1200,
+            "value": 3
+          },
+          {
+            "tMs": 1216.67,
+            "value": 3
+          },
+          {
+            "tMs": 1233.33,
+            "value": 3
+          },
+          {
+            "tMs": 1250,
+            "value": 3
+          },
+          {
+            "tMs": 1266.67,
+            "value": 3
+          },
+          {
+            "tMs": 1283.33,
+            "value": 3
+          },
+          {
+            "tMs": 1300,
+            "value": 3
+          },
+          {
+            "tMs": 1316.67,
+            "value": 3
+          },
+          {
+            "tMs": 1333.33,
+            "value": 3
+          },
+          {
+            "tMs": 1350,
+            "value": 3
+          },
+          {
+            "tMs": 1366.67,
+            "value": 3
+          },
+          {
+            "tMs": 1383.33,
+            "value": 3
+          },
+          {
+            "tMs": 1400,
+            "value": 3
+          },
+          {
+            "tMs": 1416.67,
+            "value": 3
+          },
+          {
+            "tMs": 1433.33,
+            "value": 3
+          },
+          {
+            "tMs": 1450,
+            "value": 3
+          },
+          {
+            "tMs": 1466.67,
+            "value": 3
+          },
+          {
+            "tMs": 1483.33,
+            "value": 3
+          },
+          {
+            "tMs": 1500,
+            "value": 3
+          },
+          {
+            "tMs": 1516.67,
+            "value": 3
+          },
+          {
+            "tMs": 1533.33,
+            "value": 3
+          },
+          {
+            "tMs": 1550,
+            "value": 3
+          },
+          {
+            "tMs": 1566.67,
+            "value": 3
+          },
+          {
+            "tMs": 1583.33,
+            "value": 3
+          },
+          {
+            "tMs": 1600,
+            "value": 3
+          },
+          {
+            "tMs": 1616.67,
+            "value": 3
+          },
+          {
+            "tMs": 1633.33,
+            "value": 3
+          },
+          {
+            "tMs": 1650,
+            "value": 3
+          },
+          {
+            "tMs": 1666.67,
+            "value": 3
+          },
+          {
+            "tMs": 1683.33,
+            "value": 3
+          },
+          {
+            "tMs": 1700,
+            "value": 3
+          },
+          {
+            "tMs": 1716.67,
+            "value": 3
+          },
+          {
+            "tMs": 1733.33,
+            "value": 3
+          },
+          {
+            "tMs": 1750,
+            "value": 3
+          },
+          {
+            "tMs": 1766.67,
+            "value": 3
+          },
+          {
+            "tMs": 1783.33,
+            "value": 3
+          },
+          {
+            "tMs": 1800,
+            "value": 3
+          }
+        ]
+      },
+      {
+        "id": "combat-hit-stop-active",
+        "samples": [
+          {
+            "tMs": 0,
+            "value": false
+          },
+          {
+            "tMs": 16.67,
+            "value": false
+          },
+          {
+            "tMs": 33.33,
+            "value": false
+          },
+          {
+            "tMs": 50,
+            "value": false
+          },
+          {
+            "tMs": 66.67,
+            "value": false
+          },
+          {
+            "tMs": 83.33,
+            "value": false
+          },
+          {
+            "tMs": 100,
+            "value": false
+          },
+          {
+            "tMs": 116.67,
+            "value": false
+          },
+          {
+            "tMs": 133.33,
+            "value": false
+          },
+          {
+            "tMs": 150,
+            "value": false
+          },
+          {
+            "tMs": 166.67,
+            "value": false
+          },
+          {
+            "tMs": 183.33,
+            "value": false
+          },
+          {
+            "tMs": 200,
+            "value": false
+          },
+          {
+            "tMs": 216.67,
+            "value": false
+          },
+          {
+            "tMs": 233.33,
+            "value": false
+          },
+          {
+            "tMs": 250,
+            "value": false
+          },
+          {
+            "tMs": 266.67,
+            "value": false
+          },
+          {
+            "tMs": 283.33,
+            "value": false
+          },
+          {
+            "tMs": 300,
+            "value": false
+          },
+          {
+            "tMs": 316.67,
+            "value": false
+          },
+          {
+            "tMs": 333.33,
+            "value": false
+          },
+          {
+            "tMs": 350,
+            "value": false
+          },
+          {
+            "tMs": 366.67,
+            "value": false
+          },
+          {
+            "tMs": 383.33,
+            "value": false
+          },
+          {
+            "tMs": 400,
+            "value": false
+          },
+          {
+            "tMs": 416.67,
+            "value": false
+          },
+          {
+            "tMs": 433.33,
+            "value": false
+          },
+          {
+            "tMs": 450,
+            "value": false
+          },
+          {
+            "tMs": 466.67,
+            "value": false
+          },
+          {
+            "tMs": 483.33,
+            "value": false
+          },
+          {
+            "tMs": 500,
+            "value": false
+          },
+          {
+            "tMs": 516.67,
+            "value": true
+          },
+          {
+            "tMs": 533.33,
+            "value": true
+          },
+          {
+            "tMs": 550,
+            "value": true
+          },
+          {
+            "tMs": 566.67,
+            "value": true
+          },
+          {
+            "tMs": 583.33,
+            "value": true
+          },
+          {
+            "tMs": 600,
+            "value": true
+          },
+          {
+            "tMs": 616.67,
+            "value": true
+          },
+          {
+            "tMs": 633.33,
+            "value": false
+          },
+          {
+            "tMs": 650,
+            "value": false
+          },
+          {
+            "tMs": 666.67,
+            "value": false
+          },
+          {
+            "tMs": 683.33,
+            "value": false
+          },
+          {
+            "tMs": 700,
+            "value": false
+          },
+          {
+            "tMs": 716.67,
+            "value": false
+          },
+          {
+            "tMs": 733.33,
+            "value": false
+          },
+          {
+            "tMs": 750,
+            "value": false
+          },
+          {
+            "tMs": 766.67,
+            "value": false
+          },
+          {
+            "tMs": 783.33,
+            "value": false
+          },
+          {
+            "tMs": 800,
+            "value": false
+          },
+          {
+            "tMs": 816.67,
+            "value": true
+          },
+          {
+            "tMs": 833.33,
+            "value": true
+          },
+          {
+            "tMs": 850,
+            "value": true
+          },
+          {
+            "tMs": 866.67,
+            "value": true
+          },
+          {
+            "tMs": 883.33,
+            "value": true
+          },
+          {
+            "tMs": 900,
+            "value": true
+          },
+          {
+            "tMs": 916.67,
+            "value": true
+          },
+          {
+            "tMs": 933.33,
+            "value": false
+          },
+          {
+            "tMs": 950,
+            "value": false
+          },
+          {
+            "tMs": 966.67,
+            "value": false
+          },
+          {
+            "tMs": 983.33,
+            "value": false
+          },
+          {
+            "tMs": 1000,
+            "value": false
+          },
+          {
+            "tMs": 1016.67,
+            "value": false
+          },
+          {
+            "tMs": 1033.33,
+            "value": false
+          },
+          {
+            "tMs": 1050,
+            "value": false
+          },
+          {
+            "tMs": 1066.67,
+            "value": false
+          },
+          {
+            "tMs": 1083.33,
+            "value": false
+          },
+          {
+            "tMs": 1100,
+            "value": false
+          },
+          {
+            "tMs": 1116.67,
+            "value": true
+          },
+          {
+            "tMs": 1133.33,
+            "value": true
+          },
+          {
+            "tMs": 1150,
+            "value": true
+          },
+          {
+            "tMs": 1166.67,
+            "value": true
+          },
+          {
+            "tMs": 1183.33,
+            "value": true
+          },
+          {
+            "tMs": 1200,
+            "value": true
+          },
+          {
+            "tMs": 1216.67,
+            "value": true
+          },
+          {
+            "tMs": 1233.33,
+            "value": false
+          },
+          {
+            "tMs": 1250,
+            "value": false
+          },
+          {
+            "tMs": 1266.67,
+            "value": false
+          },
+          {
+            "tMs": 1283.33,
+            "value": false
+          },
+          {
+            "tMs": 1300,
+            "value": false
+          },
+          {
+            "tMs": 1316.67,
+            "value": false
+          },
+          {
+            "tMs": 1333.33,
+            "value": false
+          },
+          {
+            "tMs": 1350,
+            "value": false
+          },
+          {
+            "tMs": 1366.67,
+            "value": false
+          },
+          {
+            "tMs": 1383.33,
+            "value": false
+          },
+          {
+            "tMs": 1400,
+            "value": false
+          },
+          {
+            "tMs": 1416.67,
+            "value": false
+          },
+          {
+            "tMs": 1433.33,
+            "value": false
+          },
+          {
+            "tMs": 1450,
+            "value": false
+          },
+          {
+            "tMs": 1466.67,
+            "value": false
+          },
+          {
+            "tMs": 1483.33,
+            "value": false
+          },
+          {
+            "tMs": 1500,
+            "value": false
+          },
+          {
+            "tMs": 1516.67,
+            "value": false
+          },
+          {
+            "tMs": 1533.33,
+            "value": false
+          },
+          {
+            "tMs": 1550,
+            "value": false
+          },
+          {
+            "tMs": 1566.67,
+            "value": false
+          },
+          {
+            "tMs": 1583.33,
+            "value": false
+          },
+          {
+            "tMs": 1600,
+            "value": false
+          },
+          {
+            "tMs": 1616.67,
+            "value": false
+          },
+          {
+            "tMs": 1633.33,
+            "value": false
+          },
+          {
+            "tMs": 1650,
+            "value": false
+          },
+          {
+            "tMs": 1666.67,
+            "value": false
+          },
+          {
+            "tMs": 1683.33,
+            "value": false
+          },
+          {
+            "tMs": 1700,
+            "value": false
+          },
+          {
+            "tMs": 1716.67,
+            "value": false
+          },
+          {
+            "tMs": 1733.33,
+            "value": false
+          },
+          {
+            "tMs": 1750,
+            "value": false
+          },
+          {
+            "tMs": 1766.67,
+            "value": false
+          },
+          {
+            "tMs": 1783.33,
+            "value": false
+          },
+          {
+            "tMs": 1800,
+            "value": false
+          }
+        ]
+      }
+    ]
+  },
+  "derived": {
+    "metric": "hitstopMs",
+    "value": 116.66,
+    "unit": "ms",
+    "windowOpenMs": 516.67
+  },
+  "honesty": {
+    "measures": "the LIVE duration of the impact hit-stop WINDOW signal (the impact-freeze interval a renderer would consume), sampled in Play Mode through the Loombridge bridge against the repo-owned shooter fixture.",
+    "doesNotMeasure": "an actual rendered freeze of the editor timeline (the fixture exposes the deterministic window rather than stalling time), nor production-tuned hit-stop balance."
+  }
+}

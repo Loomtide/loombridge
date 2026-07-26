@@ -229,7 +229,7 @@ if (wantsJump && canJump)
 
 Generates the six retro cues **procedurally** — no samples, no downloads, CC0 by construction (same
 provenance story as the PIL-generated sky/hills). Run with numpy installed
-(`pip install numpy`); writes to `unity-projects/<project>/Assets/Audio/`. ~22050 Hz mono, 16-bit PCM
+(`pip install numpy`); writes to `unity-dev-project/<project>/Assets/Audio/`. ~22050 Hz mono, 16-bit PCM
 (uncompressed WAV — Unity decodes it natively, no FFmpeg/Vorbis dependency).
 
 ```python
@@ -386,7 +386,7 @@ if __name__ == "__main__":
 Run it pointing at the project's audio folder, then refresh assets:
 
 ```
-python generate_sfx.py unity-projects/<project>/Assets/Audio
+python generate_sfx.py unity-dev-project/<project>/Assets/Audio
 # then in Unity: unity_editor_refresh_assets  (so the .wav files import as AudioClips)
 ```
 

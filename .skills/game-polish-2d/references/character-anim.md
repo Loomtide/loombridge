@@ -22,7 +22,7 @@ not input) → drop it on any 2D character with `Rigidbody2D` + `Animator`.
 - Caches which params actually exist on the controller, so a minimal idle/run controller works.
 - Facing flip via `SpriteRenderer.flipX` (or localScale.x) with a `facingDeadzone` to stop near-zero
   rapid-flipping.
-- Source: `unity-projects/demo-platformer/Assets/Scripts/CharacterAnimator2D.cs`.
+- Source: `demos/unity-platformer/Assets/Scripts/CharacterAnimator2D.cs`.
 
 Animator setup (via `unity_animator_*`): a controller with `Idle` + `Run` states, a `speed` float
 param, transitions `Idle→Run` when `speed > 0.1` and back when `speed < 0.1`. Add `Jump`/fall states
@@ -31,7 +31,7 @@ keyed off `grounded`/`vSpeed` when desired.
 ## PixelPerfectSetup (flicker / pixel-crawl fix)
 Configures a Unity `PixelPerfectCamera` (`upscaleRT` + `pixelSnapping`). `[ExecuteAlways]` + `OnValidate`
 so it applies in the editor. Requires `com.unity.2d.pixel-perfect`.
-- Source (verbatim from `unity-projects/demo-platformer/Assets/Scripts/PixelPerfectSetup.cs`):
+- Source (verbatim from `demos/unity-platformer/Assets/Scripts/PixelPerfectSetup.cs`):
 
 ```csharp
 // game-polish-2d: PixelPerfectSetup — reusable flicker / pixel-crawl fix.
@@ -149,7 +149,7 @@ is readable, scans alpha within the sprite's `textureRect`, and writes `BoxColli
 from the opaque box (offset measured from the sprite pivot, divided by PPU). Attach it (autoFit on
 enable, or the "Fit Collider To Sprite" context menu).
 
-Source (verbatim from `unity-projects/demo-platformer/Assets/Scripts/FitBoxColliderToSprite.cs`):
+Source (verbatim from `demos/unity-platformer/Assets/Scripts/FitBoxColliderToSprite.cs`):
 
 ```csharp
 using UnityEngine;
@@ -306,7 +306,7 @@ prefer a **clip-free, velocity-driven sprite animator** that owns its frame sets
 jump / fall `Sprite[]` fields) and picks the set from the `Rigidbody2D` state each frame. (Use
 `CharacterAnimator2D` + an Animator only when you already have authored clips.)
 
-Source (verbatim from `unity-projects/demo-platformer/Assets/Scripts/PlayerSpriteAnimator.cs`):
+Source (verbatim from `demos/unity-platformer/Assets/Scripts/PlayerSpriteAnimator.cs`):
 
 ```csharp
 using UnityEngine;

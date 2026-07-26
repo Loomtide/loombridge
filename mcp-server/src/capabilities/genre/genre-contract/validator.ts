@@ -97,7 +97,7 @@ const IMPLEMENTED_WAVE_METRICS = ["waveObjectiveComplete"] as const;
  * 3C controller/camera calculators: `lookInputToYawLatencyMs` (look-input onset → first sampled
  * /Player yaw response) + `shotAimAlignmentDeg` (angle between AimForward and the fired shot
  * direction). Implemented as `deriveLookInputToYawLatencyMs` / `deriveShotAimAlignmentDeg` in
- * feel-derive.ts. Promoted with committed live evidence (demo-bundles/3d-shooter-3c-controller-camera:
+ * feel-derive.ts. Promoted with committed live evidence (demos/evidence-bundles/3d-shooter-3c-controller-camera:
  * raw capture + generator re-derive through the production calculators). NARROW: look responsiveness +
  * shot/aim alignment only — recoil, ADS, and aim fairness remain explicit gaps.
  */

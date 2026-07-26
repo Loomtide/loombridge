@@ -115,7 +115,7 @@ The **`asset-layer`** skill covers the full flow (registry validation, provenanc
 browser confirmation, deterministic project cache, attribution).
 
 > Do **not** run the repo-local prepare CLI (`node mcp-server/dist/capabilities/assets/prepare-cli.js`) with a
-> `--output`/`--cache` under the repo's `demo/.artifacts/` for a clean-room validation run — that stages
+> `--output`/`--cache` under the repo's `demos/.artifacts/` for a clean-room validation run — that stages
 > assets into the *repo*, not the target project. Use `loombridge-asset-prep --project <path>` so the
 > handoff lands under `<project>/.loombridge/handoff/`.
 

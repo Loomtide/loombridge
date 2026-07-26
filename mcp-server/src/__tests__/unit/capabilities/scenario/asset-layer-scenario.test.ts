@@ -78,7 +78,7 @@ test("generatePlatformerAssetScenario builds a generic asset-backed scenario and
 
   const scenario = await generatePlatformerAssetScenario({
     reportPath,
-    templatePath: path.join(repoRoot, "demo/scenarios/build-platformer-with-assets.template.json"),
+    templatePath: path.join(repoRoot, "demos/scenarios/build-platformer-with-assets.template.json"),
     outputPath,
   });
   const validation = validateScenarioDocument(scenario);

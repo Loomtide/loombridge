@@ -6,7 +6,7 @@ description: Scaffold a throwaway Unity project wired to the Loombridge bridge f
 # New Unity Test Project (Loombridge)
 
 Spin up a disposable Unity project that is already wired to the Loombridge bridge, so a fresh agent can
-build and verify a demo from scratch fast. The project lives under `unity-projects/<name>/`; its
+build and verify a demo from scratch fast. The project lives under `unity-dev-project/<name>/`; its
 generated dirs are git-ignored, so it's safe to delete and recreate anytime.
 
 ## Scaffold it
@@ -16,7 +16,7 @@ scripts/new-test-project.sh [name] [--force]
 # default name: platformer-clean ; --force recreates an existing one
 ```
 
-This writes `unity-projects/<name>/` with:
+This writes `unity-dev-project/<name>/` with:
 - `Packages/manifest.json` — the bridge (relative `file:` ref) + the proven dependency set
   (`2d.pixel-perfect`, `2d.sprite`, `inputsystem`, `ugui`, `modules.animation`, `modules.audio`, `modules.physics2d`;
   the bridge pulls `newtonsoft-json` transitively).
@@ -43,13 +43,13 @@ load this differently:
 
 ### Claude Code
 
-- `cd unity-projects/<name> && claude` — start the session from the project folder.
+- `cd unity-dev-project/<name> && claude` — start the session from the project folder.
 - Accept the one-time **"trust this folder"** prompt. `loombridge` auto-loads through the project
   `.mcp.json` plus `.claude/settings.local.json`.
 
 ### Codex
 
-- `cd unity-projects/<name> && codex` — start the session from the project folder.
+- `cd unity-dev-project/<name> && codex` — start the session from the project folder.
 - Run `/mcp`. If `loombridge` is not listed, register the same server explicitly:
 
   ```bash
@@ -90,11 +90,11 @@ If a new agent introduces legacy input, stop and migrate it before verification.
 will be refused as `LEGACY_INPUT_UNSUPPORTED`, not measured as zero motion.
 
 ## Then build
-Hand a fresh agent the spec: `@unity-projects/<name>/BUILD-BRIEF.md` (a copy of the canonical
+Hand a fresh agent the spec: `@unity-dev-project/<name>/BUILD-BRIEF.md` (a copy of the canonical
 platformer build brief). It contains the design, tuned values, the bug fixes to
 reproduce, the asset-registry pipeline, and the verification gates.
 
-For Loombridge proof runs, also hand the agent `@unity-projects/<name>/LOOMBRIDGE-ASSETS.md`. A final
+For Loombridge proof runs, also hand the agent `@unity-dev-project/<name>/LOOMBRIDGE-ASSETS.md`. A final
 visual build should use accepted non-placeholder registry assets when the prepare report contains them.
 
 ## Gotchas (carried from real sessions)
@@ -106,12 +106,12 @@ visual build should use accepted non-placeholder registry assets when the prepar
   input across separate calls and "wait".
 - **New MCP tools/params need an MCP server restart** to register — ask the user.
 - **Preflight the agent surface:** from the repo root, run
-  `scripts/check-agent-surface.sh unity-projects/<name>` before starting a fresh agent. It catches
+  `scripts/check-agent-surface.sh unity-dev-project/<name>` before starting a fresh agent. It catches
   missing `.claude`/`.codex` skill links, missing MCP server build output, and malformed skill
   frontmatter.
 
 ## Make it independent later
-The bridge `file:` ref is relative (works only under `unity-projects/`). To use the project standalone
+The bridge `file:` ref is relative (works only under `unity-dev-project/`). To use the project standalone
 elsewhere, switch the ref to an absolute `file:` path or a UPM git URL
 (`https://github.com/<org>/Loombridge.git?path=packages/com.loomtide.loombridge`), and carry the build
 brief + the `.skills/` (or make them global) since they live in this repo.

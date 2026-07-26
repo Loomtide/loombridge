@@ -5,7 +5,7 @@ build starts *inside* the plan → build → verify → doneness flow instead of
 reaching only for the raw MCP bridge (finding RCL-O03, internal
 dogfood ledger).
 
-Unlike the in-repo fixtures under `unity-projects/*` (which reference the bridge
+Unlike the in-repo fixtures under `unity-dev-project/*` (which reference the bridge
 by a machine-local `file:` path), this template uses a **resolvable git-URL**
 bridge dependency, so it works on any machine without a sibling Loombridge clone.
 

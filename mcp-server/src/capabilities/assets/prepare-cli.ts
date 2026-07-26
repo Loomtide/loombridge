@@ -52,8 +52,8 @@ function parseArgs(argv: string[]): CliArgs {
   const args: CliArgs = {
     help: false,
     profilePath: "",
-    outputPath: "../demo/.artifacts/platformer-assets.json",
-    cacheDir: "../demo/.artifacts/asset-cache",
+    outputPath: "../demos/.artifacts/platformer-assets.json",
+    cacheDir: "../demos/.artifacts/asset-cache",
     primitives: [],
   };
 

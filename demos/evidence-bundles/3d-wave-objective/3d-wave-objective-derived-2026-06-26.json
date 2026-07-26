@@ -1,0 +1,1569 @@
+{
+  "metric": "waveObjectiveComplete",
+  "status": "pass",
+  "evidenceKind": "live-unity-capture",
+  "dimensionality": "3D",
+  "capturedAt": "2026-06-26T05:19:45.108Z",
+  "project": "shooter-3d-combat-dogfood (repo-owned 3D shooter fixture; unity-dev-project/shooter-3d-combat-dogfood, scene Assets/Scenes/Shooter3DCombatDogfood.unity)",
+  "rawCaptureSource": "demos/evidence-bundles/3d-wave-objective/3d-wave-objective-raw-2026-06-26.json",
+  "fixture": {
+    "waveObject": "/WaveManager",
+    "waveComponent": "Shooter3DWaveObjective",
+    "scene": "Assets/Scenes/Shooter3DCombatDogfood.unity",
+    "note": "A clean-room wave manager spawns N real target GameObjects on the start key (G); each kill key (K) destroys one and removes it from a live list, so AliveCount is the ACTUAL count of live spawned objects and KillCount rises per kill. ObjectiveComplete flips true ONLY when the live list reaches 0 after a wave spawned (kill-gated, never a timer). Series copied verbatim from the raw bridge transcript; not synthesized."
+  },
+  "sequence": {
+    "spawnTargetCount": 3,
+    "spawnCount": 3,
+    "killCount": 3,
+    "aliveFinal": 0,
+    "spawnEdgeMs": 116.67,
+    "killAllMs": 566.67,
+    "objectiveCompleteMs": 566.67,
+    "note": "spawn N → all N killed (KillCount == SpawnCount, AliveCount returns to 0) → ObjectiveComplete rises at/after kill-all. A completion before kill-all (timer), alive enemies remaining, or under-kill would have refused the mint."
+  },
+  "capture": {
+    "source": "runtime.capture_input_motion",
+    "captureFps": 60,
+    "sampleIntervalMs": 16.666666666666668,
+    "durationMs": 983.33,
+    "sampleCount": 60,
+    "phases": [
+      {
+        "index": 0,
+        "keys": [],
+        "requestedDurationMs": 100
+      },
+      {
+        "index": 1,
+        "keys": [
+          "G"
+        ],
+        "requestedDurationMs": 25
+      },
+      {
+        "index": 2,
+        "keys": [],
+        "requestedDurationMs": 125
+      },
+      {
+        "index": 3,
+        "keys": [
+          "K"
+        ],
+        "requestedDurationMs": 25
+      },
+      {
+        "index": 4,
+        "keys": [],
+        "requestedDurationMs": 125
+      },
+      {
+        "index": 5,
+        "keys": [
+          "K"
+        ],
+        "requestedDurationMs": 25
+      },
+      {
+        "index": 6,
+        "keys": [],
+        "requestedDurationMs": 125
+      },
+      {
+        "index": 7,
+        "keys": [
+          "K"
+        ],
+        "requestedDurationMs": 25
+      },
+      {
+        "index": 8,
+        "keys": [],
+        "requestedDurationMs": 400
+      }
+    ],
+    "fieldTimeline": [
+      {
+        "id": "WaveIndex",
+        "samples": [
+          {
+            "tMs": 0,
+            "value": 0
+          },
+          {
+            "tMs": 16.67,
+            "value": 0
+          },
+          {
+            "tMs": 33.33,
+            "value": 0
+          },
+          {
+            "tMs": 50,
+            "value": 0
+          },
+          {
+            "tMs": 66.67,
+            "value": 0
+          },
+          {
+            "tMs": 83.33,
+            "value": 0
+          },
+          {
+            "tMs": 100,
+            "value": 0
+          },
+          {
+            "tMs": 116.67,
+            "value": 1
+          },
+          {
+            "tMs": 133.33,
+            "value": 1
+          },
+          {
+            "tMs": 150,
+            "value": 1
+          },
+          {
+            "tMs": 166.67,
+            "value": 1
+          },
+          {
+            "tMs": 183.33,
+            "value": 1
+          },
+          {
+            "tMs": 200,
+            "value": 1
+          },
+          {
+            "tMs": 216.67,
+            "value": 1
+          },
+          {
+            "tMs": 233.33,
+            "value": 1
+          },
+          {
+            "tMs": 250,
+            "value": 1
+          },
+          {
+            "tMs": 266.67,
+            "value": 1
+          },
+          {
+            "tMs": 283.33,
+            "value": 1
+          },
+          {
+            "tMs": 300,
+            "value": 1
+          },
+          {
+            "tMs": 316.67,
+            "value": 1
+          },
+          {
+            "tMs": 333.33,
+            "value": 1
+          },
+          {
+            "tMs": 350,
+            "value": 1
+          },
+          {
+            "tMs": 366.67,
+            "value": 1
+          },
+          {
+            "tMs": 383.33,
+            "value": 1
+          },
+          {
+            "tMs": 400,
+            "value": 1
+          },
+          {
+            "tMs": 416.67,
+            "value": 1
+          },
+          {
+            "tMs": 433.33,
+            "value": 1
+          },
+          {
+            "tMs": 450,
+            "value": 1
+          },
+          {
+            "tMs": 466.67,
+            "value": 1
+          },
+          {
+            "tMs": 483.33,
+            "value": 1
+          },
+          {
+            "tMs": 500,
+            "value": 1
+          },
+          {
+            "tMs": 516.67,
+            "value": 1
+          },
+          {
+            "tMs": 533.33,
+            "value": 1
+          },
+          {
+            "tMs": 550,
+            "value": 1
+          },
+          {
+            "tMs": 566.67,
+            "value": 1
+          },
+          {
+            "tMs": 583.33,
+            "value": 1
+          },
+          {
+            "tMs": 600,
+            "value": 1
+          },
+          {
+            "tMs": 616.67,
+            "value": 1
+          },
+          {
+            "tMs": 633.33,
+            "value": 1
+          },
+          {
+            "tMs": 650,
+            "value": 1
+          },
+          {
+            "tMs": 666.67,
+            "value": 1
+          },
+          {
+            "tMs": 683.33,
+            "value": 1
+          },
+          {
+            "tMs": 700,
+            "value": 1
+          },
+          {
+            "tMs": 716.67,
+            "value": 1
+          },
+          {
+            "tMs": 733.33,
+            "value": 1
+          },
+          {
+            "tMs": 750,
+            "value": 1
+          },
+          {
+            "tMs": 766.67,
+            "value": 1
+          },
+          {
+            "tMs": 783.33,
+            "value": 1
+          },
+          {
+            "tMs": 800,
+            "value": 1
+          },
+          {
+            "tMs": 816.67,
+            "value": 1
+          },
+          {
+            "tMs": 833.33,
+            "value": 1
+          },
+          {
+            "tMs": 850,
+            "value": 1
+          },
+          {
+            "tMs": 866.67,
+            "value": 1
+          },
+          {
+            "tMs": 883.33,
+            "value": 1
+          },
+          {
+            "tMs": 900,
+            "value": 1
+          },
+          {
+            "tMs": 916.67,
+            "value": 1
+          },
+          {
+            "tMs": 933.33,
+            "value": 1
+          },
+          {
+            "tMs": 950,
+            "value": 1
+          },
+          {
+            "tMs": 966.67,
+            "value": 1
+          },
+          {
+            "tMs": 983.33,
+            "value": 1
+          }
+        ]
+      },
+      {
+        "id": "SpawnCount",
+        "samples": [
+          {
+            "tMs": 0,
+            "value": 0
+          },
+          {
+            "tMs": 16.67,
+            "value": 0
+          },
+          {
+            "tMs": 33.33,
+            "value": 0
+          },
+          {
+            "tMs": 50,
+            "value": 0
+          },
+          {
+            "tMs": 66.67,
+            "value": 0
+          },
+          {
+            "tMs": 83.33,
+            "value": 0
+          },
+          {
+            "tMs": 100,
+            "value": 0
+          },
+          {
+            "tMs": 116.67,
+            "value": 3
+          },
+          {
+            "tMs": 133.33,
+            "value": 3
+          },
+          {
+            "tMs": 150,
+            "value": 3
+          },
+          {
+            "tMs": 166.67,
+            "value": 3
+          },
+          {
+            "tMs": 183.33,
+            "value": 3
+          },
+          {
+            "tMs": 200,
+            "value": 3
+          },
+          {
+            "tMs": 216.67,
+            "value": 3
+          },
+          {
+            "tMs": 233.33,
+            "value": 3
+          },
+          {
+            "tMs": 250,
+            "value": 3
+          },
+          {
+            "tMs": 266.67,
+            "value": 3
+          },
+          {
+            "tMs": 283.33,
+            "value": 3
+          },
+          {
+            "tMs": 300,
+            "value": 3
+          },
+          {
+            "tMs": 316.67,
+            "value": 3
+          },
+          {
+            "tMs": 333.33,
+            "value": 3
+          },
+          {
+            "tMs": 350,
+            "value": 3
+          },
+          {
+            "tMs": 366.67,
+            "value": 3
+          },
+          {
+            "tMs": 383.33,
+            "value": 3
+          },
+          {
+            "tMs": 400,
+            "value": 3
+          },
+          {
+            "tMs": 416.67,
+            "value": 3
+          },
+          {
+            "tMs": 433.33,
+            "value": 3
+          },
+          {
+            "tMs": 450,
+            "value": 3
+          },
+          {
+            "tMs": 466.67,
+            "value": 3
+          },
+          {
+            "tMs": 483.33,
+            "value": 3
+          },
+          {
+            "tMs": 500,
+            "value": 3
+          },
+          {
+            "tMs": 516.67,
+            "value": 3
+          },
+          {
+            "tMs": 533.33,
+            "value": 3
+          },
+          {
+            "tMs": 550,
+            "value": 3
+          },
+          {
+            "tMs": 566.67,
+            "value": 3
+          },
+          {
+            "tMs": 583.33,
+            "value": 3
+          },
+          {
+            "tMs": 600,
+            "value": 3
+          },
+          {
+            "tMs": 616.67,
+            "value": 3
+          },
+          {
+            "tMs": 633.33,
+            "value": 3
+          },
+          {
+            "tMs": 650,
+            "value": 3
+          },
+          {
+            "tMs": 666.67,
+            "value": 3
+          },
+          {
+            "tMs": 683.33,
+            "value": 3
+          },
+          {
+            "tMs": 700,
+            "value": 3
+          },
+          {
+            "tMs": 716.67,
+            "value": 3
+          },
+          {
+            "tMs": 733.33,
+            "value": 3
+          },
+          {
+            "tMs": 750,
+            "value": 3
+          },
+          {
+            "tMs": 766.67,
+            "value": 3
+          },
+          {
+            "tMs": 783.33,
+            "value": 3
+          },
+          {
+            "tMs": 800,
+            "value": 3
+          },
+          {
+            "tMs": 816.67,
+            "value": 3
+          },
+          {
+            "tMs": 833.33,
+            "value": 3
+          },
+          {
+            "tMs": 850,
+            "value": 3
+          },
+          {
+            "tMs": 866.67,
+            "value": 3
+          },
+          {
+            "tMs": 883.33,
+            "value": 3
+          },
+          {
+            "tMs": 900,
+            "value": 3
+          },
+          {
+            "tMs": 916.67,
+            "value": 3
+          },
+          {
+            "tMs": 933.33,
+            "value": 3
+          },
+          {
+            "tMs": 950,
+            "value": 3
+          },
+          {
+            "tMs": 966.67,
+            "value": 3
+          },
+          {
+            "tMs": 983.33,
+            "value": 3
+          }
+        ]
+      },
+      {
+        "id": "AliveCount",
+        "samples": [
+          {
+            "tMs": 0,
+            "value": 0
+          },
+          {
+            "tMs": 16.67,
+            "value": 0
+          },
+          {
+            "tMs": 33.33,
+            "value": 0
+          },
+          {
+            "tMs": 50,
+            "value": 0
+          },
+          {
+            "tMs": 66.67,
+            "value": 0
+          },
+          {
+            "tMs": 83.33,
+            "value": 0
+          },
+          {
+            "tMs": 100,
+            "value": 0
+          },
+          {
+            "tMs": 116.67,
+            "value": 3
+          },
+          {
+            "tMs": 133.33,
+            "value": 3
+          },
+          {
+            "tMs": 150,
+            "value": 3
+          },
+          {
+            "tMs": 166.67,
+            "value": 3
+          },
+          {
+            "tMs": 183.33,
+            "value": 3
+          },
+          {
+            "tMs": 200,
+            "value": 3
+          },
+          {
+            "tMs": 216.67,
+            "value": 3
+          },
+          {
+            "tMs": 233.33,
+            "value": 3
+          },
+          {
+            "tMs": 250,
+            "value": 3
+          },
+          {
+            "tMs": 266.67,
+            "value": 2
+          },
+          {
+            "tMs": 283.33,
+            "value": 2
+          },
+          {
+            "tMs": 300,
+            "value": 2
+          },
+          {
+            "tMs": 316.67,
+            "value": 2
+          },
+          {
+            "tMs": 333.33,
+            "value": 2
+          },
+          {
+            "tMs": 350,
+            "value": 2
+          },
+          {
+            "tMs": 366.67,
+            "value": 2
+          },
+          {
+            "tMs": 383.33,
+            "value": 2
+          },
+          {
+            "tMs": 400,
+            "value": 2
+          },
+          {
+            "tMs": 416.67,
+            "value": 1
+          },
+          {
+            "tMs": 433.33,
+            "value": 1
+          },
+          {
+            "tMs": 450,
+            "value": 1
+          },
+          {
+            "tMs": 466.67,
+            "value": 1
+          },
+          {
+            "tMs": 483.33,
+            "value": 1
+          },
+          {
+            "tMs": 500,
+            "value": 1
+          },
+          {
+            "tMs": 516.67,
+            "value": 1
+          },
+          {
+            "tMs": 533.33,
+            "value": 1
+          },
+          {
+            "tMs": 550,
+            "value": 1
+          },
+          {
+            "tMs": 566.67,
+            "value": 0
+          },
+          {
+            "tMs": 583.33,
+            "value": 0
+          },
+          {
+            "tMs": 600,
+            "value": 0
+          },
+          {
+            "tMs": 616.67,
+            "value": 0
+          },
+          {
+            "tMs": 633.33,
+            "value": 0
+          },
+          {
+            "tMs": 650,
+            "value": 0
+          },
+          {
+            "tMs": 666.67,
+            "value": 0
+          },
+          {
+            "tMs": 683.33,
+            "value": 0
+          },
+          {
+            "tMs": 700,
+            "value": 0
+          },
+          {
+            "tMs": 716.67,
+            "value": 0
+          },
+          {
+            "tMs": 733.33,
+            "value": 0
+          },
+          {
+            "tMs": 750,
+            "value": 0
+          },
+          {
+            "tMs": 766.67,
+            "value": 0
+          },
+          {
+            "tMs": 783.33,
+            "value": 0
+          },
+          {
+            "tMs": 800,
+            "value": 0
+          },
+          {
+            "tMs": 816.67,
+            "value": 0
+          },
+          {
+            "tMs": 833.33,
+            "value": 0
+          },
+          {
+            "tMs": 850,
+            "value": 0
+          },
+          {
+            "tMs": 866.67,
+            "value": 0
+          },
+          {
+            "tMs": 883.33,
+            "value": 0
+          },
+          {
+            "tMs": 900,
+            "value": 0
+          },
+          {
+            "tMs": 916.67,
+            "value": 0
+          },
+          {
+            "tMs": 933.33,
+            "value": 0
+          },
+          {
+            "tMs": 950,
+            "value": 0
+          },
+          {
+            "tMs": 966.67,
+            "value": 0
+          },
+          {
+            "tMs": 983.33,
+            "value": 0
+          }
+        ]
+      },
+      {
+        "id": "KillCount",
+        "samples": [
+          {
+            "tMs": 0,
+            "value": 0
+          },
+          {
+            "tMs": 16.67,
+            "value": 0
+          },
+          {
+            "tMs": 33.33,
+            "value": 0
+          },
+          {
+            "tMs": 50,
+            "value": 0
+          },
+          {
+            "tMs": 66.67,
+            "value": 0
+          },
+          {
+            "tMs": 83.33,
+            "value": 0
+          },
+          {
+            "tMs": 100,
+            "value": 0
+          },
+          {
+            "tMs": 116.67,
+            "value": 0
+          },
+          {
+            "tMs": 133.33,
+            "value": 0
+          },
+          {
+            "tMs": 150,
+            "value": 0
+          },
+          {
+            "tMs": 166.67,
+            "value": 0
+          },
+          {
+            "tMs": 183.33,
+            "value": 0
+          },
+          {
+            "tMs": 200,
+            "value": 0
+          },
+          {
+            "tMs": 216.67,
+            "value": 0
+          },
+          {
+            "tMs": 233.33,
+            "value": 0
+          },
+          {
+            "tMs": 250,
+            "value": 0
+          },
+          {
+            "tMs": 266.67,
+            "value": 1
+          },
+          {
+            "tMs": 283.33,
+            "value": 1
+          },
+          {
+            "tMs": 300,
+            "value": 1
+          },
+          {
+            "tMs": 316.67,
+            "value": 1
+          },
+          {
+            "tMs": 333.33,
+            "value": 1
+          },
+          {
+            "tMs": 350,
+            "value": 1
+          },
+          {
+            "tMs": 366.67,
+            "value": 1
+          },
+          {
+            "tMs": 383.33,
+            "value": 1
+          },
+          {
+            "tMs": 400,
+            "value": 1
+          },
+          {
+            "tMs": 416.67,
+            "value": 2
+          },
+          {
+            "tMs": 433.33,
+            "value": 2
+          },
+          {
+            "tMs": 450,
+            "value": 2
+          },
+          {
+            "tMs": 466.67,
+            "value": 2
+          },
+          {
+            "tMs": 483.33,
+            "value": 2
+          },
+          {
+            "tMs": 500,
+            "value": 2
+          },
+          {
+            "tMs": 516.67,
+            "value": 2
+          },
+          {
+            "tMs": 533.33,
+            "value": 2
+          },
+          {
+            "tMs": 550,
+            "value": 2
+          },
+          {
+            "tMs": 566.67,
+            "value": 3
+          },
+          {
+            "tMs": 583.33,
+            "value": 3
+          },
+          {
+            "tMs": 600,
+            "value": 3
+          },
+          {
+            "tMs": 616.67,
+            "value": 3
+          },
+          {
+            "tMs": 633.33,
+            "value": 3
+          },
+          {
+            "tMs": 650,
+            "value": 3
+          },
+          {
+            "tMs": 666.67,
+            "value": 3
+          },
+          {
+            "tMs": 683.33,
+            "value": 3
+          },
+          {
+            "tMs": 700,
+            "value": 3
+          },
+          {
+            "tMs": 716.67,
+            "value": 3
+          },
+          {
+            "tMs": 733.33,
+            "value": 3
+          },
+          {
+            "tMs": 750,
+            "value": 3
+          },
+          {
+            "tMs": 766.67,
+            "value": 3
+          },
+          {
+            "tMs": 783.33,
+            "value": 3
+          },
+          {
+            "tMs": 800,
+            "value": 3
+          },
+          {
+            "tMs": 816.67,
+            "value": 3
+          },
+          {
+            "tMs": 833.33,
+            "value": 3
+          },
+          {
+            "tMs": 850,
+            "value": 3
+          },
+          {
+            "tMs": 866.67,
+            "value": 3
+          },
+          {
+            "tMs": 883.33,
+            "value": 3
+          },
+          {
+            "tMs": 900,
+            "value": 3
+          },
+          {
+            "tMs": 916.67,
+            "value": 3
+          },
+          {
+            "tMs": 933.33,
+            "value": 3
+          },
+          {
+            "tMs": 950,
+            "value": 3
+          },
+          {
+            "tMs": 966.67,
+            "value": 3
+          },
+          {
+            "tMs": 983.33,
+            "value": 3
+          }
+        ]
+      },
+      {
+        "id": "ObjectiveComplete",
+        "samples": [
+          {
+            "tMs": 0,
+            "value": false
+          },
+          {
+            "tMs": 16.67,
+            "value": false
+          },
+          {
+            "tMs": 33.33,
+            "value": false
+          },
+          {
+            "tMs": 50,
+            "value": false
+          },
+          {
+            "tMs": 66.67,
+            "value": false
+          },
+          {
+            "tMs": 83.33,
+            "value": false
+          },
+          {
+            "tMs": 100,
+            "value": false
+          },
+          {
+            "tMs": 116.67,
+            "value": false
+          },
+          {
+            "tMs": 133.33,
+            "value": false
+          },
+          {
+            "tMs": 150,
+            "value": false
+          },
+          {
+            "tMs": 166.67,
+            "value": false
+          },
+          {
+            "tMs": 183.33,
+            "value": false
+          },
+          {
+            "tMs": 200,
+            "value": false
+          },
+          {
+            "tMs": 216.67,
+            "value": false
+          },
+          {
+            "tMs": 233.33,
+            "value": false
+          },
+          {
+            "tMs": 250,
+            "value": false
+          },
+          {
+            "tMs": 266.67,
+            "value": false
+          },
+          {
+            "tMs": 283.33,
+            "value": false
+          },
+          {
+            "tMs": 300,
+            "value": false
+          },
+          {
+            "tMs": 316.67,
+            "value": false
+          },
+          {
+            "tMs": 333.33,
+            "value": false
+          },
+          {
+            "tMs": 350,
+            "value": false
+          },
+          {
+            "tMs": 366.67,
+            "value": false
+          },
+          {
+            "tMs": 383.33,
+            "value": false
+          },
+          {
+            "tMs": 400,
+            "value": false
+          },
+          {
+            "tMs": 416.67,
+            "value": false
+          },
+          {
+            "tMs": 433.33,
+            "value": false
+          },
+          {
+            "tMs": 450,
+            "value": false
+          },
+          {
+            "tMs": 466.67,
+            "value": false
+          },
+          {
+            "tMs": 483.33,
+            "value": false
+          },
+          {
+            "tMs": 500,
+            "value": false
+          },
+          {
+            "tMs": 516.67,
+            "value": false
+          },
+          {
+            "tMs": 533.33,
+            "value": false
+          },
+          {
+            "tMs": 550,
+            "value": false
+          },
+          {
+            "tMs": 566.67,
+            "value": true
+          },
+          {
+            "tMs": 583.33,
+            "value": true
+          },
+          {
+            "tMs": 600,
+            "value": true
+          },
+          {
+            "tMs": 616.67,
+            "value": true
+          },
+          {
+            "tMs": 633.33,
+            "value": true
+          },
+          {
+            "tMs": 650,
+            "value": true
+          },
+          {
+            "tMs": 666.67,
+            "value": true
+          },
+          {
+            "tMs": 683.33,
+            "value": true
+          },
+          {
+            "tMs": 700,
+            "value": true
+          },
+          {
+            "tMs": 716.67,
+            "value": true
+          },
+          {
+            "tMs": 733.33,
+            "value": true
+          },
+          {
+            "tMs": 750,
+            "value": true
+          },
+          {
+            "tMs": 766.67,
+            "value": true
+          },
+          {
+            "tMs": 783.33,
+            "value": true
+          },
+          {
+            "tMs": 800,
+            "value": true
+          },
+          {
+            "tMs": 816.67,
+            "value": true
+          },
+          {
+            "tMs": 833.33,
+            "value": true
+          },
+          {
+            "tMs": 850,
+            "value": true
+          },
+          {
+            "tMs": 866.67,
+            "value": true
+          },
+          {
+            "tMs": 883.33,
+            "value": true
+          },
+          {
+            "tMs": 900,
+            "value": true
+          },
+          {
+            "tMs": 916.67,
+            "value": true
+          },
+          {
+            "tMs": 933.33,
+            "value": true
+          },
+          {
+            "tMs": 950,
+            "value": true
+          },
+          {
+            "tMs": 966.67,
+            "value": true
+          },
+          {
+            "tMs": 983.33,
+            "value": true
+          }
+        ]
+      },
+      {
+        "id": "ResetCount",
+        "samples": [
+          {
+            "tMs": 0,
+            "value": 0
+          },
+          {
+            "tMs": 16.67,
+            "value": 0
+          },
+          {
+            "tMs": 33.33,
+            "value": 0
+          },
+          {
+            "tMs": 50,
+            "value": 0
+          },
+          {
+            "tMs": 66.67,
+            "value": 0
+          },
+          {
+            "tMs": 83.33,
+            "value": 0
+          },
+          {
+            "tMs": 100,
+            "value": 0
+          },
+          {
+            "tMs": 116.67,
+            "value": 0
+          },
+          {
+            "tMs": 133.33,
+            "value": 0
+          },
+          {
+            "tMs": 150,
+            "value": 0
+          },
+          {
+            "tMs": 166.67,
+            "value": 0
+          },
+          {
+            "tMs": 183.33,
+            "value": 0
+          },
+          {
+            "tMs": 200,
+            "value": 0
+          },
+          {
+            "tMs": 216.67,
+            "value": 0
+          },
+          {
+            "tMs": 233.33,
+            "value": 0
+          },
+          {
+            "tMs": 250,
+            "value": 0
+          },
+          {
+            "tMs": 266.67,
+            "value": 0
+          },
+          {
+            "tMs": 283.33,
+            "value": 0
+          },
+          {
+            "tMs": 300,
+            "value": 0
+          },
+          {
+            "tMs": 316.67,
+            "value": 0
+          },
+          {
+            "tMs": 333.33,
+            "value": 0
+          },
+          {
+            "tMs": 350,
+            "value": 0
+          },
+          {
+            "tMs": 366.67,
+            "value": 0
+          },
+          {
+            "tMs": 383.33,
+            "value": 0
+          },
+          {
+            "tMs": 400,
+            "value": 0
+          },
+          {
+            "tMs": 416.67,
+            "value": 0
+          },
+          {
+            "tMs": 433.33,
+            "value": 0
+          },
+          {
+            "tMs": 450,
+            "value": 0
+          },
+          {
+            "tMs": 466.67,
+            "value": 0
+          },
+          {
+            "tMs": 483.33,
+            "value": 0
+          },
+          {
+            "tMs": 500,
+            "value": 0
+          },
+          {
+            "tMs": 516.67,
+            "value": 0
+          },
+          {
+            "tMs": 533.33,
+            "value": 0
+          },
+          {
+            "tMs": 550,
+            "value": 0
+          },
+          {
+            "tMs": 566.67,
+            "value": 0
+          },
+          {
+            "tMs": 583.33,
+            "value": 0
+          },
+          {
+            "tMs": 600,
+            "value": 0
+          },
+          {
+            "tMs": 616.67,
+            "value": 0
+          },
+          {
+            "tMs": 633.33,
+            "value": 0
+          },
+          {
+            "tMs": 650,
+            "value": 0
+          },
+          {
+            "tMs": 666.67,
+            "value": 0
+          },
+          {
+            "tMs": 683.33,
+            "value": 0
+          },
+          {
+            "tMs": 700,
+            "value": 0
+          },
+          {
+            "tMs": 716.67,
+            "value": 0
+          },
+          {
+            "tMs": 733.33,
+            "value": 0
+          },
+          {
+            "tMs": 750,
+            "value": 0
+          },
+          {
+            "tMs": 766.67,
+            "value": 0
+          },
+          {
+            "tMs": 783.33,
+            "value": 0
+          },
+          {
+            "tMs": 800,
+            "value": 0
+          },
+          {
+            "tMs": 816.67,
+            "value": 0
+          },
+          {
+            "tMs": 833.33,
+            "value": 0
+          },
+          {
+            "tMs": 850,
+            "value": 0
+          },
+          {
+            "tMs": 866.67,
+            "value": 0
+          },
+          {
+            "tMs": 883.33,
+            "value": 0
+          },
+          {
+            "tMs": 900,
+            "value": 0
+          },
+          {
+            "tMs": 916.67,
+            "value": 0
+          },
+          {
+            "tMs": 933.33,
+            "value": 0
+          },
+          {
+            "tMs": 950,
+            "value": 0
+          },
+          {
+            "tMs": 966.67,
+            "value": 0
+          },
+          {
+            "tMs": 983.33,
+            "value": 0
+          }
+        ]
+      }
+    ]
+  },
+  "derived": {
+    "metric": "waveObjectiveComplete",
+    "value": true,
+    "calculator": "deriveWaveObjectiveComplete",
+    "method": "spawn N (SpawnCount > 0) → kill all (KillCount == SpawnCount AND AliveCount returns to 0 after being positive) → ObjectiveComplete rises AT/AFTER kill-all. Boolean proof; refuses under-spawn, under-kill, alive-remaining, no-completion, or completion-before-kill-all (timer). MEASURE-ONLY (a report row)."
+  },
+  "honesty": {
+    "measures": "that a deterministic single wave of N enemies spawns, all N are killed, and the objective completes as the causal consequence of kill-all — a wave/objective SEQUENCE proof in the repo-owned 3D shooter fixture.",
+    "doesNotMeasure": "multi-wave pacing, difficulty curves, spawn directors, arenas, boss waves, loot rewards, mission design, or wave-survival balance — all explicit gaps. This is the narrow spawn→kill-all→complete edge only, NOT a claim of production wave support."
+  }
+}

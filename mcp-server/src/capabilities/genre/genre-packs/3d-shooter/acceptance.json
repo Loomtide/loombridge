@@ -2,7 +2,7 @@
   "schemaVersion": "1",
   "game": "3d-shooter-reference",
   "source": {
-    "note": "Minimal genre-neutral reference acceptance template for the 3d-shooter SEED (first slice of the 3D-shooter genre). It exercises the required, genre-neutral contract sections (fonts/palette/hud/framing/feel/juice/manifest/win) for a single-player, non-Fusion 3D shooter and deliberately OMITS the optional platformer-only sections (platformer/reachability/placement/render/props/physics). The feel section carries ONLY the core shooter metrics that this seed gate-enforces today (fireIntervalMs, fireInputToSpawnLatency, ttkMs); additional 3D-shooter measurements (projectileSpeed, aimTurnRateDegPerSec, lookInputToYawLatencyMs, shotAimAlignmentDeg, hitstopMs, screenShakeMag, hitscanImpactLatencyMs, enemyReactionLatencyMs, coverBlocksDamage, waveObjectiveComplete, wallSlideTangentRatio) are measure-only proof capabilities unless a GenreContract promotes them with explicit gate bands. wallSlideTangentRatio (dogfood learnings §2 wall-slide feel gate, binds to deriveWallSlideTangentRatio) proves diagonal-into-wall input preserves tangent motion — relevant to strafing into cover/geometry — and the 3d-topdown-arena pack carries its default band. The 3C lookInputToYawLatencyMs + shotAimAlignmentDeg pair was promoted from a bridge gap to measurable-now with committed live evidence (demo-bundles/3d-shooter-3c-controller-camera). Recoil/ADS and broad aiming quality remain explicit gaps. This is a seed for `plan --genre 3d-shooter`, not a hand-tuned shipping contract, and not a 'production-ready 3D shooter' claim."
+    "note": "Minimal genre-neutral reference acceptance template for the 3d-shooter SEED (first slice of the 3D-shooter genre). It exercises the required, genre-neutral contract sections (fonts/palette/hud/framing/feel/juice/manifest/win) for a single-player, non-Fusion 3D shooter and deliberately OMITS the optional platformer-only sections (platformer/reachability/placement/render/props/physics). The feel section carries ONLY the core shooter metrics that this seed gate-enforces today (fireIntervalMs, fireInputToSpawnLatency, ttkMs); additional 3D-shooter measurements (projectileSpeed, aimTurnRateDegPerSec, lookInputToYawLatencyMs, shotAimAlignmentDeg, hitstopMs, screenShakeMag, hitscanImpactLatencyMs, enemyReactionLatencyMs, coverBlocksDamage, waveObjectiveComplete, wallSlideTangentRatio) are measure-only proof capabilities unless a GenreContract promotes them with explicit gate bands. wallSlideTangentRatio (dogfood learnings §2 wall-slide feel gate, binds to deriveWallSlideTangentRatio) proves diagonal-into-wall input preserves tangent motion — relevant to strafing into cover/geometry — and the 3d-topdown-arena pack carries its default band. The 3C lookInputToYawLatencyMs + shotAimAlignmentDeg pair was promoted from a bridge gap to measurable-now with committed live evidence (demos/evidence-bundles/3d-shooter-3c-controller-camera). Recoil/ADS and broad aiming quality remain explicit gaps. This is a seed for `plan --genre 3d-shooter`, not a hand-tuned shipping contract, and not a 'production-ready 3D shooter' claim."
   },
 
   "fonts": {
@@ -105,13 +105,13 @@
       "ms": 80,
       "frames": 5,
       "playerFlashWhite": false,
-      "note": "Design intent for a generated build — brief impact freeze on enemy hit/kill. The hit-stop WINDOW DURATION (hitstopMs) is now measurable in 3D and live-proven in the repo-owned fixture (demo-bundles/3d-impact-feedback/, deriveHitstopMs, causality-gated); this ms/frames target stays design intent, not a gate-enforced band. See methodology-gaps.md."
+      "note": "Design intent for a generated build — brief impact freeze on enemy hit/kill. The hit-stop WINDOW DURATION (hitstopMs) is now measurable in 3D and live-proven in the repo-owned fixture (demos/evidence-bundles/3d-impact-feedback/, deriveHitstopMs, causality-gated); this ms/frames target stays design intent, not a gate-enforced band. See methodology-gaps.md."
     },
     "screenShake": {
       "amplitudePx": 4,
       "decayMs": 180,
       "trigger": "fire-and-hit",
-      "note": "Design intent for a generated build — small kick on fire, larger on hit/kill. The camera-DISPLACEMENT magnitude (screenShakeMag) is now measurable in true 3D and live-proven in the repo-owned fixture (demo-bundles/3d-impact-feedback/, deriveScreenShakeMag hypot(dx,dy,dz), Z load-bearing, causality-gated); this px/decay target stays design intent, not a gate-enforced band. See methodology-gaps.md."
+      "note": "Design intent for a generated build — small kick on fire, larger on hit/kill. The camera-DISPLACEMENT magnitude (screenShakeMag) is now measurable in true 3D and live-proven in the repo-owned fixture (demos/evidence-bundles/3d-impact-feedback/, deriveScreenShakeMag hypot(dx,dy,dz), Z load-bearing, causality-gated); this px/decay target stays design intent, not a gate-enforced band. See methodology-gaps.md."
     }
   },
 

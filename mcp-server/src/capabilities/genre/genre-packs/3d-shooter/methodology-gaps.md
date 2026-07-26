@@ -7,53 +7,53 @@ treated as green. It pairs with:
 - `acceptance.json` / `slices.json` — the plan-time templates (`plan --genre 3d-shooter`).
 - `mcp-server/src/capabilities/genre/genre-contract/genre-packs/3d-shooter/hint-card.json` — the elicitation
   seed whose `defaultBands` carry the `measurabilityTag` for each metric.
-- `unity-projects/shooter-3d-combat-dogfood/` — the repo-owned 3D fixture that supplied the first
+- `unity-dev-project/shooter-3d-combat-dogfood/` — the repo-owned 3D fixture that supplied the first
   live capture.
-- `demo-bundles/3d-shooter-first-live-capture/` — raw + derived live capture evidence for the first
+- `demos/evidence-bundles/3d-shooter-first-live-capture/` — raw + derived live capture evidence for the first
   3D shooter loop; `generate.mjs` rebuilds the derived artifact from the raw transcript through the
   production feel calculators.
-- `demo-bundles/3d-projectile-speed-substrate/` — raw + derived live capture evidence for the first
+- `demos/evidence-bundles/3d-projectile-speed-substrate/` — raw + derived live capture evidence for the first
   true-3D `projectileSpeed` (3D measurement substrate v1); `generate.mjs` rebuilds it from the raw
   `{x,y,z}` transcript through the production `deriveProjectileSpeed`.
-- `demo-bundles/3d-aim-turn-rate-substrate/` — raw + derived live capture evidence for the first
+- `demos/evidence-bundles/3d-aim-turn-rate-substrate/` — raw + derived live capture evidence for the first
   rotation metric `aimTurnRateDegPerSec` (3D measurement substrate v2); `generate.mjs` rebuilds it
   from the raw `{x,y,z,rx,ry,rz}` transcript through the production `deriveAimTurnRateDegPerSec`.
-- `demo-bundles/3d-impact-feedback/` — raw + derived live capture evidence for the impact-feedback
+- `demos/evidence-bundles/3d-impact-feedback/` — raw + derived live capture evidence for the impact-feedback
   metrics `hitstopMs` and true-3D `screenShakeMag`; `generate.mjs` rebuilds both from the raw camera
   `{x,y,z}` + window-series transcript through the production `deriveHitstopMs` / `deriveScreenShakeMag`,
   asserting the Z-stripped projection refuses and both feedback edges are causally tied to the hit.
-- `demo-bundles/3d-hitscan-weapon/` — raw + derived live capture evidence for `hitscanImpactLatencyMs`;
+- `demos/evidence-bundles/3d-hitscan-weapon/` — raw + derived live capture evidence for `hitscanImpactLatencyMs`;
   `generate.mjs` rebuilds it from the raw fire/raycast-hit/damage edge series through the production
   `deriveHitscanImpactLatencyMs`, asserting the fire → raycast-hit → damage ordering (no false green).
-- `demo-bundles/3d-ai-reaction/` — raw + derived live capture evidence for `enemyReactionLatencyMs`;
+- `demos/evidence-bundles/3d-ai-reaction/` — raw + derived live capture evidence for `enemyReactionLatencyMs`;
   `generate.mjs` rebuilds it from the raw perception/reaction edge series through the production
   `deriveEnemyReactionLatencyMs`, asserting the occluder blocked LOS at start and perception precedes
   reaction (a real line-of-sight edge, not a timer).
-- `demo-bundles/3d-cover-proof/` — raw COVERED + EXPOSED capture pair for `coverBlocksDamage`;
+- `demos/evidence-bundles/3d-cover-proof/` — raw COVERED + EXPOSED capture pair for `coverBlocksDamage`;
   `generate.mjs` rebuilds it from both raw transcripts through the production `deriveCoverBlocksDamage`,
   asserting covered blocks LOS + every valid shot + all damage, exposed restores LOS + damage (a miss is
   not a cover block).
-- `demo-bundles/3d-wave-objective/` — raw capture for `waveObjectiveComplete`; `generate.mjs` rebuilds it
+- `demos/evidence-bundles/3d-wave-objective/` — raw capture for `waveObjectiveComplete`; `generate.mjs` rebuilds it
   from the raw spawn/alive/kill/complete edge series through the production `deriveWaveObjectiveComplete`,
   asserting spawn N → kill all → ObjectiveComplete rises at/after kill-all (kill-gated, not a timer).
-- `demo-bundles/3d-shooter-minimal-vertical/` — the FINAL productization roll-up (Phase 07): a fresh live
+- `demos/evidence-bundles/3d-shooter-minimal-vertical/` — the FINAL productization roll-up (Phase 07): a fresh live
   core-loop capture re-derived through the production calculators, plus an `evidence-manifest.json` +
   `reports/3d-shooter-vertical-report.json` that compose all the proven capabilities (each citing its raw
   bundle) and list every remaining gap EXPLICITLY. `experimental-green`, a minimal vertical builder, NOT a
   production-ready 3D shooter pack.
-- `demo-bundles/3d-shooter-3c-controller-camera/` — proof bundle for the Character/Controller/Camera slice:
+- `demos/evidence-bundles/3d-shooter-3c-controller-camera/` — proof bundle for the Character/Controller/Camera slice:
   look input changes the player/camera yaw, movement is aim-relative, and shot direction follows aim forward.
 
 ## Productization status (Phases 01–08 complete)
 
 The `3d-shooter` pack is a **minimal vertical builder** — a sequence of merged, raw-proven capabilities
-composed into one honest vertical run (`demo-bundles/3d-shooter-minimal-vertical/`), NOT a production-ready
+composed into one honest vertical run (`demos/evidence-bundles/3d-shooter-minimal-vertical/`), NOT a production-ready
 3D shooter. **Eleven measured capabilities** (core-loop fireIntervalMs/fireInputToSpawnLatency/ttkMs,
 true-3D projectileSpeed, aimTurnRateDegPerSec, hitstopMs, true-3D screenShakeMag, hitscanImpactLatencyMs,
 enemyReactionLatencyMs, coverBlocksDamage, waveObjectiveComplete), each backed by a live capture. The
 Phase 08 3C slice adds controller/camera so the visible vertical is no longer a fixed-camera range
 shooter, and its two checks (`lookInputToYawLatencyMs` and `shotAimAlignmentDeg`) are now PROMOTED to
-measurable-now: `demo-bundles/3d-shooter-3c-controller-camera/captures/` carries the committed live
+measurable-now: `demos/evidence-bundles/3d-shooter-3c-controller-camera/captures/` carries the committed live
 `runtime.capture_input_motion` artifacts (look sweep + aim-then-fire) whose generator re-derives both
 through the production calculators (16.66 ms look latency; 0° shot/aim alignment at 86° yaw) — bringing
 the count to **thirteen measured capabilities**. The gaps below remain explicit and never green.
@@ -83,7 +83,7 @@ third-person Character/Controller/Camera loop. Deterministic look input changes 
 moves relative to the aim yaw, the camera follows from a third-person pose, and the weapon records a shot
 direction derived from `AimForward`. `lookInputToYawLatencyMs` (look-input onset → first yaw response) and
 `shotAimAlignmentDeg` (aim/camera forward vs shot direction angular error) are now MEASURABLE-NOW: committed
-live captures under `demo-bundles/3d-shooter-3c-controller-camera/captures/` re-derive both through the
+live captures under `demos/evidence-bundles/3d-shooter-3c-controller-camera/captures/` re-derive both through the
 production `deriveLookInputToYawLatencyMs` / `deriveShotAimAlignmentDeg` calculators (16.66 ms look latency;
 0° shot/aim alignment at 86° yaw), and the calculators refuse missing/out-of-window onset, rotation-stripped
 samples, pre-armed yaw, or a malformed/zero shot or aim vector. This proves mechanics binding PLUS the two measured 3C
@@ -133,7 +133,7 @@ HONESTY CAVEAT on the hold-channel pair (`holdChannelDurationMs` / `holdInterrup
 extraction-shooter "hold-to-loot / hold-to-extract" mechanic, dogfood finding RCL-G01): the
 calculators are IMPLEMENTED and covered by synthetic-trace unit tests
 (`__tests__/3d-hold-channel-substrate.test.ts`), but unlike every other row in this table they are
-NOT yet backed by a committed live capture (`demo-bundles/3d-hold-channel/*` does not exist) — a real
+NOT yet backed by a committed live capture (`demos/evidence-bundles/3d-hold-channel/*` does not exist) — a real
 hold-to-extract capture needs a built extraction scene. They are honest measure-only proofs over the
 documented `HoldInputHeld` / `ChannelProgress` / `DamageTakenCount` sampled fields; promote them to
 live-proven once that capture is recorded, the same path the cover/wave substrates took.
@@ -141,7 +141,7 @@ live-proven once that capture is recorded, the same path the cover/wave substrat
 HONESTY CAVEAT on the move-speed pair (`moveSpeed` / `accelTo90`, the 3D movement-feel metric, dogfood
 finding RCL-G06): the calculators are IMPLEMENTED and covered by synthetic-trajectory unit tests
 (`__tests__/3d-move-speed-substrate.test.ts`), but — exactly like the hold-channel pair — they are NOT
-yet backed by a committed live capture (`demo-bundles/3d-move-speed/*` does not exist); a real top-down
+yet backed by a committed live capture (`demos/evidence-bundles/3d-move-speed/*` does not exist); a real top-down
 locomotion capture needs a built move scene. They are unblocked by the Z-aware `measure_motion` fix
 (RCL-T02): the bridge now samples a true `{x,y,z}` trajectory, so `deriveMoveSpeed` reads the PLANAR
 (XZ) ground speed and a top-down character running FORWARD (+Z) measures correctly instead of the ~0 the
@@ -154,7 +154,7 @@ extraction-shooter "reach-zone → dwell → bank" win path + "lose-everything-o
 dogfood findings RCL-G02 + RCL-G07): the calculators are IMPLEMENTED and covered by synthetic-trace
 unit tests (`__tests__/3d-extraction-objective-substrate.test.ts`), but — exactly like the
 hold-channel and move-speed pairs — they are NOT yet backed by a committed live capture
-(`demo-bundles/3d-extraction-objective/*` does not exist); a real reach-zone → dwell → bank (and a
+(`demos/evidence-bundles/3d-extraction-objective/*` does not exist); a real reach-zone → dwell → bank (and a
 death-wipe) capture needs a built extraction scene. They are the INVERSE of the wave/objective proof
 (`waveObjectiveComplete` is spawn-N → kill-all → clear; extraction is enter-zone → dwell/hold → bank,
 lose-on-death). They are honest measure-only proofs over the documented `InZone` / `ExtractProgress` /
@@ -172,7 +172,7 @@ the heat-ramp / auto-aim / sprint-traversal knobs that make a raid tense, dogfoo
 RCL-G03 + RCL-G04 + RCL-G05): the calculators are IMPLEMENTED and covered by synthetic-trace unit tests
 (`__tests__/3d-extraction-pressure-substrate.test.ts`), but — exactly like the hold-channel, move-speed,
 and extraction win/loss pairs — they are NOT yet backed by a committed live capture
-(`demo-bundles/3d-extraction-pressure/*` does not exist); a real heat-ramp / auto-aim / sprint capture
+(`demos/evidence-bundles/3d-extraction-pressure/*` does not exist); a real heat-ramp / auto-aim / sprint capture
 needs a built extraction-pressure scene. They are honest measure-only proofs over the documented spawn,
 candidate-set, and planar-speed + sprint-input signals: `deriveThreatRampSlope` refuses a flat /
 non-monotonic / grace-violated / under-spawned / degraded ramp (a positive endpoint slope over a
@@ -188,7 +188,7 @@ cover/wave substrates took.
 
 ## 3C checks (PROMOTED — measurable-now, measure-only proof)
 
-Both promoted with committed live evidence in `demo-bundles/3d-shooter-3c-controller-camera/captures/`
+Both promoted with committed live evidence in `demos/evidence-bundles/3d-shooter-3c-controller-camera/captures/`
 (`generate.mjs` re-derives through the production calculators).
 
 | Metric | Status | Live evidence |
@@ -199,11 +199,11 @@ Both promoted with committed live evidence in `demo-bundles/3d-shooter-3c-contro
 First live 3D proof:
 
 - Raw transcript:
-  `demo-bundles/3d-shooter-first-live-capture/shooter-3d-combat-loop-raw-2026-06-25.json`
+  `demos/evidence-bundles/3d-shooter-first-live-capture/shooter-3d-combat-loop-raw-2026-06-25.json`
 - Derived summary:
-  `demo-bundles/3d-shooter-first-live-capture/shooter-3d-combat-loop-derived-2026-06-25.json`
+  `demos/evidence-bundles/3d-shooter-first-live-capture/shooter-3d-combat-loop-derived-2026-06-25.json`
 - Generator:
-  `demo-bundles/3d-shooter-first-live-capture/generate.mjs`
+  `demos/evidence-bundles/3d-shooter-first-live-capture/generate.mjs`
 - Capture op: `runtime.capture_input_motion`, `captureFps=60`, `sampleCount=111`,
   `durationMs=1833.33`, `editorStateAfterCapture.error_count=0`.
 - Input phases: three short `Space` fire phases separated by empty cooldown windows.
@@ -214,11 +214,11 @@ First live 3D proof:
 First live true-3D `projectileSpeed` proof (3D measurement substrate v1):
 
 - Raw transcript:
-  `demo-bundles/3d-projectile-speed-substrate/shooter-3d-projectile-speed-raw-2026-06-25.json`
+  `demos/evidence-bundles/3d-projectile-speed-substrate/shooter-3d-projectile-speed-raw-2026-06-25.json`
 - Derived summary:
-  `demo-bundles/3d-projectile-speed-substrate/shooter-3d-projectile-speed-derived-2026-06-25.json`
+  `demos/evidence-bundles/3d-projectile-speed-substrate/shooter-3d-projectile-speed-derived-2026-06-25.json`
 - Generator:
-  `demo-bundles/3d-projectile-speed-substrate/generate.mjs`
+  `demos/evidence-bundles/3d-projectile-speed-substrate/generate.mjs`
 - Capture op: `runtime.capture_input_motion`, `captureFps=60`, `sampleCount=119`,
   `durationMs=1966.67`, `editorStateAfterCapture.error_count=0`, measure `/MeasurementProjectile`.
 - Trajectory: pure `+Z` — `x=0`, `y=1` constant; `z` rises `0.6 → 29.4` after launch (the entire
@@ -230,11 +230,11 @@ First live true-3D `projectileSpeed` proof (3D measurement substrate v1):
 First live true-3D `aimTurnRateDegPerSec` proof (3D measurement substrate v2):
 
 - Raw transcript:
-  `demo-bundles/3d-aim-turn-rate-substrate/shooter-3d-aim-turn-rate-raw-2026-06-26.json`
+  `demos/evidence-bundles/3d-aim-turn-rate-substrate/shooter-3d-aim-turn-rate-raw-2026-06-26.json`
 - Derived summary:
-  `demo-bundles/3d-aim-turn-rate-substrate/shooter-3d-aim-turn-rate-derived-2026-06-26.json`
+  `demos/evidence-bundles/3d-aim-turn-rate-substrate/shooter-3d-aim-turn-rate-derived-2026-06-26.json`
 - Generator:
-  `demo-bundles/3d-aim-turn-rate-substrate/generate.mjs`
+  `demos/evidence-bundles/3d-aim-turn-rate-substrate/generate.mjs`
 - Capture op: `runtime.capture_input_motion`, `captureFps=60`, `sampleCount=113`,
   `durationMs=1866.67`, `editorStateAfterCapture.error_count=0`, measure `/AimRig`.
 - Trajectory: position fixed (`x=3`, `y=1`, `z=0`); yaw `ry` rises `0 → 150°` at a constant
@@ -247,10 +247,10 @@ First live true-3D `aimTurnRateDegPerSec` proof (3D measurement substrate v2):
 
 First live 3D impact-feedback proof (`hitstopMs` + true-3D `screenShakeMag`):
 
-- Raw transcript: `demo-bundles/3d-impact-feedback/3d-impact-feedback-raw-2026-06-26.json`
-- Derived summaries: `demo-bundles/3d-impact-feedback/3d-hitstop-derived-2026-06-26.json`,
-  `demo-bundles/3d-impact-feedback/3d-screen-shake-derived-2026-06-26.json`
-- Generator: `demo-bundles/3d-impact-feedback/generate.mjs`
+- Raw transcript: `demos/evidence-bundles/3d-impact-feedback/3d-impact-feedback-raw-2026-06-26.json`
+- Derived summaries: `demos/evidence-bundles/3d-impact-feedback/3d-hitstop-derived-2026-06-26.json`,
+  `demos/evidence-bundles/3d-impact-feedback/3d-screen-shake-derived-2026-06-26.json`
+- Generator: `demos/evidence-bundles/3d-impact-feedback/generate.mjs`
 - Capture op: `runtime.capture_input_motion`, `captureFps=60`, `sampleCount=111`,
   `durationMs=1833.33`, `editorStateAfterCapture.error_count=0`, measure `/Main Camera`.
 - Fixture: a clean-room `Shooter3DImpactFeedback` on the Main Camera opens a hit-stop window + a camera
@@ -267,9 +267,9 @@ First live 3D impact-feedback proof (`hitstopMs` + true-3D `screenShakeMag`):
 
 First live 3D hitscan proof (`hitscanImpactLatencyMs`):
 
-- Raw transcript: `demo-bundles/3d-hitscan-weapon/3d-hitscan-raw-2026-06-26.json`
-- Derived summary: `demo-bundles/3d-hitscan-weapon/3d-hitscan-derived-2026-06-26.json`
-- Generator: `demo-bundles/3d-hitscan-weapon/generate.mjs`
+- Raw transcript: `demos/evidence-bundles/3d-hitscan-weapon/3d-hitscan-raw-2026-06-26.json`
+- Derived summary: `demos/evidence-bundles/3d-hitscan-weapon/3d-hitscan-derived-2026-06-26.json`
+- Generator: `demos/evidence-bundles/3d-hitscan-weapon/generate.mjs`
 - Capture op: `runtime.capture_input_motion`, `captureFps=60`, `sampleCount=81`,
   `durationMs=1333.33`, `editorStateAfterCapture.error_count=0`, measure `/HitscanWeapon`.
 - Fixture: a clean-room `Shooter3DHitscanWeapon` (`/HitscanWeapon` at `(0,1,-4)`) fires one
@@ -285,9 +285,9 @@ First live 3D hitscan proof (`hitscanImpactLatencyMs`):
 
 First live 3D AI perception/reaction proof (`enemyReactionLatencyMs`):
 
-- Raw transcript: `demo-bundles/3d-ai-reaction/3d-ai-reaction-raw-2026-06-26.json`
-- Derived summary: `demo-bundles/3d-ai-reaction/3d-ai-reaction-derived-2026-06-26.json`
-- Generator: `demo-bundles/3d-ai-reaction/generate.mjs`
+- Raw transcript: `demos/evidence-bundles/3d-ai-reaction/3d-ai-reaction-raw-2026-06-26.json`
+- Derived summary: `demos/evidence-bundles/3d-ai-reaction/3d-ai-reaction-derived-2026-06-26.json`
+- Generator: `demos/evidence-bundles/3d-ai-reaction/generate.mjs`
 - Capture op: `runtime.capture_input_motion`, `captureFps=60`, `sampleCount=63`,
   `durationMs=1033.33`, `editorStateAfterCapture.error_count=0`, measure `/Enemy`.
 - Fixture: a clean-room `Shooter3DEnemyReaction` on the enemy casts a `Physics.Linecast` toward the
@@ -302,10 +302,10 @@ First live 3D AI perception/reaction proof (`enemyReactionLatencyMs`):
 
 First live 3D cover proof (`coverBlocksDamage`):
 
-- Raw transcripts: `demo-bundles/3d-cover-proof/3d-cover-covered-raw-2026-06-26.json` (covered) +
-  `demo-bundles/3d-cover-proof/3d-cover-exposed-raw-2026-06-26.json` (exposed)
-- Derived summary: `demo-bundles/3d-cover-proof/3d-cover-derived-2026-06-26.json`
-- Generator: `demo-bundles/3d-cover-proof/generate.mjs`
+- Raw transcripts: `demos/evidence-bundles/3d-cover-proof/3d-cover-covered-raw-2026-06-26.json` (covered) +
+  `demos/evidence-bundles/3d-cover-proof/3d-cover-exposed-raw-2026-06-26.json` (exposed)
+- Derived summary: `demos/evidence-bundles/3d-cover-proof/3d-cover-derived-2026-06-26.json`
+- Generator: `demos/evidence-bundles/3d-cover-proof/generate.mjs`
 - Capture op: `runtime.capture_input_motion`, `captureFps=60`, `editorStateAfterCapture.error_count=0`
   on both, measure `/CoverProbe`.
 - Fixture: a clean-room `Shooter3DCoverProbe` on an isolated lane (x=-4, clear of the main lane + the AI
@@ -319,9 +319,9 @@ First live 3D cover proof (`coverBlocksDamage`):
 
 First live 3D wave/objective proof (`waveObjectiveComplete`):
 
-- Raw transcript: `demo-bundles/3d-wave-objective/3d-wave-objective-raw-2026-06-26.json`
-- Derived summary: `demo-bundles/3d-wave-objective/3d-wave-objective-derived-2026-06-26.json`
-- Generator: `demo-bundles/3d-wave-objective/generate.mjs`
+- Raw transcript: `demos/evidence-bundles/3d-wave-objective/3d-wave-objective-raw-2026-06-26.json`
+- Derived summary: `demos/evidence-bundles/3d-wave-objective/3d-wave-objective-derived-2026-06-26.json`
+- Generator: `demos/evidence-bundles/3d-wave-objective/generate.mjs`
 - Capture op: `runtime.capture_input_motion`, `captureFps=60`, `editorStateAfterCapture.error_count=0`,
   measure `/WaveManager`.
 - Fixture: a clean-room `Shooter3DWaveObjective` spawns N real target GameObjects on `G` (tracked in a
@@ -400,7 +400,7 @@ live-proven, fire→raycast-hit→damage ordering-gated), enemy AI reaction (`en
 live-proven, LOS-perception→reaction gated), cover (`coverBlocksDamage` live-proven, covered-blocks /
 exposed-damages with a miss-vs-block guard), waves/objectives (`waveObjectiveComplete` live-proven,
 spawn→kill-all→complete, kill-gated), the Phase 07 minimal-vertical roll-up
-(`demo-bundles/3d-shooter-minimal-vertical/`, composition + honest-gap ledger, no new metric), and the
+(`demos/evidence-bundles/3d-shooter-minimal-vertical/`, composition + honest-gap ledger, no new metric), and the
 3C controller/camera pair — `lookInputToYawLatencyMs` (look-input onset → first sampled /Player yaw) +
 `shotAimAlignmentDeg` (aim forward vs fired shot direction) — live-proven and promoted in PR #355. The
 next useful cuts are:

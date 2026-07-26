@@ -28,7 +28,7 @@ function record(
 }
 
 const KIDS = "/Users/x/LoombridgeGames/GameHub";
-const SHOOTER = "/Users/x/Loombridge/unity-projects/shooter-combat-dogfood";
+const SHOOTER = "/Users/x/Loombridge/unity-dev-project/shooter-combat-dogfood";
 
 test("resolveSingleEditorTarget: exactly one editor → that's the target", () => {
   const r = resolveSingleEditorTarget([record(KIDS, { projectName: "GameHub" })]);

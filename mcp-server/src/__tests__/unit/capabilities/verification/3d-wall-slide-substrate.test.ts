@@ -29,7 +29,7 @@
  * (net displacement / duration); the per-step `tangentialStallFraction` carries the
  * freeze-then-snap evidence a 1.0 average would hide.
  *
- * LIVE Unity capture evidence is DEFERRED (no committed demo-bundles/* transcript yet, like the
+ * LIVE Unity capture evidence is DEFERRED (no committed demos/evidence-bundles/* transcript yet, like the
  * hold-channel / move-speed substrate): the calculator + these synthetic-trajectory tests are the
  * slice deliverable. The capture producer is the existing bridge motion ops (a {x,y,z} position
  * trajectory from runtime.capture_input_motion / measure_motion); this slice documents the minimal
