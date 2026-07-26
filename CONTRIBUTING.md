@@ -60,6 +60,16 @@ npm run test:integration      # integration tests (spawns the server over stdio)
 npm run test:all              # build + unit + integration
 ```
 
+> **`test:unit` runs with `--test-concurrency=1` on purpose — please don't "optimise" it away.**
+> Node's test runner parses each child's results from a V8-serialized stream, and under
+> parallel execution that parsing intermittently fails with
+> `Unable to deserialize cloned data due to invalid or unsupported version`. It surfaces as
+> a whole FILE failing with no assertion, and — worse — it silently *undercounts* tests, so
+> a run can look green while reporting fewer tests than exist. Measured over repeated runs
+> of this suite: default concurrency crashed 2/6 runs and reported 3145 tests; `=4` crashed
+> 1/6; `=1` crashed 0/10 and reported the full 3148 every time. The cost is ~7s → ~21s,
+> which is worth paying for a gate you can trust. Re-measure before changing it.
+
 The **pre-commit bar is `npm run ci` green.** Add or update tests for any behavior change —
 the deterministic gates and the doneness supervisor are the product, so a change there
 without a test that would have caught the old behavior won't land.

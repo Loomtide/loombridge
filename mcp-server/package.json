@@ -21,7 +21,7 @@
     "clean": "rm -rf dist",
     "build": "rm -rf dist && tsc && (node ../scripts/write-build-info.mjs || true)",
     "typecheck": "tsc --noEmit",
-    "test:unit": "node --test \"dist/__tests__/unit/**/*.test.js\"",
+    "test:unit": "node --test --test-concurrency=1 \"dist/__tests__/unit/**/*.test.js\"",
     "test:integration": "node --test dist/__tests__/integration/*.test.js",
     "test": "npm run build && npm run test:unit",
     "test:all": "npm run build && npm run test:unit && npm run test:integration",
