@@ -3,7 +3,7 @@ import test from "node:test";
 import {
   isHandshakeResponseData,
   parseBridgeResponse,
-} from "../bridge-protocol.js";
+} from "../bridge/bridge-protocol.js";
 
 test("parseBridgeResponse parses a valid success payload", () => {
   const json = JSON.stringify({

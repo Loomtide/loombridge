@@ -4,9 +4,9 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import { loadAssetProfile, loadRegistryPack } from "../asset-layer/registry.js";
-import { validatePreparedSprite } from "../asset-layer/validator.js";
-import type { AssetProfile, AssetRegistryEntry } from "../asset-layer/types.js";
+import { loadAssetProfile, loadRegistryPack } from "../capabilities/assets/registry.js";
+import { validatePreparedSprite } from "../capabilities/assets/validator.js";
+import type { AssetProfile, AssetRegistryEntry } from "../capabilities/assets/types.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);

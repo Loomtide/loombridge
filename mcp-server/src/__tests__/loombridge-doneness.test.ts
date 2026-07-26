@@ -44,8 +44,8 @@ import { createDraftAssetManifest } from "../capabilities/assets/asset-manifest.
 import {
   applyRegistrySelectionsToManifest,
   buildRegistrySelectionPlan,
-} from "../asset-layer/manifest-selection.js";
-import { loadAssetProfile, loadRegistryPack } from "../asset-layer/registry.js";
+} from "../capabilities/assets/manifest-selection.js";
+import { loadAssetProfile, loadRegistryPack } from "../capabilities/assets/registry.js";
 import { evaluateAssetSourceFidelity } from "../capabilities/verification/gates/asset-source-fidelity.js";
 
 const doneTestRepoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");

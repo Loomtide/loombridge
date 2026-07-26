@@ -12,11 +12,11 @@ import {
   queryCatalogRecords,
   selectAssetsFromCatalog,
   sortCatalogCandidates,
-} from "../asset-layer/catalog-source.js";
-import { catalogRecordToRegistryEntry, normalizeCatalogRecord } from "../asset-layer/catalog.js";
-import { selectCatalogAssets } from "../asset-layer/registry.js";
-import { trustTierForEntry } from "../asset-layer/trust.js";
-import type { AssetCatalogRecord } from "../asset-layer/types.js";
+} from "../capabilities/assets/catalog-source.js";
+import { catalogRecordToRegistryEntry, normalizeCatalogRecord } from "../capabilities/assets/catalog.js";
+import { selectCatalogAssets } from "../capabilities/assets/registry.js";
+import { trustTierForEntry } from "../capabilities/assets/trust.js";
+import type { AssetCatalogRecord } from "../capabilities/assets/types.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { OpRegistry, normalizeBatchOperations } from "../op-registry.js";
+import { OpRegistry, normalizeBatchOperations } from "../surfaces/op-registry.js";
 
 const registry = new OpRegistry();
 

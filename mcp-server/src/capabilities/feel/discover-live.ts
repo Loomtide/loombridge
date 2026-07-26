@@ -8,8 +8,8 @@
  * proposed" rather than crashing or inventing a binding.
  */
 
-import type { BridgeResponse } from "../../types.js";
-import { createUnityClientForCli } from "../verification/unity-client-resolver.js";
+import type { BridgeResponse } from "../../shared/types.js";
+import { createUnityClientForCli } from "../../bridge/unity-client-resolver.js";
 import { resilientSend } from "../replay/resilient-send.js";
 import type { BridgeSend } from "../replay/unity-driver.js";
 import type { RawScreenRects } from "../minigame/minigame-capture-plan.js";

@@ -3,7 +3,7 @@ import test from "node:test";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
-import { TraceRecorder, type TraceEntry } from "../trace-recorder.js";
+import { TraceRecorder, type TraceEntry } from "../bridge/trace-recorder.js";
 
 /**
  * Creates a temp directory for test isolation.

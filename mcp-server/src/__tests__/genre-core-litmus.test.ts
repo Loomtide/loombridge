@@ -24,11 +24,15 @@ import { knownGenreIds } from "../capabilities/genre/genre-registry.js";
  * not strings assembled by concatenation/interpolation; and it deliberately does NOT police every way a
  * file could be genre-aware — e.g. the platformer gate-tuning section's `platformer` key on
  * AcceptanceContract is a distinct axis handled in the contract-promotion work. Coupling in the
- * separate asset-catalog subsystem (`src/asset-layer/`) is likewise out of scope (tracked there).
+ * separate asset-catalog subsystem is likewise out of scope (tracked there) — it moved from
+ * `src/asset-layer/` to `src/capabilities/assets/` in the source reorganisation, so the exclusion
+ * below follows it. That subsystem legitimately declares genre ids in its own profile table.
  */
 
 const SRC_ROOTS = ["src/capabilities", "src/domain"].map((rel) => path.join(process.cwd(), rel));
 const EXCLUDED_FILE = path.join(process.cwd(), "src", "capabilities", "genre", "genre-registry.ts");
+/** The asset-catalog subsystem: out of scope by the same decision recorded above. */
+const EXCLUDED_DIRS = [path.join(process.cwd(), "src", "capabilities", "assets")];
 
 function tsFilesUnder(dir: string): string[] {
   const out: string[] = [];
@@ -36,6 +40,7 @@ function tsFilesUnder(dir: string): string[] {
     const full = path.join(dir, entry.name);
     if (entry.isDirectory()) {
       if (entry.name === "genre-packs" || entry.name === "__tests__") continue;
+      if (EXCLUDED_DIRS.includes(full)) continue;
       out.push(...tsFilesUnder(full));
     } else if (entry.name.endsWith(".ts") && full !== EXCLUDED_FILE) {
       out.push(full);

@@ -11,7 +11,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import type { BridgeResponse } from "../types.js";
+import type { BridgeResponse } from "../shared/types.js";
 import {
   parseTrace,
   replay,

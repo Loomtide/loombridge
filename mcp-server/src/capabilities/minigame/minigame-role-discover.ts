@@ -7,7 +7,7 @@
  * binds evidence to a verdict and never changes gate behavior.
  */
 
-import type { BridgeResponse } from "../../types.js";
+import type { BridgeResponse } from "../../shared/types.js";
 import type { BridgeSend } from "../replay/unity-driver.js";
 import {
   AGE_BANDS,

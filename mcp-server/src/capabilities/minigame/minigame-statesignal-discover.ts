@@ -16,7 +16,7 @@
  */
 
 import type { BridgeSend } from "../replay/unity-driver.js";
-import type { BridgeResponse } from "../../types.js";
+import type { BridgeResponse } from "../../shared/types.js";
 
 /** The declared shape `minigame next` threads into `--state-signal <locator>:<component>:<property>`. */
 export interface StateSignalCandidate {

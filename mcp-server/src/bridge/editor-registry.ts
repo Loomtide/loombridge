@@ -6,7 +6,7 @@ import {
   scanEndpointDiscoveryRecords,
 } from "./editor-discovery.js";
 import type { McpStartupProjectBinding } from "./startup-binding.js";
-import type { UnityEndpointDiscoveryRecord } from "./types.js";
+import type { UnityEndpointDiscoveryRecord } from "../shared/types.js";
 import { UnityClient } from "./unity-client.js";
 
 export interface EditorRoute {

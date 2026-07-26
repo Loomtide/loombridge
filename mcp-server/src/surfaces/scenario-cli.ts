@@ -11,10 +11,10 @@ import {
   buildScenarioDryRunResult,
   ScenarioRunner,
   type ScenarioToolInvoker,
-} from "./scenario/runner.js";
-import { writeScenarioResult } from "./scenario/result-writer.js";
-import { validateScenarioDocument } from "./scenario/validator.js";
-import type { ScenarioDocument, ScenarioRunResult, ScenarioToolResult } from "./scenario/types.js";
+} from "../capabilities/scenario/runner.js";
+import { writeScenarioResult } from "../capabilities/scenario/result-writer.js";
+import { validateScenarioDocument } from "../capabilities/scenario/validator.js";
+import type { ScenarioDocument, ScenarioRunResult, ScenarioToolResult } from "../capabilities/scenario/types.js";
 
 interface CliArgs {
   scenarioPath: string;
@@ -150,7 +150,7 @@ function buildFatalFailureResult(scenarioName: string, message: string): Scenari
 async function createRuntime(): Promise<CliRuntime> {
   const transport = new StdioClientTransport({
     command: "node",
-    args: ["dist/index.js"],
+    args: ["dist/surfaces/index.js"],
     cwd: MCP_SERVER_DIR,
     stderr: "pipe",
   });

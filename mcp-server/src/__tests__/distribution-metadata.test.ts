@@ -28,8 +28,8 @@ test("RCL-O02: CLI package.json is the scoped public package that ships the bund
   assert.equal(pkg.name, "@loomtide/loombridge", "the scoped package name is @loomtide/loombridge");
 
   const bin = pkg.bin as Record<string, string>;
-  assert.equal(bin.loombridge, "dist/cli.js", "the `loombridge` bin must point at the CLI dispatcher");
-  assert.equal(bin["loombridge-mcp"], "dist/index.js", "the MCP stdio server bin must be preserved");
+  assert.equal(bin.loombridge, "dist/surfaces/cli.js", "the `loombridge` bin must point at the CLI dispatcher");
+  assert.equal(bin["loombridge-mcp"], "dist/surfaces/index.js", "the MCP stdio server bin must be preserved");
 
   const publishConfig = pkg.publishConfig as Record<string, unknown> | undefined;
   assert.equal(

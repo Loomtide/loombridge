@@ -20,7 +20,7 @@ import test from "node:test";
 
 import { discoverBackgroundCandidates } from "../capabilities/minigame/minigame-background-discover.js";
 import { assertValidMinigameContract } from "../capabilities/minigame/profiles/validator.js";
-import type { BridgeResponse } from "../types.js";
+import type { BridgeResponse } from "../shared/types.js";
 import type { MinigameContract } from "../capabilities/minigame/profiles/types.js";
 
 // orthoSize 5: at 16:9 (1.778) halfW ≈ 8.89; at 20:9 (2.222) halfW ≈ 11.11.

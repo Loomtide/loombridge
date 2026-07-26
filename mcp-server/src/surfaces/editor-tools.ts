@@ -1,10 +1,10 @@
-import type { UnityEndpointDiscoveryRecord } from "./types.js";
-import type { EditorStartupBindingDescriptor } from "./editor-registry.js";
+import type { UnityEndpointDiscoveryRecord } from "../shared/types.js";
+import type { EditorStartupBindingDescriptor } from "../bridge/editor-registry.js";
 import {
   collapseReloadChurn,
   normalizeProjectPathCanonical,
   projectPathCanonicalEquals,
-} from "./editor-discovery.js";
+} from "../bridge/editor-discovery.js";
 
 export const EDITOR_LIST_TOOL_NAME = "loombridge_editor_list";
 export const EDITOR_USE_TOOL_NAME = "loombridge_editor_use";

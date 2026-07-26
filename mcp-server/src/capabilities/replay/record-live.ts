@@ -8,7 +8,7 @@
  * persists the trace (e.g. to `.loombridge/replays/traces/<id>.trace.json`).
  */
 
-import { UnityClient } from "../../unity-client.js";
+import { UnityClient } from "../../bridge/unity-client.js";
 import { RecordingSession, type RecordingMeta } from "./record.js";
 import { resilientSend } from "./resilient-send.js";
 import { endLiveSession } from "./session.js";

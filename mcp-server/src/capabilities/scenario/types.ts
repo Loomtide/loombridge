@@ -1,4 +1,4 @@
-import type { EntityLocator, RuntimeComparator } from "../types.js";
+import type { EntityLocator, RuntimeComparator } from "../../shared/types.js";
 
 export type ScenarioStepKind =
   | "tool_call"

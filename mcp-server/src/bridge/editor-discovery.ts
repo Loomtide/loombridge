@@ -5,7 +5,7 @@ import { execFileSync } from "node:child_process";
 import type {
   UnityDiscoveryEndpoint,
   UnityEndpointDiscoveryRecord,
-} from "./types.js";
+} from "../shared/types.js";
 
 export const DISCOVERY_DIR_ENV_VAR = "LOOMBRIDGE_ENDPOINT_DISCOVERY_DIR";
 export const DISCOVERY_FILE_ENV_VAR = "LOOMBRIDGE_ENDPOINT_DISCOVERY_FILE";

@@ -5,7 +5,7 @@ import {
   type HeroRegion,
   type ManifestGeneratedExport,
   type RequiredAssetRole,
-} from "../capabilities/assets/asset-manifest.js";
+} from "./asset-manifest.js";
 import { createHash } from "node:crypto";
 
 export interface GeneratedAssetAnnotation {

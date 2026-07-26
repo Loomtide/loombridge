@@ -10,12 +10,12 @@ import { readAssetManifest, type AssetManifest, type RequiredAssetRole } from ".
 import { setDesignTarget } from "../capabilities/verification/design.js";
 import { runPlan } from "../capabilities/verification/plan.js";
 import { loombridgePaths } from "../domain/state.js";
-import type { GeneratedAssetAnnotation, GeneratedAssetExportInput } from "../asset-layer/generated-assets.js";
-import { adaptRegistryPackToCatalog } from "../asset-layer/catalog.js";
-import type { AssetCatalogRecord } from "../asset-layer/types.js";
-import type { CatalogFetch } from "../asset-layer/catalog-source.js";
-import { buildRegistrySelectionPlan } from "../asset-layer/manifest-selection.js";
-import { loadAssetProfile, loadRegistryPack } from "../asset-layer/registry.js";
+import type { GeneratedAssetAnnotation, GeneratedAssetExportInput } from "../capabilities/assets/generated-assets.js";
+import { adaptRegistryPackToCatalog } from "../capabilities/assets/catalog.js";
+import type { AssetCatalogRecord } from "../capabilities/assets/types.js";
+import type { CatalogFetch } from "../capabilities/assets/catalog-source.js";
+import { buildRegistrySelectionPlan } from "../capabilities/assets/manifest-selection.js";
+import { loadAssetProfile, loadRegistryPack } from "../capabilities/assets/registry.js";
 import { evaluateAssetSourceFidelity } from "../capabilities/verification/gates/asset-source-fidelity.js";
 
 const __filename = fileURLToPath(import.meta.url);

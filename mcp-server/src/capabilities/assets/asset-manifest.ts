@@ -19,7 +19,7 @@ import {
   knownAssetGenres,
   resolveAssetGenreProfile,
   type RequiredAssetRole,
-} from "../../asset-layer/asset-genre-profile.js";
+} from "./asset-genre-profile.js";
 import { isSafeCapturePath } from "../../domain/capture-paths.js";
 import { defaultGenreId } from "../genre/genre-registry.js";
 import type { LoombridgePaths } from "../../domain/state.js";

@@ -1,15 +1,15 @@
 import assert from "node:assert/strict";
 import path from "node:path";
 import test from "node:test";
-import { EditorRoutingError } from "../editor-registry.js";
-import type { UnityEndpointDiscoveryRecord } from "../types.js";
+import { EditorRoutingError } from "../bridge/editor-registry.js";
+import type { UnityEndpointDiscoveryRecord } from "../shared/types.js";
 import {
   buildUnityRoutingMetadata,
   createUnityClientForCli,
   resolveUnityProjectTarget,
   type ResolvedUnityClient,
   UNITY_PROJECT_ENV_VAR,
-} from "../capabilities/verification/unity-client-resolver.js";
+} from "../bridge/unity-client-resolver.js";
 
 function discoveryRecord(overrides: Partial<{
   sessionId: string;

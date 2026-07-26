@@ -4,10 +4,10 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import { buildScenarioDryRunResult } from "../scenario/runner.js";
-import { validateScenarioDocument } from "../scenario/validator.js";
-import { generatePlatformerAssetScenario } from "../asset-layer/platformer-scenario.js";
-import type { AssetPrepareReport } from "../asset-layer/types.js";
+import { buildScenarioDryRunResult } from "../capabilities/scenario/runner.js";
+import { validateScenarioDocument } from "../capabilities/scenario/validator.js";
+import { generatePlatformerAssetScenario } from "../capabilities/assets/platformer-scenario.js";
+import type { AssetPrepareReport } from "../capabilities/assets/types.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);

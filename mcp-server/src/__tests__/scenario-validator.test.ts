@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { validateScenarioDocument } from "../scenario/validator.js";
+import { validateScenarioDocument } from "../capabilities/scenario/validator.js";
 
 test("Scenario validator: accepts valid generic scenario", () => {
   const result = validateScenarioDocument({

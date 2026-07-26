@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import { loadAssetProfile, loadRegistryPack, validateRegistryPolicy } from "../asset-layer/registry.js";
-import type { AssetProfile, AssetRegistryEntry, AssetRegistryPack } from "../asset-layer/types.js";
+import { loadAssetProfile, loadRegistryPack, validateRegistryPolicy } from "../capabilities/assets/registry.js";
+import type { AssetProfile, AssetRegistryEntry, AssetRegistryPack } from "../capabilities/assets/types.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);

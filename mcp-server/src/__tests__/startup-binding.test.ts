@@ -6,7 +6,7 @@ import test from "node:test";
 import {
   findUnityProjectRoot,
   resolveMcpStartupProjectBinding,
-} from "../startup-binding.js";
+} from "../bridge/startup-binding.js";
 
 const ENV_VAR = "LOOMBRIDGE_UNITY_PROJECT";
 

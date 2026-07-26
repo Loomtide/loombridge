@@ -12,7 +12,7 @@
  * importing the CLI's top-level `main()`.
  */
 
-import type { BridgeResponse } from "../../types.js";
+import type { BridgeResponse } from "../../shared/types.js";
 import type { BridgeSend } from "./unity-driver.js";
 
 /** Ops whose side effect may already have happened when the socket dropped. */

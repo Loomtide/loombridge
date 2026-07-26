@@ -6,7 +6,7 @@
  */
 
 import WebSocket from "ws";
-import type { BridgeRequest, BridgeResponse } from "./types.js";
+import type { BridgeRequest, BridgeResponse } from "../shared/types.js";
 import {
   isHandshakeResponseData,
   parseBridgeResponse,

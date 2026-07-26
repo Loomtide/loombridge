@@ -8,9 +8,9 @@ import { fileURLToPath } from "node:url";
 import {
   buildAssetBrowserPayload,
   buildAssetBrowserPayloadFromPrepareReport,
-} from "../asset-layer/browser-payload.js";
-import type { CatalogFetch } from "../asset-layer/catalog-source.js";
-import { loadRegistryPack } from "../asset-layer/registry.js";
+} from "../capabilities/assets/browser-payload.js";
+import type { CatalogFetch } from "../capabilities/assets/catalog-source.js";
+import { loadRegistryPack } from "../capabilities/assets/registry.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);

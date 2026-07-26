@@ -18,12 +18,12 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 
-import type { UnityClient } from "../../unity-client.js";
-import type { BridgeResponse } from "../../types.js";
+import type { UnityClient } from "../../bridge/unity-client.js";
+import type { BridgeResponse } from "../../shared/types.js";
 import {
   buildUnityRoutingMetadata,
   createUnityClientForCli,
-} from "./unity-client-resolver.js";
+} from "../../bridge/unity-client-resolver.js";
 
 export interface CaptureFramingArgs {
   /** Objects to project into screen space, e.g. ["/Player", "/Level/Flag"]. */

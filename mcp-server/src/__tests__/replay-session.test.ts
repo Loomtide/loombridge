@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import type { UnityClient } from "../unity-client.js";
-import type { BridgeResponse } from "../types.js";
+import type { UnityClient } from "../bridge/unity-client.js";
+import type { BridgeResponse } from "../shared/types.js";
 import { endLiveSession } from "../capabilities/replay/session.js";
 
 function okSend(calls: string[]) {

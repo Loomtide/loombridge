@@ -69,7 +69,7 @@ const BACKGROUND_CANDIDATES_FILE = "background-candidates.json";
 import { ICON, unityConnectionHint } from "../../shared/cli-ui.js";
 import { printNextStep } from "./minigame-next.js";
 import type { FlowActuation } from "./flow-evidence.js";
-import { UnityClient } from "../../unity-client.js";
+import { UnityClient } from "../../bridge/unity-client.js";
 import { resolveCliProjectPin } from "../setup/cli-project-pin.js";
 import { resilientSend } from "../replay/resilient-send.js";
 import { endLiveSession } from "../replay/session.js";

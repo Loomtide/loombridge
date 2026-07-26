@@ -3,8 +3,8 @@ import fsSync from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { EditorRegistry, EditorRoutingError } from "../editor-registry.js";
-import type { UnityEndpointDiscoveryRecord } from "../types.js";
+import { EditorRegistry, EditorRoutingError } from "../bridge/editor-registry.js";
+import type { UnityEndpointDiscoveryRecord } from "../shared/types.js";
 
 function discoveryRecord(overrides: Partial<{
   sessionId: string;

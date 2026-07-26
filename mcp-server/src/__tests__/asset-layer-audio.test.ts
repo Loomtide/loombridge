@@ -4,10 +4,10 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import { readWavMetadata } from "../asset-layer/audio-metadata.js";
-import { prepareAssets } from "../asset-layer/prepare-cli.js";
-import { loadAssetProfile, loadRegistryPack } from "../asset-layer/registry.js";
-import { validatePreparedAudio } from "../asset-layer/validator.js";
+import { readWavMetadata } from "../capabilities/assets/audio-metadata.js";
+import { prepareAssets } from "../capabilities/assets/prepare-cli.js";
+import { loadAssetProfile, loadRegistryPack } from "../capabilities/assets/registry.js";
+import { validatePreparedAudio } from "../capabilities/assets/validator.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);

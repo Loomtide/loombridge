@@ -35,13 +35,23 @@ import { fileURLToPath } from "node:url";
 
 const SRC = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "src");
 
-type Layer = "shared" | "domain" | "capabilities" | "root";
+type Layer = "shared" | "domain" | "bridge" | "capabilities" | "surfaces" | "root";
 
-/** Layers a file may NOT import from. */
+/**
+ * Layers a file may NOT import from.
+ *
+ *   surfaces -> capabilities -> { bridge, domain } -> shared
+ *
+ * `bridge` (Unity transport, editor discovery/registry) and `domain` (the shared nouns)
+ * are siblings: neither needs the other, and keeping them independent is what stops the
+ * wire protocol leaking into contract vocabulary.
+ */
 const FORBIDDEN: Record<Layer, Layer[]> = {
-  shared: ["domain", "capabilities"],
-  domain: ["capabilities"],
-  capabilities: [],
+  shared: ["domain", "bridge", "capabilities", "surfaces"],
+  domain: ["bridge", "capabilities", "surfaces"],
+  bridge: ["domain", "capabilities", "surfaces"],
+  capabilities: ["surfaces"],
+  surfaces: [],
   root: [],
 };
 
@@ -49,7 +59,9 @@ export function layerOf(relPath: string): Layer {
   const top = relPath.split("/")[0];
   if (top === "shared") return "shared";
   if (top === "domain") return "domain";
+  if (top === "bridge") return "bridge";
   if (top === "capabilities") return "capabilities";
+  if (top === "surfaces") return "surfaces";
   return "root";
 }
 

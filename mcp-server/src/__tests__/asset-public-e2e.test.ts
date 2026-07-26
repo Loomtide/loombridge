@@ -7,18 +7,18 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import { prepareAssets } from "../asset-layer/prepare-cli.js";
-import { regeneratePublicSeed } from "../asset-layer/public-seed-source.js";
+import { prepareAssets } from "../capabilities/assets/prepare-cli.js";
+import { regeneratePublicSeed } from "../capabilities/assets/public-seed-source.js";
 import {
   buildAssetBrowserPayload,
   type AssetBrowserAsset,
-} from "../asset-layer/browser-payload.js";
-import { HttpAssetProvider } from "../asset-layer/providers/http-provider.js";
-import { LocalAssetProvider } from "../asset-layer/providers/local-provider.js";
-import { StubGenerationProvider } from "../asset-layer/providers/stub-generation-provider.js";
-import { HttpCatalogSource, selectAssetsFromCatalog } from "../asset-layer/catalog-source.js";
-import type { AssetCatalogRecord } from "../asset-layer/types.js";
-import { LocalCatalogSource } from "../asset-layer/catalog-source.js";
+} from "../capabilities/assets/browser-payload.js";
+import { HttpAssetProvider } from "../capabilities/assets/providers/http-provider.js";
+import { LocalAssetProvider } from "../capabilities/assets/providers/local-provider.js";
+import { StubGenerationProvider } from "../capabilities/assets/providers/stub-generation-provider.js";
+import { HttpCatalogSource, selectAssetsFromCatalog } from "../capabilities/assets/catalog-source.js";
+import type { AssetCatalogRecord } from "../capabilities/assets/types.js";
+import { LocalCatalogSource } from "../capabilities/assets/catalog-source.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);

@@ -8,8 +8,8 @@ import {
   buildAssetPickerSlotsFromRegistrySelectionPlan,
   buildRegistryHeroShotInputs,
   buildRegistrySelectionPlan,
-} from "../asset-layer/manifest-selection.js";
-import { loadAssetProfile, loadRegistryPack } from "../asset-layer/registry.js";
+} from "../capabilities/assets/manifest-selection.js";
+import { loadAssetProfile, loadRegistryPack } from "../capabilities/assets/registry.js";
 import { createDraftAssetManifest, validateAssetManifest } from "../capabilities/assets/asset-manifest.js";
 import { evaluateAssetSourceFidelity } from "../capabilities/verification/gates/asset-source-fidelity.js";
 

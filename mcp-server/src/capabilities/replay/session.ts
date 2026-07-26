@@ -16,7 +16,7 @@
  * degrade gracefully around.
  */
 
-import type { UnityClient } from "../../unity-client.js";
+import type { UnityClient } from "../../bridge/unity-client.js";
 import type { BridgeSend } from "./unity-driver.js";
 
 export async function endLiveSession(send: BridgeSend, client: UnityClient): Promise<void> {

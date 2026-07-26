@@ -20,7 +20,7 @@
  * exported + unit-tested with no live bridge.
  */
 
-import type { BridgeResponse } from "../../types.js";
+import type { BridgeResponse } from "../../shared/types.js";
 import type { BridgeSend } from "../replay/unity-driver.js";
 import type {
   BackgroundCamera,

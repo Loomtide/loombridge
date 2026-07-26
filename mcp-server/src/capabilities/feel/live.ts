@@ -1,13 +1,13 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 
-import type { BridgeResponse } from "../../types.js";
-import type { UnityClient } from "../../unity-client.js";
+import type { BridgeResponse } from "../../shared/types.js";
+import type { UnityClient } from "../../bridge/unity-client.js";
 import {
   buildUnityRoutingMetadata,
   createUnityClientForCli,
   type UnityRoutingMetadata,
-} from "../verification/unity-client-resolver.js";
+} from "../../bridge/unity-client-resolver.js";
 import { runFeelCaptureContract } from "./run.js";
 import type {
   FeelCaptureContract,

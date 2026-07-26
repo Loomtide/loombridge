@@ -5,11 +5,11 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import { readImageMetadata } from "../asset-layer/image-metadata.js";
-import { loadAssetProfile, loadRegistryPack, selectAssets } from "../asset-layer/registry.js";
-import { prepareAssets } from "../asset-layer/prepare-cli.js";
-import type { CatalogFetch } from "../asset-layer/catalog-source.js";
-import type { AssetProviderAdapter } from "../asset-layer/providers/types.js";
+import { readImageMetadata } from "../capabilities/assets/image-metadata.js";
+import { loadAssetProfile, loadRegistryPack, selectAssets } from "../capabilities/assets/registry.js";
+import { prepareAssets } from "../capabilities/assets/prepare-cli.js";
+import type { CatalogFetch } from "../capabilities/assets/catalog-source.js";
+import type { AssetProviderAdapter } from "../capabilities/assets/providers/types.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);

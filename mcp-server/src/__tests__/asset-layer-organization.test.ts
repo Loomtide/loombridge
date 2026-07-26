@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import { planUnitySpriteImport } from "../asset-layer/organization.js";
-import { loadAssetProfile, loadRegistryPack } from "../asset-layer/registry.js";
+import { planUnitySpriteImport } from "../capabilities/assets/organization.js";
+import { loadAssetProfile, loadRegistryPack } from "../capabilities/assets/registry.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);

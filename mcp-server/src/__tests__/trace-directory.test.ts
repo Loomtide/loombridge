@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import os from "node:os";
 import path from "node:path";
-import { resolveTraceDirectory, TRACE_DIR_ENV_VAR } from "../trace-directory.js";
+import { resolveTraceDirectory, TRACE_DIR_ENV_VAR } from "../bridge/trace-directory.js";
 
 test("trace dir: a bound project writes under its .loombridge/replays/traces", () => {
   const project = "/Users/dev/Games/MyGame";

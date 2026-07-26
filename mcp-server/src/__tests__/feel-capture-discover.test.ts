@@ -11,7 +11,7 @@ import {
 import { discoverFeelSetup } from "../capabilities/feel/discover-live.js";
 import { proposeFeelCaptureContract } from "../capabilities/feel/setup.js";
 import { run as runVerifyCli } from "../capabilities/verification/verify.js";
-import type { BridgeResponse } from "../types.js";
+import type { BridgeResponse } from "../shared/types.js";
 
 /** Run the verify CLI with stderr usage noise suppressed. */
 async function quietRun(args: string[]): Promise<number> {

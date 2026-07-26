@@ -17,7 +17,7 @@ import {
   scoreStateSignalProperty,
   type StateSignalCandidate,
 } from "../capabilities/minigame/minigame-statesignal-discover.js";
-import type { BridgeResponse } from "../types.js";
+import type { BridgeResponse } from "../shared/types.js";
 
 const PHASES = ["Mix", "Cook", "Decorate", "Serve"];
 

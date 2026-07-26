@@ -62,7 +62,7 @@ export function classifyServerCommand(command: string): ServerMatch | null {
     if (t === "mcp-server/dist/index.js" || t.endsWith("/mcp-server/dist/index.js")) {
       return "path"; // unambiguous — prefer it over any bare token on the same line
     }
-    if (t === "dist/index.js") bare = true;
+    if (t === "dist/surfaces/index.js" || t === "dist/index.js") bare = true;
   }
   return bare ? "bare" : null;
 }

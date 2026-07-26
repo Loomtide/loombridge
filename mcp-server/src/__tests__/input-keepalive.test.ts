@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { InputSessionKeepalive, type KeepaliveScheduler } from "../input-keepalive.js";
+import { InputSessionKeepalive, type KeepaliveScheduler } from "../bridge/input-keepalive.js";
 
 /** A scheduler whose intervals fire only when the test calls fireAll(). */
 class FakeScheduler implements KeepaliveScheduler {

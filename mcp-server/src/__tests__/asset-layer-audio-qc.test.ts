@@ -8,7 +8,7 @@ import {
   analyzeOggBuffer,
   analyzeWavBuffer,
   type WavQcMetrics,
-} from "../asset-layer/audio-qc.js";
+} from "../capabilities/assets/audio-qc.js";
 
 // ─────────────────────────────────────────────
 // WAV fixture builders (in-test, deterministic)

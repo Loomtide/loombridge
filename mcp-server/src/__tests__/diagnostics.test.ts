@@ -10,7 +10,7 @@ import {
   classifyRouteHealth,
   formatRouteHealthLine,
   type SiblingCandidate,
-} from "../diagnostics.js";
+} from "../shared/diagnostics.js";
 
 test("classifyServerCommand: path-qualified forms are trusted, bare is flagged, look-alikes rejected", () => {
   // Path-qualified (unambiguous) — see .mcp.json + loombridge-install-locally.sh:

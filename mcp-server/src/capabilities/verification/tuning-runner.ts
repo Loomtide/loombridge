@@ -12,8 +12,8 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 
-import type { UnityClient } from "../../unity-client.js";
-import type { BridgeResponse, EntityLocator } from "../../types.js";
+import type { UnityClient } from "../../bridge/unity-client.js";
+import type { BridgeResponse, EntityLocator } from "../../shared/types.js";
 import type { NumericTarget, ToleranceBand, AcceptanceContract } from "./types.js";
 import { assertValidAcceptanceContract } from "./validator.js";
 import { bandWindow } from "./gates/feel.js";
@@ -21,7 +21,7 @@ import {
   buildUnityRoutingMetadata,
   createUnityClientForCli,
   type UnityRoutingMetadata,
-} from "./unity-client-resolver.js";
+} from "../../bridge/unity-client-resolver.js";
 
 export type TuningTrialStatus = "pass" | "warn" | "fail";
 

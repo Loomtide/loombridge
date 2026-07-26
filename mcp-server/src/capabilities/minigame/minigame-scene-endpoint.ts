@@ -26,8 +26,8 @@ import {
   normalizeProjectPathCanonical,
   projectPathCanonicalEquals,
   TARGET_PROJECT_ENV_VAR,
-} from "../../editor-discovery.js";
-import type { UnityEndpointDiscoveryRecord } from "../../types.js";
+} from "../../bridge/editor-discovery.js";
+import type { UnityEndpointDiscoveryRecord } from "../../shared/types.js";
 
 export interface EditorTarget {
   projectPathCanonical: string;

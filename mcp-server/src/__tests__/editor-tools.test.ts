@@ -6,8 +6,8 @@ import {
   EDITOR_LIST_TOOL_NAME,
   EDITOR_USE_TOOL,
   EDITOR_USE_TOOL_NAME,
-} from "../editor-tools.js";
-import type { UnityEndpointDiscoveryRecord } from "../types.js";
+} from "../surfaces/editor-tools.js";
+import type { UnityEndpointDiscoveryRecord } from "../shared/types.js";
 
 function record(overrides: Partial<UnityEndpointDiscoveryRecord> = {}): UnityEndpointDiscoveryRecord {
   return {

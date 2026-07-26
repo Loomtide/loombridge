@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { ScenarioRunner } from "../scenario/runner.js";
-import type { ScenarioDocument, ScenarioToolCallRequest, ScenarioToolResult } from "../scenario/types.js";
+import { ScenarioRunner } from "../capabilities/scenario/runner.js";
+import type { ScenarioDocument, ScenarioToolCallRequest, ScenarioToolResult } from "../capabilities/scenario/types.js";
 
 function textResult(payload: Record<string, unknown>): ScenarioToolResult {
   return {

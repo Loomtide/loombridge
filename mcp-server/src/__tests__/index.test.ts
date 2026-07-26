@@ -25,22 +25,22 @@ import {
   buildConsoleErrorHint,
   buildReloadReconnectHint,
   isDomainReloadTriggeringCommand,
-} from "../index.js";
-import type { ContextualHint } from "../index.js";
-import type { BridgePreflightResult } from "../preflight/bridge-preflight.js";
-import type { BridgeResponse } from "../types.js";
-import { EditorRegistry, EditorRoutingError } from "../editor-registry.js";
-import { resolveMcpStartupProjectBinding } from "../startup-binding.js";
-import { UnityConnectionError } from "../unity-client.js";
-import { OpRegistry } from "../op-registry.js";
+} from "../surfaces/index.js";
+import type { ContextualHint } from "../surfaces/index.js";
+import type { BridgePreflightResult } from "../bridge/preflight/bridge-preflight.js";
+import type { BridgeResponse } from "../shared/types.js";
+import { EditorRegistry, EditorRoutingError } from "../bridge/editor-registry.js";
+import { resolveMcpStartupProjectBinding } from "../bridge/startup-binding.js";
+import { UnityConnectionError } from "../bridge/unity-client.js";
+import { OpRegistry } from "../surfaces/op-registry.js";
 import {
   buildEditorListPayload,
   EDITOR_LIST_TOOL,
   EDITOR_LIST_TOOL_NAME,
   EDITOR_USE_TOOL,
   EDITOR_USE_TOOL_NAME,
-} from "../editor-tools.js";
-import type { UnityEndpointDiscoveryRecord } from "../types.js";
+} from "../surfaces/editor-tools.js";
+import type { UnityEndpointDiscoveryRecord } from "../shared/types.js";
 
 // ─────────────────────────────────────────────
 // Tests for response formatting helpers

@@ -14,7 +14,7 @@ import {
   type ReplayDriver,
 } from "../capabilities/replay/index.js";
 import { captureOutcomes, observeLive } from "../capabilities/replay/observe-live.js";
-import type { BridgeResponse } from "../types.js";
+import type { BridgeResponse } from "../shared/types.js";
 
 const click = (path: string, tMs: number): ObservedClick => ({ tMs, locator: { path }, button: 0 });
 

@@ -9,7 +9,7 @@ import {
   resolveGeneratedAssetsForSlices,
   type GeneratedAssetAnnotation,
   type GeneratedAssetExportInput,
-} from "../asset-layer/generated-assets.js";
+} from "../capabilities/assets/generated-assets.js";
 import { createDraftAssetManifest, validateAssetManifest } from "../capabilities/assets/asset-manifest.js";
 
 const HASH = "c".repeat(64);

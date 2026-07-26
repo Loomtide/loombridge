@@ -1,4 +1,4 @@
-import type { HandshakeResponse } from "../types.js";
+import type { HandshakeResponse } from "../../shared/types.js";
 import {
   classifyConnectionError,
   type ConnectionDiagnostics,

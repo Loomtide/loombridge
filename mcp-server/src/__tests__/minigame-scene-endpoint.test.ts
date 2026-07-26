@@ -5,7 +5,7 @@ import {
   distinctEditorProjects,
   resolveSingleEditorTarget,
 } from "../capabilities/minigame/minigame-scene-endpoint.js";
-import type { UnityEndpointDiscoveryRecord } from "../types.js";
+import type { UnityEndpointDiscoveryRecord } from "../shared/types.js";
 
 /** A minimal live, routable discovery record for a project (one IPC endpoint, distinct pid). */
 function record(

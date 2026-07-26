@@ -3,7 +3,7 @@ import {
   type AssetManifest,
   type ManifestAsset,
   type ManifestRegistrySelection,
-} from "../capabilities/assets/asset-manifest.js";
+} from "./asset-manifest.js";
 import {
   resolveAssetGenreProfile,
   type RoleSelectionRule,

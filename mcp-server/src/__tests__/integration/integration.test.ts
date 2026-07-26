@@ -18,7 +18,7 @@ describe("MCP Integration: server over stdio", { timeout: 30000 }, () => {
   before(async () => {
     transport = new StdioClientTransport({
       command: "node",
-      args: ["dist/index.js"],
+      args: ["dist/surfaces/index.js"],
       cwd: MCP_SERVER_DIR,
       stderr: "pipe",
     });

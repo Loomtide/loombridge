@@ -18,7 +18,7 @@
  * device-invariant capture, but applied to MANY objects discovered from the hierarchy.
  */
 
-import type { BridgeResponse } from "../../types.js";
+import type { BridgeResponse } from "../../shared/types.js";
 import type { BridgeSend } from "../replay/unity-driver.js";
 import {
   COVERAGE_EPSILON,

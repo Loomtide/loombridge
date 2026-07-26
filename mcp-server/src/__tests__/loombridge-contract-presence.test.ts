@@ -35,15 +35,15 @@ import {
   LOOMBRIDGE_DONENESS_TOOL_NAME,
   LOOMBRIDGE_MOBILE_AUDIT_TOOL,
   LOOMBRIDGE_MOBILE_AUDIT_TOOL_NAME,
-} from "../loombridge-bridge-tools.js";
-import { LOOMBRIDGE_CORE_TOOLS } from "../index.js";
+} from "../surfaces/loombridge-bridge-tools.js";
+import { LOOMBRIDGE_CORE_TOOLS } from "../surfaces/index.js";
 import {
   buildMobileAuditReport,
   stableStringify,
   DEFAULT_THRESHOLDS,
   type AuditPayload,
 } from "../capabilities/mobile/mobile-audit-report.js";
-import { OpRegistry } from "../op-registry.js";
+import { OpRegistry } from "../surfaces/op-registry.js";
 import { writeApprovedAssetManifestForDesign } from "./helpers/asset-manifest-fixture.js";
 
 /** Capture console.error/log around a verb call (mirrors the CLI's own output surface). */

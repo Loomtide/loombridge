@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { validateOpArguments } from "../arg-validation.js";
+import { validateOpArguments } from "../shared/arg-validation.js";
 
 /** The real shape shared by scene.get_bounds / component.list and friends. */
 const LOCATOR_SCHEMA = {

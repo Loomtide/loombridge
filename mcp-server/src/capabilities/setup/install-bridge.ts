@@ -34,7 +34,7 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { REQUIRED_PROTOCOL_VERSION } from "../../preflight/prerequisite-checks.js";
+import { REQUIRED_PROTOCOL_VERSION } from "../../bridge/preflight/prerequisite-checks.js";
 import { resolveBuildStamp } from "../../shared/build-stamp.js";
 import {
   BridgeInstallError as RuntimeFailure,

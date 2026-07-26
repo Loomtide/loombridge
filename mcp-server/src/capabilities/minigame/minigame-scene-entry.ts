@@ -32,9 +32,9 @@ import { inspectWorkspace, defaultWorkspace } from "./minigame-next.js";
 import { flatReplayLayout } from "../../domain/state.js";
 import { parseTrace } from "../replay/parse.js";
 import { assertValidMinigameContract } from "./profiles/validator.js";
-import { UnityClient } from "../../unity-client.js";
-import { scanEndpointDiscoveryRecords, TARGET_PROJECT_ENV_VAR } from "../../editor-discovery.js";
-import type { BridgeResponse } from "../../types.js";
+import { UnityClient } from "../../bridge/unity-client.js";
+import { scanEndpointDiscoveryRecords, TARGET_PROJECT_ENV_VAR } from "../../bridge/editor-discovery.js";
+import type { BridgeResponse } from "../../shared/types.js";
 import type { MinigameContract } from "./profiles/types.js";
 
 /** Re-exec THIS CLI with the given argv, inheriting the terminal (so each shelled step looks hand-typed).

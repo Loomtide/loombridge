@@ -4,12 +4,12 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import { LocalCatalogSource } from "../asset-layer/catalog-source.js";
+import { LocalCatalogSource } from "../capabilities/assets/catalog-source.js";
 import {
   normalizeCatalogRecord,
   validatePublicCatalogRecord,
-} from "../asset-layer/catalog.js";
-import type { AssetCatalogRecord } from "../asset-layer/types.js";
+} from "../capabilities/assets/catalog.js";
+import type { AssetCatalogRecord } from "../capabilities/assets/types.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);

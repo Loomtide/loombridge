@@ -3,9 +3,9 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { checkHandoffConsistency } from "../asset-layer/handoff-consistency.js";
-import { buildPrepareDiagnostics } from "../asset-layer/reporting.js";
-import type { AssetPrepareReport, PreparedAsset } from "../asset-layer/types.js";
+import { checkHandoffConsistency } from "../capabilities/assets/handoff-consistency.js";
+import { buildPrepareDiagnostics } from "../capabilities/assets/reporting.js";
+import type { AssetPrepareReport, PreparedAsset } from "../capabilities/assets/types.js";
 
 function acceptedAsset(id: string, unityPath: string, kind: "sprite" | "audio" = "sprite"): PreparedAsset {
   return {

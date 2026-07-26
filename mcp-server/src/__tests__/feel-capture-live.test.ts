@@ -6,7 +6,7 @@ import test from "node:test";
 
 import { runFeelCaptureLive, type FeelCaptureLiveClient } from "../capabilities/feel/live.js";
 import type { FeelCaptureContract } from "../capabilities/feel/types.js";
-import type { BridgeResponse } from "../types.js";
+import type { BridgeResponse } from "../shared/types.js";
 
 function success(data: unknown): BridgeResponse {
   return { id: crypto.randomUUID(), status: "success", data, timestamp: Date.now() };

@@ -3,9 +3,9 @@ import test from "node:test";
 import {
   BridgePreflight,
   formatPreflightBlockedMessage,
-} from "../../preflight/bridge-preflight.js";
-import type { HandshakeResponse } from "../../types.js";
-import { UnityConnectionError, type ConnectionDiagnostics } from "../../unity-client.js";
+} from "../../bridge/preflight/bridge-preflight.js";
+import type { HandshakeResponse } from "../../shared/types.js";
+import { UnityConnectionError, type ConnectionDiagnostics } from "../../bridge/unity-client.js";
 
 interface StubClientState {
   isConnected: boolean;

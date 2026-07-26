@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import { loombridgeCli } from "../cli.js";
+import { loombridgeCli } from "../surfaces/cli.js";
 import { runBuild } from "../capabilities/verification/build.js";
 import { setDesignTarget } from "../capabilities/verification/design.js";
 import { run, runAsk } from "../capabilities/verification/ask.js";

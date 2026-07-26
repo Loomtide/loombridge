@@ -3,16 +3,16 @@
   "version": "0.3.2",
   "description": "MCP server + CLI for Loombridge \u2014 build and verify Unity games with AI agents; the doneness gate refuses to call a build done on the agent's word",
   "type": "module",
-  "main": "dist/index.js",
+  "main": "dist/surfaces/index.js",
   "license": "Apache-2.0",
   "homepage": "https://loomtide.ai",
   "publishConfig": {
     "access": "public"
   },
   "bin": {
-    "loombridge": "dist/cli.js",
-    "loombridge-mcp-server": "dist/cli.js",
-    "loombridge-mcp": "dist/index.js",
+    "loombridge": "dist/surfaces/cli.js",
+    "loombridge-mcp-server": "dist/surfaces/cli.js",
+    "loombridge-mcp": "dist/surfaces/index.js",
     "loombridge-run-gates": "dist/capabilities/verification/run-gates.js",
     "loombridge-capture-runner": "dist/capabilities/verification/capture-runner.js",
     "loombridge-analyze-frames": "dist/capabilities/verification/analyze-frames.js"

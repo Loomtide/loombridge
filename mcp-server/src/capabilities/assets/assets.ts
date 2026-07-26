@@ -15,20 +15,20 @@ import {
   buildGeneratedAssetPlan,
   type GeneratedAssetAnnotation,
   type GeneratedAssetExportInput,
-} from "../../asset-layer/generated-assets.js";
+} from "./generated-assets.js";
 import {
   applyRegistrySelectionsToManifest,
   buildAssetPickerSlotsFromRegistrySelectionPlan,
   buildRegistrySelectionPlan,
-} from "../../asset-layer/manifest-selection.js";
+} from "./manifest-selection.js";
 import {
   ApiCatalogSource,
   catalogRecordsToRegistryPack,
   type CatalogFetch,
   HttpCatalogSource,
   LocalCatalogSource,
-} from "../../asset-layer/catalog-source.js";
-import { loadAssetProfile, loadRegistryPack } from "../../asset-layer/registry.js";
+} from "./catalog-source.js";
+import { loadAssetProfile, loadRegistryPack } from "./registry.js";
 import {
   assertValidAssetManifest,
   readAssetManifest,

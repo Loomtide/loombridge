@@ -15,7 +15,7 @@ import type {
   UnityEndpointDiscoveryRecord,
   UnityTransportMode,
   UnityDiscoveryEndpoint,
-} from "./types.js";
+} from "../shared/types.js";
 import {
   isHandshakeResponseData,
   parseBridgeResponse,

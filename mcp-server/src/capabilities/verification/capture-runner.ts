@@ -12,13 +12,13 @@ import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 
-import type { UnityClient } from "../../unity-client.js";
-import type { BridgeResponse } from "../../types.js";
+import type { UnityClient } from "../../bridge/unity-client.js";
+import type { BridgeResponse } from "../../shared/types.js";
 import {
   buildUnityRoutingMetadata,
   createUnityClientForCli,
   UNITY_PROJECT_ENV_VAR,
-} from "./unity-client-resolver.js";
+} from "../../bridge/unity-client-resolver.js";
 import { analyzeVisualArtifactFrames, readPng, type NamedFrame } from "./analyze-frames.js";
 import type { RenderFrameInput, RenderFrameSample } from "./gates/render-frame.js";
 import { runGates } from "./run-gates.js";

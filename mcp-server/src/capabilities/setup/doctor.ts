@@ -17,7 +17,7 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import process from "node:process";
 
-import { REQUIRED_PROTOCOL_VERSION } from "../../preflight/prerequisite-checks.js";
+import { REQUIRED_PROTOCOL_VERSION } from "../../bridge/preflight/prerequisite-checks.js";
 import { resolveBuildStamp } from "../../shared/build-stamp.js";
 import {
   InstallMetadata,
@@ -401,8 +401,8 @@ async function checkLiveBridge(checks: DoctorCheck[], project?: string): Promise
       }
     | undefined;
   try {
-    const { UnityClient, isRouteMismatchError } = await import("../../unity-client.js");
-    const { evaluatePrerequisiteChecks } = await import("../../preflight/prerequisite-checks.js");
+    const { UnityClient, isRouteMismatchError } = await import("../../bridge/unity-client.js");
+    const { evaluatePrerequisiteChecks } = await import("../../bridge/preflight/prerequisite-checks.js");
     // Pin to --project so we validate the INTENDED editor, not whatever bridge is
     // reachable on the ports (a different project could be open).
     client = new UnityClient(

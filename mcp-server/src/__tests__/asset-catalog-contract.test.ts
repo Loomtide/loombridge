@@ -9,8 +9,8 @@ import {
   normalizeCatalogRecord,
   parseCatalogJsonl,
   validateCatalogRecord,
-} from "../asset-layer/catalog.js";
-import type { AssetCatalogRecord, AssetRegistryPack } from "../asset-layer/types.js";
+} from "../capabilities/assets/catalog.js";
+import type { AssetCatalogRecord, AssetRegistryPack } from "../capabilities/assets/types.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);

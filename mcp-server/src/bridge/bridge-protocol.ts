@@ -1,4 +1,4 @@
-import type { BridgeResponse, HandshakeResponse } from "./types.js";
+import type { BridgeResponse, HandshakeResponse } from "../shared/types.js";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);

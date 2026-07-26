@@ -1,4 +1,4 @@
-import type { EntityLocator } from "../../types.js";
+import type { EntityLocator } from "../../shared/types.js";
 
 export const VERIFICATION_SCENARIO_SCHEMA_VERSION = "1";
 

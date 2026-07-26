@@ -219,7 +219,7 @@ import {
   formatConnectionDiagnostics,
   ipcWebSocketUrl,
   isRouteMismatchError,
-} from "../unity-client.js";
+} from "../bridge/unity-client.js";
 
 // --- IPC transport URL ---
 

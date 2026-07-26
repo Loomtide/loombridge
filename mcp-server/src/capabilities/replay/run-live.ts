@@ -12,7 +12,7 @@
  * re-exported through `index.ts` alongside this.
  */
 
-import { UnityClient } from "../../unity-client.js";
+import { UnityClient } from "../../bridge/unity-client.js";
 import { replay } from "./engine.js";
 import { resilientSend } from "./resilient-send.js";
 import { endLiveSession } from "./session.js";

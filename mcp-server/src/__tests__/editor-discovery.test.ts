@@ -14,8 +14,8 @@ import {
   resolveDiscoveryDirectory,
   scanEndpointDiscoveryRecords,
   selectEndpointDiscoveryRecord,
-} from "../editor-discovery.js";
-import type { UnityEndpointDiscoveryRecord } from "../types.js";
+} from "../bridge/editor-discovery.js";
+import type { UnityEndpointDiscoveryRecord } from "../shared/types.js";
 
 function discoveryRecord(overrides: Partial<{
   sessionId: string;

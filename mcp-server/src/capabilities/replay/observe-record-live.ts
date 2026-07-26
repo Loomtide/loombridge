@@ -15,7 +15,7 @@
  * connect/reconnect/cleanup bootstrap around it.
  */
 
-import { UnityClient } from "../../unity-client.js";
+import { UnityClient } from "../../bridge/unity-client.js";
 import {
   observedClicksToTrace,
   observedEdgesToTrace,

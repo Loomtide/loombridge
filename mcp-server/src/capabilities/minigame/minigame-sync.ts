@@ -11,7 +11,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 
-import { UnityClient } from "../../unity-client.js";
+import { UnityClient } from "../../bridge/unity-client.js";
 import { ICON, tildify, unityConnectionHint } from "../../shared/cli-ui.js";
 import { classifyRoleCandidates, type RoleCandidate, type RoleCandidates } from "./minigame-role-discover.js";
 import { defaultWorkspace, findContract } from "./minigame-next.js";

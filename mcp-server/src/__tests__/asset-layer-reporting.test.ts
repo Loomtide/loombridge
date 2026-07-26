@@ -4,9 +4,9 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import { prepareAssets } from "../asset-layer/prepare-cli.js";
-import { buildPrepareDiagnostics, renderAttributionMarkdown, writeAttributionMarkdown } from "../asset-layer/reporting.js";
-import type { AssetPrepareReport, PreparedAsset } from "../asset-layer/types.js";
+import { prepareAssets } from "../capabilities/assets/prepare-cli.js";
+import { buildPrepareDiagnostics, renderAttributionMarkdown, writeAttributionMarkdown } from "../capabilities/assets/reporting.js";
+import type { AssetPrepareReport, PreparedAsset } from "../capabilities/assets/types.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);

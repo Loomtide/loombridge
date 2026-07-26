@@ -154,7 +154,7 @@ GameObjects are addressed by **locators**, not instance IDs (instance IDs die on
 
 ## The `loombridge` CLI Product Layer
 
-`loombridge` (bin → `mcp-server/dist/cli.js`) is a deterministic, engine-agnostic dispatcher; the MCP stdio server runs as `loombridge mcp` (or the `loombridge-mcp` bin). Intent routing and Unity orchestration live in agent prose (`commands/loombridge/*.md`); the CLI owns state, gates, and verdicts. **Two-track discipline:** deterministic checks live in the CLI; model judgment (VLM review) is advisory and never folded into a deterministic verdict.
+`loombridge` (bin → `mcp-server/dist/surfaces/cli.js`) is a deterministic, engine-agnostic dispatcher; the MCP stdio server runs as `loombridge mcp` (or the `loombridge-mcp` bin). Intent routing and Unity orchestration live in agent prose (`commands/loombridge/*.md`); the CLI owns state, gates, and verdicts. **Two-track discipline:** deterministic checks live in the CLI; model judgment (VLM review) is advisory and never folded into a deterministic verdict.
 
 | Verb | What it does | Mutates | Needs bridge |
 |------|--------------|---------|--------------|

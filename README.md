@@ -65,7 +65,7 @@ Two design choices set the safety floor:
 
 ## The refusal, for real
 
-This is verbatim output from this repository's CLI (`node mcp-server/dist/cli.js`), run in
+This is verbatim output from this repository's CLI (`node mcp-server/dist/surfaces/cli.js`), run in
 an empty scratch directory. `plan` scaffolds `.loombridge/`; `doneness` is then asked to
 certify the build with no verification run behind it — and refuses, non-zero, with every
 reason listed:

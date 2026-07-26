@@ -33,16 +33,16 @@ import {
   UnityConnectionError,
   formatConnectionDiagnostics,
   isRouteMismatchError,
-} from "./unity-client.js";
-import { TraceRecorder, type TraceEntry } from "./trace-recorder.js";
+} from "../bridge/unity-client.js";
+import { TraceRecorder, type TraceEntry } from "../bridge/trace-recorder.js";
 import { OpRegistry, normalizeBatchOperations } from "./op-registry.js";
-import type { BridgeResponse } from "./types.js";
+import type { BridgeResponse } from "../shared/types.js";
 import {
   BridgePreflight,
   formatPreflightBlockedMessage,
   type BridgePreflightResult,
-} from "./preflight/bridge-preflight.js";
-import { shouldRunDeterministicPreflight } from "./preflight/prerequisite-checks.js";
+} from "../bridge/preflight/bridge-preflight.js";
+import { shouldRunDeterministicPreflight } from "../bridge/preflight/prerequisite-checks.js";
 import {
   buildEditorListPayload,
   EDITOR_LIST_TOOL,
@@ -72,13 +72,13 @@ import {
   EditorRegistry,
   EditorRoutingError,
   type EditorRoute,
-} from "./editor-registry.js";
-import { resolveMcpStartupProjectBinding } from "./startup-binding.js";
-import { collectSiblingServers, formatDoctorLines } from "./diagnostics.js";
-import { InputSessionKeepalive } from "./input-keepalive.js";
-import { resolveBuildStamp } from "./shared/build-stamp.js";
-import { resolveTraceDirectory } from "./trace-directory.js";
-import { validateOpArguments } from "./arg-validation.js";
+} from "../bridge/editor-registry.js";
+import { resolveMcpStartupProjectBinding } from "../bridge/startup-binding.js";
+import { collectSiblingServers, formatDoctorLines } from "../shared/diagnostics.js";
+import { InputSessionKeepalive } from "../bridge/input-keepalive.js";
+import { resolveBuildStamp } from "../shared/build-stamp.js";
+import { resolveTraceDirectory } from "../bridge/trace-directory.js";
+import { validateOpArguments } from "../shared/arg-validation.js";
 
 // ─────────────────────────────────────────────
 // Response Formatting (exported for testing)

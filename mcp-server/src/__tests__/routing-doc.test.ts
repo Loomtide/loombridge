@@ -4,15 +4,15 @@ import path from "node:path";
 import test, { describe } from "node:test";
 import { fileURLToPath } from "node:url";
 
-import { OpRegistry } from "../op-registry.js";
-import { EDITOR_LIST_TOOL_NAME, EDITOR_USE_TOOL_NAME } from "../editor-tools.js";
+import { OpRegistry } from "../surfaces/op-registry.js";
+import { EDITOR_LIST_TOOL_NAME, EDITOR_USE_TOOL_NAME } from "../surfaces/editor-tools.js";
 import {
   LOOMBRIDGE_DONENESS_TOOL_NAME,
   LOOMBRIDGE_MOBILE_AUDIT_TOOL_NAME,
   LOOMBRIDGE_PROJECT_INIT_TOOL_NAME,
   LOOMBRIDGE_STATUS_TOOL_NAME,
   LOOMBRIDGE_VERIFY_TOOL_NAME,
-} from "../loombridge-bridge-tools.js";
+} from "../surfaces/loombridge-bridge-tools.js";
 import {
   ROUTING_DOC_VERSION,
   SUGGESTED_ROUTING_LINE,
@@ -22,7 +22,7 @@ import {
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // dist/__tests__ -> mcp-server/src is ../../src.
-const CLI_SRC = path.resolve(__dirname, "../../src/cli.ts");
+const CLI_SRC = path.resolve(__dirname, "../../src/surfaces/cli.ts");
 
 /** Every verb the CLI dispatch actually handles (parsed from the switch, so it can't drift). */
 function cliVerbs(): Set<string> {

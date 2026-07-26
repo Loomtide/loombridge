@@ -6,7 +6,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { loombridgeCli } from "../cli.js";
+import { loombridgeCli } from "../surfaces/cli.js";
 
 async function captureVersion(arg: string): Promise<{ code: number; out: string }> {
   const orig = console.log;

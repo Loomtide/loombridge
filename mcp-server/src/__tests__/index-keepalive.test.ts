@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { manageInputKeepalive } from "../index.js";
-import { InputSessionKeepalive, type KeepaliveScheduler } from "../input-keepalive.js";
-import type { UnityClient } from "../unity-client.js";
-import type { BridgeResponse } from "../types.js";
+import { manageInputKeepalive } from "../surfaces/index.js";
+import { InputSessionKeepalive, type KeepaliveScheduler } from "../bridge/input-keepalive.js";
+import type { UnityClient } from "../bridge/unity-client.js";
+import type { BridgeResponse } from "../shared/types.js";
 
 // Intervals never auto-fire; we only care about registration bookkeeping here.
 const inertScheduler: KeepaliveScheduler = {

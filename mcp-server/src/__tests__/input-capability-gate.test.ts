@@ -4,7 +4,7 @@ import {
   OpRegistry,
   INPUT_CAPABILITY_BLOCKER_CODE,
   buildInputCapabilityBlockedPayload,
-} from "../op-registry.js";
+} from "../surfaces/op-registry.js";
 
 const registry = new OpRegistry();
 

@@ -12,7 +12,7 @@ import { ROUTING_DOC_VERSION } from "../capabilities/setup/routing-doc.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // dist/__tests__ -> mcp-server is two up; repo root is three up.
-const CLI = path.resolve(__dirname, "../cli.js");
+const CLI = path.resolve(__dirname, "../surfaces/cli.js");
 const REPO_ROOT = path.resolve(__dirname, "../../..");
 const PACK_SCRIPT = path.resolve(REPO_ROOT, "scripts/loombridge-pack-bridge.sh");
 const PKG_ID = "com.loomtide.loombridge";
