@@ -65,7 +65,7 @@ demo-bundle/
 3. **Plan through the real CLI.**
 
    ```bash
-   node mcp-server/dist/cli.js plan --genre <genre> --engine <engine> --root .
+   node mcp-server/dist/surfaces/cli.js plan --genre <genre> --engine <engine> --root .
    ```
 
    `plan` hard-gates on an approved Design Target by default. The first call exits non-zero
@@ -74,13 +74,13 @@ demo-bundle/
 4. **Set and approve the provided hero shot.**
 
    ```bash
-   node mcp-server/dist/cli.js design set \
+   node mcp-server/dist/surfaces/cli.js design set \
      --root . \
      --image <bundle>/design/hero-shot.png \
      [--html <bundle>/design/hero-shot.html] \
      --mode provided
 
-   node mcp-server/dist/cli.js design approve --root . --note "approved from e2e bundle"
+   node mcp-server/dist/surfaces/cli.js design approve --root . --note "approved from e2e bundle"
    ```
 
    Re-run `plan` with the same genre/engine. It must pass the Design Target gate before build.
@@ -106,7 +106,7 @@ demo-bundle/
    round trips.
 
    ```bash
-   node mcp-server/dist/cli.js build "$(cat <bundle>/GAME_BRIEF.md)" --root .
+   node mcp-server/dist/surfaces/cli.js build "$(cat <bundle>/GAME_BRIEF.md)" --root .
    ```
 
    Record the printed `runId` — it binds the verdict to this build. Do not hand-roll a
@@ -121,7 +121,7 @@ demo-bundle/
    ```bash
    # Speed path — only writes spawn + jump-burst (visual-artifacts, render-frame, console-clean
    # gates + frames). Does NOT cover hazard/movement/win.
-   node mcp-server/dist/verification/capture-runner.js \
+   node mcp-server/dist/capabilities/verification/capture-runner.js \
      --acceptance .loombridge/ACCEPTANCE.json \
      --out .loombridge/verify/spawn
    ```
@@ -158,9 +158,9 @@ demo-bundle/
    ```bash
    # verify grades the primary state's gates; --vlm merges the ONE consolidated multi-state
    # review (verify root) so doneness can read it.
-   node mcp-server/dist/cli.js verify --root . --inputs .loombridge/verify/spawn \
+   node mcp-server/dist/surfaces/cli.js verify --root . --inputs .loombridge/verify/spawn \
      --vlm .loombridge/verify/vlm-review.json --strict
-   node mcp-server/dist/cli.js doneness --root .
+   node mcp-server/dist/surfaces/cli.js doneness --root .
    ```
 
    `doneness` is **mandatory**, not optional: it is the §3a freshness predicate and the only

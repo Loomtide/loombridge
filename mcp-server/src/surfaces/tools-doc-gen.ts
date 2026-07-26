@@ -10,6 +10,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { OpRegistry, type OpDef } from "./op-registry.js";
+import { packageRoot } from "../shared/pkg-root.js";
 
 // ─────────────────────────────────────────────
 // Helpers
@@ -184,7 +185,11 @@ function generateToolsDoc(): string {
 
 const output = generateToolsDoc();
 const scriptPath = fileURLToPath(import.meta.url);
-const outPath = path.join(path.dirname(scriptPath), "..", "TOOLS.md");
+// Package root, not a ".."-hop from this file: the generator moved from src/ to
+// src/surfaces/ and kept writing one level too deep, emitting src/TOOLS.md while CI's
+// drift check diffed the real mcp-server/TOOLS.md — so the gate passed no matter what
+// changed, and a 203 KB duplicate got committed and shipped inside `files: ["src"]`.
+const outPath = path.join(packageRoot(import.meta.url), "TOOLS.md");
 fs.writeFileSync(outPath, output, "utf-8");
 
 console.log(`Generated TOOLS.md at ${outPath}`);

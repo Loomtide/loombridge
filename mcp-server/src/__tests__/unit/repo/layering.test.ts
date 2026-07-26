@@ -25,13 +25,12 @@ import { PKG_ROOT as PKG_ROOT_SUPPORT } from "../../_support/paths.js";
  *                    assets, sfx, telemetry, setup, mobile), including that area's CLI
  *                    verb entrypoint.
  *
- * KNOWN GAP (step 3 of the organisation plan, deliberately not enforced yet): the files
- * still sitting directly in `src/` mix three layers — MCP transport (unity-client,
- * editor-registry), CLI/MCP entrypoints (index, cli), and shared primitives (types,
- * bridge-protocol). Until they are split into `bridge/`, `surfaces/` and `shared/`, that
- * root is treated as an unlayered zone that anything may import. Enforcing a rule we
- * cannot yet satisfy would mean either a failing suite or a fake exemption list; naming
- * the gap is honest, and this test tightens the moment step 3 lands.
+ *  - `bridge/`       Unity transport and editor routing.
+ *  - `surfaces/`     the MCP server and CLI entrypoints.
+ *
+ * `src/` no longer holds loose `.ts` files, so the `"root"` layer is a defensive default
+ * for anything that appears there in future rather than a live exemption — it is
+ * unconstrained precisely so a stray new file is visible rather than silently blessed.
  */
 
 const SRC = path.join(PKG_ROOT_SUPPORT, "src");
@@ -66,6 +65,33 @@ export function layerOf(relPath: string): Layer {
   return "root";
 }
 
+/**
+ * Every shape a module specifier can take here. The first version matched only
+ * `from "..."` with double quotes, so it was blind to dynamic `import()` — which is the
+ * established cross-module idiom in this codebase (doctor, verify, minigame-finalize,
+ * genre-registry all use it) — as well as single quotes, bare side-effect imports and
+ * createRequire. A layering rule that any lazy import can walk through is not a rule.
+ */
+/** Quote characters a specifier can be wrapped in — including backticks. */
+const Q = "[\"'`]";
+const NOT_Q = "[^\"'`]";
+
+const SPECIFIER_RE = new RegExp(
+  [
+    // from "x" | import("x") | import 'x' | await import(`x`)
+    `(?:from|import)\\s*\\(?\\s*${Q}(${NOT_Q}+)${Q}`,
+    `require\\s*\\(\\s*${Q}(${NOT_Q}+)${Q}`,
+    `export\\s+(?:\\*|\\{[^}]*\\})\\s+from\\s*${Q}(${NOT_Q}+)${Q}`,
+    `import\\s+type\\s+${NOT_Q}*from\\s*${Q}(${NOT_Q}+)${Q}`,
+  ].join("|"),
+  "g",
+);
+
+/** Remove line/block comments so a specifier quoted in prose is not read as an import. */
+export function stripCommentary(source: string): string {
+  return source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/[^\n]*/g, "$1");
+}
+
 function tsFiles(dir: string, acc: string[] = []): string[] {
   for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
     const abs = path.join(dir, e.name);
@@ -91,9 +117,14 @@ export function collectViolations(
     const forbidden = FORBIDDEN[from];
     if (forbidden.length === 0) continue;
 
-    const text = readFile(abs);
-    for (const m of text.matchAll(/from\s+"([^"]+)"/g)) {
-      const spec = m[1];
+    // Strip comments and template-literal noise first: a specifier MENTIONED in a comment
+    // ("historically re-exported from ...") is documentation, not a dependency, and firing
+    // on it would punish writing things down. Stripping is cheap and removes the whole
+    // class of false positives without weakening detection of real imports.
+    const text = stripCommentary(readFile(abs));
+    for (const m of text.matchAll(SPECIFIER_RE)) {
+      const spec = m[1] ?? m[2] ?? m[3] ?? m[4];
+      if (!spec) continue;
       if (!spec.startsWith(".")) continue;
       const resolved = path
         .relative(srcRoot, path.resolve(path.dirname(abs), spec))
@@ -134,6 +165,53 @@ test("layering LITMUS: the detector actually fires on a planted violation", () =
 
   assert.equal(violations.length, 1, "exactly the planted violation should be reported");
   assert.match(violations[0], /^domain\/capture-paths\.ts \(domain\) imports capabilities\//);
+});
+
+test("layering LITMUS: every import shape is detected, not just a static double-quoted one", () => {
+  // The matcher previously saw only `from "x"`. Each shape below is a real way this
+  // codebase imports across modules — dynamic import() especially — so each must trip
+  // the rule. A litmus that plants one shape only proves that shape.
+  const planted = path.join(SRC, "domain", "capture-paths.ts");
+  const target = `${".."}/capabilities/verification/verify.js`;
+  const shapes: Record<string, string> = {
+    "double-quoted static": `import { x } from "${target}";`,
+    "single-quoted static": `import { x } from '${target}';`,
+    "dynamic import()": `const m = await import("${target}");`,
+    "side-effect import": `import "${target}";`,
+    "re-export": `export { x } from "${target}";`,
+    "type-only": `import type { X } from "${target}";`,
+    "require()": `const m = require("${target}");`,
+    "template-literal import()": `const m = await import(\`${target}\`);`,
+  };
+
+  for (const [shape, source] of Object.entries(shapes)) {
+    const violations = collectViolations(SRC, (p) => (p === planted ? source : fs.readFileSync(p, "utf-8")));
+    assert.equal(violations.length, 1, `${shape}: expected exactly the planted violation`);
+    assert.match(violations[0], /^domain\/capture-paths\.ts \(domain\) imports capabilities\//, shape);
+  }
+});
+
+test("layering: a specifier MENTIONED in a comment is documentation, not a dependency", () => {
+  // Firing on prose would punish writing things down — and an earlier version did exactly
+  // that, flagging a historical note as a live violation.
+  const planted = path.join(SRC, "domain", "capture-paths.ts");
+  const target = `${".."}/capabilities/verification/verify.js`;
+  const commentary = [
+    `// historically re-exported from "${target}"`,
+    `/** see import("${target}") for the old shape */`,
+  ];
+
+  for (const source of commentary) {
+    const violations = collectViolations(SRC, (p) => (p === planted ? source : fs.readFileSync(p, "utf-8")));
+    assert.deepEqual(violations, [], `a commented specifier must not fire: ${source}`);
+  }
+});
+
+test("layering: stripCommentary removes comments without eating real code", () => {
+  assert.equal(stripCommentary('import x from "a";\n// import y from "b";').includes('"b"'), false);
+  assert.equal(stripCommentary('import x from "a";\n/* import y from "b"; */').includes('"b"'), false);
+  // A URL inside real code must survive — the `//` in https:// is not a comment.
+  assert.ok(stripCommentary('const u = "https://example.com/x";').includes("example.com"));
 });
 
 test("layering: the layer classifier maps each top-level directory", () => {

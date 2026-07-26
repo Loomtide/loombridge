@@ -15,7 +15,7 @@
  * NOT folded into the Tier-1 `status`.
  *
  * Usage:
- *   node dist/verification/run-gates.js \
+ *   node dist/capabilities/verification/run-gates.js \
  *     --acceptance src/capabilities/verification/tiderunner.acceptance.json \
  *     --inputs ../demo/.artifacts/verify \
  *     --output ../demo/.artifacts/verify/build-verdict.json \
@@ -334,7 +334,7 @@ const __dirname = dirname(__filename);
 function printUsage(): void {
   console.log(
     [
-      "Usage: node dist/verification/run-gates.js \\",
+      "Usage: node dist/capabilities/verification/run-gates.js \\",
       "  --acceptance <acceptance.json> \\",
       "  --inputs <dir of captured op-output JSON> \\",
       "  [--output <build-verdict.json>] \\",

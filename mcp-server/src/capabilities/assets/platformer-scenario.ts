@@ -43,7 +43,7 @@ interface CliArgs extends GeneratePlatformerAssetScenarioOptions {
 
 function printUsage(): void {
   console.log(
-    "Usage: node dist/asset-layer/platformer-scenario.js --report <platformer-assets.json> --template <template.json> --output <scenario.json>",
+    "Usage: node dist/capabilities/assets/platformer-scenario.js --report <platformer-assets.json> --template <template.json> --output <scenario.json>",
   );
 }
 

@@ -45,7 +45,7 @@ jobs:
           mkdir -p "$RUNNER_TEMP/bin"
           cat > "$RUNNER_TEMP/bin/loombridge" <<EOF
           #!/usr/bin/env bash
-          exec node "$RUNNER_TEMP/loombridge-src/mcp-server/dist/cli.js" "\$@"
+          exec node "$RUNNER_TEMP/loombridge-src/mcp-server/dist/surfaces/cli.js" "\$@"
           EOF
           chmod +x "$RUNNER_TEMP/bin/loombridge"
           echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"

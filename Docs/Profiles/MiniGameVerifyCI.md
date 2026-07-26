@@ -23,13 +23,13 @@ git clone https://github.com/Loomtide/loombridge loombridge
 cd loombridge && git checkout <PINNED_SHA_OR_TAG>
 cd mcp-server && npm ci && npm run build
 # invoke directly — no global install, no ~/.claude:
-node "$PWD/dist/cli.js" --version
+node "$PWD/dist/surfaces/cli.js" --version
 ```
 
 Wrap it in a shell alias / step so the rest of the pipeline can call `loombridge`:
 
 ```bash
-echo "alias loombridge='node $PWD/dist/cli.js'"     # or add a wrapper to $PATH
+echo "alias loombridge='node $PWD/dist/surfaces/cli.js'"     # or add a wrapper to $PATH
 ```
 
 **B. Packaged CLI (`npm pack` → install the tarball).** A portable, self-contained artifact — hand a partner

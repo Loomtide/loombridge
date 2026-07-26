@@ -13,6 +13,7 @@ import { fileURLToPath } from "node:url";
 
 import type { RoutingDocRecord } from "./routing-doc.js";
 import { readTarballFile } from "./tarball.js";
+import { packageRoot } from "../../shared/pkg-root.js";
 
 export const PKG_ID = "com.loomtide.loombridge";
 
@@ -98,8 +99,10 @@ export function resolveBundledTarball(override?: string): string | null {
     if (!existsSync(p)) throw new BridgeInstallError(`bridge tarball not found: ${p}`);
     return p;
   }
-  const here = path.dirname(fileURLToPath(import.meta.url)); // <mcp-server>/dist/loombridge
-  const mcpServerRoot = path.resolve(here, "..", ".."); // <mcp-server>
+  // Depth-independent: counting ".." encoded how deep this module sat, so the source
+  // reorganisation silently pointed both candidates one level too shallow and every
+  // consumer install lost its bundled bridge while the test suite stayed green.
+  const mcpServerRoot = packageRoot(import.meta.url); // <mcp-server>
   const repoRoot = path.resolve(mcpServerRoot, ".."); // <repo>
   const candidateDirs = [path.join(mcpServerRoot, "bridge"), path.join(repoRoot, "dist", "bridge")];
   for (const dir of candidateDirs) {

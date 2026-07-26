@@ -149,7 +149,7 @@ async function main() {
 
   const transport = new StdioClientTransport({
     command: "node",
-    args: ["dist/index.js"],
+    args: ["dist/surfaces/index.js"],
     cwd: MCP_SERVER_DIR,
     env: childEnv,
     stderr: "pipe",

@@ -62,7 +62,7 @@ fi
 mkdir -p "$HANDOFF_DIR"
 
 pushd "$REPO_ROOT/mcp-server" >/dev/null
-if [ ! -f dist/asset-layer/prepare-cli.js ] || [ src/asset-layer/prepare-cli.ts -nt dist/asset-layer/prepare-cli.js ]; then
+if [ ! -f dist/capabilities/assets/prepare-cli.js ] || [ src/capabilities/assets/prepare-cli.ts -nt dist/capabilities/assets/prepare-cli.js ]; then
   npm run build
 fi
 
@@ -70,14 +70,14 @@ REPORT="$HANDOFF_DIR/${NAME}-asset-prepare-report.json"
 ATTRIBUTION="$HANDOFF_DIR/${NAME}-asset-attribution.md"
 CACHE="$HANDOFF_DIR/asset-cache"
 
-node dist/asset-layer/prepare-cli.js \
+node dist/capabilities/assets/prepare-cli.js \
   --profile "$PROFILE" \
   --registry "$REGISTRY" \
   --output "$REPORT" \
   --cache "$CACHE" \
   --preferred-license CC0-1.0
 
-node dist/asset-layer/reporting.js \
+node dist/capabilities/assets/reporting.js \
   --report "$REPORT" \
   --output "$ATTRIBUTION"
 popd >/dev/null

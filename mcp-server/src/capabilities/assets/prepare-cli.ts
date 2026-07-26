@@ -36,7 +36,7 @@ interface CliArgs extends PrepareAssetsOptions {
 
 function printUsage(): void {
   console.log(
-    "Usage: node dist/asset-layer/prepare-cli.js --profile <path-or-id> (--registry <path> | --catalog <path-or-url> | --catalog-api <baseUrl>) --output <path> --cache <dir> [--validate-only] [--genre <genre>] [--primitive <name>] [--tags <csv>] [--preferred-license <spdx>]",
+    "Usage: node dist/capabilities/assets/prepare-cli.js --profile <path-or-id> (--registry <path> | --catalog <path-or-url> | --catalog-api <baseUrl>) --output <path> --cache <dir> [--validate-only] [--genre <genre>] [--primitive <name>] [--tags <csv>] [--preferred-license <spdx>]",
   );
 }
 

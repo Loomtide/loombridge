@@ -59,7 +59,7 @@ The bundled platformer scenario (`platformer-2d-basic.json`) is a **single jump-
 ONCE, writing into the primary state's subdir (`.loombridge/verify/spawn/`):
 
 ```bash
-node mcp-server/dist/verification/capture-runner.js \
+node mcp-server/dist/capabilities/verification/capture-runner.js \
   --acceptance .loombridge/ACCEPTANCE.json \
   --out .loombridge/verify/spawn
 ```
@@ -113,11 +113,11 @@ entries exist:
 # For platformer-2d the primary state is `spawn` (--inputs grades that state's gates).
 # --vlm is the ONE consolidated review at the verify ROOT, covering ALL states' frames
 # (NOT a per-state spawn-only review — that misses cross-state frame-integrity, P1.3).
-node mcp-server/dist/cli.js verify --root . --inputs .loombridge/verify/spawn --strict \
+node mcp-server/dist/surfaces/cli.js verify --root . --inputs .loombridge/verify/spawn --strict \
   --vlm .loombridge/verify/vlm-review.json
 
 # §3a freshness + hero-shot fidelity gate — the ONLY path to a "done" claim.
-node mcp-server/dist/cli.js doneness --root .
+node mcp-server/dist/surfaces/cli.js doneness --root .
 ```
 
 `loombridge verify` writes the canonical `.loombridge/reports/build-verdict.json`; `loombridge doneness` returns 0 only when phase=verified-green AND verdict.runId === currentBuild.runId AND verdict.producedAt is on/after currentBuild.startedAt AND every captureManifest entry is present + safe **AND — for a design-targeted build — the verdict's `reviewFindings` references the frozen hero shot (`reference.heroShotSha256 === designTarget.pngSha256`), is independent (`independent` + `reviewerCount ≥ 2`), and passes every structural fidelity criterion** (§P0). Never claim handover without a `doneness` exit 0.
@@ -141,7 +141,7 @@ For each Tier-1 `failures[]` entry: reproduce (the gate already did) → fix the
 If `.loombridge/handoff/<genre>-asset-prepare-report.json` exists, run the consistency check explicitly (the bare `npm run asset:handoff:check` script requires `--prepare-report` and exits 1 without it):
 
 ```bash
-node mcp-server/dist/asset-layer/handoff-consistency.js \
+node mcp-server/dist/capabilities/assets/handoff-consistency.js \
   --prepare-report .loombridge/handoff/<genre>-asset-prepare-report.json \
   --verdict .loombridge/reports/build-verdict.json \
   --output .loombridge/handoff/asset-handoff-consistency.json \

@@ -38,19 +38,25 @@ describe("MCP Integration: server over stdio", { timeout: 30000 }, () => {
     }
   });
 
-  test("tools/list returns all 59 expected tools", async () => {
+  test("tools/list returns the full op catalogue", async () => {
     const result = await client.listTools();
 
-    assert.equal(result.tools.length, 59, `Expected 59 tools, got ${result.tools.length}`);
+    // Asserted as a floor, not a frozen count: a hard 59 went stale the moment ops were
+    // added and left test:all permanently red, which is how a later regression stayed
+    // invisible. The op registry's own tests cover the exact catalogue.
+    assert.ok(
+      result.tools.length >= 120,
+      `Expected the full catalogue (>=120 tools), got ${result.tools.length}`,
+    );
   });
 
-  test("tools/list: all tool names start with unity_", async () => {
+  test("tools/list: every tool is namespaced (unity_ or loombridge_)", async () => {
     const result = await client.listTools();
 
     for (const tool of result.tools) {
       assert.ok(
-        tool.name.startsWith("unity_"),
-        `Tool name "${tool.name}" does not start with "unity_"`,
+        tool.name.startsWith("unity_") || tool.name.startsWith("loombridge_"),
+        `Tool name "${tool.name}" is not namespaced unity_/loombridge_`,
       );
     }
   });

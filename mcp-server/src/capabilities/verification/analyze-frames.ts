@@ -68,7 +68,7 @@ const DEFAULT_OPTIONS: Required<AnalyzeFrameOptions> = {
 
 function usage(): string {
   return [
-    "Usage: node dist/verification/analyze-frames.js \\",
+    "Usage: node dist/capabilities/verification/analyze-frames.js \\",
     "  --baseline-id spawn --baseline frames/spawn.png \\",
     "  --stress-id jump --stress frames/jump.png \\",
     "  --output .artifacts/verify/visual-artifacts.json",

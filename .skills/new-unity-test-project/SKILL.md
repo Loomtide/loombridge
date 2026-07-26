@@ -53,10 +53,10 @@ load this differently:
 - Run `/mcp`. If `loombridge` is not listed, register the same server explicitly:
 
   ```bash
-  codex mcp add loombridge -- node <loombridge-repo>/mcp-server/dist/index.js
+  codex mcp add loombridge -- node <loombridge-repo>/mcp-server/dist/surfaces/index.js
   ```
 
-  Use the `node` path and `dist/index.js` path from this project's `.mcp.json` if they differ.
+  Use the `node` path and `dist/surfaces/index.js` path from this project's `.mcp.json` if they differ.
 
 ### Verify before building
 

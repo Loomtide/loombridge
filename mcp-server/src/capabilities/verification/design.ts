@@ -16,6 +16,7 @@ import { createHash } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { packageRoot } from "../../shared/pkg-root.js";
 
 import {
   loombridgePaths,
@@ -25,17 +26,15 @@ import {
   type LoombridgePaths,
 } from "../../domain/state.js";
 
-// At runtime this file is dist/loombridge/design.js. The canonical (product-owned)
+// At runtime this file is dist/capabilities/design.js. The canonical (product-owned)
 // schema for the artifacts this module writes lives next to the source under
 // `src/domain/schemas/` — v0.6 explicitly settled the location decision: the
 // product is the source of truth, projects are consumers. Exported so external
 // tooling can resolve the schema path without grepping the package.
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-export const DESIGN_TARGET_SCHEMA_PATH = path.resolve(
-  __dirname,
-  "..",
-  "..",
+export const DESIGN_TARGET_SCHEMA_PATH = path.join(
+  packageRoot(import.meta.url),
   "src",
   "domain",
   "schemas",

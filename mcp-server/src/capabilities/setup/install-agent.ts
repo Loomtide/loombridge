@@ -36,6 +36,7 @@ import process from "node:process";
 import { fileURLToPath } from "node:url";
 
 import { resolveBuildStamp } from "../../shared/build-stamp.js";
+import { packageRoot } from "../../shared/pkg-root.js";
 import {
   AgentSurfaceFile,
   BridgeInstallError as RuntimeFailure,
@@ -111,8 +112,9 @@ function resolvePayloadDir(): string {
     if (!existsSync(override)) throw new RuntimeFailure(`agent surface payload not found: ${override}`);
     return override;
   }
-  const here = path.dirname(fileURLToPath(import.meta.url)); // <mcp-server>/dist/loombridge
-  const candidate = path.resolve(here, "..", "..", "agent-surface"); // <mcp-server>/agent-surface
+  // Depth-independent — see bridge-install-common.ts; the ".."-count broke on the reorg
+  // and only the LOOMBRIDGE_AGENT_SURFACE_DIR override was covered by tests.
+  const candidate = path.join(packageRoot(import.meta.url), "agent-surface");
   if (existsSync(candidate)) return candidate;
   throw new RuntimeFailure(
     "no agent-surface payload bundled with this CLI. In the dev repo, run scripts/build-agent-surface.mjs " +

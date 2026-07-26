@@ -66,7 +66,7 @@ Default capture + analyzer:
 4. Run the analyzer from the repo root (writes the per-state `visual-artifacts.json` the gate consumes):
 
 ```bash
-node mcp-server/dist/verification/analyze-frames.js \
+node mcp-server/dist/capabilities/verification/analyze-frames.js \
   --baseline-id spawn \
   --baseline .loombridge/verify/<state>/frames/spawn.png \
   --stress-id jump-rise \

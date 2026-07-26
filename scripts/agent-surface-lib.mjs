@@ -45,15 +45,15 @@ export const CONSUMER_SKILLS = [
 function scrubRules(dataDir, rtMcp) {
   return [
     // Dev-repo ABSOLUTE node invocations (any /abs/prefix/node <abs>/mcp-server/dist/...).
-    [/(?:\S*\/)?node\s+\S*\/mcp-server\/dist\/verification\/capture-runner\.js/g, "loombridge-capture"],
-    [/(?:\S*\/)?node\s+\S*\/mcp-server\/dist\/verification\/analyze-frames\.js/g, "loombridge-analyze-frames"],
-    [/(?:\S*\/)?node\s+\S*\/mcp-server\/dist\/asset-layer\/handoff-consistency\.js/g, "loombridge-handoff-check"],
+    [/(?:\S*\/)?node\s+\S*\/mcp-server\/dist\/capabilities\/verification\/capture-runner\.js/g, "loombridge-capture"],
+    [/(?:\S*\/)?node\s+\S*\/mcp-server\/dist\/capabilities\/verification\/analyze-frames\.js/g, "loombridge-analyze-frames"],
+    [/(?:\S*\/)?node\s+\S*\/mcp-server\/dist\/capabilities\/assets\/handoff-consistency\.js/g, "loombridge-handoff-check"],
     // Dev-repo RELATIVE node invocations -> released binaries.
-    [/node mcp-server\/dist\/cli\.js/g, "loombridge"],
-    [/node mcp-server\/dist\/verification\/capture-runner\.js/g, "loombridge-capture"],
-    [/node mcp-server\/dist\/verification\/tuning-runner\.js/g, "loombridge-tune"],
-    [/node mcp-server\/dist\/asset-layer\/handoff-consistency\.js/g, "loombridge-handoff-check"],
-    [/node mcp-server\/dist\/verification\/analyze-frames\.js/g, "loombridge-analyze-frames"],
+    [/node mcp-server\/dist\/surfaces\/cli\.js/g, "loombridge"],
+    [/node mcp-server\/dist\/capabilities\/verification\/capture-runner\.js/g, "loombridge-capture"],
+    [/node mcp-server\/dist\/capabilities\/verification\/tuning-runner\.js/g, "loombridge-tune"],
+    [/node mcp-server\/dist\/capabilities\/assets\/handoff-consistency\.js/g, "loombridge-handoff-check"],
+    [/node mcp-server\/dist\/capabilities\/verification\/analyze-frames\.js/g, "loombridge-analyze-frames"],
     // prepare-project-assets.sh, in any form (relative, $REPO-relative, or a committed
     // absolute path) -> the released wrapper.
     [/(?:\S*\/)?scripts\/prepare-project-assets\.sh/g, "loombridge-asset-prep"],
@@ -69,14 +69,17 @@ function scrubRules(dataDir, rtMcp) {
     // Asset-layer data + frozen-runtime paths relocate to the install target.
     [/asset-layer\/profiles\//g, `${dataDir}/asset-layer/profiles/`],
     [/asset-layer\/registry\//g, `${dataDir}/asset-layer/registry/`],
-    [/mcp-server\/src\/verification\/scenarios\//g, `${rtMcp}/src/capabilities/verification/scenarios/`],
+    // NOTE: the replacement must not itself contain "mcp-server/(src|dist)/", or the
+    // generic backstop below re-matches this rule's own output and mangles it into
+    // "<internal — see `loombridge --help`>". rtMcp already ends at .../mcp-server.
+    [/mcp-server\/src\/(?:capabilities\/)?verification\/scenarios\//g, `${rtMcp}/src/capabilities/verification/scenarios/`],
     // Bare (no `node ` prefix) dev binary references that still name the dist path.
-    [/mcp-server\/dist\/verification\/tuning-runner\.js/g, "loombridge-tune"],
+    [/mcp-server\/dist\/capabilities\/verification\/tuning-runner\.js/g, "loombridge-tune"],
     // Internal schemas/types/gates -> a consumer-safe pointer at the CLI.
-    [/mcp-server\/src\/verification\/acceptance\.schema\.json/g, "<internal schema — validated by `loombridge plan`>"],
-    [/mcp-server\/src\/verification\/vlm-review\.schema\.json/g, "<internal schema — validated by `loombridge verify --vlm`>"],
-    [/mcp-server\/src\/verification\/types\.ts/g, "<internal types — see `loombridge verify --help`>"],
-    [/mcp-server\/src\/verification\/gates\//g, "<internal — see `loombridge verify --help`>"],
+    [/mcp-server\/src\/capabilities\/verification\/acceptance\.schema\.json/g, "<internal schema — validated by `loombridge plan`>"],
+    [/mcp-server\/src\/capabilities\/verification\/vlm-review\.schema\.json/g, "<internal schema — validated by `loombridge verify --vlm`>"],
+    [/mcp-server\/src\/capabilities\/verification\/types\.ts/g, "<internal types — see `loombridge verify --help`>"],
+    [/mcp-server\/src\/capabilities\/verification\/gates\//g, "<internal — see `loombridge verify --help`>"],
     // GENERAL catch (LAST, after every specific binary/schema rule so it never shadows
     // them): any remaining internal mcp-server/(src|dist)/… path — e.g. genre-pack internals
     // referenced in prose — collapses to a consumer-safe pointer. This is the backstop that

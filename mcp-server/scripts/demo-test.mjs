@@ -25,7 +25,7 @@ async function main() {
 
   const transport = new StdioClientTransport({
     command: process.execPath,
-    args: [resolve(MCP_SERVER_DIR, "dist/index.js")],
+    args: [resolve(MCP_SERVER_DIR, "dist/surfaces/index.js")],
     cwd: MCP_SERVER_DIR,
   });
   const client = new Client({ name: "demo-tester", version: "1.0" });

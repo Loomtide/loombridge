@@ -3,7 +3,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { promoteGenreContract } from "../../../mcp-server/dist/domain/genre-contract/promote.js";
+import { promoteGenreContract } from "../../../mcp-server/dist/capabilities/genre/genre-contract/promote.js";
 import {
   deriveTimeToKill,
   firstRisingEdge,
@@ -15,7 +15,7 @@ import {
 
 const bundleDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(bundleDir, "../../..");
-const contractPath = path.join(repoRoot, "mcp-server/src/loombridge/genre-contract/examples/2d-shooter.contract.json");
+const contractPath = path.join(repoRoot, "mcp-server/src/capabilities/genre/genre-contract/examples/2d-shooter.contract.json");
 
 // The CANONICAL live shooter-combat-loop TTK artifact. Every other TTK artifact in this bundle is
 // superseded BY it; the promoted proof cites only this one for ttkMs.

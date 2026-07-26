@@ -20,7 +20,7 @@ continue work after a restart.
    For local dogfooding before install:
 
    ```bash
-   node mcp-server/dist/cli.js status --root .
+   node mcp-server/dist/surfaces/cli.js status --root .
    ```
 
 2. Report the CLI output directly. Do not replace it with a hand-authored status table.

@@ -248,7 +248,7 @@ async function run(): Promise<number> {
   const args = parseArgs(process.argv);
   if (args.help || !args.prepareReportPath) {
     console.log([
-      "Usage: node dist/asset-layer/handoff-consistency.js --prepare-report <report.json>",
+      "Usage: node dist/capabilities/assets/handoff-consistency.js --prepare-report <report.json>",
       "  [--verdict <build-verdict.json>[,<final-verdict.json>]]",
       "  [--text <handoff.md>[,<builder.cs>]] [--output <report.json>]",
     ].join("\n"));

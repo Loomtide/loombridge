@@ -545,7 +545,7 @@ function parseArgs(argv: string[]): CliArgs {
 async function run(): Promise<number> {
   const args = parseArgs(process.argv);
   if (args.help || !args.filePath) {
-    console.log("Usage: node dist/asset-layer/audio-qc.js --file <audio.wav|audio.ogg>");
+    console.log("Usage: node dist/capabilities/assets/audio-qc.js --file <audio.wav|audio.ogg>");
     return args.help ? 0 : 1;
   }
 

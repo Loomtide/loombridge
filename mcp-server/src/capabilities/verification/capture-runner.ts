@@ -25,6 +25,7 @@ import { runGates } from "./run-gates.js";
 import { assertValidAcceptanceContract } from "./validator.js";
 import type { AcceptanceContract } from "./types.js";
 import { scenarioPacks } from "../genre/genre-registry.js";
+import { packageRoot } from "../../shared/pkg-root.js";
 import {
   assertValidVerificationScenario,
   getVerificationResetPolicy,
@@ -101,7 +102,7 @@ const __dirname = path.dirname(__filename);
 function printUsage(): void {
   console.log(
     [
-      "Usage: node dist/verification/capture-runner.js \\",
+      "Usage: node dist/capabilities/verification/capture-runner.js \\",
       "  --acceptance <acceptance.json> \\",
       "  [--scenario <verification-scenario.json>] \\",
       "  --out <trace/verify> \\",
@@ -171,9 +172,13 @@ export function planCaptureRunnerOutputs(outDir: string): CaptureRunnerOutputPla
 }
 
 function scenarioPackPath(fileName: string): string {
-  const sourceDir = __dirname.endsWith(`${path.sep}dist${path.sep}verification`)
-    ? path.resolve(__dirname, "../../src/capabilities/verification/scenarios")
-    : path.join(__dirname, "scenarios");
+  const sourceDir = path.join(
+    packageRoot(import.meta.url),
+    "src",
+    "capabilities",
+    "verification",
+    "scenarios",
+  );
   return path.join(sourceDir, fileName);
 }
 

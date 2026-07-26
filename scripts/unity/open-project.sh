@@ -159,8 +159,8 @@ wait_for_bridge() {
 
   if [[ "$skip_build" != "true" ]]; then
     (cd "$root/mcp-server" && npm run build)
-  elif [[ ! -f "$root/mcp-server/dist/index.js" ]]; then
-    die "mcp-server/dist/index.js is missing; rerun without --skip-build or build mcp-server first."
+  elif [[ ! -f "$root/mcp-server/dist/surfaces/index.js" ]]; then
+    die "mcp-server/dist/surfaces/index.js is missing; rerun without --skip-build or build mcp-server first."
   fi
 
   deadline=$((SECONDS + timeout_s))

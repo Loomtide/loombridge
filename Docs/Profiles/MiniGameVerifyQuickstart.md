@@ -181,7 +181,7 @@ If this says `unknown command "--version"` or shows an old commit, rebuild/reins
 cd /path/to/Loombridge/mcp-server
 npm ci
 npm run build
-alias loombridge="node /path/to/Loombridge/mcp-server/dist/cli.js"
+alias loombridge="node /path/to/Loombridge/mcp-server/dist/surfaces/cli.js"
 hash -r
 loombridge --version
 ```
