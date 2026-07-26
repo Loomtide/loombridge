@@ -26,36 +26,45 @@ The hosted asset search API is a company-run service (public endpoint below), no
 ## Source Layers (`mcp-server/src/`)
 
 Dependencies run in ONE direction, and the rule is enforced by
-`src/__tests__/layering.test.ts` — including a litmus that plants a violation and requires
-the checker to report it, so the check can never pass vacuously:
+`src/__tests__/unit/repo/layering.test.ts` — including a litmus that plants a violation and
+requires the checker to report it, so the check can never pass vacuously:
 
 ```
-surfaces  ->  capabilities  ->  domain  ->  shared
+surfaces  ->  capabilities  ->  { bridge, domain }  ->  shared
 ```
 
-- **`shared/`** — leaf helpers with no domain knowledge (`build-stamp`, `cli-ui`, `pkg-root`).
+- **`shared/`** — leaf helpers with no domain knowledge (`build-stamp`, `cli-ui`, `pkg-root`,
+  `types`, `arg-validation`, `diagnostics`).
 - **`domain/`** — the shared nouns: JSON schemas, capture paths, workspace layout, contract
   presence. Deliberately small.
+- **`bridge/`** — Unity transport and editor routing: `unity-client`, `editor-registry`,
+  `editor-discovery`, `startup-binding`, the trace recorder, `preflight/`.
 - **`capabilities/`** — one directory per area, each owning its CLI verb entrypoint:
   `verification/`, `replay/`, `minigame/`, `feel/`, `genre/`, `assets/`, `sfx/`,
-  `telemetry/`, `setup/`, `mobile/`.
-- **surfaces** — the MCP server and CLI entrypoints (`index.ts`, `cli.ts`, `op-registry.ts`,
-  `*-tools.ts`) plus bridge transport (`unity-client.ts`, `editor-*.ts`), currently still
-  at the root of `src/`.
+  `telemetry/`, `setup/`, `mobile/`, `scenario/`.
+- **`surfaces/`** — the entrypoints: MCP server (`index.ts`), CLI dispatcher (`cli.ts`),
+  op registry, tool definitions.
+
+`bridge/` and `domain/` are siblings — neither imports the other, which is what keeps the
+wire protocol out of the contract vocabulary.
 
 **Where does new code go?** If it is vocabulary several areas share, `domain/`. If it does
 something — grades, drives, captures, installs — it belongs to one `capabilities/<area>/`.
-If it is a leaf utility with no knowledge of either, `shared/`.
+If it talks to Unity, `bridge/`. If it is a leaf utility with no knowledge of any of them,
+`shared/`.
 
-Two things the layering check taught us, worth not re-learning: genre packs and sfx
-cue-maps *look* like vocabulary but import gate implementations, so they are capabilities;
-and modules that read data out of the source tree must locate the package root via
-`shared/pkg-root.ts` rather than counting `..` segments, which silently encodes how deep a
-file happens to sit.
+Tests mirror the layout under `src/__tests__/unit/<layer>/<area>/`, so a file's tests live
+where the file does. `__tests__/integration/` stays separate (it needs a live editor) and
+runs via `npm run test:integration`, never `test:unit`.
 
-**Known gap:** the root of `src/` still mixes bridge transport, entrypoints and shared
-primitives. Splitting it into `bridge/` + `surfaces/` is the next step; until then the
-checker treats that root as an unlayered zone rather than pretending otherwise.
+Three things this reorganisation taught us, worth not re-learning:
+- Genre packs and sfx cue-maps *look* like vocabulary but import gate implementations, so
+  they are capabilities, not domain.
+- Anything that reads data out of the source tree must locate the package root via
+  `shared/pkg-root.ts` (and tests via `__tests__/_support/paths.ts`) rather than counting
+  `..` segments, which silently encodes how deep a file happens to sit.
+- `package.json` `bin` targets are declared paths nothing imports, so a full green suite
+  can still hide broken published executables — `package-entrypoints.test.ts` guards them.
 
 Unity targets: `6000.3` LTS primary, `2022.3` compatibility. Unity diagnostics use the `[Loombridge]` log prefix. Node `>= 18`.
 
