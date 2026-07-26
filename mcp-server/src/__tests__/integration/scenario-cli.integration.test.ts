@@ -30,7 +30,7 @@ describe("Scenario CLI integration", { timeout: 30000 }, () => {
     const result = spawnSync(
       "node",
       [
-        "dist/scenario-cli.js",
+        "dist/surfaces/scenario-cli.js",
         "--scenario",
         "../demo/scenarios/generic-smoke.json",
         "--dry-run",
@@ -70,7 +70,7 @@ describe("Scenario CLI integration", { timeout: 30000 }, () => {
     const result = spawnSync(
       "node",
       [
-        "dist/scenario-cli.js",
+        "dist/surfaces/scenario-cli.js",
         "--scenario",
         invalidScenarioPath,
         "--dry-run",
@@ -116,7 +116,7 @@ describe("Scenario CLI integration", { timeout: 30000 }, () => {
     const result = spawnSync(
       "node",
       [
-        "dist/scenario-cli.js",
+        "dist/surfaces/scenario-cli.js",
         "--scenario",
         scenarioPath,
         "--output",

@@ -82,7 +82,7 @@ Add this to your Claude Code MCP settings (replace the path with your actual ins
   "mcpServers": {
     "loombridge": {
       "command": "node",
-      "args": ["/absolute/path/to/mcp-server/dist/index.js"]
+      "args": ["/absolute/path/to/mcp-server/dist/surfaces/index.js"]
     }
   }
 }
@@ -151,18 +151,18 @@ Guardrail:
 
 ## Scenario Runner (Generic Orchestration)
 
-Run reusable scenario documents from `demo/scenarios/` to validate tool composition with deterministic preflight-first pass/fail/blocked reports. The scenario runner is built as `dist/scenario-cli.js` (`npm run build`).
+Run reusable scenario documents from `demo/scenarios/` to validate tool composition with deterministic preflight-first pass/fail/blocked reports. The scenario runner is built as `dist/surfaces/scenario-cli.js` (`npm run build`).
 
 Dry-run validation of a scenario document (no Unity needed):
 
 ```bash
-node dist/scenario-cli.js --scenario ../demo/scenarios/generic-smoke.json --dry-run --output ../demo/.artifacts/scenario-report.json
+node dist/surfaces/scenario-cli.js --scenario ../demo/scenarios/generic-smoke.json --dry-run --output ../demo/.artifacts/scenario-report.json
 ```
 
 Against a connected Unity editor, drop `--dry-run` to execute the steps with deterministic preflight gating:
 
 ```bash
-node dist/scenario-cli.js --scenario ../demo/scenarios/generic-smoke.json --output ../demo/.artifacts/scenario-run.json
+node dist/surfaces/scenario-cli.js --scenario ../demo/scenarios/generic-smoke.json --output ../demo/.artifacts/scenario-run.json
 ```
 
 Available scenario documents live under `demo/scenarios/` (`generic-smoke.json`, `build-fresh-platformer.json`, and the `build-platformer-with-assets.template.json` asset-import template).
@@ -178,13 +178,13 @@ Report contract highlights:
 
 ## Asset Layer Platformer Scenario
 
-The asset layer prepares curated CC0 platformer sprites into a local cache and can generate a scenario that imports them with generic Loombridge tools. The prepare/validate steps run through the built `dist/asset-layer/*` CLIs.
+The asset layer prepares curated CC0 platformer sprites into a local cache and can generate a scenario that imports them with generic Loombridge tools. The prepare/validate steps run through the built `dist/capabilities/assets/*` CLIs.
 
 From `mcp-server/` (after `npm run build`):
 
 ```bash
 # Prepare + checksum-verify curated platformer assets into a deterministic cache:
-node dist/asset-layer/prepare-cli.js \
+node dist/capabilities/assets/prepare-cli.js \
   --profile ../asset-layer/profiles/2d-platformer.json \
   --catalog ../asset-layer/catalog-fixtures/platformer-catalog.json \
   --output ../demo/.artifacts/platformer-assets.json \
@@ -217,11 +217,11 @@ as the product-owned verification signal; the `verified` tag is only a search/fa
 Local command support:
 
 ```bash
-node dist/asset-layer/browser-payload.js --profile ../asset-layer/profiles/2d-platformer.json --catalog ../asset-layer/catalog-fixtures/platformer-catalog.json --output ../demo/.artifacts/asset-browser-payload.json
-node dist/asset-layer/prepare-cli.js --profile ../asset-layer/profiles/2d-platformer.json --catalog ../asset-layer/catalog-fixtures/platformer-catalog.json --output ../demo/.artifacts/platformer-assets.json --cache ../demo/.artifacts/asset-cache
-node dist/loombridge/assets.js registry-plan --catalog ../asset-layer/catalog-fixtures/platformer-catalog.json --profile ../asset-layer/profiles/2d-platformer.json
-node dist/loombridge/assets.js registry-apply --catalog ../asset-layer/catalog-fixtures/platformer-catalog.json --profile ../asset-layer/profiles/2d-platformer.json --selections <json> --approved-at <iso>
-node dist/loombridge/assets.js registry-apply --catalog-api <hosted-catalog-url> --profile ../asset-layer/profiles/2d-platformer.json --from-selection <web-selection.json> --approved-at <iso>
+node dist/capabilities/assets/browser-payload.js --profile ../asset-layer/profiles/2d-platformer.json --catalog ../asset-layer/catalog-fixtures/platformer-catalog.json --output ../demo/.artifacts/asset-browser-payload.json
+node dist/capabilities/assets/prepare-cli.js --profile ../asset-layer/profiles/2d-platformer.json --catalog ../asset-layer/catalog-fixtures/platformer-catalog.json --output ../demo/.artifacts/platformer-assets.json --cache ../demo/.artifacts/asset-cache
+node dist/capabilities/assets/assets.js registry-plan --catalog ../asset-layer/catalog-fixtures/platformer-catalog.json --profile ../asset-layer/profiles/2d-platformer.json
+node dist/capabilities/assets/assets.js registry-apply --catalog ../asset-layer/catalog-fixtures/platformer-catalog.json --profile ../asset-layer/profiles/2d-platformer.json --selections <json> --approved-at <iso>
+node dist/capabilities/assets/assets.js registry-apply --catalog-api <hosted-catalog-url> --profile ../asset-layer/profiles/2d-platformer.json --from-selection <web-selection.json> --approved-at <iso>
 ```
 
 Implementation rules:

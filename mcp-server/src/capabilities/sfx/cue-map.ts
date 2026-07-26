@@ -509,7 +509,7 @@ export function noRepeatCues(schema: CueMapSchema): CueDecl[] {
   return schema.cues.filter((c) => c.variantPolicy?.noImmediateRepeat === true && c.variantPolicy.count >= 2);
 }
 
-// At runtime this compiles to dist/loombridge/sfx/cue-map.js, so the package root is
+// At runtime this compiles to dist/capabilities/sfx/cue-map.js, so the package root is
 // three levels up. Pack artifacts (.json) are read from src/ (tsc does not copy .json
 // into dist), the same convention telemetry/schema.ts + genre-registry.ts use.
 const PKG_ROOT = packageRoot(import.meta.url);

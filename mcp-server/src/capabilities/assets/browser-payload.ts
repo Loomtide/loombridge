@@ -134,7 +134,7 @@ const categories: AssetBrowserCategory[] = [
 
 function printUsage(): void {
   console.log(
-    "Usage: node dist/asset-layer/browser-payload.js (--profile <path-or-id> (--registry <path> | --catalog <path-or-url> | --catalog-api <baseUrl>) | --prepare-report <report.json>) --output <payload.json> [--preferred-license <spdx>] [--tags <csv>] [--cache-previews] [--preview-cache <dir>]",
+    "Usage: node dist/capabilities/assets/browser-payload.js (--profile <path-or-id> (--registry <path> | --catalog <path-or-url> | --catalog-api <baseUrl>) | --prepare-report <report.json>) --output <payload.json> [--preferred-license <spdx>] [--tags <csv>] [--cache-previews] [--preview-cache <dir>]",
   );
 }
 

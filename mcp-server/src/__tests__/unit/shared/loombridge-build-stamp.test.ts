@@ -15,9 +15,9 @@ import { resolveBuildStamp, formatBuildStamp } from "../../../shared/build-stamp
 //   <moduleUrl>/../../package.json   (package root #version)
 //   <moduleUrl>/../build-info.json   (commit + builtAt)
 // so each scenario is exercised by pointing `moduleUrl` at a temp layout that
-// mimics `dist/loombridge/<module>.js`.
+// mimics `dist/capabilities/<module>.js`.
 
-/** Build a temp `<dir>/dist/loombridge/build-stamp.js` and return its file URL. */
+/** Build a temp `<dir>/dist/capabilities/build-stamp.js` and return its file URL. */
 async function fakeModule(opts: {
   version?: string | null;
   buildInfo?: unknown;

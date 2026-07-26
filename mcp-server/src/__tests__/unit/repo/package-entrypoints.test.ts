@@ -8,13 +8,24 @@ import { packageRoot } from "../../../shared/pkg-root.js";
  * Every path package.json advertises must actually exist in the built output.
  *
  * `bin` entries are declared paths that nothing imports, so no unit test walks them: the
- * source reorganisation moved `dist/verification/**` to `dist/capabilities/verification/**`
+ * source reorganisation moved `dist/capabilities/verification/**` to `dist/capabilities/verification/**`
  * and the whole suite stayed green while three published executables
  * (loombridge-run-gates, loombridge-capture-runner, loombridge-analyze-frames) pointed at
  * files that no longer existed. That breaks only for whoever installs the package.
  */
 
 const PKG_ROOT = packageRoot(import.meta.url);
+
+/**
+ * Any relative path an npm script names. Deliberately NOT limited to `dist/` and `src/`:
+ * five scripts here reach outside the package (`../scripts/write-build-info.mjs`,
+ * `../scripts/loombridge-pack-bridge.sh` and `../scripts/build-agent-surface.mjs` are in
+ * `prepack`, so moving one breaks `npm pack` itself), and a leading `./` or `../` was
+ * previously unmatched entirely. Glob patterns are skipped — they are checked by the
+ * suite actually running.
+ */
+const SCRIPT_PATH_RE =
+  /(?:^|[\s"'(=])((?:\.{1,2}\/)?(?:[\w.@-]+\/)*[\w.@-]+\.(?:js|mjs|cjs|ts|sh|json))/g;
 const pkg = JSON.parse(fs.readFileSync(path.join(PKG_ROOT, "package.json"), "utf-8"));
 
 test("package entrypoints: every bin target exists in dist", () => {
@@ -37,14 +48,15 @@ test("package entrypoints: main exists in dist", () => {
  * Every dist/ or src/ path an npm script names must exist. The earlier version of this
  * test pattern-matched two renamed prefixes and therefore missed `docs:tools`
  * (src/tools-doc-gen.ts), `spike:ws` (src/spike-ws-client.ts) and `asset:handoff:check`
- * (dist/asset-layer/…) — one of which runs in CI, so main was red while this test was
+ * (dist/capabilities/assets/…) — one of which runs in CI, so main was red while this test was
  * green. Checking EXISTENCE instead of enumerating known-bad prefixes cannot go stale.
  */
 test("package entrypoints: every dist/ or src/ path named by an npm script exists", () => {
   const referenced: string[] = [];
   for (const [name, cmd] of Object.entries(pkg.scripts ?? {})) {
-    for (const m of String(cmd).matchAll(/(?:^|[\s"'([])((?:dist|src)\/[\w./-]+\.(?:js|mjs|ts|json))/g)) {
-      if (!fs.existsSync(path.join(PKG_ROOT, m[1]))) referenced.push(`${name}: ${m[1]}`);
+    for (const m of String(cmd).matchAll(SCRIPT_PATH_RE)) {
+      const rel = m[1]!;
+      if (!fs.existsSync(path.resolve(PKG_ROOT, rel))) referenced.push(`${name}: ${rel}`);
     }
   }
   assert.deepEqual(

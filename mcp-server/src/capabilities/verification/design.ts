@@ -26,7 +26,7 @@ import {
   type LoombridgePaths,
 } from "../../domain/state.js";
 
-// At runtime this file is dist/loombridge/design.js. The canonical (product-owned)
+// At runtime this file is dist/capabilities/design.js. The canonical (product-owned)
 // schema for the artifacts this module writes lives next to the source under
 // `src/domain/schemas/` — v0.6 explicitly settled the location decision: the
 // product is the source of truth, projects are consumers. Exported so external

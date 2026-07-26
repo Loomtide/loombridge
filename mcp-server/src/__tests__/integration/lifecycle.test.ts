@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import test from "node:test";
 
 // dist/__tests__/integration/lifecycle.test.js -> dist/index.js
-const SERVER_ENTRY = fileURLToPath(new URL("../../index.js", import.meta.url));
+const SERVER_ENTRY = fileURLToPath(new URL("../../surfaces/index.js", import.meta.url));
 
 function waitForStderr(child: ChildProcessWithoutNullStreams, marker: string, timeoutMs: number): Promise<void> {
   return new Promise((resolve, reject) => {

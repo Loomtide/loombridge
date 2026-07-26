@@ -27,7 +27,7 @@ import type { VerifyProfileArgs } from "./genre-packs/platformer-2d/verify-profi
 import type { AcceptanceContract } from "../verification/types.js";
 import { packageRoot } from "../../shared/pkg-root.js";
 
-// At runtime this file is dist/loombridge/genre-registry.js, so the package root is two up. Genre
+// At runtime this file is dist/capabilities/genre-registry.js, so the package root is two up. Genre
 // templates (.json) live under src/ — `tsc` does not copy .json into dist/, so they are read from src
 // at runtime (the same convention plan.ts / the platformer pack use).
 const PKG_ROOT = packageRoot(import.meta.url);

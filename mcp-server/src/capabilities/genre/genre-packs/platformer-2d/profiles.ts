@@ -21,7 +21,7 @@ import { packageRoot } from "../../../../shared/pkg-root.js";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// __dirname is dist/loombridge/genre-packs/platformer-2d at runtime; the JSON lives in the
+// __dirname is dist/capabilities/genre-packs/platformer-2d at runtime; the JSON lives in the
 // source tree (not copied by tsc), so resolve to the package root and read src/.
 const PKG_ROOT = packageRoot(import.meta.url);
 const PROFILES_DIR = path.join(

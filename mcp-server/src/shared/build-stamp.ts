@@ -64,7 +64,7 @@ export interface BuildStamp {
  *
  * Resolution mirrors `cli.ts#printVersion`:
  *  - `version` ← `package.json#version` at the package root. The compiled module
- *    sits in `dist/loombridge/`, so the package root is two levels up:
+ *    sits in `dist/capabilities/`, so the package root is two levels up:
  *    `../../package.json`.
  *  - `commit`/`builtAt` ← `dist/build-info.json`, one level up from the compiled
  *    module: `../build-info.json`.

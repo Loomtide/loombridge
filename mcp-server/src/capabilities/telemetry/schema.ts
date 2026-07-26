@@ -319,7 +319,7 @@ export function validateTelemetrySchema(raw: unknown): TelemetrySchemaParseResul
   return { ok: true, refusals: [], schema };
 }
 
-// At runtime this compiles to dist/loombridge/telemetry/schema.js, so the package root
+// At runtime this compiles to dist/capabilities/telemetry/schema.js, so the package root
 // is three levels up. Pack artifacts (.json) are read from src/ (tsc does not copy
 // .json into dist), the same convention genre-registry.ts uses.
 const PKG_ROOT = packageRoot(import.meta.url);

@@ -34,7 +34,7 @@ const MCP_SERVER_DIR = packageRoot(import.meta.url);
 
 function printUsage(): void {
   console.log(
-    "Usage: node dist/scenario-cli.js --scenario <path> [--output <path>] [--dry-run]",
+    "Usage: node dist/surfaces/scenario-cli.js --scenario <path> [--output <path>] [--dry-run]",
   );
 }
 

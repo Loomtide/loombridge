@@ -374,7 +374,7 @@ export function validatePersonaContract(
 }
 
 // Mirrors telemetrySchemaPathForGenre: pack artifacts live under src/ (tsc does not copy
-// .json into dist). PKG_ROOT is three levels up from dist/loombridge/telemetry/personas.js.
+// .json into dist). PKG_ROOT is three levels up from dist/capabilities/telemetry/personas.js.
 const PKG_ROOT = packageRoot(import.meta.url);
 
 /**

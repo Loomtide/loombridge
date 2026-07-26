@@ -152,7 +152,7 @@ function parseArgs(argv: string[]): { reportPath: string; outputPath: string; he
 async function run(): Promise<number> {
   const args = parseArgs(process.argv);
   if (args.help || !args.reportPath || !args.outputPath) {
-    console.log("Usage: node dist/asset-layer/reporting.js --report <report.json> --output <attribution.md>");
+    console.log("Usage: node dist/capabilities/assets/reporting.js --report <report.json> --output <attribution.md>");
     return args.help ? 0 : 1;
   }
 

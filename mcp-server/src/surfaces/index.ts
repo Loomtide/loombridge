@@ -732,7 +732,7 @@ const SERVER_NAME = "loombridge";
 // Read from package.json rather than hand-maintained: a literal here silently went
 // stale at 0.2.0 while the package shipped 0.3.0, so every MCP client saw the wrong
 // version. resolveBuildStamp() resolves package.json relative to its OWN compiled
-// location (dist/loombridge/), so it is correct regardless of this module's depth.
+// location (dist/capabilities/), so it is correct regardless of this module's depth.
 const SERVER_VERSION = resolveBuildStamp().version;
 
 // Exported so the `loombridge` CLI dispatcher (cli.ts) can boot the server via the

@@ -32,7 +32,10 @@ export interface DoctorServers {
 }
 
 /** pkill pattern offered as a convenience remedy (covers the path-qualified forms). */
-const PKILL_PATTERN = "mcp-server/dist/surfaces/index.js";
+// A regex covering BOTH entrypoints, because classifyServerCommand confirms both: the
+// remedy must match the stale PRE-reorg server it just told you about, which a literal
+// on the new path never would.
+const PKILL_PATTERN = "'mcp-server/dist/(surfaces/)?index\\.js'";
 
 /**
  * Classify a ps command line as a loombridge MCP server launch, or null if it isn't one.

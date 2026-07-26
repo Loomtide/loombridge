@@ -24,7 +24,7 @@ test("classifyServerCommand: path-qualified forms are trusted, bare is flagged, 
   assert.equal(classifyServerCommand("node dist/index.js"), "bare", "bare cwd=mcp-server form");
   assert.equal(classifyServerCommand("node22 dist/index.js"), "bare", "versioned node binary");
   // Not the server:
-  assert.equal(classifyServerCommand("node dist/scenario-cli.js"), null, "different entrypoint");
+  assert.equal(classifyServerCommand("node dist/surfaces/scenario-cli.js"), null, "different entrypoint");
   assert.equal(classifyServerCommand("node --test dist/__tests__/diagnostics.test.js"), null, "test runner");
   assert.equal(classifyServerCommand("node /Users/x/some-other-proj/dist/index.js"), null, "unrelated absolute dist/index.js");
   assert.equal(classifyServerCommand("/Applications/Pencil.app/mcp-server-darwin-arm64 --app desktop"), null, "not node");
@@ -42,7 +42,7 @@ const PS = [
   "  2338     2226    06:18:42 node mcp-server/dist/index.js", // path (relative)
   "18523    15908 01-01:53:16 /opt/homebrew/bin/node /a/b/mcp-server/dist/index.js", // path (absolute)
   "20385    20372    01:15:43 node dist/index.js", // BARE — needs cwd check
-  " 4242     1234       00:05 node dist/scenario-cli.js", // not the server
+  " 4242     1234       00:05 node dist/surfaces/scenario-cli.js", // not the server
   " 5000     1234    00:01:00 node /Users/x/some-other-proj/dist/index.js", // unrelated absolute
 ].join("\n");
 
@@ -99,7 +99,9 @@ test("formatDoctorLines recommends kill only for confirmed; ambiguous gets a ver
   assert.equal(confirmedOnly.length, 2);
   assert.match(confirmedOnly[0]!, /1 other loombridge MCP server \(pids: 18523\)/);
   assert.match(confirmedOnly[1]!, /kill 18523/);
-  assert.match(confirmedOnly[1]!, /pkill -f mcp-server\/dist\/surfaces\/index\.js/);
+  // The remedy must match BOTH entrypoints, because the classifier confirms both — a
+  // literal on the new path would not kill the stale pre-reorg server it just reported.
+  assert.match(confirmedOnly[1]!, /pkill -f .*surfaces\/\)\?index/);
 
   // Ambiguous-only -> NO kill recommendation, only a verify-first note.
   const ambiguousOnly = formatDoctorLines({

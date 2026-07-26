@@ -102,7 +102,7 @@ const __dirname = path.dirname(__filename);
 function printUsage(): void {
   console.log(
     [
-      "Usage: node dist/verification/capture-runner.js \\",
+      "Usage: node dist/capabilities/verification/capture-runner.js \\",
       "  --acceptance <acceptance.json> \\",
       "  [--scenario <verification-scenario.json>] \\",
       "  --out <trace/verify> \\",

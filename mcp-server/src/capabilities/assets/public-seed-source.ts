@@ -175,7 +175,7 @@ async function run(): Promise<number> {
   const args = parseArgs(process.argv);
   if (args.help || !args.shardPath) {
     console.log(
-      "Usage: node dist/asset-layer/public-seed-source.js --shard <jsonl> [--assets-dir <dir>] [--write]\n" +
+      "Usage: node dist/capabilities/assets/public-seed-source.js --shard <jsonl> [--assets-dir <dir>] [--write]\n" +
         "  Regenerates byte-derived metadata (sha256, sizeBytes, technical.width/height)\n" +
         "  for each record from the BUNDLED assets — no private mirror, no network.\n" +
         "  Without --write it prints the regenerated shard to stdout (diff against the committed file).",
