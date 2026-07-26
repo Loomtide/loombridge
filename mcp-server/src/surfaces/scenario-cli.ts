@@ -15,6 +15,7 @@ import {
 import { writeScenarioResult } from "../capabilities/scenario/result-writer.js";
 import { validateScenarioDocument } from "../capabilities/scenario/validator.js";
 import type { ScenarioDocument, ScenarioRunResult, ScenarioToolResult } from "../capabilities/scenario/types.js";
+import { packageRoot } from "../shared/pkg-root.js";
 
 interface CliArgs {
   scenarioPath: string;
@@ -29,7 +30,7 @@ interface CliRuntime {
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-const MCP_SERVER_DIR = resolve(__dirname, "..");
+const MCP_SERVER_DIR = packageRoot(import.meta.url);
 
 function printUsage(): void {
   console.log(

@@ -31,7 +31,7 @@ Prepared organization output must provide the exact generic tool argument pair e
 - `source_path`: local prepared cache file
 - `path`: Unity asset destination such as `Assets/Art/Sprites/Tiles/grass-tile.png`
 
-The prepare report also includes checksum, cache status, provider diagnostics, selected-vs-rejected counts, accepted import arguments, and the attribution/provenance for each accepted asset. Run the prepare step via `loombridge-asset-prep --project <path>` (or `node dist/asset-layer/prepare-cli.js`), which emits both the prepare report and the attribution markdown into the project handoff dir.
+The prepare report also includes checksum, cache status, provider diagnostics, selected-vs-rejected counts, accepted import arguments, and the attribution/provenance for each accepted asset. Run the prepare step via `loombridge-asset-prep --project <path>` (or `node dist/capabilities/assets/prepare-cli.js`), which emits both the prepare report and the attribution markdown into the project handoff dir.
 
 ## Platform Surface Rendering
 

@@ -32,7 +32,7 @@ export interface DoctorServers {
 }
 
 /** pkill pattern offered as a convenience remedy (covers the path-qualified forms). */
-const PKILL_PATTERN = "mcp-server/dist/index.js";
+const PKILL_PATTERN = "mcp-server/dist/surfaces/index.js";
 
 /**
  * Classify a ps command line as a loombridge MCP server launch, or null if it isn't one.
@@ -59,8 +59,13 @@ export function classifyServerCommand(command: string): ServerMatch | null {
   let bare = false;
   for (const tok of tokens) {
     const t = tok.replace(/\\/g, "/");
-    if (t === "mcp-server/dist/index.js" || t.endsWith("/mcp-server/dist/index.js")) {
-      return "path"; // unambiguous — prefer it over any bare token on the same line
+    // Match the current entrypoint AND the pre-reorg one: a server left running from an
+    // older build is exactly what this detector exists to catch, so dropping the old form
+    // would blind it in the case that matters most.
+    for (const rel of ["mcp-server/dist/surfaces/index.js", "mcp-server/dist/index.js"]) {
+      if (t === rel || t.endsWith(`/${rel}`)) {
+        return "path"; // unambiguous — prefer it over any bare token on the same line
+      }
     }
     if (t === "dist/surfaces/index.js" || t === "dist/index.js") bare = true;
   }

@@ -107,7 +107,7 @@ For human-visible demo runs, show the agent-selected prepared assets before impo
 ```bash
 cd <loombridge-repo>/mcp-server
 npm run build
-node dist/asset-layer/browser-payload.js \
+node dist/capabilities/assets/browser-payload.js \
   --prepare-report "$PROJECT/.loombridge/handoff/switchyard-asset-prepare-report.json" \
   --output "$PROJECT/.loombridge/handoff/switchyard-asset-browser-payload.json"
 ```

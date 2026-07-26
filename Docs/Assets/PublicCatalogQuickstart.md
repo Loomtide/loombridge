@@ -53,7 +53,7 @@ trust tier, license, source/provenance links, and the action intents the UI is a
 ```bash
 cd mcp-server
 npm run build   # one-time, produces dist/
-node dist/asset-layer/browser-payload.js \
+node dist/capabilities/assets/browser-payload.js \
   --profile 2d-platformer \
   --catalog https://catalog.loomtide.ai/v1/catalog/public/2d-platformer \
   --output payload.json
@@ -78,7 +78,7 @@ validates the sprite, and writes a deterministic project cache plus a prepare re
 
 ```bash
 cd mcp-server
-node dist/asset-layer/prepare-cli.js \
+node dist/capabilities/assets/prepare-cli.js \
   --profile 2d-platformer \
   --catalog https://catalog.loomtide.ai/v1/catalog/public/2d-platformer \
   --primitive tile \
@@ -161,13 +161,13 @@ has non-zero on-screen extent (`unity_scene_get_bounds`).
 cd mcp-server && npm run build
 
 # 1) Browse public candidates (no token).
-node dist/asset-layer/browser-payload.js \
+node dist/capabilities/assets/browser-payload.js \
   --profile 2d-platformer \
   --catalog https://catalog.loomtide.ai/v1/catalog/public/2d-platformer \
   --output payload.json
 
 # 2) Prepare the trusted-default tile (downloads + checksum-verifies into .cache).
-node dist/asset-layer/prepare-cli.js \
+node dist/capabilities/assets/prepare-cli.js \
   --profile 2d-platformer \
   --catalog https://catalog.loomtide.ai/v1/catalog/public/2d-platformer \
   --primitive tile \

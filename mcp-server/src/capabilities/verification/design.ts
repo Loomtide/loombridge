@@ -16,6 +16,7 @@ import { createHash } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { packageRoot } from "../../shared/pkg-root.js";
 
 import {
   loombridgePaths,
@@ -32,10 +33,8 @@ import {
 // tooling can resolve the schema path without grepping the package.
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-export const DESIGN_TARGET_SCHEMA_PATH = path.resolve(
-  __dirname,
-  "..",
-  "..",
+export const DESIGN_TARGET_SCHEMA_PATH = path.join(
+  packageRoot(import.meta.url),
   "src",
   "domain",
   "schemas",

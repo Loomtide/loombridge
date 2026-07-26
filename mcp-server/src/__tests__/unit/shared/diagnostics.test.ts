@@ -14,7 +14,10 @@ import {
 
 test("classifyServerCommand: path-qualified forms are trusted, bare is flagged, look-alikes rejected", () => {
   // Path-qualified (unambiguous) — see .mcp.json + loombridge-install-locally.sh:
-  assert.equal(classifyServerCommand("node mcp-server/dist/index.js"), "path", "relative");
+  assert.equal(classifyServerCommand("node mcp-server/dist/surfaces/index.js"), "path", "relative");
+  // A stale server started from a PRE-reorg build is exactly what this detector is for,
+  // so the old entrypoint must keep classifying too.
+  assert.equal(classifyServerCommand("node mcp-server/dist/index.js"), "path", "relative (pre-reorg build)");
   assert.equal(classifyServerCommand("/opt/homebrew/bin/node /a/b/mcp-server/dist/index.js"), "path", "absolute");
   assert.equal(classifyServerCommand("/usr/local/bin/node /h/.loombridge/runtime/mcp-server/dist/index.js"), "path", "frozen");
   // Bare (cwd=mcp-server) — must be flagged for a cwd check, not trusted on argv alone:
@@ -96,7 +99,7 @@ test("formatDoctorLines recommends kill only for confirmed; ambiguous gets a ver
   assert.equal(confirmedOnly.length, 2);
   assert.match(confirmedOnly[0]!, /1 other loombridge MCP server \(pids: 18523\)/);
   assert.match(confirmedOnly[1]!, /kill 18523/);
-  assert.match(confirmedOnly[1]!, /pkill -f mcp-server\/dist\/index\.js/);
+  assert.match(confirmedOnly[1]!, /pkill -f mcp-server\/dist\/surfaces\/index\.js/);
 
   // Ambiguous-only -> NO kill recommendation, only a verify-first note.
   const ambiguousOnly = formatDoctorLines({

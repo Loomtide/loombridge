@@ -16,7 +16,7 @@ One canonical body drives both Claude Code (`/loombridge:build`) and Codex
 ```bash
 loombridge build
 # local dogfood fallback from the repo:
-# node mcp-server/dist/cli.js build --root .
+# node mcp-server/dist/surfaces/cli.js build --root .
 ```
 
 The CLI default-hard-gates on (a) a contract from `loombridge plan` and (b) an **approved +
@@ -114,7 +114,7 @@ its absolute path — `<repo-root>/scripts/prepare-project-assets.sh --project "
 The **`asset-layer`** skill covers the full flow (registry validation, provenance,
 browser confirmation, deterministic project cache, attribution).
 
-> Do **not** run the repo-local prepare CLI (`node mcp-server/dist/asset-layer/prepare-cli.js`) with a
+> Do **not** run the repo-local prepare CLI (`node mcp-server/dist/capabilities/assets/prepare-cli.js`) with a
 > `--output`/`--cache` under the repo's `demo/.artifacts/` for a clean-room validation run — that stages
 > assets into the *repo*, not the target project. Use `loombridge-asset-prep --project <path>` so the
 > handoff lands under `<project>/.loombridge/handoff/`.
@@ -128,7 +128,7 @@ prompt into ONE:
 |---|---|---|
 | "add a coin pickup and a win flag" | **feature build** → `unity-2d-game` | `unity_ops_batch` for all multi-object construction |
 | "lay out the level / platforms" | **level** → `platformer-level-design` | `unity_ops_batch` (or a generated editor script for very large layouts) |
-| "make the jump feel snappier" | **feel-tune** → FeelHarness solve→measure→tune | **`mcp-server/dist/verification/tuning-runner.js`** — accelerates the iterate loop (mutations + measurement recipes in one pinned pass) |
+| "make the jump feel snappier" | **feel-tune** → FeelHarness solve→measure→tune | **`mcp-server/dist/capabilities/verification/tuning-runner.js`** — accelerates the iterate loop (mutations + measurement recipes in one pinned pass) |
 | "polish it for a recording" | **polish** → `game-polish-2d`, `parallax-2d` | `unity_ops_batch` for prop wiring |
 | phase is `verified-failing` | **fix-to-green** → read `.loombridge/reports/build-verdict.json` failures, fix each | re-run only the failing gates' captures |
 
@@ -225,7 +225,7 @@ it does **not** drive Unity through hazard / movement / win. So one runner pass 
 spawn + jump-burst evidence into `.loombridge/verify/spawn/`. Use it there only:
 
 ```bash
-node mcp-server/dist/verification/capture-runner.js \
+node mcp-server/dist/capabilities/verification/capture-runner.js \
   --acceptance .loombridge/ACCEPTANCE.json \
   --out .loombridge/verify/spawn
 ```
@@ -399,11 +399,11 @@ enforces that **all** states' files exist AND the hero-shot fidelity holds:
 # spawn's gates, and doneness enforces capture-presence for every state in capturePack).
 # --vlm merges the ONE consolidated multi-state review (verify root) into the verdict
 # so doneness can read it; --inputs still grades the primary state's deterministic gates.
-node mcp-server/dist/cli.js verify --root . --inputs .loombridge/verify/spawn \
+node mcp-server/dist/surfaces/cli.js verify --root . --inputs .loombridge/verify/spawn \
   --vlm .loombridge/verify/vlm-review.json --strict
 
 # §3a freshness + hero-shot fidelity gate — the ONLY path to a "done" claim.
-node mcp-server/dist/cli.js doneness --root .
+node mcp-server/dist/surfaces/cli.js doneness --root .
 ```
 
 - **`verify`** with `--inputs <state-subdir>` reads that state's per-gate files, runs the
@@ -438,7 +438,7 @@ also run the consistency check — catches stale handoff prose, `registryAssets.
 contradictions, and asset-id drift between the prepare report and the verdict:
 
 ```bash
-node mcp-server/dist/asset-layer/handoff-consistency.js \
+node mcp-server/dist/capabilities/assets/handoff-consistency.js \
   --prepare-report .loombridge/handoff/<genre>-asset-prepare-report.json \
   --verdict .loombridge/reports/build-verdict.json \
   --output .loombridge/handoff/asset-handoff-consistency.json

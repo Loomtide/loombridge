@@ -31,7 +31,7 @@ async function main() {
 
   const transport = new StdioClientTransport({
     command: "/opt/homebrew/bin/node",
-    args: [resolve(MCP_SERVER_DIR, "dist/index.js")],
+    args: [resolve(MCP_SERVER_DIR, "dist/surfaces/index.js")],
     cwd: MCP_SERVER_DIR,
   });
 

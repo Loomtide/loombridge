@@ -241,4 +241,4 @@ so the two agents cannot drift.
    For read-only progress without any scaffold/state mutation, run `loombridge status`.
 
 For local dogfooding from the Loombridge repo before installing the CLI, the equivalent command is
-`node mcp-server/dist/cli.js <subcommand>`.
+`node mcp-server/dist/surfaces/cli.js <subcommand>`.

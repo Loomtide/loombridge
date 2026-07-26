@@ -16,7 +16,7 @@ identical on Claude Code and Codex because it lives in the deterministic CLI, no
    ```bash
    # Per-state captures live under .loombridge/verify/<state>/ (see build.md §6).
    # For platformer-2d the primary state is `spawn`; pick the contract's first state for other genres.
-   node mcp-server/dist/cli.js verify --root . --inputs .loombridge/verify/spawn
+   node mcp-server/dist/surfaces/cli.js verify --root . --inputs .loombridge/verify/spawn
    # require all-green (no warnings tolerated): add --strict
    # (published installs: `loombridge verify --root . --inputs .loombridge/verify/spawn`)
    ```

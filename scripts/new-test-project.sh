@@ -117,7 +117,7 @@ fi
 # PATH. This project is git-ignored, so machine-specific paths are fine. settings.local.json
 # pre-approves it (no /mcp prompt; the one-time folder-trust prompt still appears on first open).
 NODE_BIN="$(command -v node || true)"
-SERVER_JS="$REPO_ROOT/mcp-server/dist/index.js"
+SERVER_JS="$REPO_ROOT/mcp-server/dist/surfaces/index.js"
 [ -z "$NODE_BIN" ] && echo "WARN: 'node' not on PATH; edit $PROJ/.mcp.json command by hand." >&2
 [ -f "$SERVER_JS" ] || echo "WARN: $SERVER_JS missing — run: (cd mcp-server && npm install && npm run build)" >&2
 

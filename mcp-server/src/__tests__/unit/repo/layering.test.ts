@@ -66,6 +66,23 @@ export function layerOf(relPath: string): Layer {
   return "root";
 }
 
+/**
+ * Every shape a module specifier can take here. The first version matched only
+ * `from "..."` with double quotes, so it was blind to dynamic `import()` — which is the
+ * established cross-module idiom in this codebase (doctor, verify, minigame-finalize,
+ * genre-registry all use it) — as well as single quotes, bare side-effect imports and
+ * createRequire. A layering rule that any lazy import can walk through is not a rule.
+ */
+const SPECIFIER_RE = new RegExp(
+  [
+    String.raw`(?:from|import)\s*\(?\s*["']([^"']+)["']`, // from "x" | import("x") | import "x"
+    String.raw`require\s*\(\s*["']([^"']+)["']`, //            require("x")
+    String.raw`export\s+(?:\*|\{[^}]*\})\s+from\s*["']([^"']+)["']`, // re-export
+    String.raw`import\s+type\s+[^"']*from\s*["']([^"']+)["']`, //          type-only
+  ].join("|"),
+  "g",
+);
+
 function tsFiles(dir: string, acc: string[] = []): string[] {
   for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
     const abs = path.join(dir, e.name);
@@ -92,8 +109,9 @@ export function collectViolations(
     if (forbidden.length === 0) continue;
 
     const text = readFile(abs);
-    for (const m of text.matchAll(/from\s+"([^"]+)"/g)) {
-      const spec = m[1];
+    for (const m of text.matchAll(SPECIFIER_RE)) {
+      const spec = m[1] ?? m[2] ?? m[3] ?? m[4];
+      if (!spec) continue;
       if (!spec.startsWith(".")) continue;
       const resolved = path
         .relative(srcRoot, path.resolve(path.dirname(abs), spec))
@@ -134,6 +152,29 @@ test("layering LITMUS: the detector actually fires on a planted violation", () =
 
   assert.equal(violations.length, 1, "exactly the planted violation should be reported");
   assert.match(violations[0], /^domain\/capture-paths\.ts \(domain\) imports capabilities\//);
+});
+
+test("layering LITMUS: every import shape is detected, not just a static double-quoted one", () => {
+  // The matcher previously saw only `from "x"`. Each shape below is a real way this
+  // codebase imports across modules — dynamic import() especially — so each must trip
+  // the rule. A litmus that plants one shape only proves that shape.
+  const planted = path.join(SRC, "domain", "capture-paths.ts");
+  const target = `${".."}/capabilities/verification/verify.js`;
+  const shapes: Record<string, string> = {
+    "double-quoted static": `import { x } from "${target}";`,
+    "single-quoted static": `import { x } from '${target}';`,
+    "dynamic import()": `const m = await import("${target}");`,
+    "side-effect import": `import "${target}";`,
+    "re-export": `export { x } from "${target}";`,
+    "type-only": `import type { X } from "${target}";`,
+    "require()": `const m = require("${target}");`,
+  };
+
+  for (const [shape, source] of Object.entries(shapes)) {
+    const violations = collectViolations(SRC, (p) => (p === planted ? source : fs.readFileSync(p, "utf-8")));
+    assert.equal(violations.length, 1, `${shape}: expected exactly the planted violation`);
+    assert.match(violations[0], /^domain\/capture-paths\.ts \(domain\) imports capabilities\//, shape);
+  }
 });
 
 test("layering: the layer classifier maps each top-level directory", () => {

@@ -166,7 +166,7 @@ No external model or API is required — Claude is multimodal. But the reviewers
    # ONE consolidated review at the verify root covers every capturePack state.
    # --inputs still points at the primary state (verify grades that state's
    # deterministic gates); --vlm is the consolidated multi-state review.
-   node mcp-server/dist/cli.js verify --root . \
+   node mcp-server/dist/surfaces/cli.js verify --root . \
      --inputs .loombridge/verify/spawn \
      --vlm .loombridge/verify/vlm-review.json \
      --strict

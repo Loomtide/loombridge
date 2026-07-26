@@ -20,7 +20,7 @@ over `loombridge status`.
    For local dogfooding before install:
 
    ```bash
-   node mcp-server/dist/cli.js ask --root . "$ARGUMENTS"
+   node mcp-server/dist/surfaces/cli.js ask --root . "$ARGUMENTS"
    ```
 
 2. Report the CLI output directly. Do not replace it with a custom table or a broader plan.

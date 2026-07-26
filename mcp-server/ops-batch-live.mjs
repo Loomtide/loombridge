@@ -1,5 +1,5 @@
 // Live ops.batch test using the real UnityClient (auto-discovers the working IPC transport).
-import { UnityClient } from "./dist/unity-client.js";
+import { UnityClient } from "./dist/bridge/unity-client.js";
 
 const client = new UnityClient();
 const T = 30000;

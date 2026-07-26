@@ -33,13 +33,32 @@ test("package entrypoints: main exists in dist", () => {
   );
 });
 
-test("package entrypoints: npm scripts do not reference a stale dist layout", () => {
-  // The reorg renamed these prefixes; a script still naming them would fail only when run.
-  const stale = Object.entries(pkg.scripts ?? {})
-    .filter(([, cmd]) => /dist\/(verification|loombridge)\//.test(cmd as string))
-    .map(([name, cmd]) => `${name}: ${cmd}`);
+/**
+ * Every dist/ or src/ path an npm script names must exist. The earlier version of this
+ * test pattern-matched two renamed prefixes and therefore missed `docs:tools`
+ * (src/tools-doc-gen.ts), `spike:ws` (src/spike-ws-client.ts) and `asset:handoff:check`
+ * (dist/asset-layer/…) — one of which runs in CI, so main was red while this test was
+ * green. Checking EXISTENCE instead of enumerating known-bad prefixes cannot go stale.
+ */
+test("package entrypoints: every dist/ or src/ path named by an npm script exists", () => {
+  const referenced: string[] = [];
+  for (const [name, cmd] of Object.entries(pkg.scripts ?? {})) {
+    for (const m of String(cmd).matchAll(/(?:^|[\s"'([])((?:dist|src)\/[\w./-]+\.(?:js|mjs|ts|json))/g)) {
+      if (!fs.existsSync(path.join(PKG_ROOT, m[1]))) referenced.push(`${name}: ${m[1]}`);
+    }
+  }
+  assert.deepEqual(
+    referenced,
+    [],
+    `npm script(s) name a path that does not exist:\n  ${referenced.join("\n  ")}`,
+  );
+});
 
-  assert.deepEqual(stale, [], `npm script(s) reference a pre-reorg dist path:\n  ${stale.join("\n  ")}`);
+test("package entrypoints LITMUS: the npm-script path check fires on a bogus path", () => {
+  const bogus = "dist/definitely/not/here.js";
+  assert.ok(!fs.existsSync(path.join(PKG_ROOT, bogus)), "fixture path must not exist");
+  const hits = [...`node ${bogus}`.matchAll(/(?:^|[\s"'([])((?:dist|src)\/[\w./-]+\.(?:js|mjs|ts|json))/g)];
+  assert.equal(hits.length, 1, "the extractor must find the path the check would test");
 });
 
 test("package entrypoints LITMUS: the check fires on a bogus bin target", () => {

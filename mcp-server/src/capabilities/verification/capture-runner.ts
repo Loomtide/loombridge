@@ -25,6 +25,7 @@ import { runGates } from "./run-gates.js";
 import { assertValidAcceptanceContract } from "./validator.js";
 import type { AcceptanceContract } from "./types.js";
 import { scenarioPacks } from "../genre/genre-registry.js";
+import { packageRoot } from "../../shared/pkg-root.js";
 import {
   assertValidVerificationScenario,
   getVerificationResetPolicy,
@@ -171,9 +172,13 @@ export function planCaptureRunnerOutputs(outDir: string): CaptureRunnerOutputPla
 }
 
 function scenarioPackPath(fileName: string): string {
-  const sourceDir = __dirname.endsWith(`${path.sep}dist${path.sep}verification`)
-    ? path.resolve(__dirname, "../../src/capabilities/verification/scenarios")
-    : path.join(__dirname, "scenarios");
+  const sourceDir = path.join(
+    packageRoot(import.meta.url),
+    "src",
+    "capabilities",
+    "verification",
+    "scenarios",
+  );
   return path.join(sourceDir, fileName);
 }
 

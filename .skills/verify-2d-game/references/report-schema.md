@@ -32,7 +32,7 @@ Produced by `run-gates.js` (aggregates the per-gate `GateReport`s). This is what
   match the prepare report exactly, and a separate `asset-handoff-consistency.json` should be produced by
   running the consistency checker with its required flags from the repo root:
   ```bash
-  node mcp-server/dist/asset-layer/handoff-consistency.js \
+  node mcp-server/dist/capabilities/assets/handoff-consistency.js \
     --prepare-report .loombridge/handoff/<genre>-asset-prepare-report.json \
     --verdict .loombridge/reports/build-verdict.json \
     --output .loombridge/handoff/asset-handoff-consistency.json
