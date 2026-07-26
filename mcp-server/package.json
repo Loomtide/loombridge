@@ -13,9 +13,9 @@
     "loombridge": "dist/cli.js",
     "loombridge-mcp-server": "dist/cli.js",
     "loombridge-mcp": "dist/index.js",
-    "loombridge-run-gates": "dist/verification/run-gates.js",
-    "loombridge-capture-runner": "dist/verification/capture-runner.js",
-    "loombridge-analyze-frames": "dist/verification/analyze-frames.js"
+    "loombridge-run-gates": "dist/capabilities/verification/run-gates.js",
+    "loombridge-capture-runner": "dist/capabilities/verification/capture-runner.js",
+    "loombridge-analyze-frames": "dist/capabilities/verification/analyze-frames.js"
   },
   "scripts": {
     "clean": "rm -rf dist",
@@ -33,9 +33,9 @@
     "asset:handoff:check": "node dist/asset-layer/handoff-consistency.js",
     "spike:ws": "tsx src/spike-ws-client.ts",
     "docs:tools": "tsx src/tools-doc-gen.ts",
-    "verify:gates": "node dist/verification/run-gates.js",
-    "verify:capture-runner": "node dist/verification/capture-runner.js",
-    "verify:analyze-frames": "node dist/verification/analyze-frames.js",
+    "verify:gates": "node dist/capabilities/verification/run-gates.js",
+    "verify:capture-runner": "node dist/capabilities/verification/capture-runner.js",
+    "verify:analyze-frames": "node dist/capabilities/verification/analyze-frames.js",
     "prepack": "npm run build && bash ../scripts/loombridge-pack-bridge.sh --out-dir bridge && node ../scripts/build-agent-surface.mjs"
   },
   "dependencies": {
