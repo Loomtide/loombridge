@@ -14,21 +14,21 @@ import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
-import { runGates, isGateInStage, VERIFY_STAGES, type ReviewFindings } from "../verification/run-gates.js";
-import type { AcceptanceContract } from "../verification/types.js";
-import { createDraftAssetManifest, type AssetManifest } from "../loombridge/asset-manifest.js";
+import { runGates, isGateInStage, VERIFY_STAGES, type ReviewFindings } from "../capabilities/verification/run-gates.js";
+import type { AcceptanceContract } from "../capabilities/verification/types.js";
+import { createDraftAssetManifest, type AssetManifest } from "../capabilities/assets/asset-manifest.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const acceptancePath = path.resolve(
   __dirname,
   "../../..",
-  "mcp-server/src/verification/tiderunner.acceptance.json",
+  "mcp-server/src/capabilities/verification/tiderunner.acceptance.json",
 );
 const switchyardAcceptancePath = path.resolve(
   __dirname,
   "../../..",
-  "mcp-server/src/verification/switchyard-courier.acceptance.json",
+  "mcp-server/src/capabilities/verification/switchyard-courier.acceptance.json",
 );
 
 async function loadAcceptance(): Promise<AcceptanceContract> {

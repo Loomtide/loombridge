@@ -6,7 +6,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { readTarball, readTarballFile, extractTarball } from "../loombridge/tarball.js";
+import { readTarball, readTarballFile, extractTarball } from "../capabilities/setup/tarball.js";
 
 /**
  * Fixtures are produced by the SYSTEM tar, not by a writer of our own, so the reader is

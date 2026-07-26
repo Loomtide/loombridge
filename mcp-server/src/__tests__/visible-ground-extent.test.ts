@@ -5,7 +5,7 @@ import {
   computeVisibleGroundExtent,
   orthographicGroundWidthM,
   type BoundedGroundExtent,
-} from "../verification/visible-ground-extent.js";
+} from "../capabilities/verification/visible-ground-extent.js";
 
 const ASPECT_16_9 = 16 / 9;
 

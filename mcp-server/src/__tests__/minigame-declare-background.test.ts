@@ -16,7 +16,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-import { computeDeclaration, runDeclareBackground } from "../loombridge/minigame-declare-background.js";
+import { computeDeclaration, runDeclareBackground } from "../capabilities/minigame/minigame-declare-background.js";
 
 // ── pure core: computeDeclaration ──────────────────────────────────────────────
 

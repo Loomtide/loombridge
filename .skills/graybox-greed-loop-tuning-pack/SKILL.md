@@ -10,9 +10,9 @@ regressions; HUMANS judge fun. This skill covers the loop machinery plus a speci
 tuning grammar (provenance labeled per rule — most of it is single-run candidate material).
 
 The telemetry schema, persona spread, and evidence classes are genre-pack artifacts + shipped analysis:
-`mcp-server/src/loombridge/genre-packs/3d-topdown-arena/telemetry.json` (per-run summary + closed event
+`mcp-server/src/capabilities/genre/genre-packs/3d-topdown-arena/telemetry.json` (per-run summary + closed event
 set), `.../personas.json` (Timid/Balanced/Greedy/Reckless with intent + envelope + calibration posture),
-and `mcp-server/src/verification/gates/evidence-classes.ts`. Point at those for the field lists — do not
+and `mcp-server/src/capabilities/verification/gates/evidence-classes.ts`. Point at those for the field lists — do not
 restate them here.
 
 Provenance tags: **VALIDATED** = the specific RULE (not just its theme) appears independently in two

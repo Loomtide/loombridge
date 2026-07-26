@@ -12,10 +12,10 @@ import {
   applyContractDiff,
   diffContractVsScene,
   type ContractDiff,
-} from "../loombridge/minigame-sync.js";
-import { assertValidMinigameContract, validateMinigameContract } from "../loombridge/minigame-profiles/validator.js";
-import type { MinigameContract } from "../loombridge/minigame-profiles/types.js";
-import type { RoleCandidates } from "../loombridge/minigame-role-discover.js";
+} from "../capabilities/minigame/minigame-sync.js";
+import { assertValidMinigameContract, validateMinigameContract } from "../capabilities/minigame/profiles/validator.js";
+import type { MinigameContract } from "../capabilities/minigame/profiles/types.js";
+import type { RoleCandidates } from "../capabilities/minigame/minigame-role-discover.js";
 
 function baseContract(): MinigameContract {
   return assertValidMinigameContract({

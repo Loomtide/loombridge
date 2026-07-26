@@ -4,19 +4,19 @@ import test from "node:test";
 import {
   validatePlatformerProfile,
   assertValidPlatformerProfile,
-} from "../loombridge/genre-packs/platformer-2d/validator.js";
+} from "../capabilities/genre/genre-packs/platformer-2d/validator.js";
 import {
   loadAllProfiles,
   loadProfile,
   SHIPPED_PROFILE_IDS,
-} from "../loombridge/genre-packs/platformer-2d/profiles.js";
+} from "../capabilities/genre/genre-packs/platformer-2d/profiles.js";
 import {
   KNOWN_PROFILE_METRICS,
   PLATFORMER_PROFILE_SCHEMA_VERSION,
   SUPPORTED_PROFILE_UNIT_SET,
   type PlatformerFeelProfile,
-} from "../loombridge/genre-packs/platformer-2d/types.js";
-import { withinBand, bandWindow } from "../verification/gates/feel.js";
+} from "../capabilities/genre/genre-packs/platformer-2d/types.js";
+import { withinBand, bandWindow } from "../capabilities/verification/gates/feel.js";
 
 // A minimal valid profile we can clone and corrupt for the negative tests.
 function baseProfile(): Record<string, unknown> {

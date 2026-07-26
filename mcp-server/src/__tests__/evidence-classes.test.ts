@@ -25,7 +25,7 @@ import {
   EVIDENCE_CLASS_PRODUCERS,
   deriveEvidenceClasses,
   type EvidenceVerdictView,
-} from "../verification/gates/evidence-classes.js";
+} from "../capabilities/verification/gates/evidence-classes.js";
 import {
   evidenceClassRefusals,
   isProjectDone,
@@ -33,12 +33,12 @@ import {
   runDoneness,
   wholeGameDonenessReasons,
   type VerdictLike,
-} from "../loombridge/doneness.js";
-import { validateAcceptanceContract } from "../verification/validator.js";
-import { runPlan } from "../loombridge/plan.js";
-import { runVerify } from "../loombridge/verify.js";
-import { loombridgePaths } from "../loombridge/state.js";
-import type { GateCheck, CheckStatus } from "../verification/gates/types.js";
+} from "../capabilities/verification/doneness.js";
+import { validateAcceptanceContract } from "../capabilities/verification/validator.js";
+import { runPlan } from "../capabilities/verification/plan.js";
+import { runVerify } from "../capabilities/verification/verify.js";
+import { loombridgePaths } from "../domain/state.js";
+import type { GateCheck, CheckStatus } from "../capabilities/verification/gates/types.js";
 
 async function tmpRoot(): Promise<string> {
   return fs.mkdtemp(path.join(os.tmpdir(), "loombridge-evidence-"));

@@ -50,16 +50,16 @@ import {
   type TileRenderInput,
   type VisualArtifactsInput,
   type VerifyManifestResult,
-} from "../verification/gates/index.js";
-import type { AcceptanceContract } from "../verification/types.js";
-import { createDraftAssetManifest, type AssetManifest } from "../loombridge/asset-manifest.js";
+} from "../capabilities/verification/gates/index.js";
+import type { AcceptanceContract } from "../capabilities/verification/types.js";
+import { createDraftAssetManifest, type AssetManifest } from "../capabilities/assets/asset-manifest.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const acceptancePath = path.resolve(
   __dirname,
   "../../..",
-  "mcp-server/src/verification/tiderunner.acceptance.json",
+  "mcp-server/src/capabilities/verification/tiderunner.acceptance.json",
 );
 
 let acceptance: AcceptanceContract;

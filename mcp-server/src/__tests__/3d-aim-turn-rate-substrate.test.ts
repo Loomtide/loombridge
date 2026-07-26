@@ -6,7 +6,7 @@ import { spawnSync } from "node:child_process";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
-import { deriveAimTurnRateDegPerSec } from "../verification/feel-derive.js";
+import { deriveAimTurnRateDegPerSec } from "../capabilities/verification/feel-derive.js";
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "../../..");
 const bundleRoot = join(repoRoot, "demo-bundles/3d-aim-turn-rate-substrate");

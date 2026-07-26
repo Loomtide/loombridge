@@ -10,7 +10,7 @@ import {
   type Assertion,
   type ReplayDriver,
   type ReplayTrace,
-} from "../loombridge/replay/index.js";
+} from "../capabilities/replay/index.js";
 
 // ───────────────────────────── fixtures ─────────────────────────────
 

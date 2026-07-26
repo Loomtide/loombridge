@@ -2,9 +2,9 @@
 
 **Status:** S6a — Visual/Mini-Game Contract (shipped 2026-06-05)
 **Type:** `2d-kids-minigame`
-**Runtime source of truth:** `mcp-server/src/loombridge/minigame-profiles/validator.ts`
-**JSON Schema (docs mirror):** `mcp-server/src/loombridge/schemas/minigame-contract.schema.json`
-**Example:** `mcp-server/src/loombridge/minigame-profiles/games/alphabet-pop.minigame.json`
+**Runtime source of truth:** `mcp-server/src/capabilities/minigame/profiles/validator.ts`
+**JSON Schema (docs mirror):** `mcp-server/src/domain/schemas/minigame-contract.schema.json`
+**Example:** `mcp-server/src/capabilities/minigame/profiles/games/alphabet-pop.minigame.json`
 
 A **mini-game contract** is a product-owned, per-game description of the
 machine-checkable facts a kids mini-game release must satisfy before it ships:

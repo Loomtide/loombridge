@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import path from "node:path";
 import test from "node:test";
 
-import { isSafeCapturePath, isWithin } from "../loombridge/capture-paths.js";
+import { isSafeCapturePath, isWithin } from "../domain/capture-paths.js";
 
 // ── isSafeCapturePath ────────────────────────────────────────────────────────
 

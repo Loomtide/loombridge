@@ -10,15 +10,52 @@ Around these sit two supporting subsystems: the **replay verification** engine (
 ## Repository Topology
 
 - `packages/com.loomtide.loombridge/` — canonical Unity bridge UPM package (Editor, Runtime, Tests).
-- `mcp-server/` — TypeScript: the MCP stdio server, the op registry, **and** the `loombridge` CLI (`src/cli.ts`, `src/loombridge/`).
+- `mcp-server/` — TypeScript: the MCP stdio server, the op registry, **and** the `loombridge` CLI (`src/cli.ts`, `src/capabilities/`).
 - `unity-projects/loombridge-dev/` — package development + EditMode test project.
 - `unity-projects/demo-platformer/` — demo consumer project (local `file:` package reference).
-- `asset-layer/` — curated registry packs, validation profiles, public catalog seed, fixtures, provenance.
+- `asset-layer/` — curated registry packs, validation profiles, public catalog seed, fixtures, provenance. **Data, not code** — the asset *code* is `mcp-server/src/capabilities/assets/`.
 - `commands/loombridge/` — agent-facing slash-command prose (Claude; Codex wrappers are generator-emitted).
+- `.skills/` — the genre and craft skill packs (2D game build, feel/verify, UI polish, SFX, 3D art integration, session retro…). Shipped into a consumer project by `loombridge install-agent` alongside `commands/`.
+- `templates/create-loombridge-game/` — the starter project scaffold.
+- `demo-bundles/`, `demo/` — frozen evidence bundles and their `generate.mjs` reproducers; the substrate proofs referenced from the docs.
 - `scripts/` — install/freeze (`loombridge-install-locally.sh`), bridge packaging (`loombridge-pack-bridge.sh`) + legacy embed (`loombridge-embed-bridge.sh`), build stamping, smoke runners, artifact sync.
 - `Docs/` — product docs: `Install.md` (new-machine setup) + `BridgeDistribution.md` (bridge install options), `Profiles/` (verify contracts + partner guides), `Assets/` (public hosted-catalog quickstart), `ThreatModel.md`, `UnityAutonomousLaunch.md`.
 
 The hosted asset search API is a company-run service (public endpoint below), not a subtree of this repo.
+
+## Source Layers (`mcp-server/src/`)
+
+Dependencies run in ONE direction, and the rule is enforced by
+`src/__tests__/layering.test.ts` — including a litmus that plants a violation and requires
+the checker to report it, so the check can never pass vacuously:
+
+```
+surfaces  ->  capabilities  ->  domain  ->  shared
+```
+
+- **`shared/`** — leaf helpers with no domain knowledge (`build-stamp`, `cli-ui`, `pkg-root`).
+- **`domain/`** — the shared nouns: JSON schemas, capture paths, workspace layout, contract
+  presence. Deliberately small.
+- **`capabilities/`** — one directory per area, each owning its CLI verb entrypoint:
+  `verification/`, `replay/`, `minigame/`, `feel/`, `genre/`, `assets/`, `sfx/`,
+  `telemetry/`, `setup/`, `mobile/`.
+- **surfaces** — the MCP server and CLI entrypoints (`index.ts`, `cli.ts`, `op-registry.ts`,
+  `*-tools.ts`) plus bridge transport (`unity-client.ts`, `editor-*.ts`), currently still
+  at the root of `src/`.
+
+**Where does new code go?** If it is vocabulary several areas share, `domain/`. If it does
+something — grades, drives, captures, installs — it belongs to one `capabilities/<area>/`.
+If it is a leaf utility with no knowledge of either, `shared/`.
+
+Two things the layering check taught us, worth not re-learning: genre packs and sfx
+cue-maps *look* like vocabulary but import gate implementations, so they are capabilities;
+and modules that read data out of the source tree must locate the package root via
+`shared/pkg-root.ts` rather than counting `..` segments, which silently encodes how deep a
+file happens to sit.
+
+**Known gap:** the root of `src/` still mixes bridge transport, entrypoints and shared
+primitives. Splitting it into `bridge/` + `surfaces/` is the next step; until then the
+checker treats that root as an unlayered zone rather than pretending otherwise.
 
 Unity targets: `6000.3` LTS primary, `2022.3` compatibility. Unity diagnostics use the `[Loombridge]` log prefix. Node `>= 18`.
 
@@ -138,7 +175,7 @@ GameObjects are addressed by **locators**, not instance IDs (instance IDs die on
 
 ### `.loombridge/` State Contract
 
-`.loombridge/` is the single source of truth per project: `STATE.md` (machine-readable state), `ACCEPTANCE.json`, `SLICES.json` (slice DAG), `FEEL_SPEC.json`, `GAME_SPEC.md`, `ASSET_MANIFEST.json`, `design/` (frozen `design-target.json` + `hero-shot.png`), `verify/` (captures, per-slice subdirs), `reports/` (`build-verdict.json`, `feel-profile.json`, `minigame-verification.json` + `report.html`/`report.md`, `slices/<id>.verdict.json`), and `replays/` (`traces/`, `reports/`, `baseline/`). Layout source of truth: `src/loombridge/state.ts`.
+`.loombridge/` is the single source of truth per project: `STATE.md` (machine-readable state), `ACCEPTANCE.json`, `SLICES.json` (slice DAG), `FEEL_SPEC.json`, `GAME_SPEC.md`, `ASSET_MANIFEST.json`, `design/` (frozen `design-target.json` + `hero-shot.png`), `verify/` (captures, per-slice subdirs), `reports/` (`build-verdict.json`, `feel-profile.json`, `minigame-verification.json` + `report.html`/`report.md`, `slices/<id>.verdict.json`), and `replays/` (`traces/`, `reports/`, `baseline/`). Layout source of truth: `src/capabilities/state.ts`.
 
 ### The §3a Supervisor
 
@@ -156,7 +193,7 @@ The threat model is a self-graded or hand-crafted verdict. The mechanism is code
 
 A consumer project installs the Unity bridge as a **versioned `.tgz` tarball added as a `file:` immutable dependency** in `Packages/manifest.json` — not a physical copy. `loombridge install-bridge --project <p>` drops the CLI-bundled tarball into `<project>/Packages/tarballs/`, writes the `file:` dependency, and records `ProjectSettings/LoombridgeInstall.json` (`installMode`, bridge version, `bridgeProtocol`, tarball `sha256`). Because Unity resolves an immutable dependency read-only into `Library/PackageCache`, the package's `Tests/` **self-exclude** from the consumer compile — an immutable dependency is not a Unity *testable*, so `UNITY_INCLUDE_TESTS` stays undefined and the `nunit`-referencing test asmdef never compiles. The tarball therefore ships `Tests/` unstripped yet cannot break a consumer that lacks `com.unity.test-framework` (the RUN-1 #62 break, which the legacy *embedded* copy had to strip against). Only the packaged bridge bytes ship, inside `@loomtide/loombridge` — a consumer needs no git credentials and no repo clone — and the read-only install removes the "developer edited the embedded bridge" drift.
 
-- **Packaging** — `scripts/loombridge-pack-bridge.sh` produces the one versioned distribution unit (`+ .sha256`), refusing to pack if the Tests asmdef ever loses its `UNITY_INCLUDE_TESTS` guard. Shared metadata/tarball helpers live in `src/loombridge/bridge-install-common.ts` (single source of truth for `install-bridge`, `doctor`, `update`).
+- **Packaging** — `scripts/loombridge-pack-bridge.sh` produces the one versioned distribution unit (`+ .sha256`), refusing to pack if the Tests asmdef ever loses its `UNITY_INCLUDE_TESTS` guard. Shared metadata/tarball helpers live in `src/capabilities/bridge-install-common.ts` (single source of truth for `install-bridge`, `doctor`, `update`).
 - **`doctor`** — offline health of the local install + a project's wiring (metadata, manifest `file:` dep, tarball presence + sha integrity, version drift vs the CLI-bundled bridge, protocol expectation); `--live` pins to `--project` and runs the same `evaluatePrerequisiteChecks` protocol preflight against the running bridge; `--ci` emits JSON. Every failed row prints its fix.
 - **`update`** — hash-checked tarball file-swap + `file:` bump (prune old `.tgz`), backs up `LoombridgeInstall.json`, then runs `doctor`. The CLI itself is not self-updated (`npm install -g` is unreliable across nvm/volta/asdf) — `update` detect-and-instructs.
 - **Fallbacks** — `install-bridge --embedded` physically copies the package (`Tests/` stripped) for air-gapped consumers; UPM git-URL / scoped registry remain for a public bridge. Steps: `Docs/Install.md`, `Docs/BridgeDistribution.md`.
@@ -187,7 +224,7 @@ CR-style release verification for 2D kids mini-games against a `MinigameContract
 
 ## Replay Verification Subsystem
 
-Record a human demonstration once, replay it deterministically forever (`src/loombridge/replay/`).
+Record a human demonstration once, replay it deterministically forever (`src/capabilities/replay/`).
 
 - **Trace format** (`.loombridge/replays/traces/<id>.trace.json`): segments of steps — `tap`, `drag`, `world-tap`, `key-tap`, `key-hold`, `key-down`/`key-up`/`wait` (timed-edge keyboard with concurrent holds), `wait-for-visible` — gated by anchors (`ui-visible`, runtime `condition`) with captures tied to anchors. Outcome assertions (captured end-state, `reachedWhenVisible`-gated so an unreached state can't false-pass) close the "flow ok but outcome wrong" hole. Reset tiers: scene-load / game hook / editor relaunch.
 - **Recording** (`trace record --observe`): the observer records what the game *responded to* — gesture-time locator resolution (reparenting drags keep the origin path), inert taps dropped + counted, keyboard edges on a timeline, per-step settle timing from the human's own dwell. Traces are green by construction; an empty observation is refused.

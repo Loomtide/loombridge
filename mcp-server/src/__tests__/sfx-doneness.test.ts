@@ -23,11 +23,11 @@ import {
   sfxGateRefusals,
   wholeGameDonenessReasons,
   type VerdictLike,
-} from "../loombridge/doneness.js";
-import { SFX_GATE_NAMES } from "../verification/run-gates.js";
-import { runPlan } from "../loombridge/plan.js";
-import { runVerify } from "../loombridge/verify.js";
-import { loombridgePaths } from "../loombridge/state.js";
+} from "../capabilities/verification/doneness.js";
+import { SFX_GATE_NAMES } from "../capabilities/verification/run-gates.js";
+import { runPlan } from "../capabilities/verification/plan.js";
+import { runVerify } from "../capabilities/verification/verify.js";
+import { loombridgePaths } from "../domain/state.js";
 
 async function tmpRoot(): Promise<string> {
   return fs.mkdtemp(path.join(os.tmpdir(), "loombridge-sfx-doneness-"));

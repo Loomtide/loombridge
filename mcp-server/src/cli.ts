@@ -17,7 +17,7 @@ import process from "node:process";
 import { realpathSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
-import { resolveBuildStamp, formatBuildStamp } from "./loombridge/build-stamp.js";
+import { resolveBuildStamp, formatBuildStamp } from "./shared/build-stamp.js";
 
 /**
  * Print the running build's version + stamp so a partner can detect a STALE frozen
@@ -114,75 +114,75 @@ export async function loombridgeCli(argv: string[]): Promise<number> {
 
   switch (sub) {
     case "plan": {
-      const { run } = await import("./loombridge/plan.js");
+      const { run } = await import("./capabilities/verification/plan.js");
       return run(rest);
     }
     case "adopt": {
-      const { run } = await import("./loombridge/adopt.js");
+      const { run } = await import("./capabilities/verification/adopt.js");
       return run(rest);
     }
     case "status": {
-      const { run } = await import("./loombridge/status.js");
+      const { run } = await import("./capabilities/verification/status.js");
       return run(rest);
     }
     case "ask": {
-      const { run } = await import("./loombridge/ask.js");
+      const { run } = await import("./capabilities/verification/ask.js");
       return run(rest);
     }
     case "verify": {
-      const { run } = await import("./loombridge/verify.js");
+      const { run } = await import("./capabilities/verification/verify.js");
       return run(rest);
     }
     case "minigame": {
-      const { run } = await import("./loombridge/minigame.js");
+      const { run } = await import("./capabilities/minigame/minigame.js");
       return run(rest);
     }
     case "design": {
-      const { run } = await import("./loombridge/design.js");
+      const { run } = await import("./capabilities/verification/design.js");
       return run(rest);
     }
     case "capture": {
-      const { run } = await import("./loombridge/capture.js");
+      const { run } = await import("./capabilities/verification/capture.js");
       return run(rest);
     }
     case "doneness": {
-      const { run } = await import("./loombridge/doneness.js");
+      const { run } = await import("./capabilities/verification/doneness.js");
       return run(rest);
     }
     case "trace": {
-      const { run } = await import("./loombridge/trace.js");
+      const { run } = await import("./capabilities/replay/trace.js");
       return run(rest);
     }
     case "tuning-report": {
-      const { run } = await import("./loombridge/tuning-report.js");
+      const { run } = await import("./capabilities/feel/tuning-report.js");
       return run(rest);
     }
     case "mobile-audit": {
-      const { run } = await import("./loombridge/mobile-audit.js");
+      const { run } = await import("./capabilities/mobile/mobile-audit.js");
       return run(rest);
     }
     case "build": {
-      const { run } = await import("./loombridge/build.js");
+      const { run } = await import("./capabilities/verification/build.js");
       return run(rest);
     }
     case "assets": {
-      const { run } = await import("./loombridge/assets.js");
+      const { run } = await import("./capabilities/assets/assets.js");
       return run(rest);
     }
     case "install-bridge": {
-      const { run } = await import("./loombridge/install-bridge.js");
+      const { run } = await import("./capabilities/setup/install-bridge.js");
       return run(rest);
     }
     case "install-agent": {
-      const { run } = await import("./loombridge/install-agent.js");
+      const { run } = await import("./capabilities/setup/install-agent.js");
       return run(rest);
     }
     case "doctor": {
-      const { run } = await import("./loombridge/doctor.js");
+      const { run } = await import("./capabilities/setup/doctor.js");
       return run(rest);
     }
     case "update": {
-      const { run } = await import("./loombridge/update.js");
+      const { run } = await import("./capabilities/setup/update.js");
       return run(rest);
     }
     case "mcp": {

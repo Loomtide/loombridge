@@ -39,15 +39,15 @@ import {
   type MinigameCaptureObject,
   type MinigameCaptureState,
   type MinigameFrameFacts,
-} from "../loombridge/minigame-gates/index.js";
-import type { GateReport } from "../verification/gates/types.js";
-import { assertValidMinigameContract } from "../loombridge/minigame-profiles/validator.js";
+} from "../capabilities/minigame/index.js";
+import type { GateReport } from "../capabilities/verification/gates/types.js";
+import { assertValidMinigameContract } from "../capabilities/minigame/profiles/validator.js";
 import type {
   MinigameContainerBinding,
   MinigameContract,
   MinigameSafeAreas,
   MinigameState,
-} from "../loombridge/minigame-profiles/types.js";
+} from "../capabilities/minigame/profiles/types.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);

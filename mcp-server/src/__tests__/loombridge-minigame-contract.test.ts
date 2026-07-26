@@ -7,12 +7,12 @@ import { fileURLToPath } from "node:url";
 import {
   validateMinigameContract,
   assertValidMinigameContract,
-} from "../loombridge/minigame-profiles/validator.js";
+} from "../capabilities/minigame/profiles/validator.js";
 import {
   EXAMPLE_MINIGAME_IDS,
   loadAllExampleMinigames,
   loadExampleMinigame,
-} from "../loombridge/minigame-profiles/profiles.js";
+} from "../capabilities/minigame/profiles/profiles.js";
 import {
   AGE_BANDS,
   MINIGAME_ADVISORY_CHECKS,
@@ -23,13 +23,13 @@ import {
   resolveDevices,
   type DeviceSpec,
   type MinigameContract,
-} from "../loombridge/minigame-profiles/types.js";
+} from "../capabilities/minigame/profiles/types.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SCHEMA_PATH = path.resolve(
   __dirname,
   "../../..",
-  "mcp-server/src/loombridge/schemas/minigame-contract.schema.json",
+  "mcp-server/src/domain/schemas/minigame-contract.schema.json",
 );
 
 // A minimal VALID contract we clone and corrupt for the negative tests.

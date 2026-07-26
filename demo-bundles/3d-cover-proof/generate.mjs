@@ -8,7 +8,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { deriveCoverBlocksDamage, firstRisingEdge } from "../../mcp-server/dist/verification/feel-derive.js";
+import { deriveCoverBlocksDamage, firstRisingEdge } from "../../mcp-server/dist/capabilities/verification/feel-derive.js";
 
 const bundleDir = path.dirname(fileURLToPath(import.meta.url));
 const COVERED_RAW = "3d-cover-covered-raw-2026-06-26.json";

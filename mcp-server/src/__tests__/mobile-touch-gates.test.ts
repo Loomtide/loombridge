@@ -22,7 +22,7 @@ import {
   type SweepElement,
   type TopDownTouchCapture,
   type TopDownTouchElement,
-} from "../verification/mobile-touch-gates.js";
+} from "../capabilities/verification/mobile-touch-gates.js";
 
 // A phone-landscape-ish safe area: 5% top/bottom, 4% left/right, zero tolerance.
 const INSETS = { top: 0.05, bottom: 0.05, left: 0.04, right: 0.04 };

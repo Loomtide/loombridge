@@ -4,9 +4,9 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import { renderGameSpec, runPlan } from "../loombridge/plan.js";
-import { nextActionFor, readState, loombridgePaths, type LoombridgeState } from "../loombridge/state.js";
-import { setDesignTarget } from "../loombridge/design.js";
+import { renderGameSpec, runPlan } from "../capabilities/verification/plan.js";
+import { nextActionFor, readState, loombridgePaths, type LoombridgeState } from "../domain/state.js";
+import { setDesignTarget } from "../capabilities/verification/design.js";
 
 async function tmpRoot(): Promise<string> {
   return fs.mkdtemp(path.join(os.tmpdir(), "loombridge-plan-"));
@@ -180,8 +180,9 @@ test("runPlan — --genre-contract promotes acceptance, slices, and report", asy
     const genreContractPath = path.join(
       process.cwd(),
       "src",
-      "loombridge",
-      "genre-contract",
+      "capabilities",
+  "genre",
+  "genre-contract",
       "examples",
       "2d-shooter.contract.json",
     );
@@ -221,7 +222,7 @@ test("runPlan — --genre-contract promotes acceptance, slices, and report", asy
 test("runPlan — --genre-contract refuses unregistered promoted genres", async () => {
   const root = await tmpRoot();
   try {
-    const sourcePath = path.join(process.cwd(), "src", "loombridge", "genre-contract", "examples", "2d-shooter.contract.json");
+    const sourcePath = path.join(process.cwd(), "src", "capabilities", "genre", "genre-contract", "examples", "2d-shooter.contract.json");
     const source = JSON.parse(await fs.readFile(sourcePath, "utf-8"));
     source.genreId = "unregistered-shooter";
     const contractPath = path.join(root, "unregistered.contract.json");
@@ -244,7 +245,7 @@ test("runPlan — --genre-contract refuses to mix with existing artifacts withou
   const root = await tmpRoot();
   try {
     await runPlan({ root, genre: "platformer-2d", engine: "unity", force: false, allowMissingDesignTarget: true });
-    const genreContractPath = path.join(process.cwd(), "src", "loombridge", "genre-contract", "examples", "2d-shooter.contract.json");
+    const genreContractPath = path.join(process.cwd(), "src", "capabilities", "genre", "genre-contract", "examples", "2d-shooter.contract.json");
     const code = await runPlan({
       root,
       genre: "2d-shooter",

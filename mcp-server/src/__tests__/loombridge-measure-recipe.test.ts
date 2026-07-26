@@ -11,15 +11,15 @@ import {
   SHORT_HOP_CANONICAL_TAP_TICKS,
   tapMsToTicks,
   type InputMap,
-} from "../loombridge/genre-packs/platformer-2d/measure-recipe.js";
+} from "../capabilities/genre/genre-packs/platformer-2d/measure-recipe.js";
 import {
   assembleMeasurements,
   type MetricCapture,
-} from "../loombridge/genre-packs/platformer-2d/assemble-measurements.js";
-import { parseMeasurements } from "../loombridge/genre-packs/platformer-2d/measurements.js";
-import { rederiveFromSources } from "../verification/gates/feel-rederive.js";
-import { buildProfileReport } from "../loombridge/genre-packs/platformer-2d/verify-profile.js";
-import type { FeelTrajectorySample } from "../verification/gates/feel.js";
+} from "../capabilities/genre/genre-packs/platformer-2d/assemble-measurements.js";
+import { parseMeasurements } from "../capabilities/genre/genre-packs/platformer-2d/measurements.js";
+import { rederiveFromSources } from "../capabilities/verification/gates/feel-rederive.js";
+import { buildProfileReport } from "../capabilities/genre/genre-packs/platformer-2d/verify-profile.js";
+import type { FeelTrajectorySample } from "../capabilities/verification/gates/feel.js";
 
 function jumpArc(apex: number, apexMs = 280, endMs = 560, stepMs = 40): FeelTrajectorySample[] {
   const out: FeelTrajectorySample[] = [];
@@ -659,7 +659,7 @@ test("assembleMeasurements omits inputToSfxLatency when no SFX cue fired (no ris
 test("assembleMeasurements: a derived inputToSfxLatency lands in alsoMeasured and NEVER gates the verdict", async () => {
   const root = await unityRoot();
   const mPath = path.join(root, "m.json");
-  const { loadProfile } = await import("../loombridge/genre-packs/platformer-2d/profiles.js");
+  const { loadProfile } = await import("../capabilities/genre/genre-packs/platformer-2d/profiles.js");
   const prof = await loadProfile("precision");
   const allAtTarget = Object.fromEntries(Object.entries(prof.metrics).map(([id, t]) => [id, (t as any).target]));
   // Assemble a sync metric, then merge it into an otherwise-clean banded measurements doc.
@@ -799,7 +799,7 @@ test("assembleMeasurements omits dashToGhostMs when no ghost spawned after the d
 test("assembleMeasurements: a derived dashToGhostMs lands in alsoMeasured and NEVER gates the verdict", async () => {
   const root = await unityRoot();
   const mPath = path.join(root, "m.json");
-  const { loadProfile } = await import("../loombridge/genre-packs/platformer-2d/profiles.js");
+  const { loadProfile } = await import("../capabilities/genre/genre-packs/platformer-2d/profiles.js");
   const prof = await loadProfile("precision");
   const allAtTarget = Object.fromEntries(Object.entries(prof.metrics).map(([id, t]) => [id, (t as any).target]));
   const sync = assembleMeasurements([
@@ -875,7 +875,7 @@ test("assembleMeasurements omits groundContactToDustMs when no landing dust spaw
 test("assembleMeasurements: a derived groundContactToDustMs lands in alsoMeasured and NEVER gates the verdict", async () => {
   const root = await unityRoot();
   const mPath = path.join(root, "m.json");
-  const { loadProfile } = await import("../loombridge/genre-packs/platformer-2d/profiles.js");
+  const { loadProfile } = await import("../capabilities/genre/genre-packs/platformer-2d/profiles.js");
   const prof = await loadProfile("precision");
   const allAtTarget = Object.fromEntries(Object.entries(prof.metrics).map(([id, t]) => [id, (t as any).target]));
   const sync = assembleMeasurements([
@@ -939,7 +939,7 @@ test("assembleMeasurements REFUSES fireIntervalMs on a degraded fire series (F1 
 test("assembleMeasurements: a derived fireIntervalMs lands in alsoMeasured and NEVER gates the verdict", async () => {
   const root = await unityRoot();
   const mPath = path.join(root, "m.json");
-  const { loadProfile } = await import("../loombridge/genre-packs/platformer-2d/profiles.js");
+  const { loadProfile } = await import("../capabilities/genre/genre-packs/platformer-2d/profiles.js");
   const prof = await loadProfile("precision");
   const allAtTarget = Object.fromEntries(Object.entries(prof.metrics).map(([id, t]) => [id, (t as any).target]));
   const sync = assembleMeasurements([
@@ -971,7 +971,7 @@ test("assembleMeasurements derives projectileSpeed from moving projectile trajec
 test("assembleMeasurements: a derived projectileSpeed lands in alsoMeasured and NEVER gates the verdict", async () => {
   const root = await unityRoot();
   const mPath = path.join(root, "m.json");
-  const { loadProfile } = await import("../loombridge/genre-packs/platformer-2d/profiles.js");
+  const { loadProfile } = await import("../capabilities/genre/genre-packs/platformer-2d/profiles.js");
   const prof = await loadProfile("precision");
   const allAtTarget = Object.fromEntries(Object.entries(prof.metrics).map(([id, t]) => [id, (t as any).target]));
   const projectile = assembleMeasurements([
@@ -1032,7 +1032,7 @@ test("assembleMeasurements omits inputToAnimStateLatency when the state is never
 test("assembleMeasurements: a derived inputToAnimStateLatency lands in alsoMeasured and NEVER gates the verdict", async () => {
   const root = await unityRoot();
   const mPath = path.join(root, "m.json");
-  const { loadProfile } = await import("../loombridge/genre-packs/platformer-2d/profiles.js");
+  const { loadProfile } = await import("../capabilities/genre/genre-packs/platformer-2d/profiles.js");
   const prof = await loadProfile("precision");
   const allAtTarget = Object.fromEntries(Object.entries(prof.metrics).map(([id, t]) => [id, (t as any).target]));
   const sync = assembleMeasurements([
@@ -1057,8 +1057,8 @@ test("assembleMeasurements: a derived inputToAnimStateLatency lands in alsoMeasu
 // adding a band for a `sync`-family metric. Lock it: no shipped profile may band any
 // metric whose KNOWN_PROFILE_METRICS family is "sync" (those are measure-only by design).
 test("no shipped profile bands a sync-family metric (measure-only invariant)", async () => {
-  const { loadAllProfiles } = await import("../loombridge/genre-packs/platformer-2d/profiles.js");
-  const { KNOWN_PROFILE_METRICS } = await import("../loombridge/genre-packs/platformer-2d/types.js");
+  const { loadAllProfiles } = await import("../capabilities/genre/genre-packs/platformer-2d/profiles.js");
+  const { KNOWN_PROFILE_METRICS } = await import("../capabilities/genre/genre-packs/platformer-2d/types.js");
   const syncMetricIds = new Set(
     Object.values(KNOWN_PROFILE_METRICS)
       .filter((m) => m.family === "sync")

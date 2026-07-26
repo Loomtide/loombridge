@@ -3,7 +3,7 @@ import test from "node:test";
 
 import type { UnityClient } from "../unity-client.js";
 import type { BridgeResponse } from "../types.js";
-import { endLiveSession } from "../loombridge/replay/session.js";
+import { endLiveSession } from "../capabilities/replay/session.js";
 
 function okSend(calls: string[]) {
   return async (command: string): Promise<BridgeResponse> => {

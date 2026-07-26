@@ -1,6 +1,6 @@
-import { createDraftAssetManifest, writeAssetManifest, type AssetManifestMode } from "../../loombridge/asset-manifest.js";
-import { designStatus } from "../../loombridge/design.js";
-import { loombridgePaths } from "../../loombridge/state.js";
+import { createDraftAssetManifest, writeAssetManifest, type AssetManifestMode } from "../../capabilities/assets/asset-manifest.js";
+import { designStatus } from "../../capabilities/verification/design.js";
+import { loombridgePaths } from "../../domain/state.js";
 
 export async function writeApprovedAssetManifestForDesign(
   root: string,

@@ -69,7 +69,7 @@ function scrubRules(dataDir, rtMcp) {
     // Asset-layer data + frozen-runtime paths relocate to the install target.
     [/asset-layer\/profiles\//g, `${dataDir}/asset-layer/profiles/`],
     [/asset-layer\/registry\//g, `${dataDir}/asset-layer/registry/`],
-    [/mcp-server\/src\/verification\/scenarios\//g, `${rtMcp}/src/verification/scenarios/`],
+    [/mcp-server\/src\/verification\/scenarios\//g, `${rtMcp}/src/capabilities/verification/scenarios/`],
     // Bare (no `node ` prefix) dev binary references that still name the dist path.
     [/mcp-server\/dist\/verification\/tuning-runner\.js/g, "loombridge-tune"],
     // Internal schemas/types/gates -> a consumer-safe pointer at the CLI.

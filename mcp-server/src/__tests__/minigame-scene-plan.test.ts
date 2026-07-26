@@ -7,8 +7,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { planSceneAgnosticScan } from "../loombridge/minigame-scene-plan.js";
-import type { ReplayTrace, Segment, Action } from "../loombridge/replay/types.js";
+import { planSceneAgnosticScan } from "../capabilities/minigame/minigame-scene-plan.js";
+import type { ReplayTrace, Segment, Action } from "../capabilities/replay/types.js";
 
 const drag = (travelPx: number): Action => ({ do: "drag", from: { path: "/Canvas/Pan" }, to: { path: "/Canvas/Pan" }, travelPx });
 const tap = (): Action => ({ do: "tap", locator: { path: "/Canvas/Btn" } });

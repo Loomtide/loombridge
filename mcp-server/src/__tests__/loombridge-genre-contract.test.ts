@@ -8,12 +8,12 @@ import {
   validateGenreContract,
   assertValidGenreContract,
   IMPLEMENTED_CALCULATOR_IDS,
-} from "../loombridge/genre-contract/validator.js";
-import type { GenreContract } from "../loombridge/genre-contract/types.js";
+} from "../capabilities/genre/genre-contract/validator.js";
+import type { GenreContract } from "../capabilities/genre/genre-contract/types.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PKG_ROOT = path.resolve(__dirname, "..", ".."); // dist/__tests__ -> mcp-server
-const EXAMPLES = path.join(PKG_ROOT, "src", "loombridge", "genre-contract", "examples");
+const EXAMPLES = path.join(PKG_ROOT, "src", "capabilities", "genre", "genre-contract", "examples");
 
 /** A minimal, valid twitch contract used as the base for mutation-based negative tests. */
 function validBase(): GenreContract {

@@ -8,13 +8,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { backgroundDeclareGroups, renderMinigameReportHtml, renderMinigameReportMarkdown } from "../loombridge/minigame-report-render.js";
+import { backgroundDeclareGroups, renderMinigameReportHtml, renderMinigameReportMarkdown } from "../capabilities/minigame/minigame-report-render.js";
 import {
   stampFindingScenes,
   type MinigameCrReport,
   type MinigameFinding,
   type MinigameVerifyReport,
-} from "../loombridge/verify-minigame.js";
+} from "../capabilities/minigame/verify-minigame.js";
 
 const EMPTY_CR: MinigameCrReport = {
   blockingFailures: [], baselineRegressions: [], incompleteHarness: [],

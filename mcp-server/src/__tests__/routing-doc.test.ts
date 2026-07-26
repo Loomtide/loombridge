@@ -18,7 +18,7 @@ import {
   SUGGESTED_ROUTING_LINE,
   parseRoutingDocVersion,
   renderRoutingDoc,
-} from "../loombridge/routing-doc.js";
+} from "../capabilities/setup/routing-doc.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // dist/__tests__ -> mcp-server/src is ../../src.

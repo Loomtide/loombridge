@@ -4,9 +4,9 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import { runPlan } from "../loombridge/plan.js";
-import { exitCodeForVerdict, runVerify } from "../loombridge/verify.js";
-import { fileExists, loombridgePaths, readState } from "../loombridge/state.js";
+import { runPlan } from "../capabilities/verification/plan.js";
+import { exitCodeForVerdict, runVerify } from "../capabilities/verification/verify.js";
+import { fileExists, loombridgePaths, readState } from "../domain/state.js";
 
 async function tmpRoot(): Promise<string> {
   return fs.mkdtemp(path.join(os.tmpdir(), "loombridge-cli-"));

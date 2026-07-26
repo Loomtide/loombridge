@@ -14,7 +14,7 @@ approved assets in the project.
 
 ## Read first (existing code you extend — do NOT rewrite)
 
-- `mcp-server/src/loombridge/assets.ts` — the `registry-apply` verb. Today it takes
+- `mcp-server/src/capabilities/assets.ts` — the `registry-apply` verb. Today it takes
   `--selections <json>` where the JSON is a **flat `{ manifestAssetId: registryEntryId }` map** plus
   `--approved-at <iso>`, `--profile`, and a source (`--registry` | `--catalog` | `--catalog-api`).
   Find `runRegistryApply` and how it loads the manifest + registry and calls into selection apply.

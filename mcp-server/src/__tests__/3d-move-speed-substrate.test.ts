@@ -19,8 +19,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { deriveMoveSpeed, deriveAccelTo90 } from "../verification/feel-derive.js";
-import type { FeelTrajectorySample } from "../verification/gates/feel.js";
+import { deriveMoveSpeed, deriveAccelTo90 } from "../capabilities/verification/feel-derive.js";
+import type { FeelTrajectorySample } from "../capabilities/verification/gates/feel.js";
 
 // Constant planar motion at `speed` u/s along a chosen ground axis ("x" or "z"),
 // with a constant up-axis (`y`) height. Models a character cruising at steady speed.

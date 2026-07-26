@@ -9,9 +9,9 @@ import {
   analyzeVisualArtifactFrames,
   readPng,
   type NamedFrame,
-} from "../verification/analyze-frames.js";
-import { evaluateVisualArtifacts } from "../verification/gates/index.js";
-import type { AcceptanceContract } from "../verification/types.js";
+} from "../capabilities/verification/analyze-frames.js";
+import { evaluateVisualArtifacts } from "../capabilities/verification/gates/index.js";
+import type { AcceptanceContract } from "../capabilities/verification/types.js";
 
 const acceptance = {
   game: "test",

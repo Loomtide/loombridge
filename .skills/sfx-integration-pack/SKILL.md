@@ -14,7 +14,7 @@ the committed tree (env-only), and record provenance (source, license, author, c
 imported clip. Import with game-appropriate Unity defaults (compressed-in-memory for one-shots, streaming
 for loops/music) and, for a top-down game, anchor the listener to the player rather than the camera so
 distance attenuation reads correctly. The per-genre cue map lives as a genre-pack artifact
-(`mcp-server/src/loombridge/genre-packs/<genre>/cue-map.json`), and the verification gates read it. This
+(`mcp-server/src/capabilities/genre/genre-packs/<genre>/cue-map.json`), and the verification gates read it. This
 skill is the actionable runbook + the DO/DO-NOT framing. Loombridge gates technical audio health and cue
 FIRING deterministically; "does it sound like the intended action?" stays a HUMAN gate.
 
@@ -28,7 +28,7 @@ Do not re-enumerate the cue taxonomy in prose. Read the genre-pack cue map
 top-down required set (`fire`, `hit`, `hurt`, `loot_open`, `loot_reward`, `extract_start`,
 `extract_complete`, `enemy_death`, `player_death`) plus optional cues, each with its `event`,
 `layerRoles`, `frequency`, `variantPolicy`, `priority`, `mixerBus`, `spatial`, and `meaning`. The schema
-type + self-validating parser live in `mcp-server/src/loombridge/sfx/cue-map.ts`. A malformed/hand-edited
+type + self-validating parser live in `mcp-server/src/capabilities/sfx/cue-map.ts`. A malformed/hand-edited
 cue map is refused, so it can never silently degrade the gates. If your genre has no cue map, author one
 following that shape; do not scatter ad-hoc cue names through the build. `[VALIDATED: sfx doc backlog #5 + seeded cue-map.json + cue-map.ts]`
 
@@ -81,7 +81,7 @@ Recipe canonical in `GeneratedSfxWorkflow.md` → "Top-Down Audio Rig". `[CANDID
 
 ## How the T2 SFX gates consume the declaration
 
-The gates (`mcp-server/src/loombridge/sfx/`) read the parsed cue map to know WHICH cues matter, then grade
+The gates (`mcp-server/src/capabilities/sfx/`) read the parsed cue map to know WHICH cues matter, then grade
 runtime evidence — they do not invent requirements:
 - **presence** — every `required` cue asset is imported as an `AudioClip` and bound on the SfxPlayer /
   event router; declared mixer buses exist.

@@ -5,8 +5,8 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import { runPlan } from "../loombridge/plan.js";
-import { designStatus, setDesignTarget } from "../loombridge/design.js";
+import { runPlan } from "../capabilities/verification/plan.js";
+import { designStatus, setDesignTarget } from "../capabilities/verification/design.js";
 import {
   createDraftAssetManifest,
   readAssetManifest,
@@ -14,14 +14,14 @@ import {
   type AssetManifestMode,
   type ManifestGeneratedExport,
   type ManifestRegistrySelection,
-} from "../loombridge/asset-manifest.js";
+} from "../capabilities/assets/asset-manifest.js";
 import {
   assertValidSlicePlan,
   readSlicePlan,
   writeSlicePlan,
   type SlicePlan,
-} from "../loombridge/slices.js";
-import { loombridgePaths, readState, updateState } from "../loombridge/state.js";
+} from "../capabilities/verification/slices.js";
+import { loombridgePaths, readState, updateState } from "../domain/state.js";
 
 async function tmpRoot(): Promise<string> {
   return fs.mkdtemp(path.join(os.tmpdir(), "loombridge-dispatch-"));

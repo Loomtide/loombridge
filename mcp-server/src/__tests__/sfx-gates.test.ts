@@ -17,11 +17,11 @@ import {
   evaluateInputToSfxLatency as latency,
   evaluateSfxFatigue as fatigue,
   findImmediateRepeats as repeats,
-} from "../verification/gates/index.js";
-import { validateCueMapSchema, type CueMapSchema } from "../loombridge/sfx/cue-map.js";
-import { runGates, SFX_GATE_NAMES } from "../verification/run-gates.js";
-import type { AcceptanceContract } from "../verification/types.js";
-import type { GateReport } from "../verification/gates/types.js";
+} from "../capabilities/verification/gates/index.js";
+import { validateCueMapSchema, type CueMapSchema } from "../capabilities/sfx/cue-map.js";
+import { runGates, SFX_GATE_NAMES } from "../capabilities/verification/run-gates.js";
+import type { AcceptanceContract } from "../capabilities/verification/types.js";
+import type { GateReport } from "../capabilities/verification/gates/types.js";
 
 /** A small valid cue map: `fire` (required, frequent, no-repeat) + `loot` (required, occasional). */
 function cueMap(): CueMapSchema {

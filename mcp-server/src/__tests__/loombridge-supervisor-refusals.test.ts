@@ -15,11 +15,11 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import { runPlan } from "../loombridge/plan.js";
-import { runBuild } from "../loombridge/build.js";
-import { runDoneness } from "../loombridge/doneness.js";
-import { setDesignTarget, designPaths } from "../loombridge/design.js";
-import { loombridgePaths, readState } from "../loombridge/state.js";
+import { runPlan } from "../capabilities/verification/plan.js";
+import { runBuild } from "../capabilities/verification/build.js";
+import { runDoneness } from "../capabilities/verification/doneness.js";
+import { setDesignTarget, designPaths } from "../capabilities/verification/design.js";
+import { loombridgePaths, readState } from "../domain/state.js";
 import { writeApprovedAssetManifestForDesign } from "./helpers/asset-manifest-fixture.js";
 
 async function tmpRoot(): Promise<string> {

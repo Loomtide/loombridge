@@ -7,8 +7,8 @@ import {
   type AssetManifest,
   type ManifestGeneratedExport,
   type ManifestRegistrySelection,
-} from "../loombridge/asset-manifest.js";
-import { resolveAllSliceAssetBindings, resolveAssetBindingsForSlice } from "../loombridge/asset-bindings.js";
+} from "../capabilities/assets/asset-manifest.js";
+import { resolveAllSliceAssetBindings, resolveAssetBindingsForSlice } from "../capabilities/assets/asset-bindings.js";
 
 const HASH = "d".repeat(64);
 const APPROVED_AT = "2026-06-05T00:00:00.000Z";

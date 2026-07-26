@@ -27,22 +27,22 @@ import {
   evaluateBackgroundCoverage,
   evaluateBackgroundSeam,
   type BackgroundData,
-} from "../loombridge/minigame-gates/index.js";
+} from "../capabilities/minigame/index.js";
 import {
   BACKGROUND_DATA_FILE,
   isBackgroundKey,
   runMinigameGates,
-} from "../loombridge/minigame-gates/run-minigame-gates.js";
+} from "../capabilities/minigame/run-minigame-gates.js";
 import {
   parseCameraProps,
   parseSceneLocator,
   parseSpriteRendererOrder,
   unionRenderers,
-} from "../loombridge/minigame-background.js";
-import { assertValidMinigameContract } from "../loombridge/minigame-profiles/validator.js";
-import { buildCrGroups, splitStateDevice, summarize } from "../loombridge/verify-minigame.js";
-import type { MinigameContract } from "../loombridge/minigame-profiles/types.js";
-import type { GateReport } from "../verification/gates/types.js";
+} from "../capabilities/minigame/minigame-background.js";
+import { assertValidMinigameContract } from "../capabilities/minigame/profiles/validator.js";
+import { buildCrGroups, splitStateDevice, summarize } from "../capabilities/minigame/verify-minigame.js";
+import type { MinigameContract } from "../capabilities/minigame/profiles/types.js";
+import type { GateReport } from "../capabilities/verification/gates/types.js";
 
 // orthoSize 5 at 16:9 (1.778) → halfW = 8.9; at 20:9 (2.222) → halfW = 11.1.
 const ASPECT_16x9 = 16 / 9;

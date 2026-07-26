@@ -11,9 +11,9 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import { buildScaffoldContract } from "../loombridge/minigame-scaffold.js";
-import { validateMinigameContract } from "../loombridge/minigame-profiles/validator.js";
-import { run as minigameRun } from "../loombridge/minigame.js";
+import { buildScaffoldContract } from "../capabilities/minigame/minigame-scaffold.js";
+import { validateMinigameContract } from "../capabilities/minigame/profiles/validator.js";
+import { run as minigameRun } from "../capabilities/minigame/minigame.js";
 
 async function tmpDir(): Promise<string> {
   return fs.mkdtemp(path.join(os.tmpdir(), "minigame-init-"));

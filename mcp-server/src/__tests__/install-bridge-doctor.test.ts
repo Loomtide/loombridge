@@ -8,7 +8,7 @@ import path from "node:path";
 import test, { after, before, describe } from "node:test";
 import { fileURLToPath } from "node:url";
 
-import { ROUTING_DOC_VERSION } from "../loombridge/routing-doc.js";
+import { ROUTING_DOC_VERSION } from "../capabilities/setup/routing-doc.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // dist/__tests__ -> mcp-server is two up; repo root is three up.

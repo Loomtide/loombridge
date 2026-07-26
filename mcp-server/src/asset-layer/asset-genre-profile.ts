@@ -20,7 +20,7 @@
  * `asset-manifest.ts` can import this module's resolver without a runtime cycle.
  */
 
-import type { AssetManifestMode, AssetSourceType } from "../loombridge/asset-manifest.js";
+import type { AssetManifestMode, AssetSourceType } from "../capabilities/assets/asset-manifest.js";
 
 /** How a manifest role maps onto registry-pack primitives during selection. */
 export interface RoleSelectionRule {

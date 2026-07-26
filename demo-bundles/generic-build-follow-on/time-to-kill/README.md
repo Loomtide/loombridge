@@ -6,7 +6,7 @@ time (it answers "given hits land, how long does the enemy take to die?").
 
 ## Calculator
 
-`deriveTimeToKill(damageSeries, deathSeries)` (`mcp-server/src/verification/feel-derive.ts`) — the
+`deriveTimeToKill(damageSeries, deathSeries)` (`mcp-server/src/capabilities/verification/feel-derive.ts`) — the
 series→series sync form (same shape as `dashToGhostMs`):
 
 - **damage / first-hit edge** (the reference edge): a monotonic `Enemy.HitCount` going 0→1, or an

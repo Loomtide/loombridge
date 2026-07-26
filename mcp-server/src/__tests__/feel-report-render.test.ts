@@ -5,8 +5,8 @@ import {
   feelBannerFor,
   renderFeelReportHtml,
   renderFeelReportMarkdown,
-} from "../loombridge/genre-packs/platformer-2d/feel-report-render.js";
-import type { ProfileVerifyReport } from "../loombridge/genre-packs/platformer-2d/verify-profile.js";
+} from "../capabilities/genre/genre-packs/platformer-2d/feel-report-render.js";
+import type { ProfileVerifyReport } from "../capabilities/genre/genre-packs/platformer-2d/verify-profile.js";
 
 function baseReport(over: Partial<ProfileVerifyReport> = {}): ProfileVerifyReport {
   return {

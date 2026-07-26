@@ -4,8 +4,8 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import { discoverTraces, parseStateSignal, readEnter, replayExitCode, run } from "../loombridge/trace.js";
-import { flatReplayLayout, standardReplayLayout } from "../loombridge/state.js";
+import { discoverTraces, parseStateSignal, readEnter, replayExitCode, run } from "../capabilities/replay/trace.js";
+import { flatReplayLayout, standardReplayLayout } from "../domain/state.js";
 
 test("parseStateSignal: <path>:<Component>:<property> → meta shape", () => {
   assert.deepEqual(parseStateSignal("/Canvas/GM:ChefGameManager:phase"), {

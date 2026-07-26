@@ -21,16 +21,16 @@ import {
   renderVerificationSummary,
   resolveScenarioPath,
   selectScenarioPack,
-} from "../verification/capture-runner.js";
-import type { AcceptanceContract } from "../verification/types.js";
-import type { VerificationScenario } from "../verification/scenario.js";
+} from "../capabilities/verification/capture-runner.js";
+import type { AcceptanceContract } from "../capabilities/verification/types.js";
+import type { VerificationScenario } from "../capabilities/verification/scenario.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const fixturePath = path.resolve(
   __dirname,
   "../../..",
-  "mcp-server/src/verification/scenarios/platformer-2d-basic.json",
+  "mcp-server/src/capabilities/verification/scenarios/platformer-2d-basic.json",
 );
 
 async function loadFixture(): Promise<VerificationScenario> {
@@ -42,17 +42,17 @@ test("capture-runner: parses required backend CLI args", () => {
     "node",
     "capture-runner.js",
     "--acceptance",
-    "src/verification/tiderunner.acceptance.json",
+    "src/capabilities/verification/tiderunner.acceptance.json",
     "--scenario",
-    "src/verification/scenarios/platformer-2d-basic.json",
+    "src/capabilities/verification/scenarios/platformer-2d-basic.json",
     "--out",
     "../trace/verify",
     "--project",
     "GameA",
   ]);
 
-  assert.ok(args.acceptancePath.endsWith("src/verification/tiderunner.acceptance.json"));
-  assert.ok(args.scenarioPath?.endsWith("src/verification/scenarios/platformer-2d-basic.json"));
+  assert.ok(args.acceptancePath.endsWith("src/capabilities/verification/tiderunner.acceptance.json"));
+  assert.ok(args.scenarioPath?.endsWith("src/capabilities/verification/scenarios/platformer-2d-basic.json"));
   assert.ok(args.outDir.endsWith("trace/verify"));
   assert.equal(args.project, "GameA");
 });
@@ -62,12 +62,12 @@ test("capture-runner: allows omitted scenario for bundled pack auto-selection", 
     "node",
     "capture-runner.js",
     "--acceptance",
-    "src/verification/tiderunner.acceptance.json",
+    "src/capabilities/verification/tiderunner.acceptance.json",
     "--out",
     "../trace/verify",
   ]);
 
-  assert.ok(args.acceptancePath.endsWith("src/verification/tiderunner.acceptance.json"));
+  assert.ok(args.acceptancePath.endsWith("src/capabilities/verification/tiderunner.acceptance.json"));
   assert.equal(args.scenarioPath, undefined);
   assert.ok(args.outDir.endsWith("trace/verify"));
 });

@@ -39,12 +39,12 @@ import {
   type MinigameFinding,
   type MinigameFlatCheck,
   type MinigameVerifyReport,
-} from "../loombridge/verify-minigame.js";
-import type { FlowReport } from "../loombridge/minigame-gates/interaction-flow.js";
-import { run as verifyRun } from "../loombridge/verify.js";
-import { assertValidMinigameContract } from "../loombridge/minigame-profiles/validator.js";
-import type { MinigameContract } from "../loombridge/minigame-profiles/types.js";
-import { makeGateReport, type GateReport } from "../verification/gates/types.js";
+} from "../capabilities/minigame/verify-minigame.js";
+import type { FlowReport } from "../capabilities/minigame/interaction-flow.js";
+import { run as verifyRun } from "../capabilities/verification/verify.js";
+import { assertValidMinigameContract } from "../capabilities/minigame/profiles/validator.js";
+import type { MinigameContract } from "../capabilities/minigame/profiles/types.js";
+import { makeGateReport, type GateReport } from "../capabilities/verification/gates/types.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);

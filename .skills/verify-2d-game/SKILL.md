@@ -7,7 +7,7 @@ Use this skill to turn the human review pass — "the font is wrong, the player 
 
 ## When to invoke
 
-After the game builds and plays. You need an **acceptance contract** at `.loombridge/ACCEPTANCE.json` (seeded by `loombridge plan`; authored from the design mock + the locked feel doc). If none exists, run `loombridge plan` first — it will refuse to complete without an approved Design Target, which is the right gate (see `references/report-schema.md` for the contract sections and `mcp-server/src/verification/acceptance.schema.json` for the schema).
+After the game builds and plays. You need an **acceptance contract** at `.loombridge/ACCEPTANCE.json` (seeded by `loombridge plan`; authored from the design mock + the locked feel doc). If none exists, run `loombridge plan` first — it will refuse to complete without an approved Design Target, which is the right gate (see `references/report-schema.md` for the contract sections and `mcp-server/src/capabilities/verification/acceptance.schema.json` for the schema).
 
 ## Principles
 

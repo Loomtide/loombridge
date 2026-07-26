@@ -1,8 +1,8 @@
 # Platformer Feel Profiles
 
 **Status:** S5a — Profile Contract (shipped 2026-06-02)
-**Source of truth:** `mcp-server/src/loombridge/genre-packs/platformer-2d/`
-**Schema:** `mcp-server/src/loombridge/schemas/platformer-profile.schema.json`
+**Source of truth:** `mcp-server/src/capabilities/genre/genre-packs/platformer-2d/`
+**Schema:** `mcp-server/src/domain/schemas/platformer-profile.schema.json`
 
 A **profile** is a product-owned, named set of *measurable* 2D-platformer feel target
 bands. It is the verify-first counterpart to a game's `AcceptanceContract.feel` section:

@@ -5,18 +5,18 @@ import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
-import { run as runAssets } from "../loombridge/assets.js";
-import { readAssetManifest, type AssetManifest, type RequiredAssetRole } from "../loombridge/asset-manifest.js";
-import { setDesignTarget } from "../loombridge/design.js";
-import { runPlan } from "../loombridge/plan.js";
-import { loombridgePaths } from "../loombridge/state.js";
+import { run as runAssets } from "../capabilities/assets/assets.js";
+import { readAssetManifest, type AssetManifest, type RequiredAssetRole } from "../capabilities/assets/asset-manifest.js";
+import { setDesignTarget } from "../capabilities/verification/design.js";
+import { runPlan } from "../capabilities/verification/plan.js";
+import { loombridgePaths } from "../domain/state.js";
 import type { GeneratedAssetAnnotation, GeneratedAssetExportInput } from "../asset-layer/generated-assets.js";
 import { adaptRegistryPackToCatalog } from "../asset-layer/catalog.js";
 import type { AssetCatalogRecord } from "../asset-layer/types.js";
 import type { CatalogFetch } from "../asset-layer/catalog-source.js";
 import { buildRegistrySelectionPlan } from "../asset-layer/manifest-selection.js";
 import { loadAssetProfile, loadRegistryPack } from "../asset-layer/registry.js";
-import { evaluateAssetSourceFidelity } from "../verification/gates/asset-source-fidelity.js";
+import { evaluateAssetSourceFidelity } from "../capabilities/verification/gates/asset-source-fidelity.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);

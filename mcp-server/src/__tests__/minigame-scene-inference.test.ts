@@ -14,10 +14,10 @@ import {
   sceneSlug,
   sceneNamespacedId,
   findSlugCollisions,
-} from "../loombridge/minigame-scene-inference.js";
-import { observedClicksToTrace } from "../loombridge/replay/observe.js";
-import type { ObservedClick } from "../loombridge/replay/observe.js";
-import type { ReplayTrace, Segment } from "../loombridge/replay/types.js";
+} from "../capabilities/minigame/minigame-scene-inference.js";
+import { observedClicksToTrace } from "../capabilities/replay/observe.js";
+import type { ObservedClick } from "../capabilities/replay/observe.js";
+import type { ReplayTrace, Segment } from "../capabilities/replay/types.js";
 
 /** A minimal trace shell; `segs` are partial Segments (only `scene` matters to these helpers). */
 function trace(startScene: string, segs: Array<Partial<Segment>>): Pick<ReplayTrace, "segments" | "start"> {

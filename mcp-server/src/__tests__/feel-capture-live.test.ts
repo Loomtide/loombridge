@@ -4,8 +4,8 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import { runFeelCaptureLive, type FeelCaptureLiveClient } from "../loombridge/feel-capture/live.js";
-import type { FeelCaptureContract } from "../loombridge/feel-capture/types.js";
+import { runFeelCaptureLive, type FeelCaptureLiveClient } from "../capabilities/feel/live.js";
+import type { FeelCaptureContract } from "../capabilities/feel/types.js";
 import type { BridgeResponse } from "../types.js";
 
 function success(data: unknown): BridgeResponse {

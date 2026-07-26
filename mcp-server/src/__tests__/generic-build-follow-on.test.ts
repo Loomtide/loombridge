@@ -8,14 +8,14 @@ import {
   assertValidExperimentalBuildProof,
   validateExperimentalBuildProof,
   type ExperimentalBuildProof,
-} from "../loombridge/genre-contract/experimental-build-proof.js";
+} from "../capabilities/genre/genre-contract/experimental-build-proof.js";
 import {
   deriveTimeToKill,
   firstRisingEdge,
   deriveHitstopMs,
   deriveScreenShakeMag,
   isImmediateImpactFeedback,
-} from "../verification/feel-derive.js";
+} from "../capabilities/verification/feel-derive.js";
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "../../..");
 

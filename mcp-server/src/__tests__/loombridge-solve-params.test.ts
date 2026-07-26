@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { resolveStartingParams } from "../loombridge/genre-packs/platformer-2d/solve-params.js";
-import { loadProfile } from "../loombridge/genre-packs/platformer-2d/profiles.js";
-import type { PlatformerFeelProfile } from "../loombridge/genre-packs/platformer-2d/types.js";
+import { resolveStartingParams } from "../capabilities/genre/genre-packs/platformer-2d/solve-params.js";
+import { loadProfile } from "../capabilities/genre/genre-packs/platformer-2d/profiles.js";
+import type { PlatformerFeelProfile } from "../capabilities/genre/genre-packs/platformer-2d/types.js";
 
 // A minimal profile with a `build` block and the three solve bands, plus shortHopApex
 // so the stored jumpCutMultiplier is verifiable. Used to exercise the pure math

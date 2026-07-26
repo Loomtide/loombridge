@@ -20,7 +20,7 @@ import {
   type BridgeSend,
   type ReplayDriver,
   type ReplayTrace,
-} from "../loombridge/replay/index.js";
+} from "../capabilities/replay/index.js";
 
 // ───────────────────────── parse ─────────────────────────
 

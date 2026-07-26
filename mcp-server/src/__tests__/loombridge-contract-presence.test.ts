@@ -14,14 +14,14 @@ import test from "node:test";
 import {
   inspectContractPresence,
   noContractRefusal,
-} from "../loombridge/contract-presence.js";
-import { runVerify, run as runVerifyCli } from "../loombridge/verify.js";
-import { runDoneness } from "../loombridge/doneness.js";
-import { runPlan } from "../loombridge/plan.js";
-import { computeStatusModel, renderDetailedStatus } from "../loombridge/status-model.js";
-import { designStatus, setDesignTarget } from "../loombridge/design.js";
-import { loombridgePaths, readState, writeState } from "../loombridge/state.js";
-import { readSlicePlan } from "../loombridge/slices.js";
+} from "../domain/contract-presence.js";
+import { runVerify, run as runVerifyCli } from "../capabilities/verification/verify.js";
+import { runDoneness } from "../capabilities/verification/doneness.js";
+import { runPlan } from "../capabilities/verification/plan.js";
+import { computeStatusModel, renderDetailedStatus } from "../capabilities/verification/status-model.js";
+import { designStatus, setDesignTarget } from "../capabilities/verification/design.js";
+import { loombridgePaths, readState, writeState } from "../domain/state.js";
+import { readSlicePlan } from "../capabilities/verification/slices.js";
 import {
   buildLoombridgeStatusPayload,
   runLoombridgeProjectInit,
@@ -42,7 +42,7 @@ import {
   stableStringify,
   DEFAULT_THRESHOLDS,
   type AuditPayload,
-} from "../loombridge/mobile-audit-report.js";
+} from "../capabilities/mobile/mobile-audit-report.js";
 import { OpRegistry } from "../op-registry.js";
 import { writeApprovedAssetManifestForDesign } from "./helpers/asset-manifest-fixture.js";
 

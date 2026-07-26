@@ -80,4 +80,4 @@ This bundle proves the impact hit-stop WINDOW duration and the impact camera-DIS
 does **not** measure hit-stop / screen-shake QUALITY, freeze or trauma curves, shake shape (perlin), or
 any production camera-shake / time-dilation authoring. Muzzle flash, hit markers, crosshair bloom,
 vignette, dust, recoil, ADS, hitscan impact latency, AI/cover/waves, and Fusion/multiplayer all remain
-explicit gaps. See `mcp-server/src/loombridge/genre-packs/3d-shooter/methodology-gaps.md`.
+explicit gaps. See `mcp-server/src/capabilities/genre/genre-packs/3d-shooter/methodology-gaps.md`.

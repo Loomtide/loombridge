@@ -16,7 +16,7 @@ import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
-import { runVerify } from "../loombridge/verify.js";
+import { runVerify } from "../capabilities/verification/verify.js";
 import {
   ensureScaffold,
   loombridgePaths,
@@ -24,7 +24,7 @@ import {
   fileExists,
   nowIso,
   type LoombridgeState,
-} from "../loombridge/state.js";
+} from "../domain/state.js";
 import {
   readSlicePlan,
   writeSlicePlan,
@@ -33,14 +33,14 @@ import {
   getSliceVerdictPath,
   getSliceVerifyDir,
   type SlicePlan,
-} from "../loombridge/slices.js";
+} from "../capabilities/verification/slices.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const acceptancePath = path.resolve(
   __dirname,
   "../../..",
-  "mcp-server/src/verification/tiderunner.acceptance.json",
+  "mcp-server/src/capabilities/verification/tiderunner.acceptance.json",
 );
 
 async function tmpRoot(): Promise<string> {
@@ -391,7 +391,7 @@ test("verify --slice + --stage together → exit 2 usage error", async () => {
     await scaffold(root);
     const paths = loombridgePaths(root);
     await writeSlicePlan(paths, planWith(["manifest"]));
-    const { run } = await import("../loombridge/verify.js");
+    const { run } = await import("../capabilities/verification/verify.js");
     const code = await run(["--root", root, "--slice", "s1-hud", "--stage", "construct"]);
     assert.equal(code, 2);
     // No per-slice verdict was produced.

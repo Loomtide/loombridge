@@ -22,7 +22,7 @@ import {
   firstRisingEdge,
   isImmediateImpactFeedback,
   SCREEN_SHAKE_MIN_REGISTERED_U,
-} from "../../mcp-server/dist/verification/feel-derive.js";
+} from "../../mcp-server/dist/capabilities/verification/feel-derive.js";
 
 const bundleDir = path.dirname(fileURLToPath(import.meta.url));
 const RAW_NAME = "3d-impact-feedback-raw-2026-06-26.json";

@@ -37,14 +37,14 @@ import {
   syncSeriesRefusal,
   type BisectionTrial,
   type SyncSeries,
-} from "../verification/feel-derive.js";
+} from "../capabilities/verification/feel-derive.js";
 import {
   evaluateFeelRederive,
   rederiveFromSources,
-} from "../verification/gates/feel-rederive.js";
-import { evaluateFeelProvenance, validMeasurementSource } from "../verification/gates/feel-provenance.js";
-import type { FeelMeasurements, FeelMeasurementSource, FeelTrajectorySample } from "../verification/gates/feel.js";
-import type { AcceptanceContract } from "../verification/types.js";
+} from "../capabilities/verification/gates/feel-rederive.js";
+import { evaluateFeelProvenance, validMeasurementSource } from "../capabilities/verification/gates/feel-provenance.js";
+import type { FeelMeasurements, FeelMeasurementSource, FeelTrajectorySample } from "../capabilities/verification/gates/feel.js";
+import type { AcceptanceContract } from "../capabilities/verification/types.js";
 
 // A jump arc peaking at +3.0u above start at 280ms (0..560ms, 40ms step).
 function jumpArc(apex = 3.0, apexMs = 280, endMs = 560, stepMs = 40): FeelTrajectorySample[] {

@@ -452,7 +452,7 @@ describe("loombridge install-agent (optional agent surface)", { timeout: 90000 }
   });
 
   test("#3 installTargets normalizes a Windows-style (backslash) payload rel to POSIX keys", async () => {
-    const mod = await import("../loombridge/install-agent.js");
+    const mod = await import("../capabilities/setup/install-agent.js");
     const skill = mod._internals.installTargets("skills\\parallax-2d\\SKILL.md");
     assert.deepEqual(skill, [".claude/skills/parallax-2d/SKILL.md", ".codex/skills/parallax-2d/SKILL.md"]);
     const cmd = mod._internals.installTargets("commands\\loombridge\\plan.md");

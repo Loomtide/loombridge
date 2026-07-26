@@ -14,16 +14,16 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import { buildScaffoldContract } from "../loombridge/minigame-scaffold.js";
+import { buildScaffoldContract } from "../capabilities/minigame/minigame-scaffold.js";
 import {
   driveDeviceOnce,
   indexCheckpoints,
   type CaptureDriver,
   type DriveAccumulators,
-} from "../loombridge/minigame-capture.js";
-import { planCaptureFromTrace } from "../loombridge/minigame-capture-plan.js";
-import type { DeviceSpec, MinigameContract } from "../loombridge/minigame-profiles/types.js";
-import type { Action, ReplayTrace } from "../loombridge/replay/types.js";
+} from "../capabilities/minigame/minigame-capture.js";
+import { planCaptureFromTrace } from "../capabilities/minigame/minigame-capture-plan.js";
+import type { DeviceSpec, MinigameContract } from "../capabilities/minigame/profiles/types.js";
+import type { Action, ReplayTrace } from "../capabilities/replay/types.js";
 
 const tap = (p: string): Action => ({ do: "tap", locator: { path: p } });
 const wait = (p: string): Action => ({ do: "wait-for-visible", locator: { path: p } });

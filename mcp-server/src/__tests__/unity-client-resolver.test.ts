@@ -9,7 +9,7 @@ import {
   resolveUnityProjectTarget,
   type ResolvedUnityClient,
   UNITY_PROJECT_ENV_VAR,
-} from "../verification/unity-client-resolver.js";
+} from "../capabilities/verification/unity-client-resolver.js";
 
 function discoveryRecord(overrides: Partial<{
   sessionId: string;

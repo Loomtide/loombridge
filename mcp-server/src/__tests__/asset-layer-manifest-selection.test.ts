@@ -10,8 +10,8 @@ import {
   buildRegistrySelectionPlan,
 } from "../asset-layer/manifest-selection.js";
 import { loadAssetProfile, loadRegistryPack } from "../asset-layer/registry.js";
-import { createDraftAssetManifest, validateAssetManifest } from "../loombridge/asset-manifest.js";
-import { evaluateAssetSourceFidelity } from "../verification/gates/asset-source-fidelity.js";
+import { createDraftAssetManifest, validateAssetManifest } from "../capabilities/assets/asset-manifest.js";
+import { evaluateAssetSourceFidelity } from "../capabilities/verification/gates/asset-source-fidelity.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);

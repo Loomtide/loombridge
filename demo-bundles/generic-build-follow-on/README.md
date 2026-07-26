@@ -29,7 +29,7 @@ a fire-SFX edge.
 ## Verification
 
 The bundle is validated by `validateExperimentalBuildProof` in
-`mcp-server/src/loombridge/genre-contract/experimental-build-proof.ts`.
+`mcp-server/src/capabilities/genre/genre-contract/experimental-build-proof.ts`.
 
 Run from `mcp-server/`:
 

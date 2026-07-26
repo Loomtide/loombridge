@@ -16,12 +16,12 @@ import {
   type AbBriefInput,
   type IndependenceAttestation,
   type JudgmentScores,
-} from "../loombridge/genre-contract/ab-rubric.js";
-import type { GenreContract } from "../loombridge/genre-contract/types.js";
+} from "../capabilities/genre/genre-contract/ab-rubric.js";
+import type { GenreContract } from "../capabilities/genre/genre-contract/types.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PKG_ROOT = path.resolve(__dirname, "..", ".."); // dist/__tests__ -> mcp-server
-const EXAMPLES = path.join(PKG_ROOT, "src", "loombridge", "genre-contract", "examples");
+const EXAMPLES = path.join(PKG_ROOT, "src", "capabilities", "genre", "genre-contract", "examples");
 
 function shooterFixture(): unknown {
   return JSON.parse(fs.readFileSync(path.join(EXAMPLES, "2d-shooter.contract.json"), "utf8"));

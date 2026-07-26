@@ -10,23 +10,23 @@ import {
   evaluateReachabilityEnvelope,
   type ReachabilityLayout,
   type FeelEnvelopeBudget,
-} from "../verification/gates/index.js";
+} from "../capabilities/verification/gates/index.js";
 import {
   envelopeFromProfile,
   evaluateProfileReachability,
   PROFILE_REACHABILITY_VERTICAL_MARGIN_U,
-} from "../loombridge/genre-packs/platformer-2d/reachability-profile.js";
+} from "../capabilities/genre/genre-packs/platformer-2d/reachability-profile.js";
 import {
   buildProfileReport,
   computeProfileReachability,
   headlineFor,
-} from "../loombridge/genre-packs/platformer-2d/verify-profile.js";
-import { loadProfile } from "../loombridge/genre-packs/platformer-2d/profiles.js";
-import { run as runVerifyCli } from "../loombridge/verify.js";
+} from "../capabilities/genre/genre-packs/platformer-2d/verify-profile.js";
+import { loadProfile } from "../capabilities/genre/genre-packs/platformer-2d/profiles.js";
+import { run as runVerifyCli } from "../capabilities/verification/verify.js";
 import type {
   PlatformerFeelProfile,
   ProfileMetricTarget,
-} from "../loombridge/genre-packs/platformer-2d/types.js";
+} from "../capabilities/genre/genre-packs/platformer-2d/types.js";
 
 // ---------------------------------------------------------------------------
 // Synthetic profile builder — lets a test pin EXACTLY the solve bands the F4

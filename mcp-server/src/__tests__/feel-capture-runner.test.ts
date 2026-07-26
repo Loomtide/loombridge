@@ -1,12 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { runFeelCaptureContract, type FeelCaptureSend } from "../loombridge/feel-capture/run.js";
-import { evaluateFeelCaptureRuntimeGuard } from "../loombridge/feel-capture/runtime-guard.js";
-import type { FeelCaptureContract } from "../loombridge/feel-capture/types.js";
-import { SHORT_HOP_CANONICAL_TAP_TICKS } from "../loombridge/genre-packs/platformer-2d/measure-recipe.js";
-import { evaluateFeelProvenance } from "../verification/gates/feel-provenance.js";
-import { rederiveFromSources } from "../verification/gates/feel-rederive.js";
+import { runFeelCaptureContract, type FeelCaptureSend } from "../capabilities/feel/run.js";
+import { evaluateFeelCaptureRuntimeGuard } from "../capabilities/feel/runtime-guard.js";
+import type { FeelCaptureContract } from "../capabilities/feel/types.js";
+import { SHORT_HOP_CANONICAL_TAP_TICKS } from "../capabilities/genre/genre-packs/platformer-2d/measure-recipe.js";
+import { evaluateFeelProvenance } from "../capabilities/verification/gates/feel-provenance.js";
+import { rederiveFromSources } from "../capabilities/verification/gates/feel-rederive.js";
 
 const player = { scene: "Scene_1", path: "/Player" };
 const dashAcceptance = {

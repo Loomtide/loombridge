@@ -31,15 +31,15 @@ import {
   renderMinigameReportHtml,
   renderMinigameReportMarkdown,
   whereCopy,
-} from "../loombridge/minigame-report-render.js";
+} from "../capabilities/minigame/minigame-report-render.js";
 import {
   buildCrGroups,
   type MinigameDeviceTag,
   type MinigameFinding,
   type MinigameFlatCheck,
   type MinigameVerifyReport,
-} from "../loombridge/verify-minigame.js";
-import { makeGateReport, type GateCheckAnnotation, type GateReport } from "../verification/gates/types.js";
+} from "../capabilities/minigame/verify-minigame.js";
+import { makeGateReport, type GateCheckAnnotation, type GateReport } from "../capabilities/verification/gates/types.js";
 
 /** A fully-formed report with sane defaults; override only what a case needs. */
 function baseReport(over: Partial<MinigameVerifyReport>): MinigameVerifyReport {

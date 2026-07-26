@@ -12,7 +12,7 @@ import {
   type Action,
   type Anchor,
   type Assertion,
-} from "../loombridge/replay/index.js";
+} from "../capabilities/replay/index.js";
 
 // ───────────────────────── fake bridge ─────────────────────────
 

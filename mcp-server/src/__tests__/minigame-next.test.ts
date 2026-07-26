@@ -16,7 +16,7 @@ import {
   nextStepLinesFor,
   resolveNextStep,
   type WorkspaceFacts,
-} from "../loombridge/minigame-next.js";
+} from "../capabilities/minigame/minigame-next.js";
 
 const base: WorkspaceFacts = {
   id: "g",

@@ -9,7 +9,7 @@ import {
   deriveTimeToKill,
   eventEdges,
   firstRisingEdge,
-} from "../../mcp-server/dist/verification/feel-derive.js";
+} from "../../mcp-server/dist/capabilities/verification/feel-derive.js";
 
 const bundleDir = path.dirname(fileURLToPath(import.meta.url));
 const RAW_NAME = "shooter-3d-combat-loop-raw-2026-06-25.json";

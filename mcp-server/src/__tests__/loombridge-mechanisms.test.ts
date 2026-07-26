@@ -10,10 +10,10 @@ import {
   FALL_ASYMMETRY_MARGIN,
   evaluateMechanisms,
   type MechanismEvidence,
-} from "../loombridge/genre-packs/platformer-2d/mechanisms.js";
-import type { PlatformerFeelProfile } from "../loombridge/genre-packs/platformer-2d/types.js";
-import type { FeelTrajectorySample } from "../verification/gates/feel.js";
-import type { BisectionTrial } from "../verification/feel-derive.js";
+} from "../capabilities/genre/genre-packs/platformer-2d/mechanisms.js";
+import type { PlatformerFeelProfile } from "../capabilities/genre/genre-packs/platformer-2d/types.js";
+import type { FeelTrajectorySample } from "../capabilities/verification/gates/feel.js";
+import type { BisectionTrial } from "../capabilities/verification/feel-derive.js";
 
 // ── synthetic-fixture builders ───────────────────────────────────────────────
 

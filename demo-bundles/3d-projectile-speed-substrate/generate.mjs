@@ -10,7 +10,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { deriveProjectileSpeed } from "../../mcp-server/dist/verification/feel-derive.js";
+import { deriveProjectileSpeed } from "../../mcp-server/dist/capabilities/verification/feel-derive.js";
 
 const bundleDir = path.dirname(fileURLToPath(import.meta.url));
 const RAW_NAME = "shooter-3d-projectile-speed-raw-2026-06-25.json";

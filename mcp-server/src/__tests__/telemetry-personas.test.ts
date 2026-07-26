@@ -10,8 +10,8 @@ import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import test from "node:test";
 
-import { validateTelemetrySchema, telemetrySchemaPathForGenre, type TelemetrySchema } from "../loombridge/telemetry/schema.js";
-import { validatePersonaContract, personaContractPathForGenre, type PersonaContract } from "../loombridge/telemetry/personas.js";
+import { validateTelemetrySchema, telemetrySchemaPathForGenre, type TelemetrySchema } from "../capabilities/telemetry/schema.js";
+import { validatePersonaContract, personaContractPathForGenre, type PersonaContract } from "../capabilities/telemetry/personas.js";
 import {
   buildPersonaCohortReport,
   buildPersonaCohortComparison,
@@ -22,8 +22,8 @@ import {
   PERSONA_RENDER_TEMPLATES,
   PERSONA_REPORT_DISCLAIMER,
   type PersonaCohortReport,
-} from "../loombridge/telemetry/persona-report.js";
-import { LOW_SAMPLE_THRESHOLD, type TelemetryRun } from "../loombridge/telemetry/report.js";
+} from "../capabilities/telemetry/persona-report.js";
+import { LOW_SAMPLE_THRESHOLD, type TelemetryRun } from "../capabilities/telemetry/report.js";
 
 const SCHEMA: TelemetrySchema = validateTelemetrySchema({
   schemaVersion: "1",

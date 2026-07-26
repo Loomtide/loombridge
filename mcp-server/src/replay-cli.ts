@@ -12,8 +12,8 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 
-import { parseTrace } from "./loombridge/replay/index.js";
-import { runLiveReplay } from "./loombridge/replay/run-live.js";
+import { parseTrace } from "./capabilities/replay/index.js";
+import { runLiveReplay } from "./capabilities/replay/run-live.js";
 
 interface CliArgs {
   trace: string;

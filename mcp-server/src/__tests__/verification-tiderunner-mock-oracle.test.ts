@@ -10,9 +10,9 @@ import {
   parseMockToAcceptance,
   parseNotes,
   parsePaletteVars,
-} from "../verification/tiderunner-mock-oracle.js";
-import { validateAcceptanceContract } from "../verification/validator.js";
-import type { AcceptanceContract } from "../verification/types.js";
+} from "../capabilities/verification/tiderunner-mock-oracle.js";
+import { validateAcceptanceContract } from "../capabilities/verification/validator.js";
+import type { AcceptanceContract } from "../capabilities/verification/types.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -25,7 +25,7 @@ const mockPath = path.join(
 const feelDocPath = path.join(repoRoot, "mcp-server/src/__tests__/fixtures/design-briefs/trailer-demo-concept.md");
 const acceptancePath = path.join(
   repoRoot,
-  "mcp-server/src/verification/tiderunner.acceptance.json",
+  "mcp-server/src/capabilities/verification/tiderunner.acceptance.json",
 );
 
 async function loadMock(): Promise<string> {

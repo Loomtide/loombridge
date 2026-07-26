@@ -9,7 +9,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import { ICON, nextStepLines, tildify, unityConnectionHint } from "../loombridge/cli-ui.js";
+import { ICON, nextStepLines, tildify, unityConnectionHint } from "../shared/cli-ui.js";
 
 test("tildify: shortens a $HOME path to ~/…, leaves others untouched", () => {
   assert.equal(tildify(path.join(os.homedir(), ".loombridge", "x", "y.png")), "~/.loombridge/x/y.png");

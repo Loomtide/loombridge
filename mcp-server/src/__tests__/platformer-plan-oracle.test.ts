@@ -5,8 +5,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 
-import { runPlan } from "../loombridge/plan.js";
-import { loombridgePaths } from "../loombridge/state.js";
+import { runPlan } from "../capabilities/verification/plan.js";
+import { loombridgePaths } from "../domain/state.js";
 
 /**
  * Platformer REGRESSION ORACLE (slice-2 of genre-pack decoupling). Freezes the deterministic platformer

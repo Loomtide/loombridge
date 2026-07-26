@@ -43,9 +43,9 @@ import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
-import { deriveWallSlideTangentRatio } from "../verification/feel-derive.js";
-import type { FeelTrajectorySample } from "../verification/gates/feel.js";
-import { validateAcceptanceContract } from "../verification/validator.js";
+import { deriveWallSlideTangentRatio } from "../capabilities/verification/feel-derive.js";
+import type { FeelTrajectorySample } from "../capabilities/verification/gates/feel.js";
+import { validateAcceptanceContract } from "../capabilities/verification/validator.js";
 
 // The canonical wall + diagonal-input geometry all cases share (see file header).
 const WALL_NORMAL = { x: 1, z: 0 } as const; // outward normal, +X
@@ -445,8 +445,8 @@ test("edited genre packs (3d-topdown-arena + 3d-shooter) validate; arena carries
   const load = async (rel: string) =>
     JSON.parse(await fs.readFile(path.join(repoRoot, rel), "utf-8")) as Record<string, unknown>;
 
-  const arena = await load("mcp-server/src/loombridge/genre-packs/3d-topdown-arena/acceptance.json");
-  const shooter = await load("mcp-server/src/loombridge/genre-packs/3d-shooter/acceptance.json");
+  const arena = await load("mcp-server/src/capabilities/genre/genre-packs/3d-topdown-arena/acceptance.json");
+  const shooter = await load("mcp-server/src/capabilities/genre/genre-packs/3d-shooter/acceptance.json");
   for (const [name, contract] of [["3d-topdown-arena", arena], ["3d-shooter", shooter]] as const) {
     const result = validateAcceptanceContract(contract as never);
     assert.equal(result.valid, true, `${name}: ${JSON.stringify(result.issues, null, 2)}`);

@@ -52,7 +52,7 @@ never drifts from the committed source evidence.
 `look responsiveness/latency`, `recoil`, `ADS / aim spread`, `hit-stop / screen-shake FEEL QUALITY`,
 broader hitscan weapon features, `enemy AI behavior beyond reaction`, `advanced cover beyond LOS/damage`,
 `wave pacing / mission design beyond one wave`, `aiming-feel`, and `Fusion / multiplayer / netcode` — see
-`evidence-manifest.json#gaps` and `mcp-server/src/loombridge/genre-packs/3d-shooter/methodology-gaps.md`.
+`evidence-manifest.json#gaps` and `mcp-server/src/capabilities/genre/genre-packs/3d-shooter/methodology-gaps.md`.
 
 ## Files
 

@@ -13,10 +13,10 @@ import test from "node:test";
 import {
   evaluateInputResponse,
   type InputResponseEvidence,
-} from "../loombridge/minigame-gates/input-response.js";
-import { minigameReportStatus } from "../loombridge/verify-minigame.js";
-import type { MinigameContract } from "../loombridge/minigame-profiles/types.js";
-import type { MinigameCaptureObject } from "../loombridge/minigame-gates/types.js";
+} from "../capabilities/minigame/input-response.js";
+import { minigameReportStatus } from "../capabilities/minigame/verify-minigame.js";
+import type { MinigameContract } from "../capabilities/minigame/profiles/types.js";
+import type { MinigameCaptureObject } from "../capabilities/minigame/types.js";
 
 /** A contract whose `active` state declares an input-response (tap answer0 → feedback changes). */
 function contract(overrides: Partial<MinigameContract> = {}): MinigameContract {

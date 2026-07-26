@@ -4,14 +4,14 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import { setDesignTarget } from "../loombridge/design.js";
-import { runPlan } from "../loombridge/plan.js";
-import { runBuild } from "../loombridge/build.js";
-import { runStatus } from "../loombridge/status.js";
-import { designStatus } from "../loombridge/design.js";
-import { loombridgePaths, readState } from "../loombridge/state.js";
-import { computeStatusModel } from "../loombridge/status-model.js";
-import { readSlicePlan, writeSlicePlan, type SlicePlan } from "../loombridge/slices.js";
+import { setDesignTarget } from "../capabilities/verification/design.js";
+import { runPlan } from "../capabilities/verification/plan.js";
+import { runBuild } from "../capabilities/verification/build.js";
+import { runStatus } from "../capabilities/verification/status.js";
+import { designStatus } from "../capabilities/verification/design.js";
+import { loombridgePaths, readState } from "../domain/state.js";
+import { computeStatusModel } from "../capabilities/verification/status-model.js";
+import { readSlicePlan, writeSlicePlan, type SlicePlan } from "../capabilities/verification/slices.js";
 import { writeApprovedAssetManifestForDesign } from "./helpers/asset-manifest-fixture.js";
 
 async function tmpRoot(): Promise<string> {

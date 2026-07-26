@@ -92,8 +92,8 @@ test("NO DUAL SOURCE: the generator's doc resolver matches resolveStartingParams
   // the tested resolver so editing one without the other can never silently ship a
   // doc table that disagrees with the real build-side resolver (review finding #2).
   const { resolveStartingParamsForDoc } = await loadGenerator();
-  const { resolveStartingParams } = await import("../loombridge/genre-packs/platformer-2d/solve-params.js");
-  const { loadProfile, SHIPPED_PROFILE_IDS } = await import("../loombridge/genre-packs/platformer-2d/profiles.js");
+  const { resolveStartingParams } = await import("../capabilities/genre/genre-packs/platformer-2d/solve-params.js");
+  const { loadProfile, SHIPPED_PROFILE_IDS } = await import("../capabilities/genre/genre-packs/platformer-2d/profiles.js");
   for (const id of SHIPPED_PROFILE_IDS) {
     const profile = await loadProfile(id);
     assert.deepEqual(

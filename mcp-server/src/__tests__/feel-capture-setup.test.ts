@@ -4,8 +4,8 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import { proposeFeelCaptureContract, writeFeelCaptureContract } from "../loombridge/feel-capture/setup.js";
-import { SHORT_HOP_CANONICAL_TAP_TICKS } from "../loombridge/genre-packs/platformer-2d/measure-recipe.js";
+import { proposeFeelCaptureContract, writeFeelCaptureContract } from "../capabilities/feel/setup.js";
+import { SHORT_HOP_CANONICAL_TAP_TICKS } from "../capabilities/genre/genre-packs/platformer-2d/measure-recipe.js";
 
 test("setup proposal writes a generic uGUI capture contract for mobile/pointer games", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "loombridge-feel-setup-"));

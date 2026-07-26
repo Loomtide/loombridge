@@ -9,14 +9,14 @@ import {
   getVerificationResetPolicy,
   validateVerificationScenario,
   type VerificationScenario,
-} from "../verification/scenario.js";
+} from "../capabilities/verification/scenario.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const fixturePath = path.resolve(
   __dirname,
   "../../..",
-  "mcp-server/src/verification/scenarios/platformer-2d-basic.json",
+  "mcp-server/src/capabilities/verification/scenarios/platformer-2d-basic.json",
 );
 
 async function loadFixture(): Promise<VerificationScenario> {

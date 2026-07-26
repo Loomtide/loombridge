@@ -105,7 +105,7 @@ promote as a genre constant.
 ### Stage 3 — Mobile / safe-area (touch builds)
 - Every visible HUD element must sit inside the device safe area; only backgrounds may bleed. Audit
   control insets against the notch inset at the target device resolution, and check tap-target sizes.
-  The safe-area-sweep gate LOGIC exists (`mcp-server/src/verification/mobile-touch-gates.ts`) but today
+  The safe-area-sweep gate LOGIC exists (`mcp-server/src/capabilities/verification/mobile-touch-gates.ts`) but today
   is reachable only through the 2D minigame verify pipeline — for a 3D/mobile build apply the same
   discipline by hand until a 3D/mobile front door exists.
   `[VALIDATED-concept: GRL-C08 + dogfood-ui #11; the specific joystick-notch numbers are CANDIDATE — do not promote]`

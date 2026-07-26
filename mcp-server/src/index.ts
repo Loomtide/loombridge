@@ -76,7 +76,7 @@ import {
 import { resolveMcpStartupProjectBinding } from "./startup-binding.js";
 import { collectSiblingServers, formatDoctorLines } from "./diagnostics.js";
 import { InputSessionKeepalive } from "./input-keepalive.js";
-import { resolveBuildStamp } from "./loombridge/build-stamp.js";
+import { resolveBuildStamp } from "./shared/build-stamp.js";
 import { resolveTraceDirectory } from "./trace-directory.js";
 import { validateOpArguments } from "./arg-validation.js";
 

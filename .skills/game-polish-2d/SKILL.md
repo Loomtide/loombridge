@@ -25,9 +25,9 @@ For a platformer `player-feel` slice:
 
 Starting params come from the **feel identity**, not hand-picked numbers. Pick a profile
 (`precision` / `classic` / `momentum`,
-`mcp-server/src/loombridge/genre-packs/platformer-2d/profiles/*.profile.json`) and resolve its starting
+`mcp-server/src/capabilities/genre/genre-packs/platformer-2d/profiles/*.profile.json`) and resolve its starting
 params with `resolveStartingParams(profile)`
-(`mcp-server/src/loombridge/genre-packs/platformer-2d/solve-params.ts`): it derives `jumpSpeed`,
+(`mcp-server/src/capabilities/genre/genre-packs/platformer-2d/solve-params.ts`): it derives `jumpSpeed`,
 `gravityScale`, and `moveSpeed` from the profile's band targets and reads `jumpCutMultiplier` /
 `fixedTimestep` from the profile's `build` block. The resolved per-profile values are tabulated in
 `unity-2d-game/references/feel-presets.md` §2 (generated from the profiles). Then measure → compare →

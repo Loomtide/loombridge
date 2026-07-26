@@ -6,7 +6,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { isDraftContract, isDraftDescription } from "../loombridge/minigame-draft.js";
+import { isDraftContract, isDraftDescription } from "../capabilities/minigame/minigame-draft.js";
 
 test("isDraftDescription: matches the scan `DRAFT:` and scaffold `TODO:` PREFIXES (case-insensitive), nothing else", () => {
   assert.equal(isDraftDescription("DRAFT: live-scanned screen roster."), true);

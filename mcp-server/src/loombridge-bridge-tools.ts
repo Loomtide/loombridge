@@ -21,11 +21,11 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import fs from "node:fs/promises";
 import path from "node:path";
 
-import { designStatus } from "./loombridge/design.js";
-import { isProjectDone, runDoneness } from "./loombridge/doneness.js";
-import { runVerify } from "./loombridge/verify.js";
-import { ensureScaffold, loombridgePaths, readState } from "./loombridge/state.js";
-import { inspectContractPresence } from "./loombridge/contract-presence.js";
+import { designStatus } from "./capabilities/verification/design.js";
+import { isProjectDone, runDoneness } from "./capabilities/verification/doneness.js";
+import { runVerify } from "./capabilities/verification/verify.js";
+import { ensureScaffold, loombridgePaths, readState } from "./domain/state.js";
+import { inspectContractPresence } from "./domain/contract-presence.js";
 import {
   buildMobileAuditReport,
   renderMobileAuditReportText,
@@ -36,7 +36,7 @@ import {
   type MobileAuditReport,
   type MobileAuditThresholds,
   type Severity,
-} from "./loombridge/mobile-audit-report.js";
+} from "./capabilities/mobile/mobile-audit-report.js";
 
 export const LOOMBRIDGE_STATUS_TOOL_NAME = "loombridge_status";
 export const LOOMBRIDGE_PROJECT_INIT_TOOL_NAME = "loombridge_project_init";

@@ -3,7 +3,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { promoteGenreContract } from "../../../mcp-server/dist/loombridge/genre-contract/promote.js";
+import { promoteGenreContract } from "../../../mcp-server/dist/domain/genre-contract/promote.js";
 import {
   deriveTimeToKill,
   firstRisingEdge,
@@ -11,7 +11,7 @@ import {
   deriveHitstopMs,
   deriveScreenShakeMag,
   isImmediateImpactFeedback,
-} from "../../../mcp-server/dist/verification/feel-derive.js";
+} from "../../../mcp-server/dist/capabilities/verification/feel-derive.js";
 
 const bundleDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(bundleDir, "../../..");

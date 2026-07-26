@@ -4,7 +4,7 @@ import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
-import { DEFAULT_SLICE_ASSET_BINDINGS } from "../loombridge/asset-manifest.js";
+import { DEFAULT_SLICE_ASSET_BINDINGS } from "../capabilities/assets/asset-manifest.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);

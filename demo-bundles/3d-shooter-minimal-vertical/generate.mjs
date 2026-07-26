@@ -19,7 +19,7 @@ import {
   deriveFireIntervalMs,
   deriveInputToSpawnLatency,
   deriveTimeToKill,
-} from "../../mcp-server/dist/verification/feel-derive.js";
+} from "../../mcp-server/dist/capabilities/verification/feel-derive.js";
 
 const bundleDir = path.dirname(fileURLToPath(import.meta.url));
 const demoBundles = path.resolve(bundleDir, "..");

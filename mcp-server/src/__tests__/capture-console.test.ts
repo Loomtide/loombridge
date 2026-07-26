@@ -5,9 +5,9 @@ import {
   logsArrayOf,
   partitionConsolePhases,
   type ConsoleEntry,
-} from "../verification/capture-console.js";
-import { evaluateConsoleClean } from "../verification/gates/console-clean.js";
-import type { AcceptanceContract } from "../verification/types.js";
+} from "../capabilities/verification/capture-console.js";
+import { evaluateConsoleClean } from "../capabilities/verification/gates/console-clean.js";
+import type { AcceptanceContract } from "../capabilities/verification/types.js";
 
 const acceptance = {} as AcceptanceContract; // console-clean ignores the contract
 

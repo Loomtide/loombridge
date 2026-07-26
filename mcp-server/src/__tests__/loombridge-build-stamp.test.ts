@@ -5,7 +5,7 @@ import path from "node:path";
 import test from "node:test";
 import { pathToFileURL } from "node:url";
 
-import { resolveBuildStamp, formatBuildStamp } from "../loombridge/build-stamp.js";
+import { resolveBuildStamp, formatBuildStamp } from "../shared/build-stamp.js";
 
 // F5 finding #14: the producing-runtime identity must be STAMPABLE into a report,
 // with absence impossible — when build info is unavailable the stamp says so

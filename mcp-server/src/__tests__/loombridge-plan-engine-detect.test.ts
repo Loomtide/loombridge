@@ -4,10 +4,10 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import { detectEngine, run } from "../loombridge/plan.js";
-import { setDesignTarget } from "../loombridge/design.js";
-import { readSlicePlan } from "../loombridge/slices.js";
-import { loombridgePaths } from "../loombridge/state.js";
+import { detectEngine, run } from "../capabilities/verification/plan.js";
+import { setDesignTarget } from "../capabilities/verification/design.js";
+import { readSlicePlan } from "../capabilities/verification/slices.js";
+import { loombridgePaths } from "../domain/state.js";
 import { writeApprovedAssetManifestForDesign } from "./helpers/asset-manifest-fixture.js";
 
 async function tmpRoot(): Promise<string> {

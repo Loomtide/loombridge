@@ -12,12 +12,13 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
 
-import { assertValidSlicePlan, SLICES_SCHEMA_VERSION } from "../loombridge/slices.js";
+import { assertValidSlicePlan, SLICES_SCHEMA_VERSION } from "../capabilities/verification/slices.js";
 
 const SLICES_PATH = path.join(
   process.cwd(),
   "src",
-  "loombridge",
+  "capabilities",
+  "genre",
   "genre-packs",
   "3d-topdown-arena",
   "slices.json",
@@ -183,7 +184,7 @@ test("3d-topdown-arena — every derive* calculator named in a binding is a real
   // Binding-reality guard: a typo'd deriveNonexistentThing in slices.json must fail CI.
   // Scan the WHOLE slices.json (bindings AND notes — a note claiming a calculator that does
   // not exist is also a false claim) and check membership against the imported module.
-  const feelDerive = (await import("../verification/feel-derive.js")) as Record<string, unknown>;
+  const feelDerive = (await import("../capabilities/verification/feel-derive.js")) as Record<string, unknown>;
   const rawText = await fs.readFile(SLICES_PATH, "utf8");
   const tokens = new Set(rawText.match(/\bderive[A-Z]\w*/g) ?? []);
   assert.ok(tokens.size >= 15, `expected the pack to name many calculators, found ${tokens.size}`);
@@ -197,7 +198,7 @@ test("3d-topdown-arena — every derive* calculator named in a binding is a real
 });
 
 test("3d-topdown-arena — every telemetry name in a binding exists in the shipped telemetry.json seed", async () => {
-  const { telemetrySchemaPathForGenre } = await import("../loombridge/telemetry/schema.js");
+  const { telemetrySchemaPathForGenre } = await import("../capabilities/telemetry/schema.js");
   const telemetryPath = telemetrySchemaPathForGenre("3d-topdown-arena");
   assert.ok(telemetryPath, "telemetry.json resolves for the pack");
   const telemetry = JSON.parse(await fs.readFile(telemetryPath!, "utf8")) as {

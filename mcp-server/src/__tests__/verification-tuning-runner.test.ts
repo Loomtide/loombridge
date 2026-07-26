@@ -13,8 +13,8 @@ import {
   validateTuningSessionConfig,
   type TuningSessionConfig,
   type TuningTrialResult,
-} from "../verification/tuning-runner.js";
-import type { AcceptanceContract, NumericTarget } from "../verification/types.js";
+} from "../capabilities/verification/tuning-runner.js";
+import type { AcceptanceContract, NumericTarget } from "../capabilities/verification/types.js";
 
 function validConfig(): TuningSessionConfig {
   return {

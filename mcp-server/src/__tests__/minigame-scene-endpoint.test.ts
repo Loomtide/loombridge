@@ -4,7 +4,7 @@ import test from "node:test";
 import {
   distinctEditorProjects,
   resolveSingleEditorTarget,
-} from "../loombridge/minigame-scene-endpoint.js";
+} from "../capabilities/minigame/minigame-scene-endpoint.js";
 import type { UnityEndpointDiscoveryRecord } from "../types.js";
 
 /** A minimal live, routable discovery record for a project (one IPC endpoint, distinct pid). */

@@ -18,15 +18,15 @@ import {
   panelVisitOrder,
   segmentStates,
   type RoleCandidates,
-} from "../loombridge/minigame-role-discover.js";
-import { validateMinigameContract } from "../loombridge/minigame-profiles/validator.js";
-import { buildScaffoldContract } from "../loombridge/minigame-scaffold.js";
-import type { RawScreenRects } from "../loombridge/minigame-capture-plan.js";
-import type { MinigameContract } from "../loombridge/minigame-profiles/types.js";
-import type { ReplayTrace } from "../loombridge/replay/types.js";
-import { parseScanArgs, idFromScene } from "../loombridge/minigame-scan.js";
-import { normalizeWorkspaceId } from "../loombridge/workspace-paths.js";
-import { run as minigameRun } from "../loombridge/minigame.js";
+} from "../capabilities/minigame/minigame-role-discover.js";
+import { validateMinigameContract } from "../capabilities/minigame/profiles/validator.js";
+import { buildScaffoldContract } from "../capabilities/minigame/minigame-scaffold.js";
+import type { RawScreenRects } from "../capabilities/minigame/minigame-capture-plan.js";
+import type { MinigameContract } from "../capabilities/minigame/profiles/types.js";
+import type { ReplayTrace } from "../capabilities/replay/types.js";
+import { parseScanArgs, idFromScene } from "../capabilities/minigame/minigame-scan.js";
+import { normalizeWorkspaceId } from "../domain/workspace-paths.js";
+import { run as minigameRun } from "../capabilities/minigame/minigame.js";
 
 function fixtureRects(): RawScreenRects {
   return {

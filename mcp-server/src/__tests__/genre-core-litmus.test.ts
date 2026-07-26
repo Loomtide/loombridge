@@ -3,15 +3,15 @@ import { readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 
-import { knownGenreIds } from "../loombridge/genre-registry.js";
+import { knownGenreIds } from "../capabilities/genre/genre-registry.js";
 
 /**
  * The decoupling LITMUS (slice-2 of genre-pack decoupling). The genre-neutral pipeline core must not
  * hard-code a genre id nor statically import a genre pack — the ONE sanctioned place those live is
  * `genre-registry.ts` (the wiring point), with pack material under `genre-packs/`.
  *
- * SCOPE: the plan → build → verify → doneness genre pipeline = everything under `src/loombridge/` and
- * `src/verification/`. Exclusions (each a deliberate, sanctioned home for genre knowledge):
+ * SCOPE: the plan → build → verify → doneness genre pipeline = everything under `src/capabilities/` and
+ * `src/capabilities/verification/`. Exclusions (each a deliberate, sanctioned home for genre knowledge):
  *   - `genre-registry.ts`  — the single wiring point; genre ids + pack bindings live here by design.
  *   - `genre-packs/**`     — relocated per-genre pack material.
  *   - `__tests__/**`       — tests may name genres freely.
@@ -27,8 +27,8 @@ import { knownGenreIds } from "../loombridge/genre-registry.js";
  * separate asset-catalog subsystem (`src/asset-layer/`) is likewise out of scope (tracked there).
  */
 
-const SRC_ROOTS = ["src/loombridge", "src/verification"].map((rel) => path.join(process.cwd(), rel));
-const EXCLUDED_FILE = path.join(process.cwd(), "src", "loombridge", "genre-registry.ts");
+const SRC_ROOTS = ["src/capabilities", "src/domain"].map((rel) => path.join(process.cwd(), rel));
+const EXCLUDED_FILE = path.join(process.cwd(), "src", "capabilities", "genre", "genre-registry.ts");
 
 function tsFilesUnder(dir: string): string[] {
   const out: string[] = [];

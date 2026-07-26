@@ -10,10 +10,10 @@ Use this skill to run the plan-time **elicitation front-end**: turn a one-line g
 build plan; this skill is the judgment half (the deterministic half is `validateGenreContract`).
 
 The gate is `validateGenreContract` in
-`mcp-server/src/loombridge/genre-contract/validator.ts`.
+`mcp-server/src/capabilities/genre/genre-contract/validator.ts`.
 A contract is done only when that function returns `valid: true`. Never invent gate ids, units, or
 calculator ids outside the closed sets it binds against (listed below). A passing reference is
-`mcp-server/src/loombridge/genre-contract/examples/2d-shooter.contract.json`.
+`mcp-server/src/capabilities/genre/genre-contract/examples/2d-shooter.contract.json`.
 
 ## Interaction model: draft first, ask only on uncertainty
 
@@ -176,7 +176,7 @@ weapon-roster (`kind: roster`), progression (`kind: progression`).
 A genre hint-card seeds defaults — `genreClass`, asset roles, exemplars, pack-default bands, and
 optional `coreHooks[]` for brief-defining meta-looking mechanics that need one minimal core
 representative. It is a declarative JSON read at
-`mcp-server/src/loombridge/genre-contract/genre-packs/<id>/hint-card.json` (forward reference — the
+`mcp-server/src/capabilities/genre/genre-contract/genre-packs/<id>/hint-card.json` (forward reference — the
 pack-discovery refactor is a later milestone; here the hint-card is just a file the skill reads).
 Absent a pack, the spine + your genre knowledge still emit a contract — lower default quality, more
 honest gaps.

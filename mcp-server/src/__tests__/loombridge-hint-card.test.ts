@@ -9,11 +9,11 @@ import {
   assertValidHintCard,
   type GenrePackManifest,
   type GenreHintCard,
-} from "../loombridge/genre-contract/hint-card.js";
+} from "../capabilities/genre/genre-contract/hint-card.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PKG_ROOT = path.resolve(__dirname, "..", ".."); // dist/__tests__ -> mcp-server
-const PACK_ROOT = path.join(PKG_ROOT, "src", "loombridge", "genre-contract", "genre-packs");
+const PACK_ROOT = path.join(PKG_ROOT, "src", "capabilities", "genre", "genre-contract", "genre-packs");
 
 function readJson(genreId: string, file: string): unknown {
   return JSON.parse(fs.readFileSync(path.join(PACK_ROOT, genreId, file), "utf8"));

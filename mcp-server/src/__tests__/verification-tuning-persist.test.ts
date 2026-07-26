@@ -9,8 +9,8 @@ import {
   validateTuningPersistInput,
   valuesEquivalent,
   type TuningPersistInput,
-} from "../verification/tuning-persist.js";
-import type { TuningSessionConfig, TuningTrialsReport } from "../verification/tuning-runner.js";
+} from "../capabilities/verification/tuning-persist.js";
+import type { TuningSessionConfig, TuningTrialsReport } from "../capabilities/verification/tuning-runner.js";
 
 function config(): TuningSessionConfig {
   return {

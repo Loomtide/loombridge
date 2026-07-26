@@ -6,7 +6,7 @@ import { spawnSync } from "node:child_process";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
-import { deriveFireIntervalMs, deriveInputToSpawnLatency, deriveTimeToKill } from "../verification/feel-derive.js";
+import { deriveFireIntervalMs, deriveInputToSpawnLatency, deriveTimeToKill } from "../capabilities/verification/feel-derive.js";
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "../../..");
 const demoBundles = join(repoRoot, "demo-bundles");

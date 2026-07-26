@@ -20,7 +20,7 @@ import {
   type Action,
   type BridgeSend,
   type ObservedKeyEdge,
-} from "../loombridge/replay/index.js";
+} from "../capabilities/replay/index.js";
 
 const meta = { id: "kbd-rec", scene: "Assets/Scenes/Platformer.unity", title: "t" };
 const edge = (key: string, e: "down" | "up", tMs: number): ObservedKeyEdge => ({ key, edge: e, tMs });

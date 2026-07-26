@@ -11,13 +11,13 @@ import {
   mintSliceRunId,
   mintRunId,
   runBuild,
-} from "../loombridge/build.js";
-import { HERO_SHOT_FIDELITY_CRITERIA, runDoneness } from "../loombridge/doneness.js";
-import { runPlan } from "../loombridge/plan.js";
-import { runVerify } from "../loombridge/verify.js";
-import { setDesignTarget } from "../loombridge/design.js";
-import { loombridgePaths, readState } from "../loombridge/state.js";
-import { readSlicePlan, writeSlicePlan, type SlicePlan } from "../loombridge/slices.js";
+} from "../capabilities/verification/build.js";
+import { HERO_SHOT_FIDELITY_CRITERIA, runDoneness } from "../capabilities/verification/doneness.js";
+import { runPlan } from "../capabilities/verification/plan.js";
+import { runVerify } from "../capabilities/verification/verify.js";
+import { setDesignTarget } from "../capabilities/verification/design.js";
+import { loombridgePaths, readState } from "../domain/state.js";
+import { readSlicePlan, writeSlicePlan, type SlicePlan } from "../capabilities/verification/slices.js";
 import { writeApprovedAssetManifestForDesign } from "./helpers/asset-manifest-fixture.js";
 
 async function tmpRoot(): Promise<string> {
@@ -417,7 +417,7 @@ test("end-to-end: plan → build → verify → doneness lights up the §3a supe
   // our synthetic verdict, then patch state's phase via a second runVerify? No
   // — simpler: patch the phase directly to mirror what verify would do on pass.
   // (This is a substrate test for the supervisor wiring, not a full Unity run.)
-  const { updateState } = await import("../loombridge/state.js");
+  const { updateState } = await import("../domain/state.js");
   await updateState(paths, { phase: "verified-green" });
 
   // Doneness MUST certify now: fresh + green + manifest captures present.
@@ -443,7 +443,7 @@ test("end-to-end: an ungrounded build cannot be certified by doneness", async ()
     }),
     "utf-8",
   );
-  const { updateState } = await import("../loombridge/state.js");
+  const { updateState } = await import("../domain/state.js");
   await updateState(paths, { phase: "verified-green" });
 
   assert.equal(
@@ -460,7 +460,7 @@ test("end-to-end: an ungrounded build cannot be certified by doneness", async ()
 test("build SLICE-mode tags currentBuild ungrounded when escaping the unapproved-asset gate (PR #349 finding 2, slice path)", async () => {
   const root = await tmpRoot();
   const genreContractPath = path.join(
-    process.cwd(), "src", "loombridge", "genre-contract", "examples", "2d-shooter.contract.json",
+    process.cwd(), "src", "capabilities", "genre", "genre-contract", "examples", "2d-shooter.contract.json",
   );
   // --genre-contract promotion WRITES SLICES.json (so `build` takes the slice path) and leaves assets UNAPPROVED —
   // exactly the PR #349 dogfood shape. Design is then approved, so the ONLY escaped hard gate is the asset manifest.

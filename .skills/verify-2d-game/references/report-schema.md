@@ -56,7 +56,7 @@ These added gates **degrade to WARN if their capture is missing** (same as the o
 
 ## `reviewFindings` (Tier-2 VLM — ADVISORY, separate from `status`)
 
-Merged under this key only when `--vlm <findings.json>` is passed. Strict schema: `mcp-server/src/verification/vlm-review.schema.json`. **Never folded into `status`** — informs, does not gate.
+Merged under this key only when `--vlm <findings.json>` is passed. Strict schema: `mcp-server/src/capabilities/verification/vlm-review.schema.json`. **Never folded into `status`** — informs, does not gate.
 
 ```json
 {
@@ -74,7 +74,7 @@ Criteria ids come from the game contract's perceptual rubric, or from the defaul
 
 ## Acceptance contract (`acceptance.json`) — the spec every gate checks against
 
-Schema: `mcp-server/src/verification/acceptance.schema.json`; reference instance pattern: `<game>.acceptance.json`; types: `mcp-server/src/verification/types.ts`. Sections:
+Schema: `mcp-server/src/capabilities/verification/acceptance.schema.json`; reference instance pattern: `<game>.acceptance.json`; types: `mcp-server/src/capabilities/verification/types.ts`. Sections:
 
 - `fonts` — `{ global:{family}, byRole:{<id>:{family}} }` -> UI gate font checks.
 - `palette` — `{ entries:[{hex, roles[], name}] }` -> UI gate color checks (roles map to HUD `colorRole`s).

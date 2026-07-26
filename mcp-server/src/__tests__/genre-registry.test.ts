@@ -10,10 +10,10 @@ import {
   resolveFeelProfileModule,
   resolveGenrePack,
   scenarioPacks,
-} from "../loombridge/genre-registry.js";
-import { HERO_SHOT_FIDELITY_CRITERIA, VLM_REVIEW_CRITERION_IDS, fidelityCriteriaForGenre } from "../loombridge/doneness.js";
-import { SHIPPED_PROFILE_IDS } from "../loombridge/genre-packs/platformer-2d/profiles.js";
-import { unknownProfileMessage } from "../loombridge/genre-packs/platformer-2d/verify-profile.js";
+} from "../capabilities/genre/genre-registry.js";
+import { HERO_SHOT_FIDELITY_CRITERIA, VLM_REVIEW_CRITERION_IDS, fidelityCriteriaForGenre } from "../capabilities/verification/doneness.js";
+import { SHIPPED_PROFILE_IDS } from "../capabilities/genre/genre-packs/platformer-2d/profiles.js";
+import { unknownProfileMessage } from "../capabilities/genre/genre-packs/platformer-2d/verify-profile.js";
 
 test("genre registry resolves platformer-2d to real template paths", () => {
   const pack = resolveGenrePack("platformer-2d");

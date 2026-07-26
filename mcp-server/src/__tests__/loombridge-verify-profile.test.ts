@@ -8,15 +8,15 @@ import { fileURLToPath } from "node:url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-import { exitCodeForLiveProfileCapture, run as runVerifyCli } from "../loombridge/verify.js";
+import { exitCodeForLiveProfileCapture, run as runVerifyCli } from "../capabilities/verification/verify.js";
 import {
   buildProfileReport,
   evaluateProfile,
   runVerifyProfile,
-} from "../loombridge/genre-packs/platformer-2d/verify-profile.js";
-import { parseMeasurements } from "../loombridge/genre-packs/platformer-2d/measurements.js";
-import { loadProfile } from "../loombridge/genre-packs/platformer-2d/profiles.js";
-import { SHORT_HOP_CANONICAL_TAP_TICKS } from "../loombridge/genre-packs/platformer-2d/measure-recipe.js";
+} from "../capabilities/genre/genre-packs/platformer-2d/verify-profile.js";
+import { parseMeasurements } from "../capabilities/genre/genre-packs/platformer-2d/measurements.js";
+import { loadProfile } from "../capabilities/genre/genre-packs/platformer-2d/profiles.js";
+import { SHORT_HOP_CANONICAL_TAP_TICKS } from "../capabilities/genre/genre-packs/platformer-2d/measure-recipe.js";
 
 /**
  * A canonical-tap shortHopApex provenance source. shortHopApex is stimulus-sensitive

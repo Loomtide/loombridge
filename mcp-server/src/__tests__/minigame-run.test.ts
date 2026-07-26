@@ -9,8 +9,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { driveRun, runRun, stepArgv, type RunDeps } from "../loombridge/minigame-run.js";
-import type { WorkspaceFacts } from "../loombridge/minigame-next.js";
+import { driveRun, runRun, stepArgv, type RunDeps } from "../capabilities/minigame/minigame-run.js";
+import type { WorkspaceFacts } from "../capabilities/minigame/minigame-next.js";
 
 /** A fully-defaulted facts object; override per test to place the workspace in the flow. */
 function facts(over: Partial<WorkspaceFacts> = {}): WorkspaceFacts {

@@ -29,10 +29,10 @@ import { fileURLToPath } from "node:url";
 import {
   deriveCameraFollowDamping,
   type CameraFollowDampingResult,
-} from "../verification/feel-derive.js";
-import type { FeelTrajectorySample } from "../verification/gates/feel.js";
-import { validateAcceptanceContract } from "../verification/validator.js";
-import type { AcceptanceContract } from "../verification/types.js";
+} from "../capabilities/verification/feel-derive.js";
+import type { FeelTrajectorySample } from "../capabilities/verification/gates/feel.js";
+import { validateAcceptanceContract } from "../capabilities/verification/validator.js";
+import type { AcceptanceContract } from "../capabilities/verification/types.js";
 
 const DT_MS = 1000 / 60; // 60 fps capture
 const HALF_LIFE_MS = 140; // target catch-up half-life (in the dogfood 0.10-0.18s band)
@@ -229,7 +229,7 @@ test("(e) 3d-topdown-arena framing profile validates and declares TOP-DOWN (not 
   const repoRoot = path.resolve(__dirname, "../../..");
   const acceptancePath = path.join(
     repoRoot,
-    "mcp-server/src/loombridge/genre-packs/3d-topdown-arena/acceptance.json",
+    "mcp-server/src/capabilities/genre/genre-packs/3d-topdown-arena/acceptance.json",
   );
   const text = await fs.readFile(acceptancePath, "utf-8");
   const contract = JSON.parse(text) as AcceptanceContract & Record<string, unknown>;

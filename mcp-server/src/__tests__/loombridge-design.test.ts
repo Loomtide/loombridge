@@ -13,10 +13,10 @@ import {
   resolveDesignTargetKind,
   run as designCli,
   setDesignTarget,
-} from "../loombridge/design.js";
-import { runPlan } from "../loombridge/plan.js";
-import { runVerify } from "../loombridge/verify.js";
-import { loombridgePaths, readState } from "../loombridge/state.js";
+} from "../capabilities/verification/design.js";
+import { runPlan } from "../capabilities/verification/plan.js";
+import { runVerify } from "../capabilities/verification/verify.js";
+import { loombridgePaths, readState } from "../domain/state.js";
 import { writeApprovedAssetManifestForDesign } from "./helpers/asset-manifest-fixture.js";
 
 async function tmpRoot(): Promise<string> {

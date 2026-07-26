@@ -22,8 +22,8 @@ import {
   type AssetSourceType,
   type ManifestGeneratedExport,
   type ManifestRegistrySelection,
-} from "../loombridge/asset-manifest.js";
-import { loombridgePaths } from "../loombridge/state.js";
+} from "../capabilities/assets/asset-manifest.js";
+import { loombridgePaths } from "../domain/state.js";
 
 const HASH = "a".repeat(64);
 

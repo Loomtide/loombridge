@@ -14,14 +14,15 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import { runPlan } from "../loombridge/plan.js";
-import { resolveBriefBundle } from "../loombridge/brief-bundle.js";
-import { loombridgePaths, fileExists } from "../loombridge/state.js";
+import { runPlan } from "../capabilities/verification/plan.js";
+import { resolveBriefBundle } from "../domain/brief-bundle.js";
+import { loombridgePaths, fileExists } from "../domain/state.js";
 
 const EXAMPLE_CONTRACT = path.join(
   process.cwd(),
   "src",
-  "loombridge",
+  "capabilities",
+  "genre",
   "genre-contract",
   "examples",
   "2d-shooter.contract.json",

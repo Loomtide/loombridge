@@ -57,7 +57,7 @@ inspects the live editor through the bridge using **read-only ops only**:
 - `scene.get_bounds` / `runtime.get_snapshot` — bounds + runtime transform
 - `editor.screenshot` — optional visual context
 
-Player heuristic: reuse `isPlayer(name, hint)` (`mcp-server/src/verification/gates/framing.ts`) —
+Player heuristic: reuse `isPlayer(name, hint)` (`mcp-server/src/capabilities/verification/gates/framing.ts`) —
 name contains `player`/`ninja`/`frog` or a caller hint.
 
 ### Mutation deny-list (never call in verify-first)

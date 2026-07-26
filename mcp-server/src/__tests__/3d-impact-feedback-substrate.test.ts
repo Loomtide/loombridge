@@ -11,7 +11,7 @@ import {
   deriveScreenShakeMag,
   firstRisingEdge,
   isImmediateImpactFeedback,
-} from "../verification/feel-derive.js";
+} from "../capabilities/verification/feel-derive.js";
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "../../..");
 const bundleRoot = join(repoRoot, "demo-bundles/3d-impact-feedback");

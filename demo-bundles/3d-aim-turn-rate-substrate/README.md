@@ -48,4 +48,4 @@ This bundle proves ONE conservative rotation metric — a constant yaw turn RATE
 look responsiveness/latency (no input-onset binding here), recoil kick/recovery, ADS transition, aim
 assist/fairness, or mouse-look acceleration. Hitscan, 3D hit-stop/screen-shake, AI/cover/waves, and
 Fusion/multiplayer also remain explicit gaps. See
-`mcp-server/src/loombridge/genre-packs/3d-shooter/methodology-gaps.md`.
+`mcp-server/src/capabilities/genre/genre-packs/3d-shooter/methodology-gaps.md`.

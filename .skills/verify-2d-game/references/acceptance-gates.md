@@ -1,6 +1,6 @@
 # Tier-1 acceptance gates — orchestration recipe
 
-The deterministic gates (`mcp-server/src/verification/gates/`). Each evaluator is a **pure function** `(opOutput, acceptance) -> GateReport`. You drive the MCP op, save its output, and `run-gates.js` feeds it to the matching evaluator. You never re-implement the gate math.
+The deterministic gates (`mcp-server/src/capabilities/verification/gates/`). Each evaluator is a **pure function** `(opOutput, acceptance) -> GateReport`. You drive the MCP op, save its output, and `run-gates.js` feeds it to the matching evaluator. You never re-implement the gate math.
 
 ## Report shape
 

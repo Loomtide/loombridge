@@ -8,8 +8,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { continueThroughRecordFor, driveCheck, parseArgs, scenesConflict, type CheckDeps } from "../loombridge/minigame-check.js";
-import type { ContractDiff } from "../loombridge/minigame-sync.js";
+import { continueThroughRecordFor, driveCheck, parseArgs, scenesConflict, type CheckDeps } from "../capabilities/minigame/minigame-check.js";
+import type { ContractDiff } from "../capabilities/minigame/minigame-sync.js";
 
 test("parseArgs (Phase 0): --record-scene is parsed + validated as an asset path; --id normalizes; --scene stays the contract scene", () => {
   const ok = parseArgs(["--scene", "Assets/Scenes/StarChef.unity", "--id", "StarChef", "--record-scene", "Assets/Scenes/Home.unity"]);

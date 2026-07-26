@@ -13,7 +13,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import { run as minigameRun } from "../loombridge/minigame.js";
+import { run as minigameRun } from "../capabilities/minigame/minigame.js";
 import {
   WORKSPACE_SUBDIRS,
   buildNextStepsChecklist,
@@ -22,8 +22,8 @@ import {
   resolveSetupConfig,
   runSetup,
   sanitizeToId,
-} from "../loombridge/minigame-setup.js";
-import { validateMinigameContract } from "../loombridge/minigame-profiles/validator.js";
+} from "../capabilities/minigame/minigame-setup.js";
+import { validateMinigameContract } from "../capabilities/minigame/profiles/validator.js";
 
 async function tmpDir(): Promise<string> {
   return fs.mkdtemp(path.join(os.tmpdir(), "minigame-setup-"));

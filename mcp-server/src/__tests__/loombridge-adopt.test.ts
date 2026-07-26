@@ -13,15 +13,16 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import { runAdopt, type AdoptionReport } from "../loombridge/adopt.js";
-import { runDoneness } from "../loombridge/doneness.js";
-import { loombridgePaths, readState, writeState, fileExists } from "../loombridge/state.js";
-import { validateAcceptanceContract } from "../verification/validator.js";
+import { runAdopt, type AdoptionReport } from "../capabilities/verification/adopt.js";
+import { runDoneness } from "../capabilities/verification/doneness.js";
+import { loombridgePaths, readState, writeState, fileExists } from "../domain/state.js";
+import { validateAcceptanceContract } from "../capabilities/verification/validator.js";
 
 const EXAMPLE_CONTRACT = path.join(
   process.cwd(),
   "src",
-  "loombridge",
+  "capabilities",
+  "genre",
   "genre-contract",
   "examples",
   "2d-shooter.contract.json",

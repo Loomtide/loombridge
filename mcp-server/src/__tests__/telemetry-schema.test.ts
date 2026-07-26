@@ -11,7 +11,7 @@ import test from "node:test";
 import {
   validateTelemetrySchema,
   telemetrySchemaPathForGenre,
-} from "../loombridge/telemetry/schema.js";
+} from "../capabilities/telemetry/schema.js";
 
 const GOOD = {
   schemaVersion: "1",

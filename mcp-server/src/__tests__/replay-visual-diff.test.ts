@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { comparePerceptual, type RgbaLike } from "../loombridge/replay/visual-diff.js";
+import { comparePerceptual, type RgbaLike } from "../capabilities/replay/visual-diff.js";
 
 function solid(w: number, h: number, [r, g, b]: [number, number, number]): RgbaLike {
   const data = new Uint8Array(w * h * 4);

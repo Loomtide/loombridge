@@ -9,12 +9,12 @@ import {
   runCapture,
   type CaptureArgs,
   type CaptureDeps,
-} from "../loombridge/capture.js";
+} from "../capabilities/verification/capture.js";
 import {
   clearExpectedTileOutputs,
   stampExpectedTileCaptures,
   stampProvenance,
-} from "../verification/capture-tiles.js";
+} from "../capabilities/verification/capture-tiles.js";
 
 // ── captureKindForSlice (pure dispatch from gates) ───────────────────────────
 

@@ -5,10 +5,10 @@ import {
   evaluateFraming,
   TRUSTED_PITCH_PRODUCER,
   type ScreenRectsResult,
-} from "../verification/gates/framing.js";
-import type { GateCheck, GateReport } from "../verification/gates/types.js";
-import type { AcceptanceContract, PerspectiveFramingSection } from "../verification/types.js";
-import { validateAcceptanceContract } from "../verification/validator.js";
+} from "../capabilities/verification/gates/framing.js";
+import type { GateCheck, GateReport } from "../capabilities/verification/gates/types.js";
+import type { AcceptanceContract, PerspectiveFramingSection } from "../capabilities/verification/types.js";
+import { validateAcceptanceContract } from "../capabilities/verification/validator.js";
 
 function checkById(report: GateReport, id: string): GateCheck {
   const c = report.checks.find((x) => x.id === id);

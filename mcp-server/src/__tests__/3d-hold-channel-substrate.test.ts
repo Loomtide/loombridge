@@ -23,7 +23,7 @@ import {
   deriveHoldChannelDuration,
   deriveHoldInterruptOnDamage,
   type HoldChannelSeries,
-} from "../verification/feel-derive.js";
+} from "../capabilities/verification/feel-derive.js";
 
 type FieldSample = { tMs: number; value: number | boolean };
 type FieldSeries = { id: string; samples: FieldSample[]; unresolved?: string; readError?: string };

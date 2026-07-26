@@ -13,7 +13,7 @@ Use with `runtime.measure_motion` (the measurement op) and the standard build fl
 ## 1. The feel identity — profiles, not loose adjectives
 
 The single source of truth for a platformer feel is a **product-owned profile**
-(`mcp-server/src/loombridge/genre-packs/platformer-2d/profiles/*.profile.json`): a named set of measurable
+(`mcp-server/src/capabilities/genre/genre-packs/platformer-2d/profiles/*.profile.json`): a named set of measurable
 target **bands** (the verify side) plus an optional `build` block holding only the starting params a
 band can't analytically solve (the build side). The three shipped identities are `precision`,
 `classic`, and `momentum`.
@@ -26,7 +26,7 @@ band can't analytically solve (the build side). The three shipped identities are
 ## 2. Profile → Physics Params (analytic solve)
 
 Starting params come from `resolveStartingParams(profile)`
-(`mcp-server/src/loombridge/genre-packs/platformer-2d/solve-params.ts`) — the build-side counterpart to the
+(`mcp-server/src/capabilities/genre/genre-packs/platformer-2d/solve-params.ts`) — the build-side counterpart to the
 verify bands. It DERIVES everything solvable from the band targets and reads only the un-solvable
 remainder (`jumpCutMultiplier`, `fixedTimestep`) from the profile's `build` block. For a 2D jump with
 initial vertical velocity `v0` (jumpSpeed) and `gravityScale` `k`, with Unity 2D default gravity 9.81:

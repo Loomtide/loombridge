@@ -82,7 +82,7 @@ test("release channel: one-command GitHub-Releases installer + release script ex
 });
 
 test("loombridge update points CLI self-update at the one-line installer, not an npm registry", () => {
-  const src = readFileSync(path.join(repoRoot, "mcp-server/src/loombridge/update.ts"), "utf-8");
+  const src = readFileSync(path.join(repoRoot, "mcp-server/src/capabilities/setup/update.ts"), "utf-8");
   assert.ok(
     src.includes("curl -fsSL") && src.includes("| sh"),
     "the CLI self-update hint must be the curl|sh installer (the same command used to install)",

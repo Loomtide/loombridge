@@ -18,12 +18,12 @@ import {
   validateVlmReviewFindingsShape,
   type VerdictReviewFindings,
   type VerdictLike,
-} from "../loombridge/doneness.js";
-import { runBuild } from "../loombridge/build.js";
-import { validateAssetManifest } from "../loombridge/asset-manifest.js";
-import { designPaths, designStatus, setDesignTarget } from "../loombridge/design.js";
-import { runPlan } from "../loombridge/plan.js";
-import { runVerify } from "../loombridge/verify.js";
+} from "../capabilities/verification/doneness.js";
+import { runBuild } from "../capabilities/verification/build.js";
+import { validateAssetManifest } from "../capabilities/assets/asset-manifest.js";
+import { designPaths, designStatus, setDesignTarget } from "../capabilities/verification/design.js";
+import { runPlan } from "../capabilities/verification/plan.js";
+import { runVerify } from "../capabilities/verification/verify.js";
 import {
   ensureScaffold,
   fileExists,
@@ -32,21 +32,21 @@ import {
   updateState,
   writeState,
   type LoombridgeState,
-} from "../loombridge/state.js";
+} from "../domain/state.js";
 import {
   writeSlicePlan,
   type SliceEntry,
   type SlicePlan,
-} from "../loombridge/slices.js";
+} from "../capabilities/verification/slices.js";
 import { writeApprovedAssetManifestForDesign } from "./helpers/asset-manifest-fixture.js";
 import { fileURLToPath } from "node:url";
-import { createDraftAssetManifest } from "../loombridge/asset-manifest.js";
+import { createDraftAssetManifest } from "../capabilities/assets/asset-manifest.js";
 import {
   applyRegistrySelectionsToManifest,
   buildRegistrySelectionPlan,
 } from "../asset-layer/manifest-selection.js";
 import { loadAssetProfile, loadRegistryPack } from "../asset-layer/registry.js";
-import { evaluateAssetSourceFidelity } from "../verification/gates/asset-source-fidelity.js";
+import { evaluateAssetSourceFidelity } from "../capabilities/verification/gates/asset-source-fidelity.js";
 
 const doneTestRepoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 

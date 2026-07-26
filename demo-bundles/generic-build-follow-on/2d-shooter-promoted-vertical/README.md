@@ -3,7 +3,7 @@
 Status: `experimental-green` proof bundle for the promoted `weapon` slice.
 
 This bundle proves the next generic-genre step after GenreContract promotion: the committed
-`mcp-server/src/loombridge/genre-contract/examples/2d-shooter.contract.json` promotes into runtime Loombridge artifacts,
+`mcp-server/src/capabilities/genre/genre-contract/examples/2d-shooter.contract.json` promotes into runtime Loombridge artifacts,
 and the promoted weapon slice validates against artifact-backed gate and metric evidence.
 
 ## Artifacts

@@ -17,8 +17,8 @@ import {
   SLICES_SCHEMA_VERSION,
   type SliceEntry,
   type SlicePlan,
-} from "../loombridge/slices.js";
-import { loombridgePaths } from "../loombridge/state.js";
+} from "../capabilities/verification/slices.js";
+import { loombridgePaths } from "../domain/state.js";
 
 // The shipped platformer template, read from the source tree. `test:unit` runs
 // under npm with cwd = the mcp-server package dir, so this anchors at the JSON
@@ -26,7 +26,8 @@ import { loombridgePaths } from "../loombridge/state.js";
 const TEMPLATE_PATH = path.join(
   process.cwd(),
   "src",
-  "loombridge",
+  "capabilities",
+  "genre",
   "genre-packs",
   "platformer-2d",
   "slices.json",

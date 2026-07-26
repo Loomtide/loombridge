@@ -14,8 +14,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 
-import { run as minigameRun } from "../loombridge/minigame.js";
-import { buildScaffoldContract } from "../loombridge/minigame-scaffold.js";
+import { run as minigameRun } from "../capabilities/minigame/minigame.js";
+import { buildScaffoldContract } from "../capabilities/minigame/minigame-scaffold.js";
 import {
   applyBackgroundFlag,
   applyInputResponseFlag,
@@ -28,11 +28,11 @@ import {
   runFinalize,
   traceDemonstratedControls,
   type CapturePack,
-} from "../loombridge/minigame-finalize.js";
-import type { MinigameContract } from "../loombridge/minigame-profiles/types.js";
-import type { Action, ReplayTrace } from "../loombridge/replay/types.js";
-import { validateMinigameContract } from "../loombridge/minigame-profiles/validator.js";
-import type { BackgroundCandidates, MinigameCaptureObject } from "../loombridge/minigame-gates/types.js";
+} from "../capabilities/minigame/minigame-finalize.js";
+import type { MinigameContract } from "../capabilities/minigame/profiles/types.js";
+import type { Action, ReplayTrace } from "../capabilities/replay/types.js";
+import { validateMinigameContract } from "../capabilities/minigame/profiles/validator.js";
+import type { BackgroundCandidates, MinigameCaptureObject } from "../capabilities/minigame/types.js";
 
 // Fixtures live under src/ and tsc does not copy them into dist — resolve from the
 // compiled test (dist/__tests__) up to the repo root, then into src/ (same pattern
@@ -847,7 +847,7 @@ function bgCandidates(): BackgroundCandidates {
 test("applyBackgroundFlag auto: binds the recommendation, enables the gate, freezes background.json geometry", () => {
   const applied = applyBackgroundFlag(finalizedContract(), bgCandidates(), { mode: "auto" });
   assert.ok("contract" in applied, JSON.stringify(applied));
-  const { contract: c, backgroundData } = applied as { contract: MinigameContract; backgroundData: import("../loombridge/minigame-gates/types.js").BackgroundData };
+  const { contract: c, backgroundData } = applied as { contract: MinigameContract; backgroundData: import("../capabilities/minigame/types.js").BackgroundData };
   assert.equal(c.backgroundCamera, "G:/Main Camera");
   assert.deepEqual(c.backgroundLayers, ["G:/Sky", "G:/Hills"]);
   assert.ok(c.checks.deterministic.includes("background-coverage"), "coverage gate enabled");
@@ -879,7 +879,7 @@ test("applyBackgroundFlag explicit: matched-by-locator camera+layers synthesize 
     layers: ["G:/Sky", "G:/Cloud"], // Cloud is EXCLUDED but present in allLayers → still resolvable
   });
   assert.ok("contract" in applied, JSON.stringify(applied));
-  const { contract: c, backgroundData } = applied as { contract: MinigameContract; backgroundData: import("../loombridge/minigame-gates/types.js").BackgroundData };
+  const { contract: c, backgroundData } = applied as { contract: MinigameContract; backgroundData: import("../capabilities/minigame/types.js").BackgroundData };
   assert.equal(c.backgroundCamera, "G:/Main Camera");
   assert.deepEqual(c.backgroundLayers, ["G:/Sky", "G:/Cloud"]);
   assert.ok(c.checks.deterministic.includes("background-coverage"));

@@ -5,12 +5,12 @@ import path from "node:path";
 import test from "node:test";
 
 import { loombridgeCli } from "../cli.js";
-import { runBuild } from "../loombridge/build.js";
-import { setDesignTarget } from "../loombridge/design.js";
-import { run, runAsk } from "../loombridge/ask.js";
-import { runPlan } from "../loombridge/plan.js";
-import { loombridgePaths } from "../loombridge/state.js";
-import { readSlicePlan, writeSlicePlan, type SlicePlan } from "../loombridge/slices.js";
+import { runBuild } from "../capabilities/verification/build.js";
+import { setDesignTarget } from "../capabilities/verification/design.js";
+import { run, runAsk } from "../capabilities/verification/ask.js";
+import { runPlan } from "../capabilities/verification/plan.js";
+import { loombridgePaths } from "../domain/state.js";
+import { readSlicePlan, writeSlicePlan, type SlicePlan } from "../capabilities/verification/slices.js";
 import { writeApprovedAssetManifestForDesign } from "./helpers/asset-manifest-fixture.js";
 
 async function tmpRoot(): Promise<string> {

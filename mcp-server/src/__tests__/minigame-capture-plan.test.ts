@@ -7,8 +7,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { buildScaffoldContract } from "../loombridge/minigame-scaffold.js";
-import { buildCaptureSummary } from "../loombridge/minigame-capture.js";
+import { buildScaffoldContract } from "../capabilities/minigame/minigame-scaffold.js";
+import { buildCaptureSummary } from "../capabilities/minigame/minigame-capture.js";
 import {
   actionSceneSlugs,
   assignObjectIds,
@@ -25,11 +25,11 @@ import {
   type CapturePlan,
   type RawScreenObject,
   type RawScreenRects,
-} from "../loombridge/minigame-capture-plan.js";
-import type { DeviceSpec, MinigameContract } from "../loombridge/minigame-profiles/types.js";
-import type { BackgroundCandidates } from "../loombridge/minigame-gates/types.js";
-import { changedObjectIds } from "../loombridge/minigame-gates/input-response.js";
-import type { Action, ReplayTrace } from "../loombridge/replay/types.js";
+} from "../capabilities/minigame/minigame-capture-plan.js";
+import type { DeviceSpec, MinigameContract } from "../capabilities/minigame/profiles/types.js";
+import type { BackgroundCandidates } from "../capabilities/minigame/types.js";
+import { changedObjectIds } from "../capabilities/minigame/input-response.js";
+import type { Action, ReplayTrace } from "../capabilities/replay/types.js";
 
 const tap = (path: string): Action => ({ do: "tap", locator: { path } });
 const wait = (path: string): Action => ({ do: "wait-for-visible", locator: { path } });

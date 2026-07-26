@@ -3,7 +3,7 @@ import path from "node:path";
 import {
   UNITY_PROJECT_ENV_VAR,
   resolveUnityProjectTarget,
-} from "./verification/unity-client-resolver.js";
+} from "./capabilities/verification/unity-client-resolver.js";
 
 /**
  * The MCP server's inferred startup binding to a Unity project.

@@ -8,7 +8,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { deriveWaveObjectiveComplete, firstRisingEdge } from "../../mcp-server/dist/verification/feel-derive.js";
+import { deriveWaveObjectiveComplete, firstRisingEdge } from "../../mcp-server/dist/capabilities/verification/feel-derive.js";
 
 const bundleDir = path.dirname(fileURLToPath(import.meta.url));
 const RAW_NAME = "3d-wave-objective-raw-2026-06-26.json";

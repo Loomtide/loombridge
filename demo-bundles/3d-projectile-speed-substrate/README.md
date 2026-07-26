@@ -41,4 +41,4 @@ refuse).
 Rotation-dependent 3D metrics — look responsiveness, recoil, ADS — remain explicit gaps; they need a
 rotation/aim sampler (**substrate v2**). Hitscan, 3D hit-stop/screen-shake, AI/cover/waves, and
 Fusion/multiplayer also remain gaps. See
-`mcp-server/src/loombridge/genre-packs/3d-shooter/methodology-gaps.md`.
+`mcp-server/src/capabilities/genre/genre-packs/3d-shooter/methodology-gaps.md`.

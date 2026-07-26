@@ -27,9 +27,9 @@ import {
   validateTelemetrySchema,
   telemetrySchemaPathForGenre,
   type TelemetrySchema,
-} from "../loombridge/telemetry/schema.js";
-import { validateTelemetryRun } from "../loombridge/telemetry/validate.js";
-import { aggregateSet } from "../loombridge/telemetry/report.js";
+} from "../capabilities/telemetry/schema.js";
+import { validateTelemetryRun } from "../capabilities/telemetry/validate.js";
+import { aggregateSet } from "../capabilities/telemetry/report.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);

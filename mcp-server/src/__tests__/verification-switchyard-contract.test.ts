@@ -4,15 +4,15 @@ import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
-import { validateAcceptanceContract } from "../verification/validator.js";
-import type { AcceptanceContract } from "../verification/types.js";
+import { validateAcceptanceContract } from "../capabilities/verification/validator.js";
+import type { AcceptanceContract } from "../capabilities/verification/types.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const repoRoot = path.resolve(__dirname, "../../..");
 const acceptancePath = path.join(
   repoRoot,
-  "mcp-server/src/verification/switchyard-courier.acceptance.json",
+  "mcp-server/src/capabilities/verification/switchyard-courier.acceptance.json",
 );
 // Relocated from .planning (internal) into the test-fixture tree for the OSS export.
 const briefPath = path.join(repoRoot, "mcp-server/src/__tests__/fixtures/design-briefs/switchyard-courier-design-brief.md");
