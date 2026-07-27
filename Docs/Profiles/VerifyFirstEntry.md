@@ -46,6 +46,11 @@ unmeasured taste metric still drives `incomplete` (a capture gap never turns gre
 the live-capture path still exits `2` on it). See
 [PlatformerFeelProfiles.md](PlatformerFeelProfiles.md) for the classification table.
 
+**Beyond archetypes:** once a human has approved how the game actually plays, verify
+drift against the game's OWN frozen baseline instead of any archetype:
+[TuningSnapshotVerification.md](TuningSnapshotVerification.md)
+(`loombridge feel snapshot` + `verify --snapshot`).
+
 **Confidence (the report's "warn" axis, S5d):** alongside pass/fail, every metric carries a
 `confidence` that says how much to trust the number — without ever changing the pass/fail
 `status` (grading is band + §0 distrust only):

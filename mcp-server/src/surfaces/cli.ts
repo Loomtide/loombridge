@@ -83,6 +83,9 @@ function printUsage(): void {
       "  doneness   §3a freshness gate: 0 only on fresh + green verdict for the current build",
       "  trace      Replay Verification: `trace replay --id <id>` drives a recorded action",
       "              trace against the editor and writes a report.json + self-contained HTML",
+      "  feel       Tuning snapshot: `feel snapshot <capture|approve|status>` freezes the game's",
+      "              MEASURED behavior once a human approves it; `verify --snapshot` then grades",
+      "              kinematic drift against it (a lockfile for game feel)",
       "  tuning-report  Deterministic tuning analysis over telemetry run-sets: aggregate a",
       "              genre-pack telemetry schema's metrics (segmented by map/persona/route/",
       "              outcome), before/after deltas, and a one-lever-isolation warning. With",
@@ -179,6 +182,13 @@ export async function loombridgeCli(argv: string[]): Promise<number> {
     }
     case "trace": {
       const { run } = await import("../capabilities/replay/trace.js");
+      return run(rest);
+    }
+    case "feel": {
+      // `feel snapshot <capture|approve|status>`: the tuning-snapshot lifecycle
+      // (freeze approved measured behavior; `verify --snapshot` grades drift).
+      // Distinct from `tuning-report` (telemetry run-set analysis).
+      const { run } = await import("../capabilities/feel/snapshot.js");
       return run(rest);
     }
     case "tuning-report": {
