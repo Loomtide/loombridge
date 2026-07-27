@@ -1,7 +1,7 @@
 {
   "dependencies": {
     "com.loomtide.loombridge": {
-      "version": "file:../../../packages/com.loomtide.loombridge",
+      "version": "file:../../packages/com.loomtide.loombridge",
       "depth": 0,
       "source": "local",
       "dependencies": {

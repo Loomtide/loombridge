@@ -1,6 +1,6 @@
 {
   "dependencies": {
-    "com.loomtide.loombridge": "file:../../../packages/com.loomtide.loombridge",
+    "com.loomtide.loombridge": "file:../../packages/com.loomtide.loombridge",
     "com.unity.inputsystem": "1.7.0",
     "com.unity.ugui": "2.0.0",
     "com.unity.test-framework": "1.6.0"
