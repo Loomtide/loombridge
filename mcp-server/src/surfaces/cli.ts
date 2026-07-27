@@ -77,7 +77,8 @@ function printUsage(): void {
       "                    (tarball file-swap), back up, then run doctor.",
       "",
       "Helpers:",
-      "  design     Manage the Design Target hero shot (status/set/approve) — used by `plan`",
+      "  target     Manage the Design Target hero shot (status/set/approve) — used by `plan`",
+      "               (was `design`; the old name still works and warns)",
       "  capture    Write framing-slice evidence (screen-rects/console) from raw ops + provenance",
       "  doneness   §3a freshness gate: 0 only on fresh + green verdict for the current build",
       "  trace      Replay Verification: `trace replay --id <id>` drives a recorded action",
@@ -126,6 +127,18 @@ export async function loombridgeCli(argv: string[]): Promise<number> {
       return run(rest);
     }
     case "ask": {
+      // RETIRED from the agent surface (CommandSurfaceRedesign §1.3): `ask` was a read-only prose
+      // explainer over the SAME model `status` renders — `ask.ts` imports `computeStatusModel` and
+      // `developerNextAction` from `status-model.ts`, so it was a second voice for one set of facts.
+      // The slash command and its Codex wrapper are gone.
+      //
+      // The VERB stays, deprecated. It is published and consumers may script it; breaking it to
+      // save a dispatch case is not a trade worth making. Notice goes to stderr so it cannot
+      // corrupt anything parsing stdout.
+      console.error(
+        "[loombridge ask] DEPRECATED — `ask` reads the same state as `loombridge status`, which is now the " +
+          "single read-only surface. This verb still works and will be removed in a future major.",
+      );
       const { run } = await import("../capabilities/verification/ask.js");
       return run(rest);
     }
@@ -137,7 +150,22 @@ export async function loombridgeCli(argv: string[]): Promise<number> {
       const { run } = await import("../capabilities/minigame/minigame.js");
       return run(rest);
     }
+    case "target":
     case "design": {
+      // RENAMED `design` -> `target` (CommandSurfaceRedesign §4). `loombridge design` reads as
+      // "design the game"; the verb actually FREEZES the hero shot the build converges on, which is
+      // a target. The old name also collided with the RFC's proposed game-design stage, so the two
+      // meanings of "design" were overloading each other.
+      //
+      // `design` stays as an alias. It is published and consumers script it; the notice goes to
+      // STDERR so it can never corrupt anything parsing stdout. Removal is a future major.
+      if (sub === "design") {
+        console.error(
+          "[loombridge design] DEPRECATED — renamed to `loombridge target` (it freezes the hero-shot " +
+            "TARGET; it does not design the game). This alias still works and will be removed in a " +
+            "future major. `.loombridge/design/` on disk is unchanged.",
+        );
+      }
       const { run } = await import("../capabilities/verification/design.js");
       return run(rest);
     }

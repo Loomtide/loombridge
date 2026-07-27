@@ -163,10 +163,10 @@ never need to remember `--go`, `--slice`, or other internal flags.
 
 ## 5. Construct via Loombridge MCP
 
-**3D builds — mind the design-target kind.** Run `loombridge design status`. If it reports
+**3D builds — mind the design-target kind.** Run `loombridge target status`. If it reports
 `kind=composition-reference`, the frozen image is a **style/composition guide**, not the final
 hero shot — use it to aim the scene's layout, but the build is NOT done until you (1) assemble
-the scene, (2) capture a real Unity frame, (3) `loombridge design set --image <frame> --kind
+the scene, (2) capture a real Unity frame, (3) `loombridge target set --image <frame> --kind
 rendered-unity-frame --approve` that capture, and only THEN (4) run the independent hero-shot
 review + `doneness`. `doneness` REFUSES to certify while the target is a composition-reference.
 For a `rendered-unity-frame` (the default, and all flat-2D builds) the frozen image already IS

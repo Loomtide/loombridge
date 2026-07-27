@@ -148,11 +148,20 @@ test("REGRESSION: a mismatched promotion report REFUSES even when the claimed ge
 });
 
 test("no registration and no report is `ungraded` with a non-empty, actionable gap list", () => {
+  // The free-form state: planned from the genre-neutral `_generic` template. This CAN certify now
+  // (D1), so the gap list is the entire difference between a scoped pass and an unsupported claim.
   const resolved = deriveGenreCoverage({ genre: "puzzle-hypercasual", promotion: null });
   assert.equal(resolved.coverage, "ungraded");
   assert.equal(resolved.source, "none");
-  assert.ok(resolved.gaps.length > 0, "even a refusal must say what is missing");
-  assert.match(resolved.gaps[0]!, /--genre-contract/);
+  assert.equal(resolved.contradiction, undefined, "a plain unsupported genre is not a contradiction");
+  assert.ok(resolved.gaps.length > 0, "a pass this scoped must say what it did NOT prove");
+
+  // Each limit a reader could otherwise assume away has to be stated explicitly.
+  const all = resolved.gaps.join("\n");
+  assert.match(all, /no feel oracle/i);
+  assert.match(all, /no hero-shot fidelity criteria/i);
+  assert.match(all, /genre-neutral gates/i, "must name what WAS graded, not only what was not");
+  assert.match(all, /--genre-contract/, "must name the upgrade path");
 });
 
 test("every non-graded coverage carries a non-empty gap list (the D1 precondition)", () => {

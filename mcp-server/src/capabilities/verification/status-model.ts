@@ -66,7 +66,7 @@ export function developerNextAction(model: LoombridgeStatusModel): string {
   }
   if (model.nextCommand === "loombridge build") return "run /loombridge:build or say continue.";
   if (model.nextCommand === "loombridge plan") return "run /loombridge:plan to set up or refresh the project plan.";
-  if (model.nextCommand === "loombridge design status") {
+  if (model.nextCommand === "loombridge target status") {
     return "the design target needs attention; run /loombridge:plan to continue the planning flow.";
   }
   if (model.nextCommand === "loombridge doneness") return "all slices are approved; ask the agent to certify done.";
@@ -126,7 +126,7 @@ function nextCommandFor(args: {
   captures: SliceCaptureStatus[];
 }): string {
   if (!args.plan || args.mode === "no-roadmap") return "loombridge plan";
-  if (!args.designApproved) return "loombridge design status";
+  if (!args.designApproved) return "loombridge target status";
   if (!args.currentSlice) return "loombridge doneness";
 
   const slice = args.currentSlice;

@@ -220,7 +220,7 @@ export function fidelityCriteriaForGenre(
  * disk-truth check emit the identical, actionable message.
  */
 export const COMPOSITION_REFERENCE_REFUSAL =
-  "design target is an APPROVED `composition-reference` (style/composition guide for scene assembly only) — it is NOT a frozen hero shot and can never certify doneness. Assemble the 3D scene, capture a real Unity frame, then `loombridge design set --image <frame> --kind rendered-unity-frame --approve` and re-run (the composition → assemble → capture → freeze → fidelity flow, plan §3c).";
+  "design target is an APPROVED `composition-reference` (style/composition guide for scene assembly only) — it is NOT a frozen hero shot and can never certify doneness. Assemble the 3D scene, capture a real Unity frame, then `loombridge target set --image <frame> --kind rendered-unity-frame --approve` and re-run (the composition → assemble → capture → freeze → fidelity flow, plan §3c).";
 
 /** The on-disk Design Target facts the disk-truth refusal reads (a subset of DesignStatusReport). */
 export interface DiskDesignTargetFacts {
@@ -406,9 +406,14 @@ export function checkAssetSourceFidelity(verdict: VerdictLike | null): string[] 
  * `resolved` is DISK truth (`STATE.genre` + `GENRE_PROMOTION.json`), `claimed` is whatever the verdict
  * says about itself. Four rules:
  *
- *  - UNGRADED refuses. No registration and no promotion report naming this genre means no oracle AND
- *    no source to enumerate gaps from, so there is nothing honest to claim. This is the state a
- *    hand-edited `STATE.genre` or a deleted promotion report lands in.
+ *  - CONTRADICTION refuses. The disk disagreeing with itself about which genre this project IS
+ *    (`STATE.genre` vs the promotion report) has no honest reading, so it is refused rather than
+ *    resolved in whichever direction grades higher. Keyed off the structured `contradiction` field,
+ *    never off gap prose — a load-bearing refusal must not be reworded away.
+ *  - PLAIN `ungraded` does NOT refuse. Once a free-form genre could be planned (the `_generic`
+ *    template), `ungraded` became the honest state of a real project rather than a corruption, and
+ *    D1 allows it to certify SCOPED: the derived gap list is non-empty and printed on success, and
+ *    an approved Design Target still refuses for want of fidelity criteria.
  *  - DISAGREEMENT refuses. A verdict claiming a coverage the disk does not support is a forged claim,
  *    not a stale one — the same rule `diskTruthDesignTargetRefusals` applies to `designTarget.kind`.
  *  - ABSENT-ON-NON-GRADED refuses. A `partially-graded` build MUST carry the block, because the block
@@ -439,10 +444,19 @@ export function genreCoverageRefusals(opts: {
   const expectStamp = opts.expectStamp ?? true;
   const refusals: string[] = [];
 
-  if (resolved.coverage === "ungraded") {
-    refusals.push(
-      `genre coverage is \`ungraded\` — refusing to certify: ${resolved.gaps.join("; ")}`,
-    );
+  // NOTE: plain `ungraded` is NOT refused here any more. Once a free-form genre could actually be
+  // planned (the `_generic` template), `ungraded` stopped being a residual corruption state and
+  // became the honest description of a real, buildable project — and D1 says such a project may
+  // certify, scoped. What still stops it going green unnoticed:
+  //   - the gap list is derived, non-empty, and printed on SUCCESS by `printCoverageScope`;
+  //   - the stamp is still required and still compared against disk (below);
+  //   - an approved Design Target still refuses via `fidelityCriteriaForGenre` — an ungraded genre
+  //     has no criteria, so the hero-shot moat is untouched.
+  // The CONTRADICTION case still returns `ungraded` from the derivation and still refuses, because
+  // its gap list carries that refusal text; that path is about a disk that disagrees with itself,
+  // not about a genre being unsupported.
+  if (resolved.contradiction) {
+    refusals.push(`refusing to certify: ${resolved.contradiction}`);
   }
 
   if (!claimed) {

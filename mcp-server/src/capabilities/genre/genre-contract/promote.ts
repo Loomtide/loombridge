@@ -25,6 +25,18 @@ export interface PromotedMeasurabilityRow {
 export interface GenrePromotionReport {
   schemaVersion: typeof GENRE_PROMOTION_REPORT_SCHEMA_VERSION;
   sourceGenreId: string;
+  /**
+   * sha256 of the raw source-contract bytes this report was promoted from. Present whenever the
+   * caller supplied it (`loombridge plan` always does); absent on a report written by an older
+   * release.
+   *
+   * WHAT IT PROVES, EXACTLY: that this report came from a specific contract file, and WHICH bytes.
+   * It does NOT prove the contract was any good — `validateGenreContract` owns that and runs before
+   * promotion. It does not make the report unforgeable either: someone writing a report by hand can
+   * also write a digest. It raises the cost of claiming a promotion that never happened, and it lets
+   * a reviewer confirm the contract in the repo is the one that produced the plan on disk.
+   */
+  sourceContractSha256?: string;
   sourceConfidence: GenreContract["confidence"];
   generatedAcceptance: string;
   generatedSlices: string;
@@ -53,6 +65,15 @@ export interface GenrePromotionResult {
 export interface GenrePromotionOptions {
   /** Optional registered pack slice template; matching ids preserve pack-owned skill/gate guidance. */
   sliceTemplate?: SlicePlan;
+  /**
+   * sha256 of the RAW source-contract bytes, computed by the caller that read the file. Recorded on
+   * the report so a promotion is pinned to the exact input it came from.
+   *
+   * Raw BYTES, never `JSON.stringify(contract)` — a re-serialization is canonicalization-dependent
+   * (key order, spacing, unicode escaping), so it would drift between Node versions and between a
+   * hand-formatted file and a generated one, and a digest that drifts proves nothing.
+   */
+  sourceContractSha256?: string;
 }
 
 const HUD_ANCHORS: HudAnchor[] = ["top-left", "top-center", "top-right", "bottom-left", "bottom-right"];
@@ -285,6 +306,7 @@ export function promoteGenreContract(input: unknown, options: GenrePromotionOpti
   const report: GenrePromotionReport = {
     schemaVersion: GENRE_PROMOTION_REPORT_SCHEMA_VERSION,
     sourceGenreId: contract.genreId,
+    ...(options.sourceContractSha256 ? { sourceContractSha256: options.sourceContractSha256 } : {}),
     sourceConfidence: contract.confidence,
     generatedAcceptance: ".loombridge/ACCEPTANCE.json",
     generatedSlices: ".loombridge/SLICES.json",

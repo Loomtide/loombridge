@@ -80,11 +80,15 @@ test("T0 shim parity — `build` wrapper joins ALL positional args (not just $1)
   );
 });
 
-test("command currency — e2e.md drives the independent hero-shot review so a design-targeted run can certify (§P0)", async () => {
+test("command currency — the e2e walkthrough drives the independent hero-shot review so a design-targeted run can certify (§P0)", async () => {
   // After the §P0 moat, a design-targeted flow MUST run the independent consolidated VLM
-  // (--vlm) before doneness, else doneness refuses (no reviewFindings). e2e approves a hero
-  // shot, so without the VLM step the whole e2e flow dead-ends at doneness. Guard the fix.
-  const e2e = await fs.readFile(path.join(repoRoot, "commands", "loombridge", "e2e.md"), "utf-8");
+  // (--vlm) before doneness, else doneness refuses (no reviewFindings). The walkthrough approves a
+  // hero shot, so without the VLM step the whole flow dead-ends at doneness. Guard the fix.
+  //
+  // RETIRED as a slash command (CommandSurfaceRedesign §1.3) — its own prose called it "a demo
+  // workflow wrapper, not a third product verb" — and moved to Docs/. Still guarded: a walkthrough
+  // that dead-ends at doneness is just as wrong in a doc as it was in a command.
+  const e2e = await fs.readFile(path.join(repoRoot, "Docs", "E2E-Walkthrough.md"), "utf-8");
   assert.match(e2e, /--vlm/, "e2e.md must pass --vlm so doneness can read reviewFindings");
   assert.match(e2e, /independent/i, "e2e.md must instruct the independent hero-shot review");
   assert.match(

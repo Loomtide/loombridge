@@ -1,0 +1,38 @@
+{
+  "schemaVersion": "1",
+  "genre": "generic",
+  "slices": [
+    {
+      "id": "framing",
+      "title": "Frame the game (camera, aspect, subject placement)",
+      "dependsOn": [],
+      "feelIntent": "The player can see what matters, at a readable scale, in a stable 16:9 frame.",
+      "acceptance": { "gates": ["manifest", "framing", "console-clean"] },
+      "state": "pending"
+    },
+    {
+      "id": "core-loop",
+      "title": "Build the core loop (the one verb this game is about)",
+      "dependsOn": ["framing"],
+      "feelIntent": "The primary action can be performed repeatedly and responds immediately to input.",
+      "acceptance": { "gates": ["playability", "console-clean"] },
+      "state": "pending"
+    },
+    {
+      "id": "hud",
+      "title": "Surface state the player needs (HUD)",
+      "dependsOn": ["core-loop"],
+      "feelIntent": "Whatever the player must track to make decisions is legible on screen.",
+      "acceptance": { "gates": ["ui-conformance", "console-clean"] },
+      "state": "pending"
+    },
+    {
+      "id": "end-state",
+      "title": "Resolve the loop (win/lose, and a way back in)",
+      "dependsOn": ["core-loop", "hud"],
+      "feelIntent": "The run ends deliberately, the outcome is stated, and restarting is one action.",
+      "acceptance": { "gates": ["ui-conformance", "playability", "console-clean"] },
+      "state": "pending"
+    }
+  ]
+}

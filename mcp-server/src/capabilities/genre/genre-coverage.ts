@@ -18,13 +18,18 @@
  *   ungraded           neither. There is no oracle AND no contract to enumerate gaps from, so there is
  *                      nothing honest to claim. Callers REFUSE.
  *
- * WHY `ungraded` REFUSES. The product decision (D1) was that an ungraded game may reach `doneness`
- * *provided* the gap list is mandatory and non-empty. With genre-contract promotion as the only entry
- * path for an unregistered genre, anything that reaches `plan` has either a registration or a
- * `GENRE_PROMOTION.json`, so `ungraded` is the residual state: a hand-edited `STATE.genre`, a deleted
- * promotion report, an adopted project. In every one of those there is no source to enumerate gaps
- * from, so D1's own precondition cannot be met and refusal is the only honest answer. If a free-form
- * entry path is ever added, THIS is the function that has to grow a fourth story, not the callers.
+ * WHY `ungraded` PASSES, SCOPED. The product decision (D1) was that an ungraded game may reach
+ * `doneness` *provided* the gap list is mandatory, non-empty and non-suppressible. W1 could not honour
+ * that: with contract promotion as the only way in, anything that reached `plan` already had a
+ * registration or a `GENRE_PROMOTION.json`, so `ungraded` was purely residual — a hand-edited
+ * `STATE.genre` or a deleted report — with no source to enumerate gaps from, and refusal was the only
+ * honest answer.
+ *
+ * The free-form entry path changed that. A project planned from the genre-neutral `_generic` template
+ * is legitimately ungraded, and its gaps are knowable without any contract: they follow from the
+ * absence of a pack. So `ungraded` now certifies the genre-neutral gates and nothing else, with every
+ * limit printed. What did NOT change: an approved Design Target still refuses, because there are no
+ * fidelity criteria to grade the frame against, so the hero-shot moat is exactly where it was.
  *
  * TRUST MODEL — this is a moat surface, so read carefully:
  *  - The result is DERIVED from disk (the registry + `GENRE_PROMOTION.json`) at gate time. `verify`
@@ -64,6 +69,16 @@ export interface GenreCoverageResolution {
    * whenever `coverage !== "graded"`, and derived rather than authored — see the header's trust model.
    */
   gaps: string[];
+  /**
+   * Set ONLY when the disk disagrees with itself about what this project is (see step 0). Callers
+   * REFUSE on its presence.
+   *
+   * This is a distinct field rather than a recognisable string inside `gaps` on purpose: a refusal
+   * that keys off prose disappears the moment someone rewords the message, and this one is load-
+   * bearing — it is the check that closed a confirmed laundering route. `ungraded` on its own is a
+   * legitimate, certifiable state; `ungraded` WITH a contradiction never is.
+   */
+  contradiction?: string;
 }
 
 export interface DeriveGenreCoverageInput {
@@ -98,18 +113,13 @@ export function deriveGenreCoverage(input: DeriveGenreCoverageInput): GenreCover
   //    favourably. (`plan` clears a stale report when it re-seeds a project onto a templated genre,
   //    so the legitimate genre switch does not land here.)
   if (promotion && promotion.sourceGenreId !== genre) {
-    return {
-      coverage: "ungraded",
-      genre,
-      source: "none",
-      gaps: [
-        `CONTRADICTION: this project is being certified as genre "${genre}", but ` +
-          `.loombridge/GENRE_PROMOTION.json was promoted for "${promotion.sourceGenreId}". A project ` +
-          `cannot be both, and the more favourable reading is never the one to take. Re-plan from the ` +
-          `contract you mean to build (\`loombridge plan --genre-contract <file> --force\`), or delete ` +
-          `the stale promotion report if this project really is "${genre}".`,
-      ],
-    };
+    const contradiction =
+      `CONTRADICTION: this project is being certified as genre "${genre}", but ` +
+      `.loombridge/GENRE_PROMOTION.json was promoted for "${promotion.sourceGenreId}". A project ` +
+      `cannot be both, and the more favourable reading is never the one to take. Re-plan from the ` +
+      `contract you mean to build (\`loombridge plan --genre-contract <file> --force\`), or delete ` +
+      `the stale promotion report if this project really is "${genre}".`;
+    return { coverage: "ungraded", genre, source: "none", gaps: [contradiction], contradiction };
   }
 
   // 1. Registered — the shipped path. Full claim, no gaps. Unchanged behavior for every genre that
@@ -128,19 +138,38 @@ export function deriveGenreCoverage(input: DeriveGenreCoverageInput): GenreCover
     };
   }
 
-  // 3. Neither. Nothing to grade against and nothing to enumerate — refuse (header, "WHY `ungraded`
-  //    REFUSES").
+  // 3. Neither a registration nor a contract — a FREE-FORM project, planned from the genre-neutral
+  //    `_generic` template. Nothing genre-specific can be graded, so the claim is the narrowest one
+  //    the pipeline makes, and every limit is spelled out rather than implied.
   return {
     coverage: "ungraded",
     genre,
     source: "none",
-    gaps: [
-      `genre "${genre}" is not registered and this project has no promoted genre contract ` +
-        `(.loombridge/GENRE_PROMOTION.json) naming it — there is no oracle to grade against and no ` +
-        `declared gap list to scope a claim to. Plan from a genre contract (\`loombridge plan ` +
-        `--genre-contract <file>\`) or use a registered genre.`,
-    ],
+    gaps: ungradedGaps(genre),
   };
+}
+
+/**
+ * The gap list for a free-form genre. Boilerplate BY NECESSITY — there is no contract to derive
+ * anything project-specific from, which is exactly what "ungraded" means — but non-empty and
+ * non-suppressible all the same, because it is computed here rather than read from any file a
+ * project can edit.
+ *
+ * This is the list that has to carry D1's promise. An `ungraded` build may exit 0, so these lines
+ * are the entire difference between a scoped pass and a claim the pipeline cannot support.
+ */
+function ungradedGaps(genre: string): string[] {
+  return [
+    `genre "${genre}" has no registered pack and no promoted genre contract — this build was planned ` +
+      "from the genre-neutral template, so NOTHING genre-specific was graded",
+    "no feel oracle: no genre-specific feel calculators ran, and no feel band was enforced",
+    "no hero-shot fidelity criteria: a build with an APPROVED Design Target is refused at doneness " +
+      "(there is nothing to grade the frame against)",
+    "graded ONLY by the genre-neutral gates (compile/console, playability, framing, UI conformance, " +
+      "manifest) — these do gate, and they are all that passed",
+    `to earn a stronger claim, author a genre contract (\`loombridge plan --genre-contract <file>\`) ` +
+      `for \`partially-graded\`, or register a pack for "${genre}" for \`graded\``,
+  ];
 }
 
 /**

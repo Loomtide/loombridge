@@ -111,7 +111,7 @@ surface instead of hand-rolling raw editor pokes.
 
 ## Where things live
 
-- \`loombridge status\` / \`loombridge ask\` — what state the project is in, without mutating anything.
+- \`loombridge status\` — what state the project is in, without mutating anything.
 - \`loombridge plan\` → \`loombridge build\` → \`loombridge verify\` → \`loombridge doneness\` — the pipeline.
 - \`loombridge doctor\` — health-check the bridge install; it prints the exact command to fix each row.
 - Full tool catalog: the \`unity_ops_list\` / \`unity_ops_describe\` MCP tools.${agentSurfaceLine}

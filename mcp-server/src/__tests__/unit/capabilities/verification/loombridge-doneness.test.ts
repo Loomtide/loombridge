@@ -21,6 +21,7 @@ import {
   type VerdictLike,
 } from "../../../../capabilities/verification/doneness.js";
 import { deriveGenreCoverage } from "../../../../capabilities/genre/genre-coverage.js";
+import { knownGenreIds } from "../../../../capabilities/genre/genre-registry.js";
 import { runBuild } from "../../../../capabilities/verification/build.js";
 import { validateAssetManifest } from "../../../../capabilities/assets/asset-manifest.js";
 import { designPaths, designStatus, setDesignTarget } from "../../../../capabilities/verification/design.js";
@@ -326,37 +327,103 @@ test("genreCoverageRefusals — a verdict binding coverage to another genre REFU
   assert.ok(refusals.some((r) => /binds genre coverage to "platformer-2d"/.test(r)));
 });
 
-test("genreCoverageRefusals — `ungraded` refuses however it is stamped", () => {
+test("genreCoverageRefusals — a plain `ungraded` project CERTIFIES when honestly stamped", () => {
+  // D1, now actually reachable: a free-form genre planned from the `_generic` template is
+  // legitimately ungraded, and an ungraded build may exit 0 SCOPED. What keeps that honest is not a
+  // refusal here — it is the derived, non-empty gap list that `printCoverageScope` prints on success.
   const resolved = deriveGenreCoverage({ genre: "puzzle", promotion: null });
   assert.equal(resolved.coverage, "ungraded");
-  // Absent, honestly stamped, and forged all refuse — there is no stamping that rescues it.
-  for (const claimed of [undefined, { coverage: "ungraded", genre: "puzzle" }, { coverage: "graded", genre: "puzzle" }]) {
-    const refusals = genreCoverageRefusals({ resolved, claimed });
-    assert.ok(refusals.some((r) => /`ungraded`/.test(r)), `must refuse for claimed=${JSON.stringify(claimed)}`);
+  assert.deepEqual(
+    genreCoverageRefusals({ resolved, claimed: { coverage: "ungraded", genre: "puzzle" } }),
+    [],
+    "an honestly-stamped ungraded project must be allowed to certify",
+  );
+  // The stamp is still mandatory, and still compared against disk.
+  assert.ok(genreCoverageRefusals({ resolved, claimed: undefined }).length > 0, "absent stamp refuses");
+  assert.ok(
+    genreCoverageRefusals({ resolved, claimed: { coverage: "graded", genre: "puzzle" } }).length > 0,
+    "claiming `graded` over an ungraded project still refuses",
+  );
+});
+
+test("genreCoverageRefusals — a CONTRADICTION refuses on every path, stamped or not", () => {
+  // The one `ungraded` that never certifies: the disk disagreeing with itself about which genre this
+  // project is. Distinct from "unsupported genre", and keyed off the structured `contradiction`
+  // field rather than gap prose so rewording the message cannot disable it.
+  const resolved = deriveGenreCoverage({
+    genre: knownGenreIds()[0]!,
+    promotion: promotionFor("some-other-genre"),
+  });
+  assert.ok(resolved.contradiction, "a mismatched promotion report must set `contradiction`");
+  for (const claimed of [undefined, { coverage: "ungraded", genre: knownGenreIds()[0]! }]) {
+    assert.ok(
+      genreCoverageRefusals({ resolved, claimed }).some((r) => /CONTRADICTION/.test(r)),
+      `must refuse for claimed=${JSON.stringify(claimed)}`,
+    );
+  }
+  // ...including on the slice path, which has no stamp to require.
+  assert.ok(
+    genreCoverageRefusals({ resolved, claimed: undefined, expectStamp: false }).length > 0,
+    "the slice roll-up must not be the cheaper way around a contradiction",
+  );
+});
+
+test("genreCoverageRefusals — expectStamp:false (the slice path) does not invent a stamp requirement", () => {
+  // The slice roll-up has no whole-game verdict, so an absent block there is a fact about the path,
+  // not a suppressed scope. Neither ungraded nor partially-graded is refused for lacking one.
+  for (const resolved of [
+    deriveGenreCoverage({ genre: "puzzle", promotion: null }),
+    deriveGenreCoverage({ genre: "puzzle", promotion: promotionFor("puzzle") }),
+  ]) {
+    assert.deepEqual(
+      genreCoverageRefusals({ resolved, claimed: undefined, expectStamp: false }),
+      [],
+      `${resolved.coverage} must not be refused merely for having no stamp to carry`,
+    );
   }
 });
 
-test("genreCoverageRefusals — expectStamp:false (the slice path) still refuses `ungraded`", () => {
-  // The slice roll-up has no whole-game verdict, so it cannot require a stamp. It must NOT therefore
-  // become the cheaper way around the gate: the ungraded refusal survives.
-  const ungraded = deriveGenreCoverage({ genre: "puzzle", promotion: null });
-  assert.ok(genreCoverageRefusals({ resolved: ungraded, claimed: undefined, expectStamp: false }).length > 0);
-  // ...but a partially-graded slice project is not refused merely for having no stamp to carry.
-  const partial = deriveGenreCoverage({ genre: "puzzle", promotion: promotionFor("puzzle") });
-  assert.deepEqual(genreCoverageRefusals({ resolved: partial, claimed: undefined, expectStamp: false }), []);
-});
-
-test("isFreshGreen — an ungraded genre is refused even when everything else is fresh + green", () => {
-  // The end-to-end shape: a hand-edited STATE.genre with no promotion report. Every freshness and
-  // capture check passes; coverage alone refuses.
+test("isFreshGreen — an ungraded genre CERTIFIES when fresh, green and honestly stamped", () => {
+  // The free-form end state: a genre with no pack and no contract, planned from `_generic`. It
+  // reaches a green doneness (D1) — the scope lives in the printed gaps, not in a refusal.
   const r = isFreshGreen({
-    state: { ...baselineState(), genre: "totally-made-up" },
-    verdict: { status: "pass", runId: "run-A", producedAt: "2026-05-28T01:00:00.000Z" },
+    state: { ...baselineState(), genre: "totally-made-up", designTarget: undefined },
+    verdict: {
+      status: "pass",
+      runId: "run-A",
+      producedAt: "2026-05-28T01:00:00.000Z",
+      genreCoverage: { coverage: "ungraded", genre: "totally-made-up" },
+    },
     captures: [],
     promotion: null,
   });
-  assert.equal(r.ok, false);
-  assert.ok(r.reasons.some((m) => /`ungraded`/.test(m)), r.reasons.join(" | "));
+  assert.equal(r.ok, true, r.reasons.join(" | "));
+});
+
+test("THE UNGRADED MOAT — an approved Design Target on an ungraded genre still REFUSES", () => {
+  // The invariant that makes the scoped pass safe. An ungraded genre has NO fidelity criteria, so
+  // there is nothing to grade a frozen hero shot against; certifying one would be claiming a visual
+  // match that nothing checked. Everything else here is green, so this refusal is the only thing
+  // standing between an ungraded design-targeted build and a false "hero-shot faithful".
+  //
+  // LITMUS: drop the `fidelityCriteriaForGenre` refusal branch in isFreshGreen and this goes green.
+  const r = isFreshGreen({
+    state: { ...baselineState(), genre: "totally-made-up" },
+    verdict: {
+      status: "pass",
+      runId: "run-A",
+      producedAt: "2026-05-28T01:00:00.000Z",
+      designTarget: { status: "approved", kind: "rendered-unity-frame", pngSha256: "a".repeat(64), frozenMatches: true },
+      genreCoverage: { coverage: "ungraded", genre: "totally-made-up" },
+    },
+    captures: [],
+    promotion: null,
+  });
+  assert.equal(r.ok, false, "an ungraded build with a frozen hero shot must not certify");
+  assert.ok(
+    r.reasons.some((m) => /no hero-shot fidelity criteria/.test(m)),
+    r.reasons.join(" | "),
+  );
 });
 
 test("isFreshGreen — a partially-graded build CAN pass, with its coverage stamped", () => {

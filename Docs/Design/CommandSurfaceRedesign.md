@@ -448,3 +448,70 @@ platformer `player-feel` slice:"); the surrounding content is generic 2D constru
 Residual, stated rather than hidden: a shooter `controller` slice pointed at `unity-2d-game` will
 find a platformer-movement section that does not apply to it. That is a real but much smaller gap
 than the fiction it replaced, and closing it properly means authoring shooter-specific skills.
+
+## 13. W3/W4 remainder as built
+
+Sizing the rest of W3/W4 first, because most of it was not work:
+
+- **§7 (plan emits polish tasks, verify gates them) was ALREADY SATISFIED.** Every pack ships
+  `hud` / `juice` / `end-state` slices carrying `ui-conformance` and `visual-artifacts` gates.
+- **W3's "retarget `plan` to consume `design.json`" was dead** — `design.json` was superseded in §12.
+- **W3's AgentsAtlas task structure was largely already present.** `SLICES.json` is a task DAG whose
+  nodes carry gates, a skill binding, and lifecycle state, with `plan --go` as the advancing step.
+- **W4's "skills injected from the design binding" shipped in §12.**
+
+Four items remained, all now done.
+
+**A. `ask` and `e2e` retired from the agent surface.** `ask` rendered the same `status-model` facts
+in a second voice (it imports `computeStatusModel` / `developerNextAction`); `e2e`'s own prose called
+it "a demo workflow wrapper, not a third product verb". Both are off `plugin.json` with their Codex
+wrappers deleted; `e2e.md` moved to `Docs/E2E-Walkthrough.md` (the RFC said `scripts/`, but that
+directory holds executables), and its `--vlm` currency test followed it rather than being dropped.
+The `ask` VERB stays as a deprecated alias — the command was what needed to leave the agent surface,
+and silently breaking a published verb to save a dispatch case is not a trade worth making.
+
+**B. `design` -> `target`, aliased.** `loombridge target` is canonical; `design` still works and
+warns on **stderr**, so stdout stays parseable for anything scripting it. `.loombridge/design/` on
+disk deliberately did NOT move: every existing consumer project has that directory, so renaming it
+would be a data migration wearing a rename's clothes.
+
+**C. `sourceContractSha256` on the promotion report.** Hashes the RAW contract bytes before parsing —
+a digest over a re-serialized object depends on key order and spacing, so it would drift and prove
+nothing. Scoped honestly in its own doc comment: it pins WHICH bytes were promoted; it does not prove
+the contract was good (`validateGenreContract` owns that), and a hand-written report can carry a
+hand-written digest.
+
+**D. Free-form entry, and `ungraded` made passable.** The real blocker was never the registry check
+(W1 lifted that for contracts) but that `plan` seeds `ACCEPTANCE.json` from a pack template and an
+unregistered genre had none. `genre-packs/_generic/` supplies a genre-neutral one. It asserts as
+little as possible on purpose — no feel targets, a `declared-by-project` win rule, genre-shaped gates
+`not_applicable`, no skill bindings — because anything it smuggles in gets graded against a game that
+never agreed to it. The underscore keeps it out of `knownGenreIds()`, so it is a fallback and never
+an identity.
+
+With that, `ungraded` stopped being an unreachable residual state and became the honest description
+of a real project, so it now certifies SCOPED: the derived gap list is non-empty, non-suppressible,
+and printed on success. **The moat did not move.** An approved Design Target on an ungraded genre
+still refuses — there are no fidelity criteria to grade a frozen frame against — verified against the
+real CLI, not just in unit tests. The CONTRADICTION refusal also survives, and was re-keyed off a
+structured `contradiction` field rather than gap prose, because a load-bearing refusal that matches
+on a message string disappears the moment someone rewords the message.
+
+### 13.1 Adversarial review of §13
+
+**A false green I introduced, reproduced end-to-end.** Genre preservation on a bare re-plan tested
+"is `prev.genre` REGISTERED?" — equivalent to "was it really planned?" only while every plannable
+genre was registered. Free-form broke that equivalence: after `plan --genre my-weird-game`, a bare
+`loombridge plan` silently rewrote `STATE.genre` to `platformer-2d`. Two failures at once — the
+developer's project became a platformer, and its coverage claim was UPGRADED from `ungraded` to
+`graded`, a full Tier-1 claim over a contract that asserts nothing. That is exactly the silent-default
+false green the registry refusal existed to prevent, re-entering through the door this wave opened.
+
+Fixed by naming the thing actually being excluded: `UNPLANNED_GENRE`, the sentinel a `target set`
+before any `plan` leaves behind. Any other recorded genre is preserved. Pinned by a regression test
+carrying a LITMUS proven to fail on the old predicate.
+
+**Checked and found sound:** downgrading a registered project by hand-editing `STATE.genre` to a
+free-form string gains nothing. Contract gates come from `ACCEPTANCE.json`, not from coverage, so
+they still run; the resulting claim is strictly weaker; and with a Design Target it refuses where
+platformer would have graded. The downgrade is self-harm, not an escalation.

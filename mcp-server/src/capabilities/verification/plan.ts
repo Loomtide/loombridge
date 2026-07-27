@@ -27,6 +27,7 @@ import {
   updateState,
   writeState,
   type LoombridgePaths,
+  UNPLANNED_GENRE,
   type LoombridgeState,
 } from "../../domain/state.js";
 import { designStatus, exitCodeForDesignReadiness } from "./design.js";
@@ -54,6 +55,8 @@ import { computeStatusModel, renderPlanStatusEcho } from "./status-model.js";
 import { defaultGenreId, knownGenreIds, resolveGenrePack } from "../genre/genre-registry.js";
 import { promoteGenreContract, type GenrePromotionResult } from "../genre/genre-contract/promote.js";
 import { resolveBriefBundle } from "../../domain/brief-bundle.js";
+// Never count `..` to find the package root (CLAUDE.md) — re-nesting this file would repoint it.
+import { packageRoot } from "../../shared/pkg-root.js";
 import { formatDesignHardeningAdvisory } from "../genre/genre-contract/design-hardening.js";
 import type { GenreContract } from "../genre/genre-contract/types.js";
 
@@ -94,16 +97,32 @@ export function detectEngine(root: string): EngineDetection {
   };
 }
 
-/** Read + validate a genre's slice-DAG roadmap template from the src tree. */
+/**
+ * The GENRE-NEUTRAL fallback pack (CommandSurfaceRedesign W1/D). An unregistered `--genre` seeds
+ * from here instead of exiting 2, and verifies as `genreCoverage: "ungraded"` with its gaps listed.
+ *
+ * The underscore prefix keeps it OUT of `knownGenreIds()`, which matters in three places: it can
+ * never be selected as a genre of its own, the registry template walk does not audit it as a real
+ * pack, and the W2 skill-binding guard does not expect bindings it deliberately has none of.
+ */
+const GENERIC_PACK_DIR = path.join(
+  packageRoot(import.meta.url),
+  "src",
+  "capabilities",
+  "genre",
+  "genre-packs",
+  "_generic",
+);
+
+/** Read + validate a genre's slice-DAG roadmap template, falling back to the generic pack. */
 async function loadSliceTemplate(genre: string): Promise<SlicePlan> {
   const pack = resolveGenrePack(genre);
-  if (!pack) {
-    throw new Error(
-      `no slice roadmap template for genre "${genre}". Known: ${knownGenreIds().join(", ")}`,
-    );
-  }
-  const raw = await fs.readFile(pack.sliceTemplatePath, "utf-8");
-  return assertValidSlicePlan(JSON.parse(raw));
+  const templatePath = pack ? pack.sliceTemplatePath : path.join(GENERIC_PACK_DIR, "slices.json");
+  const raw = await fs.readFile(templatePath, "utf-8");
+  // The generic DAG declares the project's OWN genre string, not "generic" — the roadmap must bind
+  // to the genre the project was planned as, or the slice roll-up's plan-vs-STATE agreement check
+  // (added in W1) would refuse every free-form project.
+  return assertValidSlicePlan({ ...JSON.parse(raw), genre });
 }
 
 export interface PlanArgs {
@@ -387,10 +406,15 @@ export async function runPlan(args: PlanArgs): Promise<number> {
   }
 
   let genreContractInput: unknown | null = null;
+  let genreContractSha256: string | undefined;
   let promoted: GenrePromotionResult | null = null;
   if (genreContractPath) {
     try {
-      genreContractInput = JSON.parse(await fs.readFile(genreContractPath, "utf-8"));
+      // Hash the RAW bytes, before parsing — a digest over a re-serialized object would depend on
+      // key order and formatting, so it would drift and prove nothing about the file on disk.
+      const rawContract = await fs.readFile(genreContractPath, "utf-8");
+      genreContractSha256 = createHash("sha256").update(rawContract, "utf-8").digest("hex");
+      genreContractInput = JSON.parse(rawContract);
       promoted = promoteGenreContract(genreContractInput);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -399,42 +423,54 @@ export async function runPlan(args: PlanArgs): Promise<number> {
     }
   }
 
-  // Genre resolution precedence: an explicit --genre-contract (its sourceGenreId) wins; then an explicit
-  // --genre; then the genre already recorded in STATE *if it is a registered genre* — so a bare re-plan does
-  // NOT silently reset a promoted 3d-shooter back to the registry default, BUT the placeholder genre that
-  // `design set` bootstraps into STATE before any genre is chosen (e.g. "unknown") never sticks; then the
-  // registry default carried in args.genre.
+  // Genre resolution precedence: an explicit --genre-contract (its sourceGenreId) wins; then an
+  // explicit --genre; then the genre already recorded in STATE; then the registry default.
+  //
+  // PRESERVE ANY RECORDED GENRE EXCEPT THE PLACEHOLDER. This originally tested "is it REGISTERED?",
+  // which was equivalent while every plannable genre was registered. The free-form entry path broke
+  // that equivalence and the old test became a live bug: a bare `loombridge plan` after
+  // `plan --genre my-weird-game` silently rewrote STATE.genre to platformer-2d, converting the
+  // developer's project into a platformer AND upgrading its coverage claim from `ungraded` to
+  // `graded` — a full Tier-1 claim over the genre-neutral contract it was actually planned from.
+  // That is precisely the silent-default false-green the registry refusal existed to prevent,
+  // re-entering through the new door.
+  //
+  // The only value that must NOT stick is `UNPLANNED_GENRE`, the sentinel a `target set` before any
+  // `plan` leaves behind — that one means "no genre chosen yet", so the default correctly wins.
   const preservedGenre =
-    !args.genreExplicit && prev?.genre && resolveGenrePack(prev.genre) ? prev.genre : undefined;
+    !args.genreExplicit && prev?.genre && prev.genre !== UNPLANNED_GENRE ? prev.genre : undefined;
   const genre = promoted?.report.sourceGenreId ?? preservedGenre ?? args.genre;
   const genrePack = resolveGenrePack(genre);
 
-  // COVERAGE, NOT REFUSAL (CommandSurfaceRedesign W1). The registry's closed set governs what `verify`
-  // CLAIMS, not what `plan` ACCEPTS — but ONLY where there is something honest to plan from:
+  // COVERAGE, NOT REFUSAL (CommandSurfaceRedesign W1 + D). The registry's closed set governs what
+  // `verify` CLAIMS, never what `plan` ACCEPTS. There are three ways in, and no genre string is
+  // turned away at the door any more:
   //
-  //  - TEMPLATED path (no --genre-contract): the pack IS the plan. Its acceptance + slice templates are
-  //    what gets seeded, so an unregistered genre has literally nothing to write. Still exit 2, message
-  //    unchanged.
-  //  - PROMOTED path (--genre-contract / --brief): the contract supplies acceptance AND slices, and the
-  //    pack's `acceptanceTemplatePath` is never even read (see the seed below — `promoted?.acceptance`
-  //    short-circuits it). The registry lookup here was a pure gatekeeper blocking a plan it contributes
-  //    nothing to. An unregistered genre now proceeds and is stamped `partially-graded` at verify time,
-  //    with its gaps enumerated from this contract's own promotion report.
+  //  - REGISTERED: the pack IS the plan — its acceptance + slice templates are seeded. `graded`.
+  //  - PROMOTED (--genre-contract / --brief): the contract supplies acceptance AND slices, and the
+  //    pack's `acceptanceTemplatePath` is never even read (`promoted?.acceptance` short-circuits it
+  //    below). `partially-graded`, with real gaps from the contract's own promotion report.
+  //  - FREE-FORM: any other `--genre` seeds the genre-neutral `_generic` pack. `ungraded`, with a
+  //    boilerplate gap list, because there is no oracle of any kind for an unknown genre.
   //
-  // The pack's slice template stays OPTIONAL either way: when it exists, matching slice ids keep
-  // pack-owned skill/gate guidance; when the genre is unregistered there is none, and the promoter
-  // already accepts `sliceTemplate: undefined`.
+  // The last one is what makes D1's "an ungraded game may reach doneness" reachable at all. Before
+  // it, `ungraded` was a state nothing could actually be in: the front door refused first.
+  //
+  // The pack's slice template stays OPTIONAL on the promoted path: when it exists, matching slice
+  // ids keep pack-owned skill/gate guidance; when the genre is unregistered there is none, and the
+  // promoter already accepts `sliceTemplate: undefined`.
   if (!genrePack && !promoted) {
     console.error(
-      `[loombridge plan] unknown genre "${genre}". Known: ${knownGenreIds().join(", ")}. ` +
-        `To plan a genre with no registered pack, author a genre contract and pass ` +
-        `--genre-contract <file> (or --brief <bundle>) — it will plan as \`partially-graded\`.`,
+      `[loombridge plan] genre "${genre}" has no registered pack — seeding the GENERIC template. ` +
+        `Registered genres (${knownGenreIds().join(", ")}) plan as \`graded\`; this project will ` +
+        "verify as `ungraded` (genre-neutral gates only, no feel or fidelity oracle). For a stronger " +
+        "claim, author a genre contract and pass --genre-contract <file>.",
     );
-    return 2;
   }
   if (genreContractInput) {
     promoted = promoteGenreContract(genreContractInput, {
       ...(genrePack ? { sliceTemplate: await loadSliceTemplate(genre) } : {}),
+      ...(genreContractSha256 ? { sourceContractSha256: genreContractSha256 } : {}),
     });
   }
 
@@ -467,11 +503,15 @@ export async function runPlan(args: PlanArgs): Promise<number> {
   let acceptanceOutcome: WriteOutcome;
   let contract: AcceptanceContract;
   if (args.force || !(await fileExists(paths.acceptance))) {
-    // The pack template is read ONLY on the templated path. `genrePack` is non-null whenever `promoted`
-    // is null (the guard above), so the non-null assertion is discharged there rather than assumed.
+    // Seed precedence: a promoted contract wins; then the registered pack's template; then the
+    // genre-neutral `_generic` fallback for a free-form genre. The pack template is read ONLY on the
+    // templated path — `promoted?.acceptance` short-circuits it entirely.
+    const acceptanceTemplatePath = genrePack
+      ? genrePack.acceptanceTemplatePath
+      : path.join(GENERIC_PACK_DIR, "acceptance.json");
     const template =
       promoted?.acceptance ??
-      (JSON.parse(await fs.readFile(genrePack!.acceptanceTemplatePath, "utf-8")) as AcceptanceContract);
+      (JSON.parse(await fs.readFile(acceptanceTemplatePath, "utf-8")) as AcceptanceContract);
     const seededGameName = args.name ?? (path.basename(args.root) || template.game);
     contract = { ...template, game: seededGameName };
     assertValidAcceptanceContract(contract); // fail fast if our seed is invalid
@@ -573,7 +613,7 @@ export async function runPlan(args: PlanArgs): Promise<number> {
     if (!gateOk || !design.pngSha256) {
       console.error(
         "[loombridge plan] NOT ready — choose an asset strategy after the Design Target is approved + frozen. " +
-          "Run `loombridge design set/approve`, then `loombridge plan --asset-mode <registry|generated|hybrid>`.",
+          "Run `loombridge target set/approve`, then `loombridge plan --asset-mode <registry|generated|hybrid>`.",
       );
       return 1;
     }
@@ -623,7 +663,7 @@ export async function runPlan(args: PlanArgs): Promise<number> {
           : "the approved Design Target has CHANGED since approval (frozen hash mismatch)";
       console.error(
         `[loombridge plan] NOT ready — ${reason}. ` +
-          "Establish/re-approve via `loombridge design set/approve` (see commands/loombridge/plan.md §3c), then re-run. " +
+          "Establish/re-approve via `loombridge target set/approve` (see commands/loombridge/plan.md §3c), then re-run. " +
           "(Use --allow-missing-design-target only for early scaffolding — `build` will still block.)",
       );
       return exitCodeForDesignReadiness(design);
@@ -636,7 +676,7 @@ export async function runPlan(args: PlanArgs): Promise<number> {
     }
     if (!gateOk) {
       console.error(
-        "[loombridge plan] next: establish the Design Target (annotated hero shot) in .loombridge/design/ via `loombridge design`, then re-run `loombridge plan`.",
+        "[loombridge plan] next: establish the Design Target (annotated hero shot) in .loombridge/design/ via `loombridge target`, then re-run `loombridge plan`.",
       );
       return 0;
     }
@@ -667,14 +707,19 @@ export async function runPlan(args: PlanArgs): Promise<number> {
     // deterministic slice DAG from the genre template. The human approval seam
     // has already happened at Design Target approval; do not require developers
     // to remember a second `--go` just to create SLICES.json.
-    // An unregistered (promoted) genre has no pack template to scaffold FROM — its SLICES.json is
-    // written at promotion time. Reaching here means that file was deleted, so the honest recovery is
-    // to re-promote the contract, not to scaffold some other genre's DAG.
-    if (!genrePack) {
+    // A PROMOTED project's SLICES.json is written at promotion time from its contract, so reaching
+    // here means that file was deleted. Falling back to the generic DAG would silently replace the
+    // contract's real, gap-annotated slices with a four-slice scaffold — a downgrade wearing the
+    // costume of a recovery. Refuse and point at the re-promotion instead.
+    //
+    // A FREE-FORM project (no promotion report) has no such contract to lose, so the generic DAG IS
+    // its roadmap and scaffolding it here is correct.
+    if (!genrePack && (await fileExists(paths.genrePromotion))) {
       console.error(
-        `[loombridge plan] NOT ready — genre "${genre}" has no registered slice template and ` +
+        `[loombridge plan] NOT ready — "${genre}" was planned from a genre contract and ` +
           `${rel(paths.slices)} is missing. Re-run with --genre-contract <file> --force to regenerate ` +
-          "the roadmap from the contract that planned this project.",
+          "the roadmap from that contract; scaffolding the generic template here would silently drop " +
+          "the contract's slices and its declared gaps.",
       );
       return 2;
     }

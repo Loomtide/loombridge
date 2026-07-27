@@ -77,7 +77,7 @@ $ loombridge plan --genre platformer-2d --name DemoGame --engine unity
 [loombridge plan] Roadmap: none yet (design phase).
 [loombridge plan] design target: missing
 [loombridge plan] asset manifest: missing
-[loombridge plan] NOT ready — no approved Design Target (annotated hero shot). Establish/re-approve via `loombridge design set/approve` (see commands/loombridge/plan.md §3c), then re-run. (Use --allow-missing-design-target only for early scaffolding — `build` will still block.)
+[loombridge plan] NOT ready — no approved Design Target (annotated hero shot). Establish/re-approve via `loombridge target set/approve` (see commands/loombridge/plan.md §3c), then re-run. (Use --allow-missing-design-target only for early scaffolding — `build` will still block.)
 ; exit 1
 
 $ loombridge doneness
