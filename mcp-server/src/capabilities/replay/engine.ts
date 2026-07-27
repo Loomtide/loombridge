@@ -6,7 +6,7 @@
  * ordering, first-divergence selection, and status/blocked logic live here, so
  * the whole contract is unit-testable against a `FakeDriver` with no live Unity.
  *
- * Design references (`Docs/FutureIdeas/ReplayVerification.md`):
+ * Design references:
  * - anchors-primary: a missed anchor IS the divergence; the run halts there.
  * - "no silent green": an undrivable target is `blocked` (with a reason), never a
  *   pass; the input-backend precondition and reset contract are gate-checked
