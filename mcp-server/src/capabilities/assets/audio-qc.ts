@@ -2,8 +2,8 @@
 /**
  * Deterministic technical audio QC for generated / curated SFX takes.
  *
- * This is the machine-checkable half of the Generated SFX Workflow
- * (Docs/Assets/GeneratedSfxWorkflow.md): it rejects technical DEFECTS — clipping,
+ * This is the machine-checkable half of the generated-SFX workflow: it rejects
+ * technical DEFECTS — clipping,
  * wrong duration, excessive silence, wrong format — but it never approves taste,
  * semantic fit, or mix beauty (those stay human/advisory per the deterministic
  * boundary). Every metric is derived by hand from the decoded PCM; nothing is

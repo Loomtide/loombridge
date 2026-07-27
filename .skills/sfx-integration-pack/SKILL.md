@@ -77,7 +77,7 @@ gameplay-true. Own each cue by class:
 - **enemy locomotion loops** should be **speed-gated** so footstep/servo loops belong to actual motion,
   not idle objects.
 
-Recipe canonical in `GeneratedSfxWorkflow.md` → "Top-Down Audio Rig". `[CANDIDATE: late-polish #1 + GeneratedSfxWorkflow — a single top-down dogfood run; a starting recipe, not yet validated across genres]`
+Recipe distilled from an internal audio-workflow writeup (not published) → "Top-Down Audio Rig". `[CANDIDATE: late-polish #1 + internal audio-workflow notes — a single top-down dogfood run; a starting recipe, not yet validated across genres]`
 
 ## How the T2 SFX gates consume the declaration
 
@@ -101,7 +101,7 @@ component/template is authored per build, the READ CONTRACT is fixed in `probe-c
 ### Stage 0 — Cue inventory
 - Extract player/enemy/world/UI/reward/failure/objective/ambience events from the core loop; mark each
   `required`, `optional`, or `silent-by-design`. Crude graybox tones are a valid EARLY deliverable — the
-  early hooks make later polish tractable. `[VALIDATED: sfx doc #7 + GeneratedSfxWorkflow "Graybox Audio"]`
+  early hooks make later polish tractable. `[VALIDATED: sfx doc #7 + internal audio-workflow notes, "Graybox Audio"]`
 - **Gate:** every core-loop action has a cue or an explicit `silent-by-design` reason.
 
 ### Stage 1 — Cue grammar (or adopt the genre cue map)
@@ -111,7 +111,7 @@ component/template is authored per build, the READ CONTRACT is fixed in `probe-c
 
 ### Stage 2 — Asset selection / generation
 - Prefer coherent curated packs; generate only game-specific-semantics cues. Record provenance + output
-  hashes; no secrets in logs/manifests (per `GeneratedSfxWorkflow.md`).
+  hashes; no secrets in logs/manifests.
 - **Gate:** provenance + hashes present; reject technically weak takes before import.
 
 ### Stage 3 — Technical QC
@@ -136,6 +136,6 @@ component/template is authored per build, the READ CONTRACT is fixed in `probe-c
 
 ## Boundaries
 - Use generic `unity_*` / `runtime_*` ops + the CLI; do not add game-specific bridge ops. `AudioClip`
-  object-reference round-trip has a known gap (`GeneratedSfxWorkflow.md`) — bind carefully and verify.
+  object-reference round-trip has a known gap — bind carefully and verify.
 - Do NOT promote the source dogfood project's exact clip names, prompt text, ElevenLabs provider choice, or specific
   loudness/centroid thresholds as canonical — gate on more genres.

@@ -214,7 +214,7 @@ export function buildMobileAuditReport(
         rationale:
           "Cap textures by what the gameplay camera can resolve, not by source-asset prestige. Keep 2048 only for " +
           "fullscreen/ground-scale surfaces when needed. Texture role is not determinable from measured data — " +
-          "verify against the role caps in Docs/Assets/GeneratedArtWorkflow.md before acting.",
+          "confirm this texture's role against your project's own caps before acting.",
       });
     } else if (maxDim === thresholds.textureCap && thresholds.textureCap >= 2048) {
       findings.push({

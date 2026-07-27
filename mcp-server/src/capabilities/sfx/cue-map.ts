@@ -1,6 +1,6 @@
 /**
  * Cue event-map schema — a GENRE-PACK-OWNED artifact (SFX dogfood backlog
- * High #5 "Cue event-map schema"; `Docs/Assets/GeneratedSfxWorkflow.md` "Cue Grammar").
+ * High #5 "Cue event-map schema"; internal audio-workflow notes, "Cue Grammar").
  *
  * The dogfood SFX pass taught that SFX is a SEMANTIC SYSTEM, not a file drop: the
  * durable lesson is that the per-cue grammar (event binding, layer roles, frequency
