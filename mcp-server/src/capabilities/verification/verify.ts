@@ -28,6 +28,7 @@ import {
 } from "../../domain/state.js";
 import { inspectContractPresence, noContractRefusal } from "../../domain/contract-presence.js";
 import { designPaths, designStatus } from "./design.js";
+import { feelPaths } from "../feel/feel-workspace.js";
 import { resolveFeelProfileModule } from "../genre/genre-registry.js";
 import { deriveGenreCoverage } from "../genre/genre-coverage.js";
 import { readGenrePromotionReport } from "../genre/promotion-report.js";
@@ -551,20 +552,6 @@ function sliceVerifiedFlipDecision(args: {
 /** A `--help`/parse outcome. `usageError` exits 2; a bare `help` exits 0. */
 type ParseHelp = { help: true; usageError?: boolean };
 
-function feelPaths(workspace: string): {
-  captureContract: string;
-  measurements: string;
-  captureArtifacts: string;
-  report: string;
-} {
-  const feelRoot = path.join(workspace, "feel");
-  return {
-    captureContract: path.join(feelRoot, "capture-contract.json"),
-    measurements: path.join(feelRoot, "profile-measurements.json"),
-    captureArtifacts: path.join(feelRoot, "capture-artifacts"),
-    report: path.join(feelRoot, "reports", "feel-profile.json"),
-  };
-}
 
 function parseArgs(args: string[]): VerifyArgs | ParseHelp {
   let root = process.cwd();
