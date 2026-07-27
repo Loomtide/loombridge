@@ -273,7 +273,7 @@ mirror-clobbering defect is fixed and confirmed on the real project.
 **Headless EditMode test result** (editor closed; run from repo root, Unity 6000.3.9f1):
 ```
 "/Applications/Unity/Hub/Editor/6000.3.9f1/Unity.app/Contents/MacOS/Unity" \
-  -batchmode -nographics -projectPath unity-projects/loombridge-dev \
+  -batchmode -nographics -projectPath unity-dev-project \
   -runTests -testPlatform EditMode \
   -testResults /tmp/lt-editmode.xml -logFile /tmp/lt-editmode.log
 ```

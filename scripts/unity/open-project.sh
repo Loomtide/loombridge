@@ -7,8 +7,9 @@ Usage: scripts/unity/open-project.sh <project-path-or-name> [options]
 
 Launch a Unity project and wait until the Loombridge MCP bridge can route to it.
 
-Project may be an absolute/relative Unity project path, or a repo-owned name under
-unity-projects/ (for example: shooter-3d-combat-dogfood).
+Project may be an absolute/relative Unity project path, or a repo-owned name — a demo
+under demos/ (for example: unity-platformer), or unity-dev-project (the EditMode/CI
+project).
 
 Options:
   --timeout <seconds>       Wait timeout for MCP routability (default: 180).
@@ -70,11 +71,16 @@ resolve_project() {
     return
   fi
 
-  candidate="$root/unity-projects/$value"
-  if [[ -d "$candidate" ]]; then
-    realpath_portable "$candidate"
-    return
-  fi
+  # A bare NAME resolves against the demo projects; the EditMode/CI project is addressed
+  # by its own top-level name. (Before the demo consolidation this searched unity-projects/,
+  # which no longer exists.)
+  for base in "$root/demos" "$root"; do
+    candidate="$base/$value"
+    if [[ -d "$candidate" ]]; then
+      realpath_portable "$candidate"
+      return
+    fi
+  done
 
   die "Unity project not found: $value"
 }

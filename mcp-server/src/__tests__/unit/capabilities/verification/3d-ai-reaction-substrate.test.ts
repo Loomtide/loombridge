@@ -10,7 +10,7 @@ import { deriveEnemyReactionLatencyMs, firstRisingEdge } from "../../../../capab
 import { REPO_ROOT as REPO_ROOT_SUPPORT } from "../../../_support/paths.js";
 
 const repoRoot = REPO_ROOT_SUPPORT;
-const bundleRoot = join(repoRoot, "demo-bundles/3d-ai-reaction");
+const bundleRoot = join(repoRoot, "demos/evidence-bundles/3d-ai-reaction");
 const RAW_NAME = "3d-ai-reaction-raw-2026-06-26.json";
 const DERIVED_NAME = "3d-ai-reaction-derived-2026-06-26.json";
 

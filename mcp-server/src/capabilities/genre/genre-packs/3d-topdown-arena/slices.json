@@ -36,7 +36,7 @@
             "deriveWallSlideTangentRatio (tangential speed preserved while pinned against a wall)"
           ],
           "liveProof": "deferred",
-          "note": "Calculators are implemented + covered by synthetic-trace unit tests; a committed LIVE top-down capture (demo-bundles/3d-topdown-*) is deferred, exactly as recorded in methodology-gaps.md. Measure-only; not gate-enforced bands. deriveCameraFollowDamping refuses on a static/non-following rig (never a fabricated value); an instant-snap camera honestly reports halfLifeMs=0."
+          "note": "Calculators are implemented + covered by synthetic-trace unit tests; a committed LIVE top-down capture (demos/evidence-bundles/3d-topdown-*) is deferred, exactly as recorded in methodology-gaps.md. Measure-only; not gate-enforced bands. deriveCameraFollowDamping refuses on a static/non-following rig (never a fabricated value); an instant-snap camera honestly reports halfLifeMs=0."
         }
       },
       "state": "pending"
@@ -100,7 +100,7 @@
             "deriveHitscanImpactLatencyMs (fire -> impact latency)"
           ],
           "liveProof": "impact-feedback-live-proven-in-3d-shooter-ledger; topdown-capture-deferred",
-          "note": "hitstop + true-3D shake are live-proven in the shared 3d impact-feedback fixture (demo-bundles/3d-impact-feedback/, causality-gated); a top-down-rig capture is deferred. Muzzle flash / hit-spark quality are gaps (design intent, not measured)."
+          "note": "hitstop + true-3D shake are live-proven in the shared 3d impact-feedback fixture (demos/evidence-bundles/3d-impact-feedback/, causality-gated); a top-down-rig capture is deferred. Muzzle flash / hit-spark quality are gaps (design intent, not measured)."
         }
       },
       "state": "pending"

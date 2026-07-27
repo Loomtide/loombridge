@@ -8,7 +8,7 @@ Attach to the Main Camera. Does **not** manage camera position/size — leave th
 
 ## Template
 
-Source (verbatim from `unity-projects/demo-platformer/Assets/Scripts/Camera2DSetup.cs`):
+Source (verbatim from `demos/unity-platformer/Assets/Scripts/Camera2DSetup.cs`):
 
 ```csharp
 using UnityEngine;

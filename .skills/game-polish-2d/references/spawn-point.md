@@ -7,7 +7,7 @@ wherever the character should begin.
 
 ## Templates
 
-Source (verbatim from `unity-projects/demo-platformer/Assets/Scripts/SpawnPoint.cs`):
+Source (verbatim from `demos/unity-platformer/Assets/Scripts/SpawnPoint.cs`):
 
 ```csharp
 using UnityEngine;
@@ -27,7 +27,7 @@ public class SpawnPoint : MonoBehaviour
 }
 ```
 
-Source (verbatim from `unity-projects/demo-platformer/Assets/Scripts/SnapToSpawnPoint.cs`):
+Source (verbatim from `demos/unity-platformer/Assets/Scripts/SnapToSpawnPoint.cs`):
 
 ```csharp
 using UnityEngine;

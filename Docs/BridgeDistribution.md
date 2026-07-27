@@ -5,11 +5,11 @@ package that lets an AI agent see, control, and verify a Unity project over MCP.
 
 This page documents how an **external** Unity project (one that is NOT a sibling
 checkout of this monorepo) installs the bridge. It exists because the in-repo
-fixtures under `unity-projects/*` reference the package by a **machine-local
+fixtures under `unity-dev-project/*` reference the package by a **machine-local
 relative path**:
 
 ```jsonc
-// unity-projects/<fixture>/Packages/manifest.json — DEV-ONLY, do not copy
+// unity-dev-project/<fixture>/Packages/manifest.json — DEV-ONLY, do not copy
 "com.loomtide.loombridge": "file:../../../packages/com.loomtide.loombridge"
 ```
 
@@ -150,7 +150,7 @@ Use this when the editor cannot reach git or a registry (air-gapped CI, etc.).
 | Public bridge / native UPM-git workflow | **B — git-URL** (pin a tag/SHA) |
 | Org with a published registry | **C — scoped registry** |
 | Air-gapped / vendored snapshot | **D — `install-bridge --embedded`** |
-| In-repo fixture under `unity-projects/*` | the `file:` ref (dev-only) |
+| In-repo fixture under `unity-dev-project/*` | the `file:` ref (dev-only) |
 
 For a brand-new project pre-wired with a resolvable bridge dependency plus a `.loombridge/` skeleton and
 `.mcp.json`, see the template at `templates/create-loombridge-game/`.

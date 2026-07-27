@@ -17,9 +17,9 @@
  * Usage:
  *   node dist/capabilities/verification/run-gates.js \
  *     --acceptance src/capabilities/verification/tiderunner.acceptance.json \
- *     --inputs ../demo/.artifacts/verify \
- *     --output ../demo/.artifacts/verify/build-verdict.json \
- *     [--vlm ../demo/.artifacts/verify/vlm-review.json]
+ *     --inputs ../demos/.artifacts/verify \
+ *     --output ../demos/.artifacts/verify/build-verdict.json \
+ *     [--vlm ../demos/.artifacts/verify/vlm-review.json]
  *
  * Mirrors the `scenario-cli.ts` CLI style (argv parse + run() returning an exit
  * code + a `--help` path + a main-module guard).

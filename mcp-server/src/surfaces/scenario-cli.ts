@@ -40,7 +40,7 @@ function printUsage(): void {
 
 function parseArgs(argv: string[]): CliArgs {
   let scenarioPath = "";
-  let outputPath = "../demo/.artifacts/scenario-report.json";
+  let outputPath = "../demos/.artifacts/scenario-report.json";
   let dryRun = false;
 
   for (let i = 2; i < argv.length; i += 1) {

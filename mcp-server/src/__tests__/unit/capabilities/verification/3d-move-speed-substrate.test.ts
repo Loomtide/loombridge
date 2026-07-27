@@ -12,7 +12,7 @@
  *
  * Both are dimension-agnostic, honest-or-omit, and re-derivable from a raw trajectory.
  * LIVE Unity capture evidence is DEFERRED: a real top-down move capture needs a built
- * locomotion scene (no committed demo-bundles/* transcript yet, like the hold-channel
+ * locomotion scene (no committed demos/evidence-bundles/* transcript yet, like the hold-channel
  * substrate). The calculators plus these synthetic-trajectory tests are the slice deliverable.
  */
 

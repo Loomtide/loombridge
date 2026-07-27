@@ -36,11 +36,13 @@ import { UnityClient } from "../../bridge/unity-client.js";
 import { scanEndpointDiscoveryRecords, TARGET_PROJECT_ENV_VAR } from "../../bridge/editor-discovery.js";
 import type { BridgeResponse } from "../../shared/types.js";
 import type { MinigameContract } from "./profiles/types.js";
+import { childStepStdio, forwardCapturedOutput } from "../../shared/child-stdio.js";
 
 /** Re-exec THIS CLI with the given argv, inheriting the terminal (so each shelled step looks hand-typed).
  *  `env` carries the resolved project pin so every step routes to the SAME editor (see runSceneAgnosticCheckCli). */
 function spawnCli(argv: string[], env: NodeJS.ProcessEnv): number {
-  const res = spawnSync(process.execPath, [process.argv[1], ...argv], { stdio: "inherit", env });
+  const res = spawnSync(process.execPath, [process.argv[1], ...argv], { ...childStepStdio(), env });
+  forwardCapturedOutput(res);
   if (res.error) {
     console.error(`[loombridge minigame] check: could not spawn step: ${res.error.message}`);
     return 1;

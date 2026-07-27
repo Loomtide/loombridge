@@ -11,13 +11,19 @@ Around these sit two supporting subsystems: the **replay verification** engine (
 
 - `packages/com.loomtide.loombridge/` — canonical Unity bridge UPM package (Editor, Runtime, Tests).
 - `mcp-server/` — TypeScript: the MCP stdio server, the op registry, **and** the `loombridge` CLI (`src/cli.ts`, `src/capabilities/`).
-- `unity-projects/loombridge-dev/` — package development + EditMode test project.
-- `unity-projects/demo-platformer/` — demo consumer project (local `file:` package reference).
+- `unity-dev-project/` — package development + EditMode test project. **Not a demo** — it is
+  what `.github/workflows/unity-editmode.yml` runs CI against, which is why it sits outside
+  `demos/`.
 - `asset-layer/` — curated registry packs, validation profiles, public catalog seed, fixtures, provenance. **Data, not code** — the asset *code* is `mcp-server/src/capabilities/assets/`.
 - `commands/loombridge/` — agent-facing slash-command prose (Claude; Codex wrappers are generator-emitted).
 - `.skills/` — the genre and craft skill packs (2D game build, feel/verify, UI polish, SFX, 3D art integration, session retro…). Shipped into a consumer project by `loombridge install-agent` alongside `commands/`.
 - `templates/create-loombridge-game/` — the starter project scaffold.
-- `demo-bundles/`, `demo/` — frozen evidence bundles and their `generate.mjs` reproducers; the substrate proofs referenced from the docs.
+- `demos/` — everything demonstrable, in one place:
+  - `unity-platformer/` — demo consumer project (local `file:` package reference).
+  - `evidence-bundles/` — frozen evidence bundles and their `generate.mjs` reproducers; the
+    substrate proofs referenced from the docs. Each reproducer re-derives its numbers through
+    the production calculators, so a bundle cannot drift from the code silently.
+  - `scenarios/`, `.artifacts/` — scenario inputs and the local asset-cache/preview artifacts.
 - `scripts/` — install/freeze (`loombridge-install-locally.sh`), bridge packaging (`loombridge-pack-bridge.sh`) + legacy embed (`loombridge-embed-bridge.sh`), build stamping, smoke runners, artifact sync.
 - `Docs/` — product docs: `Install.md` (new-machine setup) + `BridgeDistribution.md` (bridge install options), `Profiles/` (verify contracts + partner guides), `Assets/` (public hosted-catalog quickstart), `ThreatModel.md`, `UnityAutonomousLaunch.md`.
 

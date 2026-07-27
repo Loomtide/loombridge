@@ -5,7 +5,7 @@ Agents should not ask the user to open a repo-owned Unity project until the auto
 Use:
 
 ```bash
-scripts/unity/open-project.sh unity-projects/shooter-3d-combat-dogfood
+scripts/unity/open-project.sh unity-dev-project/shooter-3d-combat-dogfood
 ```
 
 or, for a repo-owned project name:

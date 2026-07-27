@@ -18,7 +18,7 @@
  * All three are dimension-agnostic (they count edges/levels/windows on sampled scalar series),
  * honest-or-refuse, MEASURE-ONLY, and re-derivable. LIVE Unity capture evidence is DEFERRED: a real
  * heat-ramp / auto-aim / sprint capture needs a built extraction-pressure scene (no committed
- * demo-bundles/* transcript yet, unlike the cover/wave substrates). The calculators plus these
+ * demos/evidence-bundles/* transcript yet, unlike the cover/wave substrates). The calculators plus these
  * synthetic-trace tests are the slice deliverable.
  */
 

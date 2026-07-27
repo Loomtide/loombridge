@@ -1,0 +1,59 @@
+{
+  "metric": "coverBlocksDamage",
+  "status": "pass",
+  "evidenceKind": "live-unity-capture",
+  "dimensionality": "3D",
+  "capturedAt": "2026-06-26T04:47:01.646Z",
+  "project": "shooter-3d-combat-dogfood (repo-owned 3D shooter fixture; unity-dev-project/shooter-3d-combat-dogfood, scene Assets/Scenes/Shooter3DCombatDogfood.unity)",
+  "rawCaptureSources": [
+    "demos/evidence-bundles/3d-cover-proof/3d-cover-covered-raw-2026-06-26.json",
+    "demos/evidence-bundles/3d-cover-proof/3d-cover-exposed-raw-2026-06-26.json"
+  ],
+  "fixture": {
+    "probeObject": "/CoverProbe",
+    "probeComponent": "Shooter3DCoverProbe",
+    "targetObject": "/CoverEnemy",
+    "coverObject": "/CoverProp",
+    "scene": "Assets/Scenes/Shooter3DCombatDogfood.unity",
+    "note": "A clean-room cover probe on an isolated lane (x=-4, clear of the main combat lane and the AI occluder) fires straight Physics.Raycast shots at a down-range CoverEnemy. A CoverProp collider sits between them. Each shot is on the line that WOULD hit the target: if the cover is in the way the ray's first hit is the cover (BlockedShotCount rises — a real block, distinct from a miss); otherwise it is the target (damage). V removes the cover (expose). Series copied verbatim from the raw bridge transcripts; not synthesized."
+  },
+  "covered": {
+    "measuredObject": "/CoverProbe",
+    "durationMs": 933.33,
+    "sampleCount": 57,
+    "incomingShots": 3,
+    "blockedShots": 3,
+    "lineOfSightEverClear": false,
+    "damage": 0,
+    "shotsBlockedEdgeMs": 116.67,
+    "damageEdgeMs": null,
+    "coverActiveAtStart": true,
+    "coverRemoved": false
+  },
+  "exposed": {
+    "measuredObject": "/CoverProbe",
+    "durationMs": 1050,
+    "sampleCount": 64,
+    "incomingShots": 3,
+    "blockedShots": 0,
+    "lineOfSightEverClear": true,
+    "damage": 3,
+    "shotsBlockedEdgeMs": null,
+    "damageEdgeMs": 250,
+    "coverActiveAtStart": true,
+    "coverRemoved": true
+  },
+  "proof": {
+    "note": "COVERED: shots fired, line of sight never clear, every shot blocked by the cover collider (BlockedShotCount == IncomingShotCount — not a miss), zero damage. EXPOSED: the SAME shots, cover removed, line of sight restored, no blocks, damage landed. So the obstacle causally blocks both LOS and damage, and removing it restores both. A miss-as-block, damage-through-cover, or false cover (exposed dealt no damage) would have refused the mint."
+  },
+  "derived": {
+    "metric": "coverBlocksDamage",
+    "value": true,
+    "calculator": "deriveCoverBlocksDamage",
+    "method": "covered (LOS blocked + every valid shot blocked by the cover collider + no damage) AND exposed (LOS restored + no blocks + damage) from a covered/exposed capture pair. Boolean proof; refuses miss-as-block, damage-through-cover, false cover, no shot, or no LOS probe. MEASURE-ONLY (a report row, never banded)."
+  },
+  "honesty": {
+    "measures": "that an obstacle blocks line of sight AND prevents damage for an otherwise-valid shot, and removing it restores both — a geometric, causal cover proof in the repo-owned 3D shooter fixture.",
+    "doesNotMeasure": "tactical planning, cover-point generation, navmesh safe areas, peeking, suppression, flanking, AI cover selection, or production cover-map quality — all explicit gaps. This is the narrow LOS/damage-prevention proof only, NOT a claim of 3D-shooter cover AI."
+  }
+}

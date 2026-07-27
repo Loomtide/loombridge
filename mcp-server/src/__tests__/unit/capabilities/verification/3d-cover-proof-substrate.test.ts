@@ -10,7 +10,7 @@ import { deriveCoverBlocksDamage, firstRisingEdge } from "../../../../capabiliti
 import { REPO_ROOT as REPO_ROOT_SUPPORT } from "../../../_support/paths.js";
 
 const repoRoot = REPO_ROOT_SUPPORT;
-const bundleRoot = join(repoRoot, "demo-bundles/3d-cover-proof");
+const bundleRoot = join(repoRoot, "demos/evidence-bundles/3d-cover-proof");
 const COVERED_RAW = "3d-cover-covered-raw-2026-06-26.json";
 const EXPOSED_RAW = "3d-cover-exposed-raw-2026-06-26.json";
 const DERIVED_NAME = "3d-cover-derived-2026-06-26.json";

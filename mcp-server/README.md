@@ -6,7 +6,7 @@ Loombridge is the agent layer for building and verifying Unity games, by [Loomti
 
 - **Node.js** >= 18
 - **Unity 6000.3 LTS (primary target)** with Loombridge package project(s):  
-  `unity-projects/loombridge-dev` for package validation and `unity-projects/demo-platformer` for demo playtesting  
+  `unity-dev-project` for package validation and `demos/unity-platformer` for demo playtesting  
   (Unity 2022.3 LTS is also supported as a compatibility target)
 - **Claude Code** (or any MCP-compatible client)
 
@@ -20,8 +20,8 @@ Loombridge is the agent layer for building and verifying Unity games, by [Loomti
 2. **Configure Claude Code** -- add the MCP server to your settings (see below).
 
 3. **Open your Unity project**:
-   - `unity-projects/loombridge-dev` for package/EditMode validation
-   - `unity-projects/demo-platformer` for demo playtesting
+   - `unity-dev-project` for package/EditMode validation
+   - `demos/unity-platformer` for demo playtesting
    The bridge starts a WebSocket server on ports 8200-8210.
 
 4. **Use Claude Code** -- Unity tools appear automatically. Ask it to create objects, write scripts, or build entire scenes.
@@ -151,21 +151,21 @@ Guardrail:
 
 ## Scenario Runner (Generic Orchestration)
 
-Run reusable scenario documents from `demo/scenarios/` to validate tool composition with deterministic preflight-first pass/fail/blocked reports. The scenario runner is built as `dist/surfaces/scenario-cli.js` (`npm run build`).
+Run reusable scenario documents from `demos/scenarios/` to validate tool composition with deterministic preflight-first pass/fail/blocked reports. The scenario runner is built as `dist/surfaces/scenario-cli.js` (`npm run build`).
 
 Dry-run validation of a scenario document (no Unity needed):
 
 ```bash
-node dist/surfaces/scenario-cli.js --scenario ../demo/scenarios/generic-smoke.json --dry-run --output ../demo/.artifacts/scenario-report.json
+node dist/surfaces/scenario-cli.js --scenario ../demos/scenarios/generic-smoke.json --dry-run --output ../demos/.artifacts/scenario-report.json
 ```
 
 Against a connected Unity editor, drop `--dry-run` to execute the steps with deterministic preflight gating:
 
 ```bash
-node dist/surfaces/scenario-cli.js --scenario ../demo/scenarios/generic-smoke.json --output ../demo/.artifacts/scenario-run.json
+node dist/surfaces/scenario-cli.js --scenario ../demos/scenarios/generic-smoke.json --output ../demos/.artifacts/scenario-run.json
 ```
 
-Available scenario documents live under `demo/scenarios/` (`generic-smoke.json`, `build-fresh-platformer.json`, and the `build-platformer-with-assets.template.json` asset-import template).
+Available scenario documents live under `demos/scenarios/` (`generic-smoke.json`, `build-fresh-platformer.json`, and the `build-platformer-with-assets.template.json` asset-import template).
 
 Report contract highlights:
 - `status`: `pass`, `fail`, or `blocked`
@@ -187,17 +187,17 @@ From `mcp-server/` (after `npm run build`):
 node dist/capabilities/assets/prepare-cli.js \
   --profile ../asset-layer/profiles/2d-platformer.json \
   --catalog ../asset-layer/catalog-fixtures/platformer-catalog.json \
-  --output ../demo/.artifacts/platformer-assets.json \
-  --cache ../demo/.artifacts/asset-cache
+  --output ../demos/.artifacts/platformer-assets.json \
+  --cache ../demos/.artifacts/asset-cache
 ```
 
 Generated outputs:
-- `../demo/.artifacts/platformer-assets.json`: report with `cachePath`, `cacheStatus`, `sha256` checksum, `unityPath`, `source`, `license`, provenance, provider diagnostics, validation status, and rejection diagnostics
-- `../demo/.artifacts/asset-cache/`: deterministic local asset cache
+- `../demos/.artifacts/platformer-assets.json`: report with `cachePath`, `cacheStatus`, `sha256` checksum, `unityPath`, `source`, `license`, provenance, provider diagnostics, validation status, and rejection diagnostics
+- `../demos/.artifacts/asset-cache/`: deterministic local asset cache
 
 The asset prepare CLI validates registry policy before selection. It rejects disallowed license values, source unverified entries, invalid checksum declarations or checksum mismatch, unsupported primitive/kind pairings, and audio metadata failures. Acquisition uses a provider adapter interface for local fixtures, HTTP downloads, and unconfigured generation providers; generation entries return `PROVIDER_NOT_CONFIGURED` until a real adapter is implemented and configured.
 
-Each accepted asset's report entry carries an `import.toolArguments` payload (`source_path` = the cached byte, `path` = the `Assets/Art/...` target). A build agent replays those through `unity_asset_create_sprite` over the MCP bridge with `unity-projects/demo-platformer` open; `demo/scenarios/build-platformer-with-assets.template.json` is the scenario template for that import step.
+Each accepted asset's report entry carries an `import.toolArguments` payload (`source_path` = the cached byte, `path` = the `Assets/Art/...` target). A build agent replays those through `unity_asset_create_sprite` over the MCP bridge with `demos/unity-platformer` open; `demos/scenarios/build-platformer-with-assets.template.json` is the scenario template for that import step.
 
 Boundary rule: registry/profile/scenario data can be genre-specific, but the MCP surface remains generic. Do not add `platformer.*` tools; compose `unity_*`, runtime, input, and screenshot steps instead.
 
@@ -217,8 +217,8 @@ as the product-owned verification signal; the `verified` tag is only a search/fa
 Local command support:
 
 ```bash
-node dist/capabilities/assets/browser-payload.js --profile ../asset-layer/profiles/2d-platformer.json --catalog ../asset-layer/catalog-fixtures/platformer-catalog.json --output ../demo/.artifacts/asset-browser-payload.json
-node dist/capabilities/assets/prepare-cli.js --profile ../asset-layer/profiles/2d-platformer.json --catalog ../asset-layer/catalog-fixtures/platformer-catalog.json --output ../demo/.artifacts/platformer-assets.json --cache ../demo/.artifacts/asset-cache
+node dist/capabilities/assets/browser-payload.js --profile ../asset-layer/profiles/2d-platformer.json --catalog ../asset-layer/catalog-fixtures/platformer-catalog.json --output ../demos/.artifacts/asset-browser-payload.json
+node dist/capabilities/assets/prepare-cli.js --profile ../asset-layer/profiles/2d-platformer.json --catalog ../asset-layer/catalog-fixtures/platformer-catalog.json --output ../demos/.artifacts/platformer-assets.json --cache ../demos/.artifacts/asset-cache
 node dist/capabilities/assets/assets.js registry-plan --catalog ../asset-layer/catalog-fixtures/platformer-catalog.json --profile ../asset-layer/profiles/2d-platformer.json
 node dist/capabilities/assets/assets.js registry-apply --catalog ../asset-layer/catalog-fixtures/platformer-catalog.json --profile ../asset-layer/profiles/2d-platformer.json --selections <json> --approved-at <iso>
 node dist/capabilities/assets/assets.js registry-apply --catalog-api <hosted-catalog-url> --profile ../asset-layer/profiles/2d-platformer.json --from-selection <web-selection.json> --approved-at <iso>
@@ -244,7 +244,7 @@ Implementation rules:
 ## Multi-Version Validation
 
 Core APIs stay game-agnostic across both supported editors. Validate on each by opening the target Unity
-project (`unity-projects/loombridge-dev` or `unity-projects/demo-platformer`) on `6000.3 LTS` (primary) or
+project (`unity-dev-project` or `demos/unity-platformer`) on `6000.3 LTS` (primary) or
 `2022.3 LTS` (compatibility) and running the baseline gate plus the connected smoke:
 
 ```bash
@@ -285,4 +285,4 @@ Connected blocker interpretation:
 - **Port conflicts**: the plugin scans ports 8200-8210. Ensure no other process is bound to those ports.
 - **Build errors**: Verify Node.js >= 18 with `node --version`.
 - **Compilation wait**: After creating/modifying scripts, use `unity_editor_wait_for` with `compiling: false` before attaching or testing.
-- **Asset layer prepare failures**: inspect `../demo/.artifacts/platformer-assets.json`; invalid license/provenance, unsupported format, oversized dimensions, and invalid `Assets/Art` paths are reported as rejection codes.
+- **Asset layer prepare failures**: inspect `../demos/.artifacts/platformer-assets.json`; invalid license/provenance, unsupported format, oversized dimensions, and invalid `Assets/Art` paths are reported as rejection codes.

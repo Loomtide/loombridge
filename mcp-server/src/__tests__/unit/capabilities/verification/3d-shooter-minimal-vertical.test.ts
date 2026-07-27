@@ -10,7 +10,7 @@ import { deriveFireIntervalMs, deriveInputToSpawnLatency, deriveTimeToKill } fro
 import { REPO_ROOT as REPO_ROOT_SUPPORT } from "../../../_support/paths.js";
 
 const repoRoot = REPO_ROOT_SUPPORT;
-const demoBundles = join(repoRoot, "demo-bundles");
+const demoBundles = join(repoRoot, "demos/evidence-bundles");
 const bundleRoot = join(demoBundles, "3d-shooter-minimal-vertical");
 const RAW_NAME = "vertical-run-raw-2026-06-26.json";
 const DERIVED_NAME = "vertical-run-derived-2026-06-26.json";

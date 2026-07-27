@@ -1,0 +1,118 @@
+{
+  "schemaVersion": "0.1.0",
+  "status": "measured",
+  "capturedAt": "2026-06-25T00:18:06+05:30",
+  "project": {
+    "name": "shooter-fire-dogfood",
+    "path": "unity-dev-project/shooter-fire-dogfood",
+    "unityVersion": "6000.3.9f1",
+    "scene": "Assets/Scenes/ShooterFireDogfood.unity"
+  },
+  "fixture": {
+    "player": "/Player",
+    "weapon": "/Player/Weapon",
+    "component": "DogfoodWeapon",
+    "counter": "FireCount",
+    "fireInput": "Space",
+    "configuredFireIntervalMs": 120
+  },
+  "inputSession": {
+    "backend": "InputSystem",
+    "sessionId": "shooter-fire-dogfood-space-fire"
+  },
+  "captureRequest": {
+    "command": "runtime.capture_input_motion",
+    "measure": { "scene": "ShooterFireDogfood", "path": "/Player" },
+    "phases": [{ "keys": ["Space"], "durationMs": 620 }],
+    "captureFps": 60,
+    "includeSamples": true,
+    "sampledFields": [
+      {
+        "id": "weapon-fire-count",
+        "locator": { "scene": "ShooterFireDogfood", "path": "/Player/Weapon" },
+        "type_name": "DogfoodWeapon",
+        "property_path": "FireCount"
+      }
+    ]
+  },
+  "rawCapture": {
+    "durationMs": 633.33,
+    "sampleCount": 39,
+    "projectFixedTimestepBeforeMeasurement": 0.02,
+    "measurementFixedTimestep": 0.02,
+    "phases": [
+      {
+        "index": 0,
+        "keys": ["Space"],
+        "requestedDurationMs": 620,
+        "sampleCount": 39,
+        "fixedTickStart": 1202,
+        "fixedTickEnd": 1234,
+        "actualFixedTicks": 32,
+        "deltaX": 0,
+        "deltaY": 0
+      }
+    ],
+    "fieldTimeline": [
+      {
+        "id": "weapon-fire-count",
+        "samples": [
+          { "tMs": 0, "value": 3 },
+          { "tMs": 16.67, "value": 4 },
+          { "tMs": 33.33, "value": 4 },
+          { "tMs": 50, "value": 4 },
+          { "tMs": 66.67, "value": 4 },
+          { "tMs": 83.33, "value": 4 },
+          { "tMs": 100, "value": 4 },
+          { "tMs": 116.67, "value": 4 },
+          { "tMs": 133.33, "value": 4 },
+          { "tMs": 150, "value": 5 },
+          { "tMs": 166.67, "value": 5 },
+          { "tMs": 183.33, "value": 5 },
+          { "tMs": 200, "value": 5 },
+          { "tMs": 216.67, "value": 5 },
+          { "tMs": 233.33, "value": 5 },
+          { "tMs": 250, "value": 5 },
+          { "tMs": 266.67, "value": 5 },
+          { "tMs": 283.33, "value": 6 },
+          { "tMs": 300, "value": 6 },
+          { "tMs": 316.67, "value": 6 },
+          { "tMs": 333.33, "value": 6 },
+          { "tMs": 350, "value": 6 },
+          { "tMs": 366.67, "value": 6 },
+          { "tMs": 383.33, "value": 6 },
+          { "tMs": 400, "value": 6 },
+          { "tMs": 416.67, "value": 7 },
+          { "tMs": 433.33, "value": 7 },
+          { "tMs": 450, "value": 7 },
+          { "tMs": 466.67, "value": 7 },
+          { "tMs": 483.33, "value": 7 },
+          { "tMs": 500, "value": 7 },
+          { "tMs": 516.67, "value": 7 },
+          { "tMs": 533.33, "value": 7 },
+          { "tMs": 550, "value": 8 },
+          { "tMs": 566.67, "value": 8 },
+          { "tMs": 583.33, "value": 8 },
+          { "tMs": 600, "value": 8 },
+          { "tMs": 616.67, "value": 8 },
+          { "tMs": 633.33, "value": 8 }
+        ]
+      }
+    ]
+  },
+  "derived": {
+    "metric": "fireIntervalMs",
+    "value": 133.3325,
+    "unit": "ms",
+    "coverageStatus": "measured",
+    "omitted": []
+  },
+  "console": {
+    "errorCount": 0
+  },
+  "notes": [
+    "This is a live Unity editor capture from runtime.capture_input_motion, not a hand-authored fixture sample.",
+    "The active phase reports the requested Space key, so the sync-only keyboard false-green guard is satisfied.",
+    "The first captured counter increment is excluded from interval averaging; the four observed intervals after it average to 133.3325ms."
+  ]
+}

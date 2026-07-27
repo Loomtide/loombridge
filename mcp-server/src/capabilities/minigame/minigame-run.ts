@@ -33,6 +33,7 @@ import {
 import { projectWorkspace as defaultWorkspace, normalizeWorkspaceId } from "../../domain/workspace-paths.js";
 import { nextStepLines } from "../../shared/cli-ui.js";
 import { isScenePath } from "./profiles/types.js";
+import { childStepStdio, forwardCapturedOutput } from "../../shared/child-stdio.js";
 import {
   resolveSetupConfig,
   scaffoldWorkspace,
@@ -148,10 +149,13 @@ export async function driveRun(deps: RunDeps, opts: { recordScene?: string } = {
   return 1;
 }
 
-/** Re-exec THIS CLI (same node + entry) with the given argv, inheriting the terminal. */
+/** Re-exec THIS CLI (same node + entry) with the given argv, streaming to the terminal.
+ *  Under `node --test` fd 1 is the runner's serialized channel, so we capture and re-emit
+ *  rather than handing that fd to the child — see shared/child-stdio.ts. */
 function spawnCli(argv: string[]): number {
   const entry = process.argv[1];
-  const res = spawnSync(process.execPath, [entry, ...argv], { stdio: "inherit" });
+  const res = spawnSync(process.execPath, [entry, ...argv], childStepStdio());
+  forwardCapturedOutput(res);
   if (res.error) {
     console.error(`[loombridge minigame] run: could not spawn step: ${res.error.message}`);
     return 1;

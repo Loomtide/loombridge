@@ -51,7 +51,7 @@ measured; the `3d-topdown-arena` framing profile validates against the productio
 
 But — exactly like the hold-channel, move-speed, extraction win/loss, and extraction-pressure
 pairs in the `3d-shooter` ledger — it is **NOT yet backed by a committed live capture**
-(`demo-bundles/3d-topdown-camera/*` does not exist). A real twin-stick follow capture (a player
+(`demos/evidence-bundles/3d-topdown-camera/*` does not exist). A real twin-stick follow capture (a player
 that strafes/dashes while the camera damps toward it and leads the aim vector) needs a built
 top-down scene with a paired player + camera trajectory capture. It is an honest measure-only
 proof over the documented paired `{x,y,z}` player/camera trajectory; **promote it to live-proven
@@ -85,7 +85,7 @@ the instantiated `.loombridge/SLICES.json`), so it survives instantiation and st
 
 **`liveProof` sub-field — do not launder implemented-but-not-live-captured as live-proven.** Each
 calculator/telemetry slice carries a `liveProof` note. In this SEED, **no calculator is backed by a
-committed live top-down capture** (`demo-bundles/3d-topdown-*` does not exist) — consistent with the
+committed live top-down capture** (`demos/evidence-bundles/3d-topdown-*` does not exist) — consistent with the
 HONESTY CAVEAT above. `deriveCoverBlocksDamage` / `deriveEnemyReactionLatencyMs` / `deriveHitstopMs`
 / `deriveScreenShakeMag` / `deriveWaveObjectiveComplete` are live-proven in the **3d-shooter**
 substrate ledger (over-shoulder rig), but their **top-down** capture is deferred.

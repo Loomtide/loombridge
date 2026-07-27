@@ -27,7 +27,7 @@ function readArtifact(relativeArtifactPath: string): unknown {
 
 function fixture(): ExperimentalBuildProof {
   return JSON.parse(
-    readFileSync(join(repoRoot, "demo-bundles/generic-build-follow-on/2d-shooter-experimental-run.json"), "utf8"),
+    readFileSync(join(repoRoot, "demos/evidence-bundles/generic-build-follow-on/2d-shooter-experimental-run.json"), "utf8"),
   ) as ExperimentalBuildProof;
 }
 
@@ -36,7 +36,7 @@ function promotedFixture(): ExperimentalBuildProof {
     readFileSync(
       join(
         repoRoot,
-        "demo-bundles/generic-build-follow-on/2d-shooter-promoted-vertical/2d-shooter-promoted-run.json",
+        "demos/evidence-bundles/generic-build-follow-on/2d-shooter-promoted-vertical/2d-shooter-promoted-run.json",
       ),
       "utf8",
     ),
@@ -71,7 +71,7 @@ test("promoted shooter vertical bundle validates from promoted artifacts and LIV
   assert.deepEqual(validated.slice.supportedGates, ["manifest", "console-clean"]);
   assert.equal(
     (validated as unknown as { promotion?: { generatedAcceptance?: string } }).promotion?.generatedAcceptance,
-    "demo-bundles/generic-build-follow-on/2d-shooter-promoted-vertical/acceptance.json",
+    "demos/evidence-bundles/generic-build-follow-on/2d-shooter-promoted-vertical/acceptance.json",
   );
   assert.deepEqual(
     validated.capture.metricEvidence?.map((row) => row.metric),
@@ -83,7 +83,7 @@ test("promoted shooter vertical bundle validates from promoted artifacts and LIV
   const ttkRow = validated.capture.metricEvidence?.find((row) => row.metric === "ttkMs");
   assert.equal(
     ttkRow?.artifact,
-    "demo-bundles/generic-build-follow-on/2d-shooter-promoted-vertical/ttk-shooter-combat-loop-2026-06-25.json",
+    "demos/evidence-bundles/generic-build-follow-on/2d-shooter-promoted-vertical/ttk-shooter-combat-loop-2026-06-25.json",
   );
 
   // The live artifact is a real Unity capture against the repo-owned shooter fixture recording a
@@ -137,7 +137,7 @@ test("promoted shooter vertical bundle validates from promoted artifacts and LIV
 
 test("promoted shooter vertical keeps the older TTK artifacts as marked-superseded fallback, not cited", () => {
   const canonical =
-    "demo-bundles/generic-build-follow-on/2d-shooter-promoted-vertical/ttk-shooter-combat-loop-2026-06-25.json";
+    "demos/evidence-bundles/generic-build-follow-on/2d-shooter-promoted-vertical/ttk-shooter-combat-loop-2026-06-25.json";
   const proof = promotedFixture();
   const ttkRow = proof.capture.metricEvidence?.find((row) => row.metric === "ttkMs");
   assert.ok(ttkRow && !ttkRow.artifact.includes("ttk-fixture-capture"), "proof must not cite the superseded fixture");
@@ -148,7 +148,7 @@ test("promoted shooter vertical keeps the older TTK artifacts as marked-supersed
 
   // The fixture-shaped artifact is superseded by the live shooter-combat-loop capture.
   const fixtureArtifact = readArtifact(
-    "demo-bundles/generic-build-follow-on/2d-shooter-promoted-vertical/ttk-fixture-capture-2026-06-25.json",
+    "demos/evidence-bundles/generic-build-follow-on/2d-shooter-promoted-vertical/ttk-fixture-capture-2026-06-25.json",
   ) as { superseded?: boolean; supersededBy?: string };
   assert.equal(fixtureArtifact.superseded, true);
   assert.equal(fixtureArtifact.supersededBy, canonical);
@@ -156,7 +156,7 @@ test("promoted shooter vertical keeps the older TTK artifacts as marked-supersed
   // The earlier GameHub host-of-convenience LIVE capture is now also superseded by the real
   // shooter-combat-loop capture (still a real capture, just no longer the cited evidence).
   const kidsArtifact = readArtifact(
-    "demo-bundles/generic-build-follow-on/2d-shooter-promoted-vertical/ttk-live-capture-2026-06-25.json",
+    "demos/evidence-bundles/generic-build-follow-on/2d-shooter-promoted-vertical/ttk-live-capture-2026-06-25.json",
   ) as { superseded?: boolean; supersededBy?: string; evidenceKind?: string };
   assert.equal(kidsArtifact.evidenceKind, "live-unity-capture");
   assert.equal(kidsArtifact.superseded, true);
@@ -167,7 +167,7 @@ test("promoted shooter vertical refuses a TTK row whose artifact does not record
   const proof = promotedFixture();
   const ttkRow = proof.capture.metricEvidence?.find((row) => row.metric === "ttkMs");
   assert.ok(ttkRow);
-  ttkRow.artifact = "demo-bundles/generic-build-follow-on/live-unity-fire-dogfood/live-fire-capture-2026-06-25.json";
+  ttkRow.artifact = "demos/evidence-bundles/generic-build-follow-on/live-unity-fire-dogfood/live-fire-capture-2026-06-25.json";
 
   const issueCodes = codes(proof);
   assert.ok(issueCodes.includes("METRIC_EVIDENCE_ARTIFACT_VALUE"));
@@ -176,9 +176,9 @@ test("promoted shooter vertical refuses a TTK row whose artifact does not record
 
 test("live shooter-combat-loop TTK artifact is bound to a raw capture transcript (provenance), not minted from constants", () => {
   const liveRel =
-    "demo-bundles/generic-build-follow-on/2d-shooter-promoted-vertical/ttk-shooter-combat-loop-2026-06-25.json";
+    "demos/evidence-bundles/generic-build-follow-on/2d-shooter-promoted-vertical/ttk-shooter-combat-loop-2026-06-25.json";
   const rawRel =
-    "demo-bundles/generic-build-follow-on/2d-shooter-promoted-vertical/ttk-shooter-combat-loop-raw-2026-06-25.json";
+    "demos/evidence-bundles/generic-build-follow-on/2d-shooter-promoted-vertical/ttk-shooter-combat-loop-raw-2026-06-25.json";
 
   const live = readArtifact(liveRel) as {
     rawCaptureSource?: string;
@@ -211,7 +211,7 @@ test("live shooter-combat-loop TTK artifact is bound to a raw capture transcript
 
 test("live shooter-combat-loop TTK: projectile-collision first-hit->death derives 600ms; missing hit or death is refused, never green", () => {
   const live = readArtifact(
-    "demo-bundles/generic-build-follow-on/2d-shooter-promoted-vertical/ttk-shooter-combat-loop-2026-06-25.json",
+    "demos/evidence-bundles/generic-build-follow-on/2d-shooter-promoted-vertical/ttk-shooter-combat-loop-2026-06-25.json",
   ) as { capture: { fieldTimeline: Array<{ id: string; samples: Array<{ tMs: number; value: number | boolean }> }> } };
   const projectileHit = live.capture.fieldTimeline.find((s) => s.id === "combat-projectile-hit-count")!;
   const damage = live.capture.fieldTimeline.find((s) => s.id === "combat-enemy-hit-count")!;
@@ -246,7 +246,7 @@ test("live shooter-combat-loop TTK: projectile-collision first-hit->death derive
 });
 
 const IMPACT_RAW_REL =
-  "demo-bundles/generic-build-follow-on/2d-shooter-promoted-vertical/impact-feedback-raw-2026-06-25.json";
+  "demos/evidence-bundles/generic-build-follow-on/2d-shooter-promoted-vertical/impact-feedback-raw-2026-06-25.json";
 
 test("live impact-feedback artifacts are bound to one raw capture transcript (provenance), repo-owned host", () => {
   const raw = readArtifact(IMPACT_RAW_REL) as {
@@ -262,10 +262,10 @@ test("live impact-feedback artifacts are bound to one raw capture transcript (pr
 
   // Both canonical artifacts name THIS raw transcript as their source and copy from it verbatim.
   const hitstop = readArtifact(
-    "demo-bundles/generic-build-follow-on/2d-shooter-promoted-vertical/hitstop-capture-2026-06-25.json",
+    "demos/evidence-bundles/generic-build-follow-on/2d-shooter-promoted-vertical/hitstop-capture-2026-06-25.json",
   ) as { rawCaptureSource?: string; capture: { fieldTimeline: Array<{ id: string }> } };
   const shake = readArtifact(
-    "demo-bundles/generic-build-follow-on/2d-shooter-promoted-vertical/screen-shake-capture-2026-06-25.json",
+    "demos/evidence-bundles/generic-build-follow-on/2d-shooter-promoted-vertical/screen-shake-capture-2026-06-25.json",
   ) as { rawCaptureSource?: string; capture: { cameraTrajectory: unknown } };
   assert.equal(hitstop.rawCaptureSource, IMPACT_RAW_REL);
   assert.equal(shake.rawCaptureSource, IMPACT_RAW_REL);
@@ -430,7 +430,7 @@ test("band-enforcement: a fabricated/unreadable artifact path cannot pass", () =
   const proof = fixture();
   // A safe-looking but non-existent artifact: the reader throws → no derived value → refused.
   proof.capture.metricEvidence![0]!.artifact =
-    "demo-bundles/generic-build-follow-on/does-not-exist.json";
+    "demos/evidence-bundles/generic-build-follow-on/does-not-exist.json";
 
   const issueCodes = codes(proof);
   assert.ok(issueCodes.includes("METRIC_EVIDENCE_ARTIFACT_VALUE"));
@@ -442,7 +442,7 @@ test("band-enforcement: an artifact that records a DIFFERENT metric cannot certi
   const proof = fixture();
   // Point the fireIntervalMs row at the projectile-speed artifact (derived.metric = projectileSpeed).
   proof.capture.metricEvidence![0]!.artifact =
-    "demo-bundles/generic-build-follow-on/live-unity-projectile-speed/live-projectile-speed-capture-2026-06-25.json";
+    "demos/evidence-bundles/generic-build-follow-on/live-unity-projectile-speed/live-projectile-speed-capture-2026-06-25.json";
 
   assert.ok(codes(proof).includes("METRIC_EVIDENCE_ARTIFACT_VALUE"));
 });

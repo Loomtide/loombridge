@@ -15,7 +15,7 @@ import {
 } from "../../../../capabilities/verification/feel-derive.js";
 
 const repoRoot = REPO_ROOT_SUPPORT;
-const bundleRoot = join(repoRoot, "demo-bundles/3d-impact-feedback");
+const bundleRoot = join(repoRoot, "demos/evidence-bundles/3d-impact-feedback");
 const RAW_NAME = "3d-impact-feedback-raw-2026-06-26.json";
 const HITSTOP_NAME = "3d-hitstop-derived-2026-06-26.json";
 const SCREEN_SHAKE_NAME = "3d-screen-shake-derived-2026-06-26.json";

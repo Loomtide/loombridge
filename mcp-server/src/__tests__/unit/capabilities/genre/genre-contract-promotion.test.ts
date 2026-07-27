@@ -21,7 +21,7 @@ const shooterContractPath = path.join(
 const promotedBundlePath = path.join(
   process.cwd(),
   "..",
-  "demo-bundles",
+  "demos/evidence-bundles",
   "generic-build-follow-on",
   "2d-shooter-promoted-vertical",
 );

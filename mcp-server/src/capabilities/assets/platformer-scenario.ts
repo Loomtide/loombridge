@@ -50,9 +50,9 @@ function printUsage(): void {
 function parseArgs(argv: string[]): CliArgs {
   const args: CliArgs = {
     help: false,
-    reportPath: "../demo/.artifacts/platformer-assets.json",
-    templatePath: "../demo/scenarios/build-platformer-with-assets.template.json",
-    outputPath: "../demo/scenarios/build-platformer-with-assets.json",
+    reportPath: "../demos/.artifacts/platformer-assets.json",
+    templatePath: "../demos/scenarios/build-platformer-with-assets.template.json",
+    outputPath: "../demos/scenarios/build-platformer-with-assets.json",
   };
 
   for (let i = 2; i < argv.length; i += 1) {

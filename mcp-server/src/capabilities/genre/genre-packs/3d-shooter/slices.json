@@ -51,7 +51,7 @@
       "title": "Combat feedback (muzzle / hit-spark / shake / hit-stop)",
       "dependsOn": ["enemy-target"],
       "skill": "shooter-3d-juice",
-      "feelIntent": "Fire and impact read clearly through muzzle flash, hit spark, shake, and hit-stop. The hit-stop WINDOW duration (hitstopMs) and the camera-DISPLACEMENT magnitude (true-3D screenShakeMag) are now measurable and live-proven in the repo-owned fixture (demo-bundles/3d-impact-feedback/, causality-gated); muzzle flash, hit-spark, and feedback QUALITY remain design intent / gaps, not measured green.",
+      "feelIntent": "Fire and impact read clearly through muzzle flash, hit spark, shake, and hit-stop. The hit-stop WINDOW duration (hitstopMs) and the camera-DISPLACEMENT magnitude (true-3D screenShakeMag) are now measurable and live-proven in the repo-owned fixture (demos/evidence-bundles/3d-impact-feedback/, causality-gated); muzzle flash, hit-spark, and feedback QUALITY remain design intent / gaps, not measured green.",
       "acceptance": {
         "gates": ["visual-artifacts", "console-clean"]
       },

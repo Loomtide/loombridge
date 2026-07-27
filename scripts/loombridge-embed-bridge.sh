@@ -13,7 +13,7 @@
 # made absent and the bridge still loads — the same isolation property the
 # frozen runtime gives the CLI (see scripts/loombridge-install-locally.sh).
 #
-# Dev-repo projects under unity-projects/* intentionally use a `file:` package
+# Dev-repo projects under unity-dev-project/* intentionally use a `file:` package
 # reference instead (see scripts/new-test-project.sh) so they track the source;
 # this script is for an OUTSIDE-repo consumer project.
 #

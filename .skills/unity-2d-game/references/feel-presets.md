@@ -64,7 +64,7 @@ the loop only corrects discretization residual.
 **Do NOT drive input + sampling over MCP frame-by-frame** — that is latency-bound and unreliable for
 fast/precise gameplay (the agent's thinking time between calls + network round-trips desync from the
 50–120Hz physics loop). Instead, measurement runs **in-process** via `FeelHarness.cs`
-(`unity-projects/demo-platformer/Assets/Scripts/FeelHarness.cs`), and the agent only configures it
+(`demos/unity-platformer/Assets/Scripts/FeelHarness.cs`), and the agent only configures it
 and reads the result. This is how every serious game-engine MCP project does verification.
 
 Why it's robust: the harness pins `Time.captureDeltaTime = Time.fixedDeltaTime` and

@@ -429,7 +429,7 @@ namespace UnityBridge.UI
             string sourceReference = string.IsNullOrEmpty(url) ? (string.IsNullOrEmpty(localPath) ? "unknown" : localPath) : url;
             string hash = Sha256Hex(entryId + ":" + sourceReference).Substring(0, 12);
             string fileName = SafeName(entryId) + "-" + SafeName(role) + "-" + hash + "." + format;
-            return Path.Combine(registryRoot, "demo/.artifacts/asset-cache/browser-previews", fileName);
+            return Path.Combine(registryRoot, "demos/.artifacts/asset-cache/browser-previews", fileName);
         }
 
         private static bool ChecksumMatches(string path, JObject file)
