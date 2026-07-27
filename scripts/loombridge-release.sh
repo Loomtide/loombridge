@@ -7,10 +7,11 @@
 # uploads the resulting loombridge-cli-<ver>.tgz PLUS scripts/install.sh as release
 # assets. Developers then install/update with a single command:
 #
-#   curl -fsSL https://get.loomtide.ai | sh
+#   gh release download -R Loomtide/loombridge -p install.sh && sh install.sh
 #
-# (get.loomtide.ai should serve scripts/install.sh — host it once on R2/Pages;
-# the script itself carries no secrets and always pulls the latest release.)
+# (get.loomtide.ai does NOT serve Loombridge today — it returns a different product's installer.
+# Once it does serve scripts/install.sh, that becomes a `curl | sh` one-liner; the script itself
+# carries no secrets and always pulls the latest release.)
 #
 # Usage: scripts/loombridge-release.sh [--tag vX.Y.Z] [--notes <str>] [--dry-run] [--deploy-installer]
 #   --tag                release tag (default: v<version> from mcp-server/package.json)
@@ -70,7 +71,12 @@ fi
 
 command -v gh >/dev/null 2>&1 || { echo "loombridge-release: the GitHub CLI (gh) is required to publish." >&2; exit 1; }
 
-notes="${NOTES:-Loombridge CLI ${TAG}. Install or update with one command: \`curl -fsSL https://get.loomtide.ai | sh\`}"
+# The default notes must NOT advertise get.loomtide.ai: that endpoint serves a DIFFERENT product's
+# installer (@loomtide/cli), so the previous default told every reader of a release page to install
+# something else. README.md and Docs/Install.md already said the endpoint was not live for
+# Loombridge; this default contradicted them, and would have repeated the error on every release cut
+# without --notes.
+notes="${NOTES:-Loombridge CLI ${TAG}. Install or update: \`gh release download ${TAG} -R ${REPO} -p install.sh && sh install.sh\`}"
 
 if gh release view "$TAG" -R "$REPO" >/dev/null 2>&1; then
   echo "==> Updating existing release $TAG"

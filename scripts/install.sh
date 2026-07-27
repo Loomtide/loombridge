@@ -1,9 +1,16 @@
 #!/bin/sh
 # Loombridge installer + updater — ONE command for install AND update.
 #
-#   curl -fsSL https://get.loomtide.ai | sh
-#   curl -fsSL https://get.loomtide.ai | sh -s -- --project /path/to/UnityProject
-#   curl -fsSL https://get.loomtide.ai | sh -s -- --project /path/to/UnityProject --with-agent
+#   sh install.sh
+#   sh install.sh --project /path/to/UnityProject
+#   sh install.sh --project /path/to/UnityProject --with-agent
+#
+# Get this script from the latest release:
+#   gh release download -R Loomtide/loombridge -p install.sh
+#
+# Do NOT pipe get.loomtide.ai into a shell to install Loombridge: that endpoint currently serves a
+# DIFFERENT product's installer (@loomtide/cli) and would install the wrong CLI. It becomes the
+# one-liner channel only once a Loombridge-specific endpoint is deployed.
 #
 # Re-run any time to pull the latest release — this script is idempotent, so the
 # same command installs on a fresh machine and updates on an existing one.

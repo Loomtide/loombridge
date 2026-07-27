@@ -11,8 +11,9 @@
  *
  * The CLI itself is NOT self-updated (self-running an install is brittle across
  * nvm/volta/asdf/corepack), so we detect-and-instruct: print the single
- * install-or-update command (`curl -fsSL https://get.loomtide.ai | sh`), which
- * is the same command a developer used to install and re-runs to update.
+ * install-or-update command, which is the same one a developer used to install
+ * and re-runs to update. See `printCliSelfUpdateHint` for why that command is
+ * the release's `install.sh` and not a get.loomtide.ai one-liner.
  *
  * Exit codes: 0 up-to-date/updated + healthy · 1 update or health problem ·
  * 2 usage/precondition (e.g. bridge was never installed).
@@ -96,16 +97,40 @@ function printUsage(): void {
 }
 
 /**
+ * Where releases (and therefore `install.sh`) are published. Mirrors the `LOOMBRIDGE_REPO` default
+ * in `scripts/install.sh` and `scripts/loombridge-release.sh`; `release-asset-contract.test.ts`
+ * keeps the three in agreement.
+ */
+const RELEASE_REPO = process.env.LOOMBRIDGE_REPO || "Loomtide/loombridge";
+
+/**
  * Detect-and-instruct: never self-run an install (brittle across node version
- * managers). Print the SINGLE install-or-update command — the same one used to
- * install; re-running it pulls the latest release. `--version` maps to the
- * installer's `LOOMBRIDGE_VERSION` pin; `--channel` is advisory only.
+ * managers). Print the install-or-update command — the same one used to install;
+ * re-running it pulls the latest release. `--version` maps to the installer's
+ * `LOOMBRIDGE_VERSION` pin; `--channel` is advisory only.
+ *
+ * IT MUST NOT ADVERTISE `get.loomtide.ai` BY DEFAULT. That endpoint does not serve Loombridge: it
+ * currently returns the installer for a DIFFERENT product (`@loomtide/cli`), so the old default here
+ * told every user running `loombridge update` to install something else entirely. Confirmed by
+ * running it. `README.md` and `Docs/Install.md` already carried that warning; this code contradicted
+ * them.
+ *
+ * The honest default is the channel that actually works today: `install.sh`, published as an asset
+ * on each release. `LOOMBRIDGE_INSTALL_URL` stays as the override, so the one-liner returns as the
+ * default the moment a Loombridge-specific endpoint is deployed, without another code change.
  */
 function printCliSelfUpdateHint(_channel?: string, version?: string): void {
-  const url = process.env.LOOMBRIDGE_INSTALL_URL || "https://get.loomtide.ai";
   const prefix = version ? `LOOMBRIDGE_VERSION=${version} ` : "";
-  console.log(`  note: to update the CLI itself, run:  ${prefix}curl -fsSL ${url} | sh`);
-  console.log(`        (same command you installed with; needs 'gh auth login' or LOOMBRIDGE_TOKEN)`);
+  const url = process.env.LOOMBRIDGE_INSTALL_URL;
+  if (url) {
+    console.log(`  note: to update the CLI itself, run:  ${prefix}curl -fsSL ${url} | sh`);
+  } else {
+    console.log("  note: to update the CLI itself, download install.sh from the latest release and run it:");
+    console.log(
+      `        ${prefix}gh release download -R ${RELEASE_REPO} -p install.sh && sh install.sh`,
+    );
+  }
+  console.log(`        (needs 'gh auth login' or LOOMBRIDGE_TOKEN)`);
 }
 
 export async function run(args: string[]): Promise<number> {
