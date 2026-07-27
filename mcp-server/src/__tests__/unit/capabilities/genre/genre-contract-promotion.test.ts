@@ -56,7 +56,16 @@ test("promoteGenreContract: promotes the 2d-shooter contract into valid acceptan
     slices.slices.map((slice) => slice.id),
     contract.sliceDag.coreVertical.map((slice) => slice.id),
   );
-  assert.equal(slices.slices.find((slice) => slice.id === "weapon")?.skill, "genre-2d-shooter-weapon");
+  // No skill binding when nothing supplies one. GenreContract has no `skill` field and no pack
+  // template was passed here, so the old `genre-2d-shooter-weapon` fallback could only ever name a
+  // skill that does not exist — and `plan` printed it to the agent as the skill to build with.
+  // Omitting is the honest answer; a registered pack template still contributes its own binding
+  // (asserted in loombridge-plan.test.ts, where the 2d-shooter template IS supplied).
+  assert.equal(slices.slices.find((slice) => slice.id === "weapon")?.skill, undefined);
+  assert.ok(
+    slices.slices.every((slice) => !("skill" in slice)),
+    "a template-less promotion must not invent bindings for any slice",
+  );
   assert.match(slices.slices.find((slice) => slice.id === "weapon")?.feelIntent ?? "", /spawn-aware-capture/);
 
   assert.deepEqual(report.deferredSlices, ["weapon-roster", "progression"]);

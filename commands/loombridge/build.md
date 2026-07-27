@@ -189,9 +189,12 @@ hero shot (flat bg + flat level + fruit-in-a-row) and the independent review lat
 it — now `doneness` REFUSES that build (§7), so build it right the first time.
 
 Build toward **both** halves of the target: the `ACCEPTANCE.json` contract and the frozen
-hero shot in `.loombridge/design/`. Use the genre pack's skills and the generic `unity_*`
-MCP ops. **One Unity editor, one project — work sequentially** (§3b: no parallel agents on
-the same scene).
+hero shot in `.loombridge/design/`. Use the slice's bound skill plus the generic `unity_*`
+MCP ops. A slice's `skill` is **optional**: where no shipped skill pack covers it, `plan`
+prints `skill: (none ships for this slice — build with the generic \`unity_*\` MCP ops)`.
+That is a real answer, not a missing one — build from the contract and the hero shot, and do
+not go hunting for a skill by guessing its name. **One Unity editor, one project — work
+sequentially** (§3b: no parallel agents on the same scene).
 
 **`unity_ops_batch` is the DEFAULT for multi-object construction — not an optional speed-up
 (plan §P1.2).** Whenever you are creating/placing/wiring more than ~2 objects, assemble the

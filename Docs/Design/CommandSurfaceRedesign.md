@@ -1,6 +1,7 @@
 # RFC: Command Surface Redesign
 
-**Status:** W1 IMPLEMENTED. W2 to W4 remain PROPOSED.
+**Status:** W1 IMPLEMENTED. **W2 SUPERSEDED** by §12 (its `design` stage already exists; its
+skill-binding half was a live defect and is now fixed). W3 to W4 remain PROPOSED.
 **Date:** 2026-07-27. Measurements in the appendix were taken against `main` at `4981142`.
 
 **Decisions, resolved 2026-07-27.** D1: yes, an ungraded game may reach `doneness`, with coverage
@@ -145,6 +146,18 @@ that currently overload the codebase.
 
 ## 5. The `design` stage
 
+> **SUPERSEDED — see §12.** Everything this section asks for already exists under other names. The
+> interrogation front-end is the `genre-pack-authoring` skill; its machine artifact is the
+> GenreContract, gated by `validateGenreContract`; it terminates in deterministic state via
+> `plan --genre-contract`; `plan --brief` covers the already-has-a-spec path; and GAME_SPEC.md is
+> the human-readable doc. §5.3's proposed `design.json` fields map almost one-to-one onto
+> GenreContract fields 0 to 11. Building a second interview and a second machine artifact would put
+> two sources of truth behind the same facts, which is the confusion §4 objects to. `.loombridge/design/`
+> also already holds the hero-shot artifacts, so `design.json` would collide there too.
+>
+> The one genuinely-missing piece, §5.4's skill bindings, turned out to be not missing but BROKEN.
+> That is what shipped instead.
+
 ### 5.1 Why it earns a command
 
 The value is the questions a developer skips: core loop, the single verb, failure state,
@@ -180,8 +193,12 @@ Once commands are generic and skills carry the knowledge, **skill selection beco
 problem.** Fourteen skills ship today and the number grows. If the agent picks by vibes each
 session, the result is inconsistency, which is precisely what Loombridge exists to eliminate.
 
-Binding skills in `design.json` makes injection auditable and reproducible: `build` loads what the
-design declared, and a reviewer can see what knowledge was in scope.
+> **Correction.** This section is right about the stakes and wrong about the location. Bindings do
+> not need a new home in `design.json` — they already exist, per slice, as `SliceEntry.skill`, and
+> `plan` already prints the next slice's binding to the agent. What they lacked was a guard, and
+> without one 25 of 29 shipped bindings had drifted to names that exist nowhere. **The two numbers
+> in the paragraph above are also not comparable:** 14 skills exist in `.skills/`, but a consumer
+> project receives only the 6 in `CONSUMER_SKILLS`. See §12.
 
 ## 6. What transfers from AgentsAtlas, and what does not
 
@@ -232,7 +249,7 @@ conversation, not a stage.
 | wave | work | gate |
 |---|---|---|
 | **W1** ✅ | Coverage split in the genre registry: three states, `genreCoverage` stamped on the verdict, gap list mandatory and non-empty. Register `3d-topdown-arena`. | DONE. See §11. |
-| **W2** | `design` command plus `design.json` schema plus skill bindings. Rename the hero-shot verb to `target`. | W1 merged. |
+| **W2** ⊘ | SUPERSEDED. The `design` stage already exists (§5 note); the skill-binding half was a live defect, fixed in §12. The `design` -> `target` rename is deferred to its own slice. | See §12. |
 | **W3** | Retarget `plan` to consume `design.json`; borrow the AgentsAtlas task structure; emit polish tasks. | W2 merged. Keep the genre-template path per D2. |
 | **W4** | Restructure `build` around implement/capture/observe/tune with skills injected from the design binding. Retire `ask` and `e2e`. | W3 merged. |
 
@@ -342,3 +359,92 @@ per genre, so a fourth registration would have had no path check at all. It now 
 `knownGenreIds()` and runs each template through the validator that consumes it, since a path that
 exists but does not validate fails at runtime rather than in CI. LITMUS: point any registration's
 `sliceTemplatePath` at its own `acceptance.json` and the test fails; an existsSync-only check passes.
+
+## 12. W2 reshaped: skill bindings made honest
+
+W2 was planned as "a `design` command, a `design.json`, and skill bindings". Exploration found the
+first two already built (§5 note) and the third not missing but broken, so what shipped is the third
+alone.
+
+**The measurement.** `SliceEntry.skill` is "which skill pack builds this slice". `plan` prints it to
+the agent as the instruction for the next slice, and `build.md` told the agent to use it. Checked
+against `CONSUMER_SKILLS` in `scripts/agent-surface-lib.mjs`, the declared list of the 6 skills a
+consumer project actually receives:
+
+| pack | dangling | of |
+|---|---|---|
+| `platformer-2d` | 0 | 4 |
+| `2d-shooter` | 7 | 7 |
+| `3d-shooter` | 7 | 7 |
+| `3d-topdown-arena` | 11 | 11 |
+
+25 of 29. `shooter-weapon`, `topdown-arena-loot-loop` and the rest were a naming scheme nobody ever
+authored. `platformer-2d` was the only pack binding real skills, which is why the happy path never
+surfaced it. `promote.ts` compounded it: with no `skill` field on a GenreContract's `SliceNode`, it
+minted `genre-<genreId>-<sliceId>`, so **every** promoted contract emitted bindings dangling by
+construction.
+
+**What shipped.**
+
+- `skill` is now OPTIONAL. "No shipped skill pack covers this slice" is a true statement and must be
+  expressible; naming a fiction is strictly worse than naming nothing, because the agent goes
+  looking. Present-but-empty is still refused, so honest cannot decay into blank.
+- 7 bindings re-pointed, 18 omitted, **0 invented**. `2d-shooter` is a 2D game, so the two general
+  2D skills that already serve the platformer pack apply to it (`unity-2d-game` for construction,
+  `game-polish-2d` for feedback/HUD/end-state). Every shipped consumer skill is 2D, so the two 3D
+  packs omit. Inventing 25 skills to make the table look full would have been the dishonest fix.
+- `promote.ts` omits rather than mints. The frozen evidence bundle at
+  `demos/evidence-bundles/generic-build-follow-on/2d-shooter-promoted-vertical/` was regenerated
+  through its own `generate.mjs`; the diff is exactly the 7 fictions and nothing else, which is the
+  proof that the promotion compiler changed in only this respect.
+- `plan` prints an actionable line for an unbound slice instead of `undefined`.
+
+**The guard**, `__tests__/unit/repo/slice-skill-bindings.test.ts`, walks `knownGenreIds()` so a newly
+registered genre is covered automatically, and reads `CONSUMER_SKILLS` by importing
+`agent-surface-lib.mjs` rather than listing `mcp-server/agent-surface/skills/` — that directory is
+generated and git-ignored, so a guard reading it would pass vacuously on any tree where the payload
+has not been built, including a fresh CI checkout. It was written FIRST and observed failing with all
+25 names before anything was fixed.
+
+**Where the closed set is NOT enforced:** the runtime validator in `slices.ts`. A consumer's own
+SLICES.json may name a skill they wrote. Membership is a claim about our shipped templates, so it
+lives in a repo test, not in a gate consumer projects run.
+
+**Three tests pinned the old behavior** and were rewritten rather than deleted: the promotion test
+asserting the synthetic `genre-2d-shooter-weapon`, the plan test asserting `shooter-weapon`, and a
+validator test that happened to use `skill` as its missing-required-field example (moved to
+`feelIntent`, which is still required, so the rule stayed covered).
+
+### 12.1 Adversarial review of §12
+
+Three findings against the change itself, all reproduced before being fixed.
+
+**The LITMUS was defusable — the worst kind of guard.** The first cut had the LITMUS re-implement the
+`shipped.has(...)` membership test inline against a fixture, instead of calling the scan the real
+check runs. Replacing the real scan's body with `if (false)` left BOTH tests green: the entire guard
+could be deleted in effect without turning CI red. Verified by doing exactly that. This is the shape
+CLAUDE.md already warns about for `layering.test.ts`, where a bulk rewriter once silently defused a
+LITMUS. Fixed by extracting one `scanBindings()` that the check and the LITMUS both call, so
+neutering it now fails the LITMUS — re-verified by re-injecting the same defusal. A third test
+asserts the scan inspects at least 10 live bindings, closing the other direction: a guard that passes
+because every template lost its `skill` is equally worthless.
+
+**`loombridge ask` leaked the literal string "undefined".** `plan`'s next-slice line was fixed, but
+`ask.ts` interpolated `${s.skill}` raw, so an unbound slice rendered `Skill: undefined` on an
+equally agent-facing surface. Two renderings of one optional field, one of them fixed. Collapsed onto
+a single exported `renderSliceSkill()` in `slices.ts`, the module that owns the field.
+
+**`slices.schema.json` is enforced by nothing.** No runtime code loads it; the hand-rolled validator
+in `slices.ts` is the real gate, so the two can silently disagree and a reader trusting the schema
+would be wrong. This change edited both sides, and nothing connected the edits. Added a drift test
+that reads the schema's `required` list and asserts the validator actually refuses each field when
+missing. LITMUS-verified by re-adding `skill` to the schema's `required` alone, which fails it.
+
+**Checked and found sound:** the 2d-shooter re-point. `unity-2d-game` and `game-polish-2d` both carry
+platformer-specific SECTIONS, but scoped ones ("When building platformer movement:", "For a
+platformer `player-feel` slice:"); the surrounding content is generic 2D construction and polish, and
+`game-polish-2d`'s own description says "reusable ... for 2D games". The slices re-pointed to
+`game-polish-2d` (feedback, hud, end-state) avoid its platformer-flavoured `player-feel` material.
+Residual, stated rather than hidden: a shooter `controller` slice pointed at `unity-2d-game` will
+find a platformer-movement section that does not apply to it. That is a real but much smaller gap
+than the fiction it replaced, and closing it properly means authoring shooter-specific skills.

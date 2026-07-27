@@ -19,6 +19,8 @@ import {
   type SlicePlan,
 } from "../../../../capabilities/verification/slices.js";
 import { loombridgePaths } from "../../../../domain/state.js";
+// Depth-independent: never count `..` to find a root (CLAUDE.md).
+import { PKG_ROOT as REPO_PKG_ROOT } from "../../../_support/paths.js";
 
 // The shipped platformer template, read from the source tree. `test:unit` runs
 // under npm with cwd = the mcp-server package dir, so this anchors at the JSON
@@ -82,9 +84,65 @@ test("assertValidSlicePlan — rejects duplicate ids", () => {
 });
 
 test("assertValidSlicePlan — rejects a missing required field", () => {
+  // Was asserted on `skill`, which is now OPTIONAL (see the next test). `feelIntent` is still
+  // required, so the missing-required-field rule is still covered — the rule did not go away, only
+  // the field this test happened to use.
   const plan = smallPlan() as unknown as { slices: Array<Record<string, unknown>> };
-  delete plan.slices[0]!.skill;
-  assert.throws(() => assertValidSlicePlan(plan), /skill/);
+  delete plan.slices[0]!.feelIntent;
+  assert.throws(() => assertValidSlicePlan(plan), /feelIntent/);
+});
+
+test("slices.schema.json `required` agrees with what the validator actually enforces", async () => {
+  // The schema is DOCUMENTATION — nothing loads it at runtime, and the hand-rolled validator in
+  // slices.ts is the real gate. So the two can silently disagree, and a reader trusting the schema
+  // would be wrong. This binds them: every field the schema calls required must actually be refused
+  // when missing.
+  //
+  // It is the check that would have caught this change if only ONE side had been edited: `skill` was
+  // dropped from `required` here and made present-only in the validator, and nothing else connected
+  // those two edits.
+  const schema = JSON.parse(
+    await fs.readFile(path.join(REPO_PKG_ROOT, "src/domain/schemas/slices.schema.json"), "utf-8"),
+  ) as { $defs: { slice: { required: string[] } } };
+
+  const required = schema.$defs.slice.required;
+  assert.ok(required.length > 0, "the slice schema must declare required fields");
+  assert.ok(!required.includes("skill"), "`skill` is optional — a slice with no shipped pack omits it");
+
+  for (const field of required) {
+    const plan = smallPlan() as unknown as { slices: Array<Record<string, unknown>> };
+    delete plan.slices[0]![field];
+    assert.throws(
+      () => assertValidSlicePlan(plan),
+      new RegExp(field),
+      `schema calls "${field}" required, but the validator accepts a slice without it`,
+    );
+  }
+});
+
+test("assertValidSlicePlan — `skill` is optional, but a present-but-blank one is refused", () => {
+  // "No shipped skill pack covers this slice" is a REAL answer: 18 slices across the two 3D packs
+  // are in exactly that position, and the alternative was naming skills that exist nowhere, which
+  // `plan` then printed to the agent as the thing to build with.
+  const omitted = smallPlan() as unknown as { slices: Array<Record<string, unknown>> };
+  delete omitted.slices[0]!.skill;
+  assert.doesNotThrow(() => assertValidSlicePlan(omitted));
+
+  // But `""` is not "no binding" — it reads as a binding while naming nothing, which is the same
+  // failure in a different costume. Refuse it, so "honest" can never decay into "blank".
+  const blank = smallPlan() as unknown as { slices: Array<Record<string, unknown>> };
+  blank.slices[0]!.skill = "";
+  assert.throws(() => assertValidSlicePlan(blank), /skill/);
+});
+
+test("instantiateSlicePlan — an absent skill stays absent (no `undefined` key)", () => {
+  // A plain `skill: slice.skill` copy would put a present-but-undefined key on every unbound slice:
+  // JSON.stringify drops it on the way to disk, but every in-memory reader still sees the key, so
+  // "is this slice bound?" would answer differently depending on who asked.
+  const template = smallPlan() as unknown as { slices: Array<Record<string, unknown>> };
+  delete template.slices[0]!.skill;
+  const instantiated = instantiateSlicePlan(assertValidSlicePlan(template));
+  assert.equal("skill" in instantiated.slices[0]!, false);
 });
 
 test("assertValidSlicePlan — rejects a non-object document", () => {

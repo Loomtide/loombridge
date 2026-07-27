@@ -2,7 +2,7 @@ import path from "node:path";
 
 import { designStatus } from "./design.js";
 import { loombridgePaths, readState } from "../../domain/state.js";
-import { readSlicePlan } from "./slices.js";
+import { readSlicePlan, renderSliceSkill } from "./slices.js";
 import { computeStatusModel, developerNextAction, type LoombridgeStatusModel } from "./status-model.js";
 
 export interface AskArgs {
@@ -51,7 +51,7 @@ function currentSliceDetails(model: LoombridgeStatusModel): string {
   if (!model.currentSlice) return currentSliceSummary(model);
   const s = model.currentSlice;
   const deps = s.dependsOn.length ? s.dependsOn.join(", ") : "none";
-  return `${s.id} (${s.state}) — ${s.title}. Skill: ${s.skill}. Gates: ${s.acceptance.gates.join(", ")}. Dependencies: ${deps}.`;
+  return `${s.id} (${s.state}) — ${s.title}. Skill: ${renderSliceSkill(s.skill)}. Gates: ${s.acceptance.gates.join(", ")}. Dependencies: ${deps}.`;
 }
 
 function nextLine(model: LoombridgeStatusModel): string {

@@ -207,7 +207,10 @@ test("runPlan — --genre-contract promotes acceptance, slices, and report", asy
     assert.equal(acceptance.feel.extra?.fireIntervalMs, undefined, "target bands stay report-only");
     assert.equal(slices.genre, "2d-shooter");
     const weaponSlice = slices.slices.find((slice: { id?: string }) => slice.id === "weapon");
-    assert.equal(weaponSlice?.skill, "shooter-weapon");
+    // The REGISTERED 2d-shooter pack template supplies the binding, and it names a skill consumers
+    // actually receive. It used to name `shooter-weapon`, which ships nowhere; the repo guard
+    // `slice-skill-bindings.test.ts` is what keeps it resolvable.
+    assert.equal(weaponSlice?.skill, "unity-2d-game");
     assert.ok(weaponSlice?.acceptance.gates.includes("visual-artifacts"));
     assert.equal(report.sourceGenreId, "2d-shooter");
     assert.ok(report.measurability.some((row: { target?: string; targetBand?: { min?: number } }) => row.target === "fireIntervalMs" && row.targetBand?.min === 90));

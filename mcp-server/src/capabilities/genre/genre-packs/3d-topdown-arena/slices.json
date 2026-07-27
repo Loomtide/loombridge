@@ -6,7 +6,6 @@
       "id": "arena",
       "title": "Frame the top-down arena (high-angle camera, bounds, visible-ground extent)",
       "dependsOn": [],
-      "skill": "topdown-arena-design",
       "feelIntent": "Establish the bounded top-down / high-angle arena frame (orthographic-or-high-angle rig, pitch 55-90 down) so every later slice composes inside it. The play space must read TOP-DOWN, not over-shoulder. The visible ground-plane width is machine-checked so a character-as-a-speck over-wide frame (the dogfood ~54m miss) cannot pass unnoticed.",
       "acceptance": {
         "gates": ["framing", "console-clean"],
@@ -23,7 +22,6 @@
       "id": "controller",
       "title": "Twin-stick controller + top-down camera follow / look-ahead",
       "dependsOn": ["arena"],
-      "skill": "topdown-arena-controller-camera",
       "feelIntent": "Twin-stick movement plus the top-down follow camera. Movement and camera are ONE slice because the camera DAMPS toward the player and LEADS the aim/movement vector (the twin-stick look-ahead the dogfood spec named: half-life 0.10-0.18s, look-ahead 2-4m). Collide-and-slide along walls preserves tangential speed (never the frozen-controller regression).",
       "acceptance": {
         "gates": ["manifest", "console-clean"],
@@ -45,7 +43,6 @@
       "id": "weapon",
       "title": "Weapon core: fire -> projectile + aim",
       "dependsOn": ["controller"],
-      "skill": "topdown-arena-weapon",
       "feelIntent": "Firing spawns a visible projectile with a crisp cadence and travel speed, aimed along the twin-stick aim vector. Cadence, input-to-spawn latency, true-3D projectile speed, and aim turn rate are measure-only.",
       "acceptance": {
         "gates": ["manifest", "visual-artifacts", "console-clean"],
@@ -67,7 +64,6 @@
       "id": "enemy-pressure",
       "title": "Reference enemy + reaction + cover + health/damage/death",
       "dependsOn": ["weapon"],
-      "skill": "topdown-arena-enemy-pressure",
       "feelIntent": "Reference enemy takes projectile damage and dies; it reacts to the player only through a real line-of-sight perception (LOS-gated), and cover between player and enemy blocks damage. First-hit to death, LOS-gated reaction latency, and cover-blocks-damage are measurable.",
       "acceptance": {
         "gates": ["manifest", "console-clean"],
@@ -88,7 +84,6 @@
       "id": "impact-feedback",
       "title": "Combat feedback (muzzle / hit-spark / shake / hit-stop)",
       "dependsOn": ["enemy-pressure"],
-      "skill": "topdown-arena-impact-feedback",
       "feelIntent": "Fire and impact read clearly through muzzle flash, hit spark, a brief hit-stop, and a top-down camera kick. The hit-stop WINDOW and the camera-DISPLACEMENT magnitude are measurable; muzzle/hit-spark QUALITY remain design intent.",
       "acceptance": {
         "gates": ["visual-artifacts", "console-clean"],
@@ -109,7 +104,6 @@
       "id": "loot-loop",
       "title": "Loot pickup loop (channelled pickup -> stash)",
       "dependsOn": ["enemy-pressure"],
-      "skill": "topdown-arena-loot-loop",
       "feelIntent": "The greed loop's acquisition beat: a crate is picked up over a channelled window and adds to the run stash. Pickup timing and value are read from the ground-truthed telemetry stream, not a bespoke gate.",
       "acceptance": {
         "gates": ["manifest", "console-clean"],
@@ -130,7 +124,6 @@
       "id": "extraction-hold",
       "title": "Extraction hold-to-bank",
       "dependsOn": ["loot-loop"],
-      "skill": "topdown-arena-extraction-hold",
       "feelIntent": "The commit beat: standing in the extract zone runs a hold that, if not cancelled, banks the carried stash. The hold start / cancel / complete and the banked value are read from the ground-truthed telemetry stream.",
       "acceptance": {
         "gates": ["manifest", "console-clean"],
@@ -151,7 +144,6 @@
       "id": "pressure-ramp",
       "title": "Enemy pressure / heat ramp signal",
       "dependsOn": ["enemy-pressure"],
-      "skill": "topdown-arena-pressure-ramp",
       "feelIntent": "The run's rising-danger signal: a pressure phase begins and the heat / nearest-enemy proximity rises over the run. This slice verifies the pressure SIGNAL is emitted and rises honestly; it deliberately does NOT bake in WHY pressure rises.",
       "acceptance": {
         "gates": ["manifest", "console-clean"],
@@ -172,7 +164,6 @@
       "id": "minimap",
       "title": "Strategic minimap (informs without revealing)",
       "dependsOn": ["enemy-pressure"],
-      "skill": "topdown-arena-minimap",
       "feelIntent": "A spatial minimap that gives the player strategic reads WITHOUT solving the route for them: it shows broad authored danger zones ('this area is getting dangerous'), and deliberately withholds per-crate loot markers and exact-position enemy radar. This informs-not-reveals property is a dual-validated design contract (taught independently in the codex-tuning session and the Claude session).",
       "acceptance": {
         "gates": ["ui-conformance", "console-clean"],
@@ -196,7 +187,6 @@
       "id": "hud",
       "title": "HUD (score / ammo / health)",
       "dependsOn": ["enemy-pressure"],
-      "skill": "topdown-arena-hud",
       "feelIntent": "Score, ammo, and health read clearly and stay inside the safe area (top-down HUD; health as 3 hearts with a stable empty-pip on loss).",
       "acceptance": {
         "gates": ["manifest", "ui-conformance", "console-clean"],
@@ -213,7 +203,6 @@
       "id": "end-state",
       "title": "Extraction win / lose-on-death end-state",
       "dependsOn": ["extraction-hold"],
-      "skill": "topdown-arena-end-state",
       "feelIntent": "The run resolves: a completed extraction banks the stash (win), and dying loses the carried stash (lose). Objective completion is measurable via the wave/objective calculator; the banked-vs-lost outcome is read from the ground-truthed telemetry.",
       "acceptance": {
         "gates": ["manifest", "console-clean"],

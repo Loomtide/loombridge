@@ -46,6 +46,7 @@ import {
   nextUnblockedSlice,
   planDispatchMode,
   readSlicePlan,
+  renderSliceSkill,
   writeSlicePlan,
   type SlicePlan,
 } from "./slices.js";
@@ -690,7 +691,7 @@ export async function runPlan(args: PlanArgs): Promise<number> {
       console.error(
         `[loombridge plan] Plan next slice: ${next.id} — ${next.title}`,
       );
-      console.error(`[loombridge plan]   skill: ${next.skill}`);
+      console.error(`[loombridge plan]   skill: ${renderSliceSkill(next.skill)}`);
       console.error(`[loombridge plan]   feel: ${next.feelIntent}`);
       console.error(`[loombridge plan]   gates: ${next.acceptance.gates.join(", ")}`);
       console.error(
@@ -801,7 +802,7 @@ export async function runPlan(args: PlanArgs): Promise<number> {
     }
     const next = nextUnblockedSlice(plan!)!;
     console.error(`[loombridge plan] Plan next slice: ${next.id} — ${next.title}`);
-    console.error(`[loombridge plan]   skill: ${next.skill}`);
+    console.error(`[loombridge plan]   skill: ${renderSliceSkill(next.skill)}`);
     console.error(`[loombridge plan]   feel: ${next.feelIntent}`);
     console.error(`[loombridge plan]   gates: ${next.acceptance.gates.join(", ")}`);
     console.error(`[loombridge plan] next: review the slice above, then run \`loombridge build\` to build it.`);

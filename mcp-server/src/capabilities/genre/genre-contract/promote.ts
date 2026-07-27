@@ -166,7 +166,9 @@ function buildManifest(contract: GenreContract): AcceptanceContract["manifest"] 
   };
 }
 
-function buildSlice(node: SliceNode, genreId: string, template?: SlicePlan["slices"][number]) {
+// `genreId` was only ever read to mint the synthetic skill name removed below; nothing else in a
+// promoted slice is genre-derived, so the parameter went with it.
+function buildSlice(node: SliceNode, template?: SlicePlan["slices"][number]) {
   if (!node.gates || node.gates.length === 0) return null;
   const gaps = node.gaps?.length ? ` Explicit gaps: ${node.gaps.join(", ")}.` : "";
   const gates = [...new Set([...(node.gates ?? []), ...(template?.acceptance.gates ?? [])])];
@@ -174,7 +176,12 @@ function buildSlice(node: SliceNode, genreId: string, template?: SlicePlan["slic
     id: node.id,
     title: node.title,
     dependsOn: node.dependsOn,
-    skill: template?.skill ?? `genre-${sanitizeId(genreId)}-${sanitizeId(node.id)}`,
+    // Only a registered pack template can supply a skill binding. GenreContract's `SliceNode` has no
+    // `skill` field at all, so the previous `genre-<genreId>-<sliceId>` fallback could only ever name
+    // something that does not exist — EVERY promoted contract emitted bindings that were dangling by
+    // construction, and `plan` printed them to the agent as the skill to build with. Omit instead:
+    // "no skill pack covers this" is a true statement, and an invented name is not.
+    ...(template?.skill ? { skill: template.skill } : {}),
     feelIntent: `${template?.feelIntent ?? node.title}.${gaps}`.trim(),
     acceptance: { gates },
     state: "pending" as const,
@@ -267,7 +274,7 @@ export function promoteGenreContract(input: unknown, options: GenrePromotionOpti
   }
   const templateById = new Map((options.sliceTemplate?.slices ?? []).map((slice) => [slice.id, slice]));
   const promotedCoreSlices = contract.sliceDag.coreVertical
-    .map((node) => buildSlice(node, contract.genreId, templateById.get(node.id)))
+    .map((node) => buildSlice(node, templateById.get(node.id)))
     .filter((slice): slice is NonNullable<ReturnType<typeof buildSlice>> => slice !== null);
   const slices = assertValidSlicePlan({
     schemaVersion: SLICES_SCHEMA_VERSION,
