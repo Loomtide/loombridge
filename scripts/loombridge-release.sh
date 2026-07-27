@@ -44,9 +44,24 @@ TAG="${TAG:-v$ver}"
 
 echo "==> Packing @loomtide/loombridge@$ver (prepack bundles the bridge tarball)"
 ( cd "$DIR/mcp-server" && npm pack >/dev/null )
+
+# npm names the tarball after the PACKAGE NAME (@loomtide/loombridge -> loomtide-loombridge-<ver>.tgz),
+# but the published ASSET name is a separate contract: scripts/install.sh fetches the release asset by
+# `ASSET_GLOB='loombridge-cli-*.tgz'`, and installers already deployed at get.loomtide.ai carry that
+# glob. So we pack, then RENAME to the asset name. Renaming the asset instead would silently break
+# every installer already in the wild.
+#
+# This step is why the script could not cut a release between the 2026-07-21 mechanical rename and
+# now: that rename rewrote a hard-coded `loomtide-cli-$ver.tgz` to `loombridge-cli-$ver.tgz` while the
+# package name became `@loomtide/loombridge`, so the script looked for a file npm never produces.
+# Deriving the produced name from package.json (npm's own scope-flattening rule) keeps a future
+# rename from re-breaking it.
+produced="$DIR/mcp-server/$(node -p "const p=require('$DIR/mcp-server/package.json'); p.name.replace(/^@/, '').replace(/\//, '-') + '-' + p.version + '.tgz'")"
+[ -f "$produced" ] || { echo "loombridge-release: npm pack did not produce $produced" >&2; exit 1; }
+
 tgz="$DIR/mcp-server/loombridge-cli-$ver.tgz"
-[ -f "$tgz" ] || { echo "loombridge-release: pack did not produce $tgz" >&2; exit 1; }
-echo "    $tgz"
+mv -f "$produced" "$tgz"
+echo "    $tgz (packed as $(basename "$produced"), renamed to the install.sh asset name)"
 
 if [ "$DRY" = 1 ]; then
   echo "==> --dry-run: skipping GitHub Release for $TAG"
