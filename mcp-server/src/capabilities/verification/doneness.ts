@@ -33,7 +33,14 @@ import {
 } from "./slices.js";
 import { readAssetManifest } from "../assets/asset-manifest.js";
 import { resolveAllSliceAssetBindings } from "../assets/asset-bindings.js";
-import { genreFidelityCriteria } from "../genre/genre-registry.js";
+import { genreFidelityCriteria, knownGenreIds } from "../genre/genre-registry.js";
+import {
+  deriveGenreCoverage,
+  promotedFidelityCriteria,
+  type GenreCoverageResolution,
+} from "../genre/genre-coverage.js";
+import type { GenrePromotionReport } from "../genre/genre-contract/promote.js";
+import { readGenrePromotionReport } from "../genre/promotion-report.js";
 import { inspectContractPresence, noContractRefusal } from "../../domain/contract-presence.js";
 import { assertValidAcceptanceContract } from "./validator.js";
 import { SFX_GATE_NAMES } from "./run-gates.js";
@@ -43,6 +50,12 @@ import {
   type EvidenceClassName,
   type EvidenceClassStatus,
 } from "./gates/evidence-classes.js";
+import { validateFidelityCriteria, VLM_REVIEW_CRITERION_IDS } from "./gates/vlm-criteria.js";
+
+// The criterion allow-list moved to `gates/vlm-criteria.ts` so the two sites that DECLARE fidelity
+// criteria (pack registrations and genre contracts) can validate against it without importing this
+// orchestrator. Re-exported here because it is part of doneness' established public surface.
+export { VLM_REVIEW_CRITERION_IDS };
 
 /** The frozen Design Target metadata `verify` embeds into the verdict (§3c). */
 export interface VerdictDesignTarget {
@@ -114,6 +127,15 @@ export interface VerdictLike {
    * not declare it is REFUSED (no laundering — `artModeRefusals`).
    */
   art?: { mode?: string };
+  /**
+   * What the build CLAIMS it may claim (CommandSurfaceRedesign W1) — stamped by `loombridge verify`
+   * from the registry + `GENRE_PROMOTION.json`. NEVER trusted: doneness RE-DERIVES coverage from that
+   * same disk truth and refuses on disagreement, exactly as it re-reads `designTarget.kind` rather
+   * than believing the verdict's copy. This block exists so a human (and `status`) can see the scope
+   * of a claim without re-running the derivation, not so a gate can shortcut it. Loosely typed (disk
+   * data).
+   */
+  genreCoverage?: { coverage?: string; genre?: string; source?: string; gaps?: unknown };
 }
 
 /**
@@ -133,19 +155,48 @@ export const HERO_SHOT_FIDELITY_CRITERIA = [
 ] as const;
 
 /**
- * Resolve the hero-shot fidelity criteria for a build's genre, or a REFUSAL when the genre is not
- * registered. An unknown/unregistered genre is NEVER defaulted to the platformer criteria (the
- * "unknown genre is refused, not defaulted" invariant) — a stale or hand-edited `state.genre` must not
- * certify a design-targeted build against arbitrary criteria. The refusal only matters when there is an
- * approved Design Target (callers gate on that); otherwise hero-shot fidelity is N/A.
+ * Resolve the hero-shot fidelity criteria for a build's genre, or a REFUSAL when none can be resolved.
+ * An unknown/unregistered genre is NEVER defaulted to the platformer criteria (the "unknown genre is
+ * refused, not defaulted" invariant) — a stale or hand-edited `state.genre` must not certify a
+ * design-targeted build against arbitrary criteria. The refusal only matters when there is an approved
+ * Design Target (callers gate on that); otherwise hero-shot fidelity is N/A.
+ *
+ * Resolution order, in decreasing authority:
+ *  1. a REGISTERED pack's criteria (unchanged shipped behavior);
+ *  2. the criteria a PROMOTED genre contract declared, taken from the on-disk `GENRE_PROMOTION.json`
+ *     and RE-VALIDATED here against the criterion allow-list. Re-validation is not belt-and-braces:
+ *     the promotion report lives inside the project and is editable, so `plan`-time validation of the
+ *     source contract is not a trust boundary. A declared-but-ungradable id is refused rather than
+ *     quietly dropped, because dropping it would shrink the criteria set the build must satisfy;
+ *  3. otherwise REFUSE, naming both honest exits.
+ *
+ * Never falls back to another genre's criteria at any step.
  */
 export function fidelityCriteriaForGenre(
   genre: string,
+  promotion: GenrePromotionReport | null = null,
 ): { criteria: readonly string[] } | { refusal: string } {
   const criteria = genreFidelityCriteria(genre);
   if (criteria) return { criteria };
+
+  const declared = promotedFidelityCriteria(genre, promotion);
+  if (declared) {
+    const issues = validateFidelityCriteria([...declared], "GENRE_PROMOTION.json fidelityCriteria");
+    if (issues.length > 0) {
+      return {
+        refusal:
+          `genre "${genre}" declares hero-shot fidelity criteria that cannot be graded; refusing: ` +
+          issues.join("; "),
+      };
+    }
+    return { criteria: declared };
+  }
+
+  const how = promotion
+    ? `declare \`fidelityCriteria\` in the genre contract and re-run \`loombridge plan --genre-contract <file> --force\`, or declare \`art: { "mode": "deferred" }\` in ACCEPTANCE.json for a gray-box build`
+    : `use a registered genre (${knownGenreIds().join(", ")}), or plan from a genre contract that declares \`fidelityCriteria\``;
   return {
-    refusal: `genre "${genre}" is not a registered genre — cannot resolve hero-shot fidelity criteria; refusing (an unknown genre is never defaulted to platformer — plan §P0).`,
+    refusal: `genre "${genre}" has no hero-shot fidelity criteria — cannot certify a design-targeted build; refusing (an unknown genre is never defaulted to platformer — plan §P0). Fix: ${how}.`,
   };
 }
 
@@ -343,6 +394,83 @@ export function checkAssetSourceFidelity(verdict: VerdictLike | null): string[] 
       const detail = check.detail ? `: ${check.detail}` : "";
       return `asset-source fidelity check \`${check.id ?? "(unknown)"}\` failed${detail}`;
     });
+}
+
+/**
+ * GENRE COVERAGE refusals (CommandSurfaceRedesign W1) — what this build is allowed to CLAIM.
+ *
+ * The closed genre set governs the claim, not the front door: an unregistered genre planned from a
+ * promoted genre contract builds and verifies, and its verdict passes WITH ITS GAPS ENUMERATED. This
+ * predicate is what keeps that from becoming a laundering route. PURE + exhaustively testable.
+ *
+ * `resolved` is DISK truth (`STATE.genre` + `GENRE_PROMOTION.json`), `claimed` is whatever the verdict
+ * says about itself. Four rules:
+ *
+ *  - UNGRADED refuses. No registration and no promotion report naming this genre means no oracle AND
+ *    no source to enumerate gaps from, so there is nothing honest to claim. This is the state a
+ *    hand-edited `STATE.genre` or a deleted promotion report lands in.
+ *  - DISAGREEMENT refuses. A verdict claiming a coverage the disk does not support is a forged claim,
+ *    not a stale one — the same rule `diskTruthDesignTargetRefusals` applies to `designTarget.kind`.
+ *  - ABSENT-ON-NON-GRADED refuses. A `partially-graded` build MUST carry the block, because the block
+ *    is where the gap list travels; omitting it would present a scoped pass as an unscoped one.
+ *  - ABSENT-ON-GRADED PASSES. This is the deliberate back-compat seam: every verdict written before
+ *    this field existed carries no block, and every one of those is a registered genre (the only kind
+ *    that could reach doneness at all). Softening the absent-field rule here costs nothing because a
+ *    `graded` verdict claims exactly what it claimed before; there is no new territory to launder.
+ *    A `graded` build that DOES carry the block is still checked for agreement.
+ *
+ * The gap LIST itself is deliberately not compared against the verdict's copy: gaps are re-derived
+ * from disk and reported from the derivation, so a trimmed list in a hand-edited verdict changes
+ * nothing about what doneness prints or decides.
+ */
+export function genreCoverageRefusals(opts: {
+  /** Coverage re-derived from disk — the authority. */
+  resolved: GenreCoverageResolution;
+  /** The `genreCoverage` block the verdict carries, if any. */
+  claimed: { coverage?: string; genre?: string } | undefined;
+  /**
+   * Whether a whole-game verdict exists that OUGHT to carry the stamp. False for the slice roll-up,
+   * which has no whole-game verdict at all — there, an absent block is a fact about the path, not a
+   * suppressed scope, so only the `ungraded` refusal applies. Defaults to true (the verdict path).
+   */
+  expectStamp?: boolean;
+}): string[] {
+  const { resolved, claimed } = opts;
+  const expectStamp = opts.expectStamp ?? true;
+  const refusals: string[] = [];
+
+  if (resolved.coverage === "ungraded") {
+    refusals.push(
+      `genre coverage is \`ungraded\` — refusing to certify: ${resolved.gaps.join("; ")}`,
+    );
+  }
+
+  if (!claimed) {
+    if (expectStamp && resolved.coverage !== "graded") {
+      refusals.push(
+        `build-verdict carries no \`genreCoverage\` block but this project resolves to ` +
+          `\`${resolved.coverage}\` — refusing (a scoped pass must state its scope; re-run ` +
+          "`loombridge verify` to stamp it)",
+      );
+    }
+    return refusals;
+  }
+
+  if (claimed.coverage !== resolved.coverage) {
+    refusals.push(
+      `build-verdict claims genre coverage \`${claimed.coverage ?? "(absent)"}\` but disk resolves ` +
+        `\`${resolved.coverage}\` for genre "${resolved.genre}" — refusing (coverage is derived from ` +
+        "the registry + GENRE_PROMOTION.json, never read from the verdict)",
+    );
+  }
+  if (claimed.genre !== undefined && claimed.genre !== resolved.genre) {
+    refusals.push(
+      `build-verdict binds genre coverage to "${claimed.genre}" but STATE says "${resolved.genre}" — ` +
+        "refusing (the verdict's coverage must bind to the genre the project was planned as)",
+    );
+  }
+
+  return refusals;
 }
 
 /**
@@ -710,6 +838,12 @@ export interface FreshGreenInput {
    * unchanged, so a stale/forged/non-passing verdict still fails.
    */
   artDeferred?: boolean;
+  /**
+   * Parsed `.loombridge/GENRE_PROMOTION.json` (or null), read from DISK by the caller. This is the
+   * evidence that decides genre coverage for an unregistered genre; it is an input rather than a read
+   * so this predicate stays pure.
+   */
+  promotion?: GenrePromotionReport | null;
 }
 
 export interface FreshGreenResult {
@@ -728,33 +862,6 @@ const VLM_REVIEW_REFERENCE_KEYS = new Set(["heroShot", "heroShotSha256"]);
 const VLM_REVIEW_INDEPENDENCE_KEYS = new Set(["independent", "reviewerCount"]);
 const VLM_REVIEW_FRAME_KEYS = new Set(["id", "path", "label"]);
 const VLM_REVIEW_CRITERION_KEYS = new Set(["id", "status", "reason", "evidenceFrame"]);
-export const VLM_REVIEW_CRITERION_IDS = new Set([
-  "composition-centering",
-  "palette-adherence",
-  "font-rendering",
-  "juice-cue-presence",
-  "end-state-styling",
-  "hazard-readability",
-  "collectible-path",
-  "parallax",
-  "hud-crispness",
-  "props-grounded",
-  "platform-edge-to-edge",
-  "backdrop-seamless",
-  "palette-match",
-  "composition-match",
-  "rendering-artifacts",
-  "parallax-present",
-  "platform-tiers",
-  "element-placement-arc",
-  // 2d-shooter hero-shot fidelity criteria (registered in genre-registry.ts). Must stay in sync with
-  // every registered pack's fidelityCriteria — the cross-table test in genre-registry.test.ts enforces
-  // that a pack can't declare a criterion the VLM-review shape validator would then reject (which would
-  // make that genre's doneness unreachable-green).
-  "arena-framing",
-  "enemy-readability",
-  "hud-placement",
-]);
 const VLM_REVIEW_STATUSES = new Set(["pass", "warn", "fail"]);
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -860,7 +967,7 @@ export function validateVlmReviewFindingsShape(input: unknown): string[] {
   return issues;
 }
 
-async function checkSliceRollupHeroShotFidelity(paths: LoombridgePaths): Promise<string[]> {
+async function checkSliceRollupHeroShotFidelity(paths: LoombridgePaths, planGenre: string): Promise<string[]> {
   const design = await designStatus(paths);
   if (design.status !== "approved") return [];
   if (!design.frozenMatches) {
@@ -883,10 +990,15 @@ async function checkSliceRollupHeroShotFidelity(paths: LoombridgePaths): Promise
     if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
   }
 
-  // Design Target is approved here (gated above), so an unregistered genre is a hard refusal — the
-  // criteria must come from the build's registered genre, never the platformer default.
-  const state = await readState(paths);
-  const fidelity = fidelityCriteriaForGenre(state?.genre ?? "unknown");
+  // Design Target is approved here (gated above), so a genre with no resolvable criteria is a hard
+  // refusal — they must come from the build's own registered pack or its own promoted contract, never
+  // the platformer default. The promotion report is read from DISK for the same reason `design.kind`
+  // above is: the roll-up must not depend on what a verdict chose to say about itself.
+  // The genre comes from the SLICE PLAN (the artifact being certified), matching the coverage
+  // derivation below it; a plan-vs-STATE genre drift is refused there rather than silently resolving
+  // criteria from whichever file happens to be consulted here.
+  const promotion = await readGenrePromotionReport(paths);
+  const fidelity = fidelityCriteriaForGenre(planGenre, promotion);
   if (!("criteria" in fidelity)) return [fidelity.refusal];
 
   return checkHeroShotFidelity(
@@ -1026,7 +1138,7 @@ export function isFreshGreen(input: FreshGreenInput): FreshGreenResult {
   }
   const artDeferred = !!input.artDeferred && !verdictClaimsApprovedTarget;
   if (!artDeferred) {
-    const fidelity = fidelityCriteriaForGenre(state.genre);
+    const fidelity = fidelityCriteriaForGenre(state.genre, input.promotion ?? null);
     if ("criteria" in fidelity) {
       reasons.push(...checkHeroShotFidelity(verdict, fidelity.criteria));
     } else if (verdict?.designTarget?.status === "approved") {
@@ -1034,6 +1146,16 @@ export function isFreshGreen(input: FreshGreenInput): FreshGreenResult {
     }
     reasons.push(...checkAssetSourceFidelity(verdict));
   }
+
+  // GENRE COVERAGE — what this build may CLAIM. Runs regardless of `artDeferred`: the gray-box
+  // relaxation scopes the VISUAL gates, it says nothing about whether a genre has an oracle at all, so
+  // an ungraded gray-box build must still be refused.
+  reasons.push(
+    ...genreCoverageRefusals({
+      resolved: deriveGenreCoverage({ genre: state.genre, promotion: input.promotion ?? null }),
+      claimed: verdict?.genreCoverage,
+    }),
+  );
 
   return { ok: reasons.length === 0, reasons };
 }
@@ -1135,7 +1257,15 @@ export interface DonenessArgs {
 export async function wholeGameDonenessReasons(
   paths: LoombridgePaths,
   verdictPathOverride?: string,
-): Promise<{ reasons: string[]; state: LoombridgeState | null; verdict: VerdictLike | null; manifestCount: number; artDeferred: boolean }> {
+): Promise<{
+  reasons: string[];
+  state: LoombridgeState | null;
+  verdict: VerdictLike | null;
+  manifestCount: number;
+  artDeferred: boolean;
+  /** Disk-derived genre coverage — what the report is allowed to say this build proved. */
+  coverage: GenreCoverageResolution;
+}> {
   const state = await readState(paths);
   const verdictPath = verdictPathOverride ?? paths.verdict;
 
@@ -1183,7 +1313,12 @@ export async function wholeGameDonenessReasons(
       verdict?.designTarget?.status === "approved" || state?.designTarget === "approved",
   });
 
-  const result = isFreshGreen({ state, verdict, captures, artDeferred: art.deferred });
+  // Genre coverage evidence, read from DISK for the same reason `art.mode` is: what the build may
+  // CLAIM cannot be decided by the verdict that wants to make the claim.
+  const promotion = await readGenrePromotionReport(paths);
+  const coverage = deriveGenreCoverage({ genre: state?.genre ?? "unknown", promotion });
+
+  const result = isFreshGreen({ state, verdict, captures, artDeferred: art.deferred, promotion });
   const reasons = [...result.reasons];
 
   // Disk-truth Design-Target refusals (§3c) — INDEPENDENT of the verdict, so a
@@ -1225,7 +1360,7 @@ export async function wholeGameDonenessReasons(
     if (!reasons.some((existing) => existing === r)) reasons.push(r);
   }
 
-  return { reasons, state, verdict, manifestCount: manifest.length, artDeferred: art.deferred };
+  return { reasons, state, verdict, manifestCount: manifest.length, artDeferred: art.deferred, coverage };
 }
 
 /** A single slice's roll-up line (computed once, printed by `runSliceDoneness`). */
@@ -1248,6 +1383,10 @@ export interface SliceRollupEvaluation {
   artRefusals: string[];
   /** True when the hero-shot + asset-source fidelity rollups are N/A (gray-box). */
   artDeferred: boolean;
+  /** Disk-derived genre coverage — scopes a PASS, and refuses an `ungraded` project outright. */
+  coverage: GenreCoverageResolution;
+  /** Coverage refusals (the `ungraded` case on this path). */
+  coverageRefusals: string[];
   ok: boolean;
 }
 
@@ -1264,7 +1403,18 @@ export async function evaluateSliceDoneness(
   // (mirrors `allSlicesApproved`'s length>0 guard; a degenerate SLICES.json must
   // never false-green the roll-up).
   if (plan.slices.length === 0) {
-    return { emptyRoadmap: true, slices: [], depRefusals: [], fidelityReasons: [], assetFidelityReasons: [], artRefusals: [], artDeferred: false, ok: false };
+    return {
+      emptyRoadmap: true,
+      slices: [],
+      depRefusals: [],
+      fidelityReasons: [],
+      assetFidelityReasons: [],
+      artRefusals: [],
+      artDeferred: false,
+      coverage: deriveGenreCoverage({ genre: plan.genre, promotion: null }),
+      coverageRefusals: [],
+      ok: false,
+    };
   }
 
   let ok = true;
@@ -1308,13 +1458,32 @@ export async function evaluateSliceDoneness(
     runtimeClaimsApprovedDesignTarget: rollupState?.designTarget === "approved",
   });
 
-  const fidelityReasons = art.deferred ? [] : await checkSliceRollupHeroShotFidelity(paths);
+  const fidelityReasons = art.deferred ? [] : await checkSliceRollupHeroShotFidelity(paths, plan.genre);
   if (fidelityReasons.length) ok = false;
   const assetFidelityReasons = art.deferred ? [] : await checkSliceRollupAssetSourceFidelity(paths);
   if (assetFidelityReasons.length) ok = false;
   if (art.refusals.length) ok = false;
 
-  return { emptyRoadmap: false, slices, depRefusals, fidelityReasons, assetFidelityReasons, artRefusals: art.refusals, artDeferred: art.deferred, ok };
+  // GENRE COVERAGE — re-derived from disk here too. The slice roll-up has no whole-game verdict to
+  // check for agreement, so this is purely the `ungraded` refusal: a project whose genre has neither a
+  // registration nor a promotion report cannot certify by the slice path any more than by the verdict
+  // path. Without this the roll-up would be the cheaper way around the gate.
+  //
+  // The genre comes from SLICES.json rather than STATE because the slice plan IS the artifact being
+  // certified here and it declares its own genre. STATE is then checked for AGREEMENT: a roadmap whose
+  // genre has drifted from the project's would otherwise let either file pick whichever genre grades
+  // more favourably.
+  const coverage = deriveGenreCoverage({ genre: plan.genre, promotion: await readGenrePromotionReport(paths) });
+  const coverageRefusals = genreCoverageRefusals({ resolved: coverage, claimed: undefined, expectStamp: false });
+  if (rollupState && rollupState.genre !== plan.genre) {
+    coverageRefusals.push(
+      `SLICES.json declares genre "${plan.genre}" but STATE says "${rollupState.genre}" — refusing ` +
+        "(the roadmap being certified must be the roadmap this project was planned as)",
+    );
+  }
+  if (coverageRefusals.length) ok = false;
+
+  return { emptyRoadmap: false, slices, depRefusals, fidelityReasons, assetFidelityReasons, artRefusals: art.refusals, artDeferred: art.deferred, coverage, coverageRefusals, ok };
 }
 
 /** True only when the acceptance contract PARSES as a valid contract (bare `{}` is rejected). */
@@ -1381,7 +1550,7 @@ export async function runDoneness(args: DonenessArgs): Promise<number> {
     return runSliceDoneness(slicePlan, paths);
   }
 
-  const { reasons, state, verdict, manifestCount, artDeferred } = await wholeGameDonenessReasons(paths, args.verdictPath);
+  const { reasons, state, verdict, manifestCount, artDeferred, coverage } = await wholeGameDonenessReasons(paths, args.verdictPath);
 
   // The SAME contract-validity gate `isProjectDone` applies (a bare/empty/
   // malformed ACCEPTANCE.json can never certify) — surfaced here too so the
@@ -1402,11 +1571,29 @@ export async function runDoneness(args: DonenessArgs): Promise<number> {
     console.error(
       `[loombridge doneness] OK — fresh + green (runId=${runId}, ${manifestCount} captures verified${fidelity}).`,
     );
+    printCoverageScope(coverage);
     return 0;
   }
   console.error("[loombridge doneness] NOT done:");
   for (const r of reasons) console.error(`  - ${r}`);
   return 1;
+}
+
+/**
+ * Scope a PASS to what was actually graded.
+ *
+ * A `partially-graded` build reaching exit 0 is the whole point of the coverage split, and it is also
+ * the thing most easily misread as a full pass. So the gap list is printed on SUCCESS, in full, not
+ * truncated and not behind a flag: the claim and its limits arrive together or the claim is dishonest.
+ * A `graded` build prints nothing, keeping the shipped output byte-identical.
+ */
+function printCoverageScope(coverage: GenreCoverageResolution): void {
+  if (coverage.coverage === "graded") return;
+  console.error(
+    `[loombridge doneness] coverage: ${coverage.coverage} — this certifies the genre-neutral gates ` +
+      `for genre "${coverage.genre}", NOT a genre-specific feel or fidelity oracle. Not graded:`,
+  );
+  for (const gap of coverage.gaps) console.error(`  - ${gap}`);
 }
 
 async function runSliceDoneness(plan: SlicePlan, paths: LoombridgePaths): Promise<number> {
@@ -1452,8 +1639,14 @@ async function runSliceDoneness(plan: SlicePlan, paths: LoombridgePaths): Promis
     for (const reason of ev.artRefusals) console.error(`      - ${reason}`);
   }
 
+  if (ev.coverageRefusals.length) {
+    console.error("  - genre-coverage: REFUSE");
+    for (const reason of ev.coverageRefusals) console.error(`      - ${reason}`);
+  }
+
   if (ev.ok) {
     console.error(`[loombridge doneness] OK — ${plan.slices.length}/${plan.slices.length} slices approved + deterministic proofs fresh + hero-shot faithful + asset-source faithful.`);
+    printCoverageScope(ev.coverage);
     return 0;
   }
   console.error("[loombridge doneness] NOT done — slice roll-up refused.");

@@ -1,7 +1,18 @@
 # RFC: Command Surface Redesign
 
-**Status:** PROPOSED. Not started. Two decisions below need a maintainer's call before work begins.
+**Status:** W1 IMPLEMENTED. W2 to W4 remain PROPOSED.
 **Date:** 2026-07-27. Measurements in the appendix were taken against `main` at `4981142`.
+
+**Decisions, resolved 2026-07-27.** D1: yes, an ungraded game may reach `doneness`, with coverage
+derived at verdict time, the gap list mandatory and non-empty, and the claim scoped. D2: land
+alongside. Entry path for an unregistered genre: genre-contract promotion only, reusing
+`promoteGenreContract`; no free-form `--genre <anything>`.
+
+Those two answers interact. With promotion as the only entry, anything that reaches `plan` has either
+a registration or a `GENRE_PROMOTION.json`, so it is `graded` or `partially-graded`. `ungraded` is the
+residual state (hand-edited `STATE.genre`, deleted promotion report, adopted project), and it has no
+source to enumerate gaps from, so D1's own precondition cannot be met. **`ungraded` therefore refuses
+in W1.** D1's "yes" becomes reachable only if a free-form entry path is added later.
 
 ## Thesis
 
@@ -33,18 +44,23 @@ authored *inside the CLI package*. The consequence:
 
 For a tool people install to build their own game, that is close to fatal.
 
-### 1.2 Authored packs are already outrunning the registry
+### 1.2 An authored pack was already outrunning the registry
 
-Genre content on disk exceeds what is wired:
+> **Correction (implementation).** The first draft of this section counted three unreachable packs by
+> reading two different pack systems as one table. `genre-contract/genre-packs/*` are **hint-card**
+> packs (`pack.json` + `hint-card.json`, 7 lines each) that seed the authoring interview, not the
+> front door; `hybrid-rungun` and `systems-rts` are reachable today via
+> `genre-pack-authoring` -> contract -> promote. The genuinely unreachable pack was **one**.
 
-| location | packs present | registered |
-|---|---|---|
-| `capabilities/genre/genre-packs/` | `platformer-2d`, `2d-shooter`, `3d-shooter`, `3d-topdown-arena` | 3 of 4 |
-| `capabilities/genre/genre-contract/genre-packs/` | `2d-shooter`, `3d-shooter`, `hybrid-rungun`, `systems-rts` | 2 of 4 |
+| location | kind | packs present | registered |
+|---|---|---|---|
+| `capabilities/genre/genre-packs/` | full plan templates (acceptance + slice DAG) | `platformer-2d`, `2d-shooter`, `3d-shooter`, `3d-topdown-arena` | 3 of 4 |
+| `capabilities/genre/genre-contract/genre-packs/` | hint cards for the authoring interview | `2d-shooter`, `3d-shooter`, `hybrid-rungun`, `systems-rts` | n/a (not registry-bound) |
 
-`3d-topdown-arena`, `hybrid-rungun`, and `systems-rts` exist as authored content the front door
-cannot reach. This is the "defined but not wired" class of finding this project treats as High
-severity, and it shows the registry is a bottleneck in practice, not only in theory.
+`3d-topdown-arena` shipped a validating acceptance contract, whose own source note reads "a seed for
+`plan --genre 3d-topdown-arena`", plus an 11-slice DAG, and no registration. This is the "defined but
+not wired" class of finding this project treats as High severity, and it showed the registry was a
+bottleneck in practice, not only in theory. **Resolved in W1: registered.**
 
 ### 1.3 The command set has drifted
 
@@ -85,6 +101,8 @@ build this." It also creates the upgrade path: build ungraded now, and when a ge
 coverage upgrades without redoing the project.
 
 ## 3. Decisions needed before work starts
+
+*Both resolved 2026-07-27; see the header. Kept below as the record of what was weighed.*
 
 **D1. May an ungraded game reach `doneness` at all?**
 
@@ -213,7 +231,7 @@ conversation, not a stage.
 
 | wave | work | gate |
 |---|---|---|
-| **W1** | Coverage split in the genre registry: three states, `coverage` stamped on the verdict, gap list mandatory and non-empty. Wire the three unregistered on-disk packs or delete them. | D1 answered. Unblocks everything else; independently valuable even if W2 to W4 never ship. |
+| **W1** ✅ | Coverage split in the genre registry: three states, `genreCoverage` stamped on the verdict, gap list mandatory and non-empty. Register `3d-topdown-arena`. | DONE. See §11. |
 | **W2** | `design` command plus `design.json` schema plus skill bindings. Rename the hero-shot verb to `target`. | W1 merged. |
 | **W3** | Retarget `plan` to consume `design.json`; borrow the AgentsAtlas task structure; emit polish tasks. | W2 merged. Keep the genre-template path per D2. |
 | **W4** | Restructure `build` around implement/capture/observe/tune with skills injected from the design binding. Retire `ask` and `e2e`. | W3 merged. |
@@ -227,6 +245,10 @@ genres.
   ungraded project can present as graded. Coverage must be derived from the registry at verdict
   time and re-derived from disk in the slice roll-up, exactly as `designTarget.kind` is today. An
   absent `coverage` field is a refusal, not a skipped check.
+  *Addressed in W1, with one deliberate exception: an absent block on a `graded` project passes.
+  Every verdict written before the field existed omits it, and every one of those is a registered
+  genre, so the exception costs no safety and is what makes D2's "alongside" real. Absent on
+  anything non-`graded` refuses.*
 - **`design` becomes a wizard people skip.** Mitigation: `plan` refuses without a `design.json`, or
   offers a documented minimal path that stamps the design as thin so the gap stays visible
   downstream.
@@ -248,6 +270,75 @@ Taken 2026-07-27 against `main` at `4981142`.
   `mobile-audit`, `plan`, `status`, `trace`, `tuning-report`, `update`, `verify`).
 - Registered genres in `capabilities/genre/genre-registry.ts`: 3 (`platformer-2d` default,
   `2d-shooter`, `3d-shooter`). Unknown genre refuses; caller exits 2.
-- Genre packs on disk: 4 under `genre-packs/`, 4 under `genre-contract/genre-packs/`. Three are
-  unregistered: `3d-topdown-arena`, `hybrid-rungun`, `systems-rts`.
+- Genre packs on disk: 4 full plan templates under `genre-packs/`, 4 hint cards under
+  `genre-contract/genre-packs/`. One full pack is unregistered: `3d-topdown-arena`. (The original
+  draft said three; see the correction in §1.2.)
 - Skills in `.skills/`: 14.
+
+## 11. W1 as built
+
+Post-implementation record. The design above stands; these are the points where building it taught
+something the proposal did not know.
+
+**The block was one line, and it gated a template that is never read.** For a promoted contract,
+`plan.ts` called `resolveGenrePack(genre)` and exited 2 on `null`, but the resolved
+`acceptanceTemplatePath` was only ever consumed as `promoted?.acceptance ?? readFile(templatePath)`.
+On the promoted path the pack template is never opened. The registry lookup there was a pure
+gatekeeper on a plan it contributes nothing to. Lifting it is scoped to that path: a bare `--genre`
+naming an unregistered genre still exits 2, because there the pack IS the plan.
+
+**Where each thing lives.**
+
+| concern | file |
+|---|---|
+| the three states, gap derivation (pure, no I/O) | `capabilities/genre/genre-coverage.ts` |
+| reading `.loombridge/GENRE_PROMOTION.json` | `capabilities/genre/promotion-report.ts` |
+| the criterion allow-list, shared by both declaring sites | `capabilities/verification/gates/vlm-criteria.ts` |
+| refusal predicate (pure) | `genreCoverageRefusals` in `doneness.ts` |
+| the stamp | `verify.ts`, next to `designTarget` |
+
+**Gaps are structural, not authored.** Two entries are computed from the *absence* of a registration
+("no registered feel oracle", "no hero-shot fidelity criteria"), so a contract declaring zero slice
+gaps with every measurability row `measurable-now` still cannot reach an empty gap list. If gaps came
+only from the contract, "partially-graded with nothing missing" would be authorable, and that reads
+exactly like a full pass.
+
+**An unregistered genre can declare its own fidelity criteria.** The genre contract gained an optional
+`fidelityCriteria`, validated at authoring time and RE-validated by doneness at gate time (the
+promotion report lives in the project and is editable, so plan-time validation is not a trust
+boundary). Without it, a promoted genre with an approved Design Target refuses, naming the two honest
+exits: declare criteria, or declare `art: { "mode": "deferred" }`. It never borrows another genre's.
+
+**The slice roll-up resolves genre from `SLICES.json`, not STATE**, since the slice plan is the
+artifact being certified and declares its own genre. A plan-vs-STATE genre drift is refused, which is
+the companion the switch requires: without it, editing either file to name a registered genre would
+be a bypass.
+
+**Adversarial review found a false green, reproduced end-to-end.** The first cut of
+`deriveGenreCoverage` checked the registry before checking whether the promotion report agreed with
+`STATE.genre`, and treated a mismatched report as merely irrelevant. That was a working laundering
+route: plan a puzzle game from a contract, hand-edit `STATE.genre` to `platformer-2d`, delete
+`SLICES.json` to take the whole-game path, and `doneness` printed `OK — fresh + green` as a full
+`graded` pass, graded against platformer feel and fidelity criteria, while `GENRE_PROMOTION.json` on
+disk still read `sourceGenreId: "puzzle-hypercasual"`. The contradicting evidence was on disk and
+was being discarded.
+
+The bug was ordering alone. `STATE.genre` and the promotion report are two independent on-disk
+claims about what a project IS; when they conflict there is no honest claim, so the derivation now
+refuses and names both sides rather than taking the reading that grades higher. The contradiction
+check runs FIRST, before the registry short-circuit.
+
+Two consequences worth keeping:
+
+- `plan` now clears a stale promotion report when it re-seeds a project onto a templated genre.
+  Without that, the legitimate "promoted a contract, now I want a shipped pack" switch strands the
+  developer on a permanent refusal. A correct refusal that cannot be escaped is still a bug.
+- The generic "report names another genre" test did NOT catch this, because its genre was
+  unregistered and so never reached the short-circuit. The regression test uses a REGISTERED genre
+  on purpose, and carries a LITMUS: restore the old ordering and it fails with `graded`.
+
+**Guard test added with the declared paths.** `genre-registry.test.ts` hand-wrote an `existsSync` pair
+per genre, so a fourth registration would have had no path check at all. It now walks
+`knownGenreIds()` and runs each template through the validator that consumes it, since a path that
+exists but does not validate fails at runtime rather than in CI. LITMUS: point any registration's
+`sliceTemplatePath` at its own `acceptance.json` and the test fails; an existsSync-only check passes.

@@ -93,6 +93,12 @@ export interface LoombridgePaths {
   slices: string;
   /** `.loombridge/ASSET_MANIFEST.json` — approved visual asset source contract. */
   assetManifest: string;
+  /**
+   * `.loombridge/GENRE_PROMOTION.json` — the promotion report `plan --genre-contract` writes. Present
+   * only for a project planned from a genre contract, and the DISK TRUTH that decides genre coverage
+   * for an unregistered genre (`capabilities/genre/genre-coverage.ts`).
+   */
+  genrePromotion: string;
   /** `.loombridge/design/` — the Design Target Phase artifacts (plan §3c). */
   design: string;
   /** `.loombridge/reports/` */
@@ -124,6 +130,7 @@ export function loombridgePaths(root: string): LoombridgePaths {
     acceptance: path.join(dir, "ACCEPTANCE.json"),
     slices: path.join(dir, "SLICES.json"),
     assetManifest: path.join(dir, "ASSET_MANIFEST.json"),
+    genrePromotion: path.join(dir, "GENRE_PROMOTION.json"),
     design: path.join(dir, "design"),
     reports: path.join(dir, "reports"),
     traces: path.join(dir, "traces"),

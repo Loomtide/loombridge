@@ -34,6 +34,14 @@ export interface GenrePromotionReport {
   measurability: PromotedMeasurabilityRow[];
   refusalConditions: GenreContract["refusalConditions"];
   humanOracleChecks: GenreContract["humanOracleChecks"];
+  /**
+   * The contract's declared hero-shot fidelity criteria, carried through VERBATIM so `doneness` can
+   * resolve them for an unregistered genre from the on-disk `GENRE_PROMOTION.json` rather than from
+   * the contract file (which need not travel with the project). Omitted when the contract declares
+   * none — and an absent list is a REFUSAL at doneness for a design-targeted build, never a fallback
+   * to another genre's criteria.
+   */
+  fidelityCriteria?: string[];
 }
 
 export interface GenrePromotionResult {
@@ -291,6 +299,11 @@ export function promoteGenreContract(input: unknown, options: GenrePromotionOpti
     })),
     refusalConditions: contract.refusalConditions,
     humanOracleChecks: contract.humanOracleChecks,
+    // Verbatim, and only when declared — the absent case must stay absent so doneness refuses rather
+    // than reading an empty list as "no fidelity requirement".
+    ...(contract.fidelityCriteria && contract.fidelityCriteria.length > 0
+      ? { fidelityCriteria: [...contract.fidelityCriteria] }
+      : {}),
   };
 
   return { acceptance: validAcceptance, slices, report };

@@ -25,6 +25,7 @@
 import { SUPPORTED_GATE_IDS } from "../../verification/run-gates.js";
 import { REDERIVABLE_METRICS } from "../../verification/feel-derive.js";
 import { EVIDENCE_CLASS_SET, EVIDENCE_CLASSES } from "../../verification/gates/evidence-classes.js";
+import { validateFidelityCriteria } from "../../verification/gates/vlm-criteria.js";
 import { MEASURABLE_METRICS, SUPPORTED_PROFILE_UNIT_SET } from "../../../domain/feel-primitives.js";
 import { isSafeCapturePath } from "../../../domain/capture-paths.js";
 import {
@@ -451,6 +452,7 @@ export function validateGenreContract(input: unknown): GenreContractValidationRe
   validateOptionalProductThesis(input.productThesis, push);
   validateOptionalScaleModel(input.scaleModel, push);
   validateOptionalRequiredEvidenceClasses(input.requiredEvidenceClasses, push);
+  validateOptionalFidelityCriteria(input.fidelityCriteria, push);
 
   // R9 — genre-class completeness
   if (genreClass) {
@@ -685,6 +687,24 @@ function validateOptionalRequiredEvidenceClasses(
       );
     }
   });
+}
+
+/**
+ * OPTIONAL `fidelityCriteria` — PRESENT-ONLY refusal, mirroring `requiredEvidenceClasses` above.
+ * Undefined/absent is a no-op (a legacy contract validates byte-identically). Present ⇒ must be a
+ * NON-EMPTY array whose every entry is in `VLM_REVIEW_CRITERION_IDS`, because doneness requires each
+ * declared criterion to appear as a `pass` in `vlm-review.json` and the review-shape validator rejects
+ * any id outside that set. Refusing here stops a contract from declaring criteria that would make its
+ * own doneness unreachable-green, and an empty list from making the fidelity check vacuous.
+ */
+function validateOptionalFidelityCriteria(
+  value: unknown,
+  push: (code: string, message: string, path: string) => void,
+): void {
+  if (value === undefined) return;
+  for (const issue of validateFidelityCriteria(value, "fidelityCriteria")) {
+    push("FIDELITY_CRITERIA", issue, "fidelityCriteria");
+  }
 }
 
 /** Throwing wrapper — mirrors assertValidSlicePlan. */

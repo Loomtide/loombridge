@@ -407,19 +407,42 @@ export async function runPlan(args: PlanArgs): Promise<number> {
     !args.genreExplicit && prev?.genre && resolveGenrePack(prev.genre) ? prev.genre : undefined;
   const genre = promoted?.report.sourceGenreId ?? preservedGenre ?? args.genre;
   const genrePack = resolveGenrePack(genre);
-  if (!genrePack) {
+
+  // COVERAGE, NOT REFUSAL (CommandSurfaceRedesign W1). The registry's closed set governs what `verify`
+  // CLAIMS, not what `plan` ACCEPTS — but ONLY where there is something honest to plan from:
+  //
+  //  - TEMPLATED path (no --genre-contract): the pack IS the plan. Its acceptance + slice templates are
+  //    what gets seeded, so an unregistered genre has literally nothing to write. Still exit 2, message
+  //    unchanged.
+  //  - PROMOTED path (--genre-contract / --brief): the contract supplies acceptance AND slices, and the
+  //    pack's `acceptanceTemplatePath` is never even read (see the seed below — `promoted?.acceptance`
+  //    short-circuits it). The registry lookup here was a pure gatekeeper blocking a plan it contributes
+  //    nothing to. An unregistered genre now proceeds and is stamped `partially-graded` at verify time,
+  //    with its gaps enumerated from this contract's own promotion report.
+  //
+  // The pack's slice template stays OPTIONAL either way: when it exists, matching slice ids keep
+  // pack-owned skill/gate guidance; when the genre is unregistered there is none, and the promoter
+  // already accepts `sliceTemplate: undefined`.
+  if (!genrePack && !promoted) {
     console.error(
-      `[loombridge plan] unknown genre "${genre}". Known: ${knownGenreIds().join(", ")}`,
+      `[loombridge plan] unknown genre "${genre}". Known: ${knownGenreIds().join(", ")}. ` +
+        `To plan a genre with no registered pack, author a genre contract and pass ` +
+        `--genre-contract <file> (or --brief <bundle>) — it will plan as \`partially-graded\`.`,
     );
     return 2;
   }
-  const templatePath = genrePack.acceptanceTemplatePath;
   if (genreContractInput) {
-    promoted = promoteGenreContract(genreContractInput, { sliceTemplate: await loadSliceTemplate(genre) });
+    promoted = promoteGenreContract(genreContractInput, {
+      ...(genrePack ? { sliceTemplate: await loadSliceTemplate(genre) } : {}),
+    });
   }
 
   await ensureScaffold(paths);
-  const promotionReportPath = path.join(paths.dir, "GENRE_PROMOTION.json");
+  // One spelling of the path, shared with the gate that reads it (`promotion-report.ts`). A second
+  // inline `path.join(paths.dir, ...)` here would be a declared path nothing cross-checks: if either
+  // drifted, `plan` would write a report the gate never finds and the project would silently drop to
+  // `ungraded`.
+  const promotionReportPath = paths.genrePromotion;
   if (promoted && !args.force) {
     const existing = [];
     if (await fileExists(paths.acceptance)) existing.push("ACCEPTANCE.json");
@@ -443,7 +466,11 @@ export async function runPlan(args: PlanArgs): Promise<number> {
   let acceptanceOutcome: WriteOutcome;
   let contract: AcceptanceContract;
   if (args.force || !(await fileExists(paths.acceptance))) {
-    const template = promoted?.acceptance ?? JSON.parse(await fs.readFile(templatePath, "utf-8")) as AcceptanceContract;
+    // The pack template is read ONLY on the templated path. `genrePack` is non-null whenever `promoted`
+    // is null (the guard above), so the non-null assertion is discharged there rather than assumed.
+    const template =
+      promoted?.acceptance ??
+      (JSON.parse(await fs.readFile(genrePack!.acceptanceTemplatePath, "utf-8")) as AcceptanceContract);
     const seededGameName = args.name ?? (path.basename(args.root) || template.game);
     contract = { ...template, game: seededGameName };
     assertValidAcceptanceContract(contract); // fail fast if our seed is invalid
@@ -472,6 +499,16 @@ export async function runPlan(args: PlanArgs): Promise<number> {
     await fs.writeFile(promotionReportPath, `${JSON.stringify(promoted.report, null, 2)}
 `, "utf-8");
     created.push(rel(promotionReportPath));
+  } else if (acceptanceOutcome === "created" && (await fileExists(promotionReportPath))) {
+    // A project just RE-SEEDED from a pack template is no longer the promoted project the old report
+    // describes: that report's acceptance and slices have been replaced. Leaving it would make the
+    // disk contradict itself (STATE says this genre, the report says another), which the coverage
+    // derivation refuses on. Clearing it is what keeps the legitimate "switch to a registered genre
+    // with --force" path from landing on that refusal.
+    await fs.rm(promotionReportPath);
+    console.error(
+      `[loombridge plan] removed stale ${rel(promotionReportPath)} — it described the previous promoted genre, not "${genre}".`,
+    );
   }
 
   // 3. GAME_SPEC.md (auto-derived from the contract, #64) + design/README.md stub
@@ -629,6 +666,17 @@ export async function runPlan(args: PlanArgs): Promise<number> {
     // deterministic slice DAG from the genre template. The human approval seam
     // has already happened at Design Target approval; do not require developers
     // to remember a second `--go` just to create SLICES.json.
+    // An unregistered (promoted) genre has no pack template to scaffold FROM — its SLICES.json is
+    // written at promotion time. Reaching here means that file was deleted, so the honest recovery is
+    // to re-promote the contract, not to scaffold some other genre's DAG.
+    if (!genrePack) {
+      console.error(
+        `[loombridge plan] NOT ready — genre "${genre}" has no registered slice template and ` +
+          `${rel(paths.slices)} is missing. Re-run with --genre-contract <file> --force to regenerate ` +
+          "the roadmap from the contract that planned this project.",
+      );
+      return 2;
+    }
     const template = await loadSliceTemplate(genre);
     const instantiated = instantiateSlicePlan(template);
     await writeSlicePlan(paths, instantiated);
@@ -882,6 +930,11 @@ function printUsage(): void {
       "",
       "Options:",
       `  --genre <id>    Genre pack — one of: ${knownGenreIds().join(", ")}. Defaults to ${defaultGenreId()} when omitted.`,
+      "                  These are the genres with a shipped pack template; a build",
+      "                  planned from one verifies as `graded`. For any OTHER genre,",
+      "                  author a genre contract and use --genre-contract / --brief:",
+      "                  it plans and builds, and verifies as `partially-graded` with",
+      "                  its ungraded gaps enumerated on the verdict.",
       "  --engine <id>   Target engine. Auto-detected from --root when omitted",
       "                  (Unity via ProjectSettings/ProjectVersion.txt); a non-Unity",
       "                  project or none detected is an error (run from a project root).",
@@ -890,6 +943,8 @@ function printUsage(): void {
       "                  Promote a validated GenreContract JSON into",
       "                  .loombridge/ACCEPTANCE.json, SLICES.json, and",
       "                  GENRE_PROMOTION.json instead of seeding a pack template.",
+      "                  Works for an UNREGISTERED genre: the contract supplies both",
+      "                  acceptance and slices, so no pack is needed.",
       "  --brief <path>  Use an existing design-doc bundle (a docs directory or a",
       "                  brief .json) as the brief source instead of the interview.",
       "                  Resolves to the interview-equivalent GenreContract and",

@@ -144,6 +144,23 @@ const REGISTRY: Record<string, GenrePackRegistration> = {
     // scenario pack yet — both await the first live 3D capture proof.
     fidelityCriteria: ["composition-match", "arena-framing", "enemy-readability", "hud-placement"],
   },
+  "3d-topdown-arena": {
+    id: "3d-topdown-arena",
+    acceptanceTemplatePath: path.join(PKG_ROOT, "src", "capabilities", "genre", "genre-packs", "3d-topdown-arena", "acceptance.json"),
+    sliceTemplatePath: path.join(PKG_ROOT, "src", "capabilities", "genre", "genre-packs", "3d-topdown-arena", "slices.json"),
+    // The top-down / twin-stick quadrant. The pack shipped complete (a validating acceptance contract
+    // whose own note calls itself "a seed for `plan --genre 3d-topdown-arena`", plus an 11-slice DAG)
+    // but was never registered, so the front door could not reach it — the "defined but not wired"
+    // shape this project treats as a real finding. Registering it is the whole fix.
+    //
+    // Same genre-neutral arena/enemy/HUD structure as the two shooters, and for the same reason: these
+    // four ids are in doneness' VLM_REVIEW_CRITERION_IDS allow-list, so this genre's doneness is
+    // reachable-green. Top-down-SPECIFIC fidelity (high-angle framing, aim-vector camera lead) is
+    // deliberately NOT claimed — there is no criterion for it, and declaring one that the review-shape
+    // validator rejects would make doneness unreachable. No feel profile and no scenario pack yet;
+    // both await a live top-down capture proof.
+    fidelityCriteria: ["composition-match", "arena-framing", "enemy-readability", "hud-placement"],
+  },
 };
 
 /** The registered genre ids, in registration order. */

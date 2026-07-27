@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import test from "node:test";
+
+import { assertValidAcceptanceContract } from "../../../../capabilities/verification/validator.js";
+import { assertValidSlicePlan } from "../../../../capabilities/verification/slices.js";
 
 import {
   DEFAULT_GENRE_ID,
@@ -33,7 +36,48 @@ test("genre registry REFUSES an unknown genre (no default-to-platformer)", () =>
 });
 
 test("knownGenreIds lists exactly the registered genres", () => {
-  assert.deepEqual(knownGenreIds(), ["platformer-2d", "2d-shooter", "3d-shooter"]);
+  assert.deepEqual(knownGenreIds(), ["platformer-2d", "2d-shooter", "3d-shooter", "3d-topdown-arena"]);
+});
+
+test("EVERY registered genre's templates exist AND parse through their own validators", () => {
+  // THE BLIND SPOT THIS CLOSES: the per-genre tests above hand-write an existsSync pair each, so a
+  // FOURTH registration got no path check at all — a declared path nothing walks, which is this repo's
+  // most expensive recurring failure. Existence is also not enough: a registration pointing at a file
+  // that exists but does not validate fails at `loombridge plan` runtime, not here. So walk the whole
+  // registry and run each template through the validator that will consume it.
+  //
+  // LITMUS: point any registration's sliceTemplatePath at its acceptance.json (a real, existing file)
+  // and this test fails on the SlicePlan validator; an existsSync-only check would pass.
+  const ids = knownGenreIds();
+  assert.ok(ids.length > 0, "expected at least one registered genre");
+  for (const id of ids) {
+    const pack = resolveGenrePack(id)!;
+    assert.ok(existsSync(pack.acceptanceTemplatePath), `${id}: acceptance template missing: ${pack.acceptanceTemplatePath}`);
+    assert.ok(existsSync(pack.sliceTemplatePath), `${id}: slice template missing: ${pack.sliceTemplatePath}`);
+
+    assert.doesNotThrow(
+      () => assertValidAcceptanceContract(JSON.parse(readFileSync(pack.acceptanceTemplatePath, "utf-8"))),
+      `${id}: acceptance template does not validate as an acceptance contract`,
+    );
+    const plan = assertValidSlicePlan(JSON.parse(readFileSync(pack.sliceTemplatePath, "utf-8")));
+    assert.ok(plan.slices.length > 0, `${id}: slice template has no slices`);
+  }
+});
+
+test("3d-topdown-arena is registered — the pack shipped complete but unreachable", () => {
+  // It shipped with a validating acceptance contract (whose own note calls itself a seed for
+  // `plan --genre 3d-topdown-arena`) and an 11-slice DAG, but no registration, so the front door could
+  // not reach it. The template walk above covers the files; this pins the registration itself.
+  const pack = resolveGenrePack("3d-topdown-arena");
+  assert.ok(pack, "3d-topdown-arena must be registered");
+  const criteria = genreFidelityCriteria("3d-topdown-arena") ?? [];
+  assert.ok(criteria.length > 0);
+  // Arena-shaped, not platformer-shaped.
+  assert.ok(!criteria.includes("platform-tiers"));
+  assert.ok(!criteria.includes("parallax-present"));
+  // No feel profile and no scenario pack yet — must not leak into the scenario-pack auto-selection.
+  assert.equal(pack!.loadFeelProfileModule, undefined);
+  assert.ok(!scenarioPacks().some((p) => p.gameKind === "3d-topdown-arena"));
 });
 
 test("2d-shooter is registered with valid, existing templates and shooter-specific fidelity", () => {
@@ -86,8 +130,42 @@ test("fidelityCriteriaForGenre REFUSES an unregistered genre — doneness never 
   for (const bogus of ["unknown", "fps-3d-unregistered", ""]) {
     const r = fidelityCriteriaForGenre(bogus);
     assert.ok("refusal" in r, `genre "${bogus}" must refuse, not resolve`);
-    assert.match(r.refusal, /not a registered genre/i);
+    assert.match(r.refusal, /refusing/i);
+    // The invariant, not the wording: the refusal must say it is NOT falling back to platformer.
+    assert.match(r.refusal, /never defaulted to platformer/i);
   }
+  // A promotion report is now a second source of criteria, but ONLY for the genre it names and only
+  // when it declares them — it must not become a way for any genre to borrow criteria.
+  const promotion = {
+    sourceGenreId: "puzzle-hypercasual",
+    fidelityCriteria: ["composition-match"],
+  } as never;
+  const declared = fidelityCriteriaForGenre("puzzle-hypercasual", promotion);
+  assert.ok("criteria" in declared, "a contract-declared criteria set must resolve");
+  assert.deepEqual([...declared.criteria], ["composition-match"]);
+  // ...but the SAME report does nothing for a different genre.
+  assert.ok("refusal" in fidelityCriteriaForGenre("some-other-genre", promotion));
+});
+
+test("fidelityCriteriaForGenre RE-VALIDATES contract-declared criteria at gate time", () => {
+  // GENRE_PROMOTION.json lives inside the project and is editable, so `plan`-time validation of the
+  // source contract is NOT a trust boundary. An ungradable id must REFUSE — never be silently dropped,
+  // which would shrink the set the build has to satisfy and make doneness easier to reach.
+  const forged = {
+    sourceGenreId: "puzzle-hypercasual",
+    fidelityCriteria: ["composition-match", "looks-great-honestly"],
+  } as never;
+  const r = fidelityCriteriaForGenre("puzzle-hypercasual", forged);
+  assert.ok("refusal" in r, "an ungradable declared criterion must refuse");
+  assert.match(r.refusal, /looks-great-honestly/);
+  // LITMUS: if the re-validation were dropped and the bad id merely filtered out, the call would
+  // resolve to ["composition-match"] and this assertion would fail.
+  assert.ok(!("criteria" in r));
+
+  // An EMPTY declared list is not "no requirement" — it coerces to no-criteria and refuses, so it can
+  // never make the structural fidelity check pass vacuously.
+  const empty = { sourceGenreId: "puzzle-hypercasual", fidelityCriteria: [] } as never;
+  assert.ok("refusal" in fidelityCriteriaForGenre("puzzle-hypercasual", empty));
 });
 
 test("EVERY registered genre's fidelityCriteria are GRADABLE by the VLM review-shape validator", () => {

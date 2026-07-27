@@ -29,6 +29,8 @@ import {
 import { inspectContractPresence, noContractRefusal } from "../../domain/contract-presence.js";
 import { designPaths, designStatus } from "./design.js";
 import { resolveFeelProfileModule } from "../genre/genre-registry.js";
+import { deriveGenreCoverage } from "../genre/genre-coverage.js";
+import { readGenrePromotionReport } from "../genre/promotion-report.js";
 import {
   getSliceDiagnosticPath,
   getSliceVerdictPath,
@@ -273,6 +275,14 @@ export async function runVerify(args: VerifyArgs): Promise<number> {
   // certifies (or null when no build is in flight). `loombridge doneness` uses
   // `verdict.runId === currentBuild.runId` to refuse stale certifications.
   const prev = await readState(paths);
+  // Genre coverage (CommandSurfaceRedesign W1) — what this verdict is allowed to CLAIM, derived from
+  // the registry + the on-disk promotion report. Stamped for humans and for `status`; `doneness`
+  // re-derives it from the same disk truth and refuses on disagreement, so this block is a readable
+  // record of the claim, never the basis for it.
+  const coverage = deriveGenreCoverage({
+    genre: prev?.genre ?? "unknown",
+    promotion: await readGenrePromotionReport(paths),
+  });
   const producedAt = nowIso();
   const reportOut = {
     ...report,
@@ -282,6 +292,7 @@ export async function runVerify(args: VerifyArgs): Promise<number> {
     evidenceClasses: deriveEvidenceClasses(report),
     producedAt,
     runId: prev?.currentBuild?.runId ?? null,
+    genreCoverage: coverage,
     designTarget: {
       status: design.status,
       // The 3D design-target split: doneness refuses to certify an approved
@@ -331,6 +342,15 @@ export async function runVerify(args: VerifyArgs): Promise<number> {
   } else if (!design.frozenMatches) {
     console.error(
       "[loombridge verify] design target: CHANGED since approval — re-approve before trusting the comparison (advisory).",
+    );
+  }
+  // Scope the claim at the moment it is made. A `partially-graded` green is a real green over the
+  // genre-neutral gates, and saying so here (not only at `doneness`) is what stops it being read as
+  // more than it is. A `graded` build prints nothing — shipped output is unchanged.
+  if (coverage.coverage !== "graded") {
+    console.error(
+      `[loombridge verify] coverage: ${coverage.coverage} — genre "${coverage.genre}" has no ` +
+        `genre-specific oracle; ${coverage.gaps.length} gap(s) recorded on the verdict (see \`genreCoverage.gaps\`).`,
     );
   }
   if (code !== 0) {
