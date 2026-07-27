@@ -54,6 +54,21 @@ export type ProfileMetricFamily =
   // kinematics. Measure-only (no shipped profile bands it).
   | "sync";
 
+/**
+ * Gating class of a metric: a property of the METRIC, not of any profile, so
+ * profiles can never disagree about it.
+ *
+ * - `grammar`: a universal feel-quality signal (forgiveness windows, gravity
+ *   asymmetry, jump-cut, responsiveness). Out-of-band GATES the verdict in every
+ *   mode: every good-feeling platformer has these regardless of archetype.
+ * - `taste`: an archetype tuning target (speeds, apex heights, dash reach). By
+ *   default out-of-band is DESCRIPTIVE (reported as placement, never a fail);
+ *   `--enforce-taste` re-arms it as a gate for a build that targets the archetype.
+ * - `measure-only`: may never be banded by any profile (the sync family). Banding
+ *   one refuses at profile load (`BANDED_MEASURE_ONLY`).
+ */
+export type MetricGatingClass = "grammar" | "taste" | "measure-only";
+
 /** A known, measurable platformer feel metric and the unit it is expressed in. */
 export interface ProfileMetricSpec {
   /** Stable metric id (the key used in a profile's `metrics` map). */
@@ -61,6 +76,11 @@ export interface ProfileMetricSpec {
   /** The single canonical unit this metric is measured in. */
   unit: ProfileUnit;
   family: ProfileMetricFamily;
+  /**
+   * Gating class (required: tsc refuses an unclassified metric, so a new metric
+   * must declare whether it gates, describes, or may never be banded).
+   */
+  gating: MetricGatingClass;
   /** Short human label for the report. */
   label: string;
   /**
@@ -83,26 +103,29 @@ export interface ProfileMetricSpec {
  */
 export const KNOWN_PROFILE_METRICS: Record<string, ProfileMetricSpec> = {
   // ── run ──
-  runSpeed: { id: "runSpeed", unit: "u/s", family: "run", label: "Run speed" },
+  runSpeed: { id: "runSpeed", unit: "u/s", family: "run", gating: "taste", label: "Run speed" },
   runAcceleration: {
     id: "runAcceleration",
     unit: "u/s^2",
     family: "run",
+    gating: "taste",
     label: "Run acceleration",
   },
   runDeceleration: {
     id: "runDeceleration",
     unit: "u/s^2",
     family: "run",
+    gating: "taste",
     label: "Run deceleration",
   },
   // ── jump ──
-  jumpApex: { id: "jumpApex", unit: "u", family: "jump", label: "Jump apex height" },
-  timeToApex: { id: "timeToApex", unit: "ms", family: "jump", label: "Time to apex" },
+  jumpApex: { id: "jumpApex", unit: "u", family: "jump", gating: "taste", label: "Jump apex height" },
+  timeToApex: { id: "timeToApex", unit: "ms", family: "jump", gating: "taste", label: "Time to apex" },
   shortHopApex: {
     id: "shortHopApex",
     unit: "u",
     family: "jump",
+    gating: "grammar",
     label: "Short-hop apex height",
   },
   // ── fall ──
@@ -110,24 +133,27 @@ export const KNOWN_PROFILE_METRICS: Record<string, ProfileMetricSpec> = {
     id: "fallGravityMultiplier",
     unit: "x",
     family: "fall",
+    gating: "grammar",
     label: "Fall-gravity multiplier",
   },
-  maxFallSpeed: { id: "maxFallSpeed", unit: "u/s", family: "fall", label: "Max fall speed" },
+  maxFallSpeed: { id: "maxFallSpeed", unit: "u/s", family: "fall", gating: "taste", label: "Max fall speed" },
   // ── dash ──
-  dashDistance: { id: "dashDistance", unit: "u", family: "dash", label: "Dash distance" },
-  dashTime: { id: "dashTime", unit: "s", family: "dash", label: "Dash duration" },
-  dashCooldown: { id: "dashCooldown", unit: "s", family: "dash", label: "Dash cooldown" },
+  dashDistance: { id: "dashDistance", unit: "u", family: "dash", gating: "taste", label: "Dash distance" },
+  dashTime: { id: "dashTime", unit: "s", family: "dash", gating: "taste", label: "Dash duration" },
+  dashCooldown: { id: "dashCooldown", unit: "s", family: "dash", gating: "grammar", label: "Dash cooldown" },
   // ── forgiveness ──
   coyoteTime: {
     id: "coyoteTime",
     unit: "s",
     family: "forgiveness",
+    gating: "grammar",
     label: "Coyote time",
   },
   jumpBuffer: {
     id: "jumpBuffer",
     unit: "s",
     family: "forgiveness",
+    gating: "grammar",
     label: "Jump buffer",
   },
   // ── camera ──
@@ -135,26 +161,30 @@ export const KNOWN_PROFILE_METRICS: Record<string, ProfileMetricSpec> = {
     id: "cameraLookahead",
     unit: "u",
     family: "camera",
+    gating: "taste",
     label: "Camera look-ahead",
   },
   cameraSettleTime: {
     id: "cameraSettleTime",
     unit: "ms",
     family: "camera",
+    gating: "taste",
     label: "Camera settle time",
   },
   // ── feedback (action-platformer juice) ──
-  hitStopMs: { id: "hitStopMs", unit: "ms", family: "feedback", label: "Hit-stop" },
+  hitStopMs: { id: "hitStopMs", unit: "ms", family: "feedback", gating: "taste", label: "Hit-stop" },
   screenShakePx: {
     id: "screenShakePx",
     unit: "px",
     family: "feedback",
+    gating: "taste",
     label: "Screen-shake amplitude",
   },
   knockbackImpulse: {
     id: "knockbackImpulse",
     unit: "u/s",
     family: "feedback",
+    gating: "taste",
     label: "Knockback impulse",
   },
   // ── responsiveness (F5: how motion BEGINS) ──
@@ -162,6 +192,7 @@ export const KNOWN_PROFILE_METRICS: Record<string, ProfileMetricSpec> = {
     id: "inputLatency",
     unit: "ms",
     family: "responsiveness",
+    gating: "grammar",
     label: "Input latency",
     whyItMatters:
       "Time from pressing a movement key to the first detectable motion. Low latency is what 'tight' feels like; high latency reads as mushy or laggy even when every endpoint metric (speed/apex) is correct.",
@@ -171,6 +202,7 @@ export const KNOWN_PROFILE_METRICS: Record<string, ProfileMetricSpec> = {
     id: "inputToSfxLatency",
     unit: "ms",
     family: "sync",
+    gating: "measure-only",
     label: "Input → SFX latency",
     whyItMatters:
       "Time from the input onset to the matching sound cue firing. A sound that lags the action by even ~100ms reads as disconnected ('the jump and its whoosh don't belong together'); tight cross-modal sync is a large part of why a game feels 'juicy' rather than silent-then-noise. Measure-only — surfaced informationally, never banded.",
@@ -179,6 +211,7 @@ export const KNOWN_PROFILE_METRICS: Record<string, ProfileMetricSpec> = {
     id: "dashToGhostMs",
     unit: "ms",
     family: "sync",
+    gating: "measure-only",
     label: "Dash → ghost-trail latency",
     whyItMatters:
       "Time from the dash starting to the afterimage/ghost trail appearing. The trail is the visual confirmation that the dash 'fired'; if it lags the dash it reads as a disconnected smear rather than a crisp burst of speed. Tight dash→ghost sync is what makes a dash feel snappy and powerful. Measure-only — surfaced informationally, never banded.",
@@ -187,6 +220,7 @@ export const KNOWN_PROFILE_METRICS: Record<string, ProfileMetricSpec> = {
     id: "groundContactToDustMs",
     unit: "ms",
     family: "sync",
+    gating: "measure-only",
     label: "Ground-contact → landing-dust latency",
     whyItMatters:
       "Time from the player touching down after a fall to the landing dust appearing. The dust is the visual confirmation of the impact; if it lags the touchdown the landing reads mushy/disconnected rather than a solid, weighty thump. Measure-only — surfaced informationally, never banded.",
@@ -195,6 +229,7 @@ export const KNOWN_PROFILE_METRICS: Record<string, ProfileMetricSpec> = {
     id: "inputToAnimStateLatency",
     unit: "ms",
     family: "sync",
+    gating: "measure-only",
     label: "Input → animation-state latency",
     whyItMatters:
       "Time from the input to the matching animation state starting (e.g. jump press → the 'jump' animation). Animation that lags the input reads as the character reacting late / mushy rather than crisply responding. Measure-only — surfaced informationally, never banded.",
@@ -203,6 +238,7 @@ export const KNOWN_PROFILE_METRICS: Record<string, ProfileMetricSpec> = {
     id: "fireIntervalMs",
     unit: "ms",
     family: "sync",
+    gating: "measure-only",
     label: "Fire interval",
     whyItMatters:
       "Mean time between observed fire/shot events. This is the cadence spine of weapon feel: too slow reads sluggish, too fast reads noisy or uncontrollable. Measure-only until a shooter profile bands it.",
@@ -211,6 +247,7 @@ export const KNOWN_PROFILE_METRICS: Record<string, ProfileMetricSpec> = {
     id: "fireInputToSpawnLatency",
     unit: "ms",
     family: "sync",
+    gating: "measure-only",
     label: "Fire input → projectile-spawn latency",
     whyItMatters:
       "Time from the fire input onset to the projectile becoming observable through an explicit spawn signal. This is the weapon-response edge: high latency makes shots feel delayed even if cadence and projectile speed are correct. Measure-only until a shooter profile bands it.",
@@ -219,6 +256,7 @@ export const KNOWN_PROFILE_METRICS: Record<string, ProfileMetricSpec> = {
     id: "projectileSpeed",
     unit: "u/s",
     family: "weapon",
+    gating: "taste",
     label: "Projectile speed",
     whyItMatters:
       "Median moving speed of the fired projectile. This is the travel-time spine of shooter feel: slow shots feel floaty and dodgeable, while fast shots feel crisp and hitscan-adjacent. Measure-only until a shooter profile bands it.",
@@ -227,6 +265,7 @@ export const KNOWN_PROFILE_METRICS: Record<string, ProfileMetricSpec> = {
     id: "ttkMs",
     unit: "ms",
     family: "sync",
+    gating: "measure-only",
     label: "Time to kill (reference enemy)",
     whyItMatters:
       "Time from the first hit landing on the reference enemy to its death. This is the combat-pacing spine: too low and encounters feel trivial/twitchless, too high and they feel spongy and unsatisfying. Measured first-hit→death so it is independent of the player's aim time. Measure-only until a shooter profile bands it.",

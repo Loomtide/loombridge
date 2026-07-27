@@ -33,9 +33,15 @@ import {
 } from "./profiles.js";
 import {
   KNOWN_PROFILE_METRICS,
+  type MetricGatingClass,
   type PlatformerFeelProfile,
   type ProfileMetricTarget,
 } from "./types.js";
+import {
+  computeTastePlacement,
+  type TastePlacementBlock,
+} from "./taste-placement.js";
+import { loadAllProfiles } from "./profiles.js";
 import {
   loadMeasurements,
   type ProfileMeasurements,
@@ -60,8 +66,14 @@ import { stimulusDistrust } from "../../../verification/gates/feel-provenance.js
 import { renderFeelReportHtml, renderFeelReportMarkdown } from "./feel-report-render.js";
 import { ICON, tildify } from "../../../../shared/cli-ui.js";
 
-/** Per-metric outcome. `not_measured` is distinct from a graded pass/fail. */
-export type ProfileMetricStatus = "pass" | "fail" | "not_measured";
+/**
+ * Per-metric outcome. `not_measured` is distinct from a graded pass/fail.
+ * `out_of_band` is the grammar/taste split's descriptive outcome: a TASTE metric,
+ * measured and trusted, outside the selected archetype's band, NOT enforced this
+ * run. It never enters `summary.fail` and never gates; `--enforce-taste` re-arms
+ * the same comparison as a plain `fail`.
+ */
+export type ProfileMetricStatus = "pass" | "fail" | "out_of_band" | "not_measured";
 
 /** Overall report status. `incomplete` = some metric unmeasured, none failing. */
 export type ProfileReportStatus = "pass" | "fail" | "incomplete";
@@ -84,6 +96,13 @@ export interface ProfileMetricResult {
   id: string;
   label: string;
   family: string;
+  /**
+   * Gating class of the metric (grammar gates; taste describes unless enforced).
+   * `measure-only` can never appear here: banding one refuses at profile load.
+   */
+  gating: Exclude<MetricGatingClass, "measure-only">;
+  /** Whether an out-of-band value GATES this run (grammar always; taste on opt-in). */
+  enforced: boolean;
   target: number;
   unit: string;
   bandLabel: string;
@@ -159,7 +178,13 @@ export interface ProfileReachabilityResult {
 
 export interface ProfileVerifyReport {
   kind: "feel-profile";
-  schemaVersion: "1";
+  /**
+   * "2" (grammar/taste split): metrics carry `gating`/`enforced`, `out_of_band`
+   * joined ProfileMetricStatus, `summary.outOfBand` counts it, and the report
+   * gained `tasteEnforcement` + `placement`. Nothing reads this field
+   * programmatically today; it exists for artifact consumers.
+   */
+  schemaVersion: "2";
   producedAt: string;
   /** Which loombridge build graded this report (F5 #14: audit provenance). */
   producedBy: BuildStamp;
@@ -207,7 +232,19 @@ export interface ProfileVerifyReport {
    * the swapped envelope (GATES the verdict, like `mechanisms`), else `pass`.
    */
   reachability: ProfileReachabilityResult;
-  summary: { total: number; pass: number; fail: number; notMeasured: number };
+  /**
+   * Whether taste metrics gated this run: `descriptive` (default; out-of-band
+   * taste is placement, never a fail) or `enforced` (`--enforce-taste`).
+   */
+  tasteEnforcement: "descriptive" | "enforced";
+  /**
+   * Archetype placement of the measured TASTE metrics against ALL shipped
+   * profiles' bands. Descriptive only; never affects `status`. Rejected values
+   * are excluded with reasons and unmeasured taste ids are stamped (no silent
+   * skip, per the refuse-on-absent house rule).
+   */
+  placement: TastePlacementBlock;
+  summary: { total: number; pass: number; fail: number; outOfBand: number; notMeasured: number };
   /** Trust roll-up across measured metrics — the report's "warn" axis (see MetricConfidence). */
   confidence: ProfileConfidenceSummary;
   status: ProfileReportStatus;
@@ -251,6 +288,7 @@ export function evaluateProfile(
   measurements: ProfileMeasurements,
   distrusted: ReadonlyMap<string, string> = new Map(),
   verified: ReadonlySet<string> = new Set(),
+  options: { enforceTaste?: boolean } = {},
 ): {
   metrics: ProfileMetricResult[];
   status: ProfileReportStatus;
@@ -276,10 +314,20 @@ export function evaluateProfile(
     const { label: bandLabel } = bandWindow(target);
     const measured = measurements.metrics[id];
 
+    // Fail-closed gating resolution: only a metric the vocabulary explicitly
+    // classifies as `taste` may be descriptive. A banded metric with no spec
+    // (reachable only from hand-built profiles in tests; the validator refuses
+    // UNKNOWN_METRIC) grades as grammar so an unknown metric never silently
+    // stops gating. `measure-only` cannot be banded (BANDED_MEASURE_ONLY).
+    const gating: ProfileMetricResult["gating"] = spec?.gating === "taste" ? "taste" : "grammar";
+    const enforced = gating === "grammar" || options.enforceTaste === true;
+
     const base = {
       id,
       label: spec?.label ?? id,
       family: spec?.family ?? "run",
+      gating,
+      enforced,
       target: target.target,
       unit: target.unit,
       bandLabel,
@@ -317,12 +365,18 @@ export function evaluateProfile(
     // samples is `verified`; otherwise it was asserted without re-derivable
     // evidence (`reported`). This never changes `status` — only how it reads.
     const confidence: MetricConfidence = verified.has(id) ? "verified" : "reported";
+    const status: ProfileMetricStatus = ok ? "pass" : enforced ? "fail" : "out_of_band";
+    const outcomeWord = ok ? "PASS" : enforced ? "FAIL" : "OUT OF BAND";
+    const tasteNote =
+      status === "out_of_band"
+        ? " (taste, descriptive; pass --enforce-taste to gate this archetype target)"
+        : "";
     metrics.push({
       ...base,
       measured,
-      status: ok ? "pass" : "fail",
+      status,
       confidence,
-      detail: `${base.label}: target ${target.target}${target.unit}, measured ${measured}${target.unit}, band ${bandLabel} -> ${ok ? "PASS" : "FAIL"}.`,
+      detail: `${base.label}: target ${target.target}${target.unit}, measured ${measured}${target.unit}, band ${bandLabel} -> ${outcomeWord}.${tasteNote}`,
     });
   }
 
@@ -330,6 +384,7 @@ export function evaluateProfile(
     total: metrics.length,
     pass: metrics.filter((m) => m.status === "pass").length,
     fail: metrics.filter((m) => m.status === "fail").length,
+    outOfBand: metrics.filter((m) => m.status === "out_of_band").length,
     notMeasured: metrics.filter((m) => m.status === "not_measured").length,
   };
   const confidence: ProfileConfidenceSummary = {
@@ -411,11 +466,19 @@ function listIds(ids: string[], cap = 3): string {
  * metrics so a typed-number "pass" can never read as a measured one.
  */
 function nextActionFor(
-  report: Pick<ProfileVerifyReport, "status" | "metrics" | "confidence" | "profile">,
+  report: Pick<ProfileVerifyReport, "status" | "metrics" | "confidence" | "profile" | "placement">,
   engineOk: boolean,
   hasMeasurements: boolean,
   engineUnconfirmedButGraded: boolean,
 ): string {
+  // Grammar/taste split: descriptive out-of-band taste metrics get their own
+  // guidance (never a "fix" order — an archetype mismatch has two honest exits).
+  const tasteIds = report.metrics.filter((m) => m.status === "out_of_band").map((m) => m.id);
+  const nearest = report.placement?.overallNearest;
+  const tasteSuffix =
+    tasteIds.length > 0
+      ? ` Taste: ${listIds(tasteIds)} sit${tasteIds.length === 1 ? "s" : ""} off the '${report.profile.id}' targets${nearest && nearest !== report.profile.id ? ` (nearest: '${nearest}'; re-run with --profile ${nearest} if that is the intended feel)` : ""}, or pass --enforce-taste to gate them.`
+      : "";
   // Nothing was graded — point at the missing input (engine first, then measurements).
   if (!hasMeasurements) {
     if (!engineOk) {
@@ -426,7 +489,7 @@ function nextActionFor(
   // A clean pass we can't certify because the engine isn't confirmed Unity — the
   // engine IS the next action here (the metrics already graded in-band).
   if (engineUnconfirmedButGraded) {
-    return `Measured metrics are all in band for '${report.profile.id}', but the project isn't confirmed Unity — run from your Unity project root (the folder with Assets/ and ProjectSettings/) to confirm it and turn this into a verified pass.`;
+    return `Measured metrics are all in band for '${report.profile.id}', but the project isn't confirmed Unity — run from your Unity project root (the folder with Assets/ and ProjectSettings/) to confirm it and turn this into a verified pass.${tasteSuffix}`;
   }
   // Metrics WERE graded → lead with the metric-driven action; the engine note (if
   // any) is appended context, never a replacement (band + §0 are engine-independent).
@@ -443,28 +506,36 @@ function nextActionFor(
     if (rejected.length > 0) {
       parts.push(`re-derivation rejected ${listIds(rejected)} (reported value ≠ raw samples) — re-capture honestly`);
     }
-    return `${parts.join("; ")}.${engineSuffix}`;
+    return `${parts.join("; ")}.${engineSuffix}${tasteSuffix}`;
   }
   if (report.status === "incomplete") {
     const unmeasured = report.metrics.filter((m) => m.status === "not_measured").map((m) => m.id);
-    return `Measured metrics are in band; ${listIds(unmeasured)} still unmeasured — measure the rest for a complete '${report.profile.id}' report.${engineSuffix}`;
+    return `Measured metrics are in band; ${listIds(unmeasured)} still unmeasured — measure the rest for a complete '${report.profile.id}' report.${engineSuffix}${tasteSuffix}`;
   }
   // pass
   if (report.confidence.reported > 0) {
     const unverified = report.metrics.filter((m) => m.confidence === "reported").map((m) => m.id);
-    return `In band for '${report.profile.id}', but ${listIds(unverified)} are reported without a re-derivable capture — capture their trajectories so the pass is verified, not just asserted.`;
+    return `In band for '${report.profile.id}', but ${listIds(unverified)} are reported without a re-derivable capture — capture their trajectories so the pass is verified, not just asserted.${tasteSuffix}`;
   }
-  return `All measured metrics are verified in band for '${report.profile.id}'. Nothing to change for the metrics checked.`;
+  return `All measured metrics are verified in band for '${report.profile.id}'. Nothing to change for the metrics checked.${tasteSuffix}`;
 }
 
 /** The one-line takeaway — read this first. */
 export function headlineFor(
-  report: Pick<ProfileVerifyReport, "status" | "summary" | "confidence" | "profile">,
+  report: Pick<ProfileVerifyReport, "status" | "summary" | "confidence" | "profile" | "placement">,
   engineOk: boolean,
   hasMeasurements: boolean,
   engineUnconfirmedButGraded: boolean,
   reachabilityNotRun: boolean,
 ): string {
+  // Grammar/taste split: a descriptive out-of-band count is surfaced on every
+  // graded headline (a pass that hides an archetype mismatch would read as "this
+  // IS a precision platformer" when it is not).
+  const nearest = report.placement?.overallNearest;
+  const tasteNote =
+    (report.summary.outOfBand ?? 0) > 0
+      ? `; ${report.summary.outOfBand} taste metric(s) off the '${report.profile.id}' archetype${nearest && nearest !== report.profile.id ? ` (nearest: ${nearest})` : ""}, descriptive only`
+      : "";
   // A green feel verdict must NOT hide that the level was never re-validated under
   // this feel's envelope — otherwise a leveled-game swap reads as a clean pass just
   // by omitting --layout (F4 strictness B; the doneness refusal is the seam's other
@@ -496,16 +567,21 @@ export function headlineFor(
     const parts: string[] = [];
     if (outOfBand > 0) parts.push(`${outOfBand} outside band`);
     if (c.rejected > 0) parts.push(`${c.rejected} rejected by re-derivation`);
-    return `${s.fail} of ${s.total} ${title} metric(s) failed: ${parts.join(", ")}.${caveat}`;
+    return `${s.fail} of ${s.total} ${title} metric(s) failed: ${parts.join(", ")}.${caveat}${tasteNote ? tasteNote + "." : ""}`;
   }
   if (report.status === "incomplete") {
-    return `${s.pass} measured metric(s) in band for ${title}; ${s.notMeasured} still unmeasured.${caveat}`;
+    return `${s.pass} measured metric(s) in band for ${title}; ${s.notMeasured} still unmeasured.${caveat}${tasteNote ? tasteNote + "." : ""}`;
   }
   // pass
   const verifiedNote =
     c.reported > 0
       ? ` (${c.verified} verified, ${c.reported} reported without re-derivable capture)`
       : " — all verified from raw samples";
+  // With descriptive out-of-band taste metrics, "all in band" would be a lie:
+  // scope the claim to the enforced metrics and carry the taste count.
+  if ((s.outOfBand ?? 0) > 0) {
+    return `All ${s.pass} enforced metric(s) in band for ${title}${verifiedNote}${tasteNote}.${reachNote}`;
+  }
   return `All ${s.pass} measured metric(s) in band for ${title}${verifiedNote}.${reachNote}`;
 }
 
@@ -520,6 +596,12 @@ export interface VerifyProfileArgs {
   outputPath?: string;
   /** Treat an `incomplete` (unmeasured) report as a non-zero exit too. */
   strict: boolean;
+  /**
+   * Re-arm TASTE metrics as gates (`--enforce-taste`). Default false: taste
+   * out-of-band is descriptive placement, never a fail. Grammar metrics gate in
+   * both modes.
+   */
+  enforceTaste?: boolean;
   /**
    * F4 — optional level layout (platforms/launchers/collectibles, the SAME shape the
    * build-mode reachability gate consumes via `scene.get_bounds`). When supplied,
@@ -576,11 +658,23 @@ export async function buildProfileReport(
     rederivation.filter((v) => v.status === "pass").map((v) => v.metric),
   );
 
+  const enforceTaste = args.enforceTaste === true;
   const { metrics, status: metricStatus, summary, confidence } = evaluateProfile(
     profile,
     measurements,
     distrusted,
     verified,
+    { enforceTaste },
+  );
+
+  // Grammar/taste split: place the measured taste values against ALL shipped
+  // profiles (descriptive only; never enters status). Uses the coverage-refusal
+  // stripped metrics map so a harness-gap value earns no placement either.
+  const placement = computeTastePlacement(
+    profile,
+    await loadAllProfiles(),
+    measurements.metrics,
+    distrusted,
   );
 
   // F5: measured metrics this profile does NOT band — surfaced informationally so a
@@ -658,12 +752,12 @@ export async function buildProfileReport(
     summary: profile.summary,
     exemplars: profile.exemplars,
   };
-  const headlineCtx = { status, summary, confidence, profile: profileSummary };
-  const nextActionCtx = { status, metrics, confidence, profile: profileSummary };
+  const headlineCtx = { status, summary, confidence, profile: profileSummary, placement };
+  const nextActionCtx = { status, metrics, confidence, profile: profileSummary, placement };
 
   return {
     kind: "feel-profile",
-    schemaVersion: "1",
+    schemaVersion: "2",
     producedAt: nowIso(),
     producedBy: resolveBuildStamp(),
     profile: profileSummary,
@@ -678,6 +772,8 @@ export async function buildProfileReport(
     alsoMeasured,
     mechanisms,
     reachability,
+    tasteEnforcement: enforceTaste ? "enforced" : "descriptive",
+    placement,
     summary,
     confidence,
     status,
@@ -689,6 +785,7 @@ export async function buildProfileReport(
 const STATUS_GLYPH: Record<ProfileMetricStatus, string> = {
   pass: "PASS",
   fail: "FAIL",
+  out_of_band: "INFO",
   not_measured: "—",
 };
 
@@ -737,6 +834,29 @@ function renderReport(report: ProfileVerifyReport): void {
       } else if (m.suggestion) {
         console.error(`       fix: ${m.suggestion}`);
       }
+    } else if (m.status === "out_of_band") {
+      // Descriptive taste mismatch: no "fix" order (an archetype mismatch is not
+      // a defect); name the two honest exits instead.
+      console.error(
+        `       taste: off the '${report.profile.id}' archetype target (descriptive; --enforce-taste gates it).`,
+      );
+    }
+  }
+  // Grammar/taste split: archetype placement of the measured taste values.
+  // Descriptive only — printed so a taste mismatch answers "then what does this
+  // tuning resemble?" instead of just "not precision".
+  if (report.placement.status === "computed") {
+    console.error(
+      `[loombridge verify] archetype placement (taste, descriptive${report.placement.overallNearest ? ` — overall nearest: ${report.placement.overallNearest}` : ""}):`,
+    );
+    for (const entry of report.placement.entries) {
+      console.error(`       ${entry.detail}`);
+    }
+    if (report.placement.notMeasured.length > 0) {
+      console.error(`       not placed (unmeasured): ${report.placement.notMeasured.join(", ")}`);
+    }
+    for (const ex of report.placement.excluded) {
+      console.error(`       not placed (rejected): ${ex.id} — ${ex.reason}`);
     }
   }
   // F5: informational "also measured" — metrics this profile doesn't band. Clearly
@@ -790,8 +910,9 @@ function renderReport(report: ProfileVerifyReport): void {
   }
   const s = report.summary;
   const c = report.confidence;
+  const outOfBandPart = s.outOfBand > 0 ? `, ${s.outOfBand} taste out-of-band (descriptive)` : "";
   console.error(
-    `[loombridge verify] status=${report.status} | ${s.pass} pass, ${s.fail} fail, ${s.notMeasured} not measured (of ${s.total})`,
+    `[loombridge verify] status=${report.status} | ${s.pass} pass, ${s.fail} fail${outOfBandPart}, ${s.notMeasured} not measured (of ${s.total})`,
   );
   console.error(
     `[loombridge verify] confidence | ${c.verified} verified, ${c.reported} reported, ${c.rejected} rejected, ${c.unmeasured} unmeasured`,

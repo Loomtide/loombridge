@@ -15,6 +15,7 @@
  *   UNSUPPORTED_UNIT  a unit outside SUPPORTED_PROFILE_UNITS              (typo masquerading as a unit)
  *   WRONG_UNIT        a supported unit that is wrong for that metric      (e.g. runSpeed in "ms")
  *   INVALID_PROFILE_ID an id that does not match PROFILE_ID_PATTERN       (malformed id)
+ *   BANDED_MEASURE_ONLY a band on a measure-only metric (sync family)     (an unvalidated gate)
  *
  * F2 build-block rules (a `build` block is optional; if present it must solve):
  *   BUILD_SOLVE_MISSING_BAND  build block on a profile missing a solve band
@@ -78,6 +79,15 @@ function validateMetricTarget(
     );
     // Keep validating the shape so we surface unit/band problems too, but we
     // can't enforce the canonical unit without a spec.
+  } else if (spec.gating === "measure-only") {
+    // A measure-only metric has no validated bands anywhere; a profile banding one
+    // would turn an informational number into a gate nothing calibrated.
+    push(
+      issues,
+      "BANDED_MEASURE_ONLY",
+      `${path}: '${metricId}' is measure-only (${spec.family}): recorded informationally, never banded by a profile.`,
+      path,
+    );
   }
 
   if (!isRecord(value)) {

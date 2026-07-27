@@ -21,6 +21,30 @@ unsupported unit (`UNSUPPORTED_UNIT`), a supported-but-wrong unit for a metric
 (`WRONG_UNIT`), and a malformed profile id (`INVALID_PROFILE_ID`). This mirrors the
 §3a "an absent binding is a refusal, not a skipped check" discipline.
 
+## Grammar vs taste: which metrics gate
+
+Every metric in the vocabulary (`KNOWN_PROFILE_METRICS`) carries a required gating
+class. It is a property of the METRIC, not of any profile, so profiles can never
+disagree about it:
+
+| Class | Metrics | Behavior |
+|---|---|---|
+| `grammar` | coyoteTime, jumpBuffer, fallGravityMultiplier, shortHopApex, dashCooldown, inputLatency | Universal feel-quality signals: out-of-band GATES the verdict in every mode. Every good-feeling platformer has these regardless of archetype. |
+| `taste` | runSpeed, runAcceleration, runDeceleration, jumpApex, timeToApex, maxFallSpeed, dashDistance, dashTime, camera/feedback/weapon targets | Archetype tuning targets: out-of-band is DESCRIPTIVE by default (reported as `out_of_band` plus an archetype-placement block, never a fail). `verify --profile <id> --enforce-taste` re-arms them as gates for a build that targets the archetype. |
+| `measure-only` | every sync-family metric (inputToSfxLatency, dashToGhostMs, groundContactToDustMs, inputToAnimStateLatency, fireIntervalMs, fireInputToSpawnLatency, ttkMs) | May never be banded by any profile: the validator refuses (`BANDED_MEASURE_ONLY`). Surfaced informationally under `alsoMeasured`. |
+
+Two rules keep the split honest:
+
+- A §0-rejected value forces `fail` for BOTH classes: tampering never pays, and a
+  rejected value earns no placement (a tampered number describes nothing).
+- An unmeasured taste metric still reads `not_measured` and still drives
+  `incomplete`: completeness is not gating, and a capture gap never turns green.
+
+The **placement block** answers the question a taste mismatch raises ("then which
+archetype does this tuning resemble?"): each measured taste value is compared
+against every shipped profile that bands it, normalized by band half-width, and the
+report names the nearest archetype per metric and overall.
+
 ## The three profiles, in measurable terms
 
 A band is `±percent` (`{ "percent": 15 }`) or `±absolute` (`{ "abs": 0.03 }`) around
