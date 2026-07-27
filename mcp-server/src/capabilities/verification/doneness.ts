@@ -1032,6 +1032,23 @@ async function checkSliceRollupHeroShotFidelity(paths: LoombridgePaths, planGenr
   );
 }
 
+/**
+ * Read `build-verdict.json` when it exists, else `null`. Shared by the whole-game path (where the
+ * verdict is the proof) and the slice roll-up (where it is not the proof, but its CLAIMS are still
+ * checked against disk — see the coverage block in `evaluateSliceDoneness`).
+ *
+ * A malformed verdict reads as absent here rather than throwing; the whole-game path already
+ * refuses on a missing/unusable verdict for its own reasons, and on the slice path an unreadable
+ * file simply carries no claim to check.
+ */
+async function readVerdictIfPresent(verdictPath: string): Promise<VerdictLike | null> {
+  try {
+    return JSON.parse(await fs.readFile(verdictPath, "utf-8")) as VerdictLike;
+  } catch {
+    return null;
+  }
+}
+
 async function checkSliceRollupAssetSourceFidelity(paths: LoombridgePaths): Promise<string[]> {
   const design = await designStatus(paths);
   if (design.status !== "approved") return [];
@@ -1478,17 +1495,34 @@ export async function evaluateSliceDoneness(
   if (assetFidelityReasons.length) ok = false;
   if (art.refusals.length) ok = false;
 
-  // GENRE COVERAGE — re-derived from disk here too. The slice roll-up has no whole-game verdict to
-  // check for agreement, so this is purely the `ungraded` refusal: a project whose genre has neither a
-  // registration nor a promotion report cannot certify by the slice path any more than by the verdict
-  // path. Without this the roll-up would be the cheaper way around the gate.
+  // GENRE COVERAGE — re-derived from disk here too, so the roll-up is never the cheaper way around
+  // the gate.
   //
   // The genre comes from SLICES.json rather than STATE because the slice plan IS the artifact being
   // certified here and it declares its own genre. STATE is then checked for AGREEMENT: a roadmap whose
   // genre has drifted from the project's would otherwise let either file pick whichever genre grades
   // more favourably.
+  //
+  // THE WHOLE-GAME VERDICT IS READ HERE TOO. An earlier cut passed `claimed: undefined`, on the
+  // stated assumption that "the slice roll-up has no whole-game verdict to check for agreement".
+  // That assumption was false: a full `loombridge verify` writes `build-verdict.json` for a
+  // slice-planned project as well. The consequence was that its `genreCoverage` block could be
+  // hand-edited to claim `graded` and NOTHING contradicted it — and because a `partially-graded`
+  // project is BY CONSTRUCTION slice-planned (it needs a promotion report, which `plan` writes
+  // alongside SLICES.json), the disk-vs-verdict comparison protected `graded` and `ungraded` while
+  // missing the one tier the coverage split was invented for. Confirmed by tampering with a real
+  // project's verdict and diffing doneness output: byte-identical.
+  //
+  // `expectStamp` stays false — per-slice verdicts are this path's proof, so an ABSENT block is a
+  // fact about the path rather than a suppressed scope. But a block that is PRESENT and DISAGREES
+  // with disk is a forged claim on either path, and is refused on both.
   const coverage = deriveGenreCoverage({ genre: plan.genre, promotion: await readGenrePromotionReport(paths) });
-  const coverageRefusals = genreCoverageRefusals({ resolved: coverage, claimed: undefined, expectStamp: false });
+  const wholeGameVerdict = await readVerdictIfPresent(paths.verdict);
+  const coverageRefusals = genreCoverageRefusals({
+    resolved: coverage,
+    claimed: wholeGameVerdict?.genreCoverage,
+    expectStamp: false,
+  });
   if (rollupState && rollupState.genre !== plan.genre) {
     coverageRefusals.push(
       `SLICES.json declares genre "${plan.genre}" but STATE says "${rollupState.genre}" — refusing ` +

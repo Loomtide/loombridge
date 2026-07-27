@@ -1,7 +1,9 @@
 # RFC: Command Surface Redesign
 
-**Status:** W1 IMPLEMENTED. **W2 SUPERSEDED** by §12 (its `design` stage already exists; its
-skill-binding half was a live defect and is now fixed). W3 to W4 remain PROPOSED.
+**Status:** COMPLETE. W1 implemented (§11). **W2 SUPERSEDED** by §12 — its `design` stage already
+existed under other names, and its skill-binding half was a live defect, now fixed. The W3/W4
+remainder shipped (§13); most of it was already satisfied or dead, and what was left is recorded
+there. Live-tested against a real Unity project (§13.2).
 **Date:** 2026-07-27. Measurements in the appendix were taken against `main` at `4981142`.
 
 **Decisions, resolved 2026-07-27.** D1: yes, an ungraded game may reach `doneness`, with coverage
@@ -515,3 +517,42 @@ carrying a LITMUS proven to fail on the old predicate.
 free-form string gains nothing. Contract gates come from `ACCEPTANCE.json`, not from coverage, so
 they still run; the resulting claim is strictly weaker; and with a Design Target it refuses where
 platformer would have graded. The downgrade is self-harm, not an escalation.
+
+### 13.2 Live Unity testing, and the hole it found
+
+Tested against a real Unity project (6000.3.20f1, created via batchmode) and a real consumer install,
+using the repo build. Worth stating: the `loombridge` on a dev machine's PATH may be a stale global
+from an earlier release, and testing it would exercise none of this work.
+
+**What passed.** The bridge installs as a `file:` tarball dependency and Unity imports and COMPILES
+it clean (0 `error CS`, `com.loomtide.loombridge.dll` actually built, bootstrap registering all 13 op
+categories). `doctor` reports correctly before and after. The agent-surface install lands exactly
+four commands (`build`, `plan`, `status`, `verify`) with no `ask.md` or `e2e.md` anywhere under
+`.claude/` or `.codex/`, confirming the retirement in a real project rather than only in the repo.
+The full CLI matrix passed: registered/free-form/contract coverage tiers, the free-form bare-re-plan
+regression, the `design` -> `target` alias with its notice on stderr only, the deprecated `ask`, and
+the contract digest independently confirmed against `shasum -a 256`.
+
+**The hole.** The slice roll-up's coverage check passed `claimed: undefined`, on the stated
+assumption that "the slice roll-up has no whole-game verdict to check for agreement". That was
+false: a full `loombridge verify` writes `build-verdict.json` for a slice-planned project too. Its
+`genreCoverage` block could therefore be hand-edited to claim `graded` with nothing contradicting
+it, confirmed by tampering with a real project's verdict and diffing doneness output byte-for-byte.
+
+The severity is worth stating precisely rather than inflating: this was **not** a path to a false
+exit code. The laundered field changed nothing about whether doneness certified, because the slice
+path proves itself from per-slice verdicts. It was a path to a false CLAIM in the artifact humans and
+tools read, left unchallenged by the one gate whose job is to refuse self-graded claims. §10's own
+risk entry names exactly that: "an ungraded project can present as graded".
+
+What makes it sting is WHICH tier it missed. A `partially-graded` project is by construction
+slice-planned, since it needs a promotion report and `plan --genre-contract` writes that alongside
+`SLICES.json`. So the disk-vs-verdict comparison protected `graded` and `ungraded` while missing the
+one tier the coverage split was invented for. Fixed by reading the whole-game verdict on the slice
+path and comparing its claim; `expectStamp` stays false there, because an ABSENT block is still a
+fact about that path rather than a suppressed scope. Regression test carries a LITMUS proven to fail
+on the old `claimed: undefined`.
+
+Also cleaned up while verifying: `scripts/sync-loombridge-artifacts.mjs`, the Codex shim generator
+with a CI `--check` mode, still carried `SHIM_SPEC` entries for `ask` and `e2e` pointing at `.md`
+files that no longer exist. `--check` passed either way, so nothing would have caught it.

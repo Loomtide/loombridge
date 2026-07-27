@@ -1177,6 +1177,53 @@ test("doneness — refuses a design-targeted build whose verdict is hero-shot-di
   assert.equal(await runDoneness({ root }), 1);
 });
 
+test("REGRESSION: the SLICE path refuses a laundered coverage claim in the whole-game verdict", async () => {
+  // Found by live CLI testing and reproduced end-to-end before the fix.
+  //
+  // W1's slice-path coverage check passed `claimed: undefined`, on the stated assumption that "the
+  // slice roll-up has no whole-game verdict to check for agreement". False: a full `loombridge
+  // verify` writes build-verdict.json for a slice-planned project too. So its `genreCoverage` block
+  // could be hand-edited to claim `graded` and nothing contradicted it.
+  //
+  // WHY THAT TIER MATTERS MOST: a `partially-graded` project is BY CONSTRUCTION slice-planned (it
+  // needs a promotion report, which `plan --genre-contract` writes alongside SLICES.json). So the
+  // disk-vs-verdict comparison covered `graded` and `ungraded` while missing the ONE tier the whole
+  // coverage split was invented for. Verified against a real project by tampering with the verdict
+  // and diffing doneness output: byte-identical before the fix.
+  //
+  // LITMUS: restore `claimed: undefined` in evaluateSliceDoneness and this test goes green.
+  const root = await tmpRoot();
+  try {
+    const paths = loombridgePaths(root);
+    const genre = "puzzle-hypercasual";
+
+    const a = { ...doneSlice("a", "run-a"), state: "approved" as const };
+    a.proof = { ...a.proof!, approvedAt: "2026-05-28T02:00:00.000Z" };
+    await writeSliceProofFiles(root, a);
+    await writeSlicePlan(paths, planOf([a], genre));
+    await writeState(paths, { genre, engine: "unity", phase: "planned", lastVerdict: null, updatedAt: "2026-05-28T00:00:00.000Z" });
+    // A promotion report makes disk truth `partially-graded` — the tier that was unprotected.
+    await fs.writeFile(paths.genrePromotion, JSON.stringify(promotionFor(genre)), "utf-8");
+
+    // An HONEST whole-game verdict certifies.
+    const verdictPath = paths.verdict;
+    await fs.mkdir(path.dirname(verdictPath), { recursive: true });
+    const honest = { status: "pass", genreCoverage: { coverage: "partially-graded", genre } };
+    await fs.writeFile(verdictPath, JSON.stringify(honest), "utf-8");
+    assert.equal(await runDoneness({ root }), 0, "an honestly-stamped slice project must certify");
+
+    // The SAME project, with only the coverage claim laundered upward, must NOT.
+    await fs.writeFile(
+      verdictPath,
+      JSON.stringify({ ...honest, genreCoverage: { coverage: "graded", genre } }),
+      "utf-8",
+    );
+    assert.equal(await runDoneness({ root }), 1, "a verdict claiming `graded` over a partially-graded project must refuse");
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
 test("slice doneness roll-up — all approved + done + dependency order exits 0", async () => {
   const root = await tmpRoot();
   try {

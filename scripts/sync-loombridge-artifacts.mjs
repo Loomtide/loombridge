@@ -29,9 +29,11 @@ const REPO_ROOT = path.resolve(__dirname, "..");
  * supplies each command's invocation details. A plugin command with no entry here
  * is an error (a new command must declare its shim).
  *
- * argMode: "none" (fixed prompt) | "question" (join all positional args — the ask
- * question) | "intent" (join all positional args — the build entry point) |
- * "bundle" (optional first arg — the e2e demo bundle path).
+ * argMode: "none" (fixed prompt) | "intent" (join all positional args — the build entry point).
+ *
+ * The "question" and "bundle" modes lost their only users when `ask` and `e2e` were retired from
+ * the agent surface (CommandSurfaceRedesign §1.3). The emitter still supports both, so a future
+ * command can declare them without re-deriving the shape; they are simply unused today.
  */
 const SHIM_SPEC = {
   plan: {
@@ -55,20 +57,6 @@ const SHIM_SPEC = {
       "Open and follow commands/loombridge/status.md. Report read-only Loombridge progress, warnings, and the next command.",
     profileComment:
       "`status` is read-only. It runs the deterministic CLI status command and reports\n# progress/next-command/proof warnings without mutating project state.",
-    profile: {
-      approval_policy: "on-request",
-      sandbox_mode: "read-only",
-      model_reasoning_effort: "low",
-      web_search: "none",
-    },
-  },
-  ask: {
-    summary: "loombridge ask",
-    argMode: "question",
-    prompt:
-      "Open and follow commands/loombridge/ask.md. Answer this read-only Loombridge workflow question from local project state:",
-    profileComment:
-      "`ask` is read-only. It runs the deterministic CLI explainer over local\n# .loombridge/ state; no build/capture/verify/approval actions.",
     profile: {
       approval_policy: "on-request",
       sandbox_mode: "read-only",
@@ -102,19 +90,6 @@ const SHIM_SPEC = {
       sandbox_mode: "workspace-write",
       model_reasoning_effort: "low",
       web_search: "none",
-    },
-  },
-  e2e: {
-    summary: "loombridge end-to-end demo workflow",
-    argMode: "bundle",
-    prompt: "Open and follow commands/loombridge/e2e.md.",
-    profileComment:
-      "`e2e` is a demo workflow wrapper over plan/build/verify. It may touch Unity\n# projects, assets, captures, and reports, so it uses the heavier build-like\n# profile. It is not a separate product verb.",
-    profile: {
-      approval_policy: "on-request",
-      sandbox_mode: "workspace-write",
-      model_reasoning_effort: "high",
-      web_search: "cached",
     },
   },
 };
