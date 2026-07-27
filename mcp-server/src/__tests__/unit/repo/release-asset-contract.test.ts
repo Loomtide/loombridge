@@ -81,6 +81,39 @@ test("the release script does NOT assume npm packs to the asset name", () => {
   assert.match(releaseSh, /\bmv\b[^\n]*"\$tgz"/, "loombridge-release.sh must rename the packed tarball to the asset name");
 });
 
+test("nothing advertises get.loomtide.ai as the Loombridge installer", async () => {
+  // That endpoint serves a DIFFERENT product's installer (@loomtide/cli). Running it installs
+  // `loomtide`, not `loombridge` — confirmed empirically. `README.md` and `Docs/Install.md` have
+  // always said so, but two code paths contradicted them: `loombridge update` printed it as THE
+  // self-update command, and the release script baked it into its default notes, so every release
+  // page repeated it.
+  //
+  // This asserts the CODE agrees with the docs. It deliberately allows prose that MENTIONS the
+  // endpoint (the docs must be able to warn about it, and the code must be able to explain the
+  // override); what it forbids is presenting it as a runnable install command.
+  const offenders: string[] = [];
+  const files = [
+    path.join(PKG_ROOT, "src", "capabilities", "setup", "update.ts"),
+    path.join(REPO_ROOT, "scripts", "loombridge-release.sh"),
+    path.join(REPO_ROOT, "scripts", "install.sh"),
+  ];
+  // A runnable one-liner: a curl/irm of the endpoint piped into a shell.
+  const runnable = /(curl|irm|wget)[^\n]*get\.loomtide\.ai[^\n]*(\|\s*(sh|bash|iex)|\bsh\b)/i;
+  for (const file of files) {
+    for (const [i, line] of read(file).split("\n").entries()) {
+      // Skip the override branch: naming the env var that RESTORES the one-liner is not advertising it.
+      if (/LOOMBRIDGE_INSTALL_URL/.test(line)) continue;
+      if (runnable.test(line)) offenders.push(`${path.relative(REPO_ROOT, file)}:${i + 1}: ${line.trim()}`);
+    }
+  }
+  assert.deepEqual(
+    offenders,
+    [],
+    "these present get.loomtide.ai as a runnable Loombridge install command, but it installs a different product:\n  " +
+      offenders.join("\n  "),
+  );
+});
+
 test("both shipped package.json versions move together", () => {
   // The CLI package and the Unity UPM package are released as one unit: the release uploads the CLI
   // tarball AND the bridge tarball, and `install-bridge` wires `com.loomtide.loombridge-<ver>.tgz`
