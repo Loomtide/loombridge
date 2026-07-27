@@ -63,10 +63,14 @@ test("plan is idempotent — re-running does not clobber ACCEPTANCE.json", async
   assert.equal(after, before, "second plan run must leave the contract untouched");
 });
 
-test("plan rejects an unknown genre with a usage exit code", async () => {
+test("plan accepts an unknown genre as free-form (no usage refusal at the door)", async () => {
+  // Was exit 2. A genre with no registered pack now seeds the genre-neutral `_generic` template and
+  // verifies as `ungraded` — the closed set governs what `verify` CLAIMS, not what `plan` ACCEPTS
+  // (CommandSurfaceRedesign W1/D). Exit 1 here is the ordinary design-target readiness gate, which
+  // every genre hits; the point is that 2 (usage refusal) is gone.
   const root = await tmpRoot();
   const code = await runPlan({ root, genre: "no-such-genre", engine: "unity", force: false });
-  assert.equal(code, 2);
+  assert.notEqual(code, 2, "an unknown genre must not be a usage error any more");
 });
 
 // ── verify ───────────────────────────────────────────────────────────────────

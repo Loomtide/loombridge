@@ -77,7 +77,7 @@ $ loombridge plan --genre platformer-2d --name DemoGame --engine unity
 [loombridge plan] Roadmap: none yet (design phase).
 [loombridge plan] design target: missing
 [loombridge plan] asset manifest: missing
-[loombridge plan] NOT ready — no approved Design Target (annotated hero shot). Establish/re-approve via `loombridge design set/approve` (see commands/loombridge/plan.md §3c), then re-run. (Use --allow-missing-design-target only for early scaffolding — `build` will still block.)
+[loombridge plan] NOT ready — no approved Design Target (annotated hero shot). Establish/re-approve via `loombridge target set/approve` (see commands/loombridge/plan.md §3c), then re-run. (Use --allow-missing-design-target only for early scaffolding — `build` will still block.)
 ; exit 1
 
 $ loombridge doneness
@@ -205,8 +205,11 @@ single source of truth per project (contract, design target, captures, reports, 
 and the supervised loop is:
 
 - **`plan`** — scaffold `.loombridge/`, seed the acceptance contract + feel spec from a
-  genre pack (`platformer-2d`, `2d-shooter`, `3d-shooter`), and establish/freeze the
-  Design Target hero shot. The roadmap won't scaffold without an approved target.
+  genre pack (`platformer-2d`, `2d-shooter`, `3d-shooter`, `3d-topdown-arena`), and
+  establish/freeze the Design Target hero shot. The roadmap won't scaffold without an
+  approved target. For a genre with no shipped pack, author a genre contract and pass
+  `--genre-contract`: it plans and builds the same way, and verifies as
+  `partially-graded` with its ungraded gaps enumerated on the verdict.
 - **`build`** — mint a build `runId` (the §3a supervisor anchor) and gate preconditions;
   the agent then constructs in-engine through the bridge tools.
 - **`verify`** — run the Tier-1 **deterministic** gates (asset/manifest, UI conformance,
@@ -214,7 +217,9 @@ and the supervised loop is:
 - **`doneness`** — the freshness + integrity gate. Exits `0` only on a fresh, run-bound,
   green verdict whose cited captures exist; for an approved Design Target it additionally
   enforces hero-shot fidelity and independent review. This is where "verified-green" is
-  distinguished from "done".
+  distinguished from "done". A `partially-graded` project can reach `0`, but the claim is
+  scoped: coverage is re-derived from disk (never read from the verdict) and every gap is
+  printed with the pass.
 
 The line between the two tracks is deliberate: **gates, exits, and state are
 deterministic and live in the CLI; model judgment (VLM design review) is advisory and

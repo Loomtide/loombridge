@@ -95,7 +95,7 @@
       "title": "One slice entry",
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "title", "dependsOn", "skill", "feelIntent", "acceptance", "state"],
+      "required": ["id", "title", "dependsOn", "feelIntent", "acceptance", "state"],
       "properties": {
         "id": {
           "type": "string",
@@ -114,7 +114,7 @@
         "skill": {
           "type": "string",
           "minLength": 1,
-          "description": "Which skill pack/component builds this slice."
+          "description": "OPTIONAL. Which skill pack builds this slice. OMIT when no shipped skill covers it — `plan` then points the agent at the generic ops. Present-but-empty is refused: a blank binding reads as a binding while naming nothing, which is the failure this field's guard exists to stop."
         },
         "feelIntent": {
           "type": "string",

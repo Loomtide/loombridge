@@ -299,7 +299,7 @@ export async function runAdopt(args: AdoptArgs): Promise<number> {
     disclaimer: DISCLAIMER,
     nextSteps: [
       "Review and edit .loombridge/ACCEPTANCE.json — it is an inferred PROPOSAL, not ground truth.",
-      "Establish + approve the Design Target (annotated hero shot) via `loombridge design set/approve`.",
+      "Establish + approve the Design Target (annotated hero shot) via `loombridge target set/approve`.",
       "Run `loombridge plan` to scaffold the slice roadmap from the reviewed contract.",
       "Build, then `loombridge verify`, then `loombridge doneness` — these still refuse until verified-green.",
     ],
@@ -342,7 +342,7 @@ export async function runAdopt(args: AdoptArgs): Promise<number> {
     }
   }
   console.error(`[loombridge adopt] ${DISCLAIMER}`);
-  console.error("[loombridge adopt] next: review the proposal, then `loombridge design` → `loombridge plan` → build → verify → doneness.");
+  console.error("[loombridge adopt] next: review the proposal, then `loombridge target` → `loombridge plan` → build → verify → doneness.");
   return 0;
 }
 

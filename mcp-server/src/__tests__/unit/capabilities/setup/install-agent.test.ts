@@ -465,6 +465,12 @@ describe("loombridge install-agent (optional agent surface)", { timeout: 90000 }
     assert.equal(cli(["install-bridge", "--project", project]).status, 0);
     // Pre-create a target path as a DIRECTORY → writing that file fails (EISDIR) mid-loop,
     // AFTER earlier command files were already written.
+    //
+    // ORDERING DEPENDENCY: the payload is written in sorted order, so the poisoned target must sort
+    // AFTER `earlierCommand` or there is no "already written" file to assert on and the test proves
+    // nothing. `verify.md` is last; `build.md` is first. (This previously used `ask.md`, which was
+    // retired from the agent surface — CommandSurfaceRedesign §1.3.)
+    const earlierCommand = ".claude/commands/loombridge/build.md";
     await fsp.mkdir(path.join(project, ".claude/commands/loombridge/verify.md"), { recursive: true });
     const r = cli(["install-agent", "--project", project]);
     assert.equal(r.status, 1, "a filesystem failure is exit 1");
@@ -472,10 +478,10 @@ describe("loombridge install-agent (optional agent surface)", { timeout: 90000 }
     assert.equal(surface.state, "enabled");
     assert.ok(Array.isArray(surface.files) && surface.files.length > 0, "partial ledger persisted for recovery");
     // Files written before the failure must be reachable by --remove (no strand).
-    await fsp.access(path.join(project, ".claude/commands/loombridge/ask.md"));
+    await fsp.access(path.join(project, earlierCommand));
     const rm = cli(["install-agent", "--project", project, "--remove"]);
     assert.equal(rm.status, 0, rm.stderr);
-    await assert.rejects(fsp.access(path.join(project, ".claude/commands/loombridge/ask.md")), "partial install cleaned");
+    await assert.rejects(fsp.access(path.join(project, earlierCommand)), "partial install cleaned");
   });
 
   test("#5 a corrupt ledger (files:null) self-heals: --remove exits 0 and sets declined; refresh does not throw", async () => {

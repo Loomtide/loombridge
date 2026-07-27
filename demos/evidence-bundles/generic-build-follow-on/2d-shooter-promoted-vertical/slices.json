@@ -6,7 +6,6 @@
       "id": "arena",
       "title": "Arena + framing",
       "dependsOn": [],
-      "skill": "genre-2d-shooter-arena",
       "feelIntent": "Arena + framing.",
       "acceptance": {
         "gates": [
@@ -23,7 +22,6 @@
       "dependsOn": [
         "arena"
       ],
-      "skill": "genre-2d-shooter-controller",
       "feelIntent": "Player controller + move. Explicit gaps: move-feel-measurement.",
       "acceptance": {
         "gates": [
@@ -39,7 +37,6 @@
       "dependsOn": [
         "controller"
       ],
-      "skill": "genre-2d-shooter-weapon",
       "feelIntent": "Weapon core: fire -> projectile + impact. Explicit gaps: spawn-aware-capture.",
       "acceptance": {
         "gates": [
@@ -55,7 +52,6 @@
       "dependsOn": [
         "weapon"
       ],
-      "skill": "genre-2d-shooter-enemy",
       "feelIntent": "Enemy + health/damage + death. Explicit gaps: ttk-live-capture.",
       "acceptance": {
         "gates": [
@@ -71,7 +67,6 @@
       "dependsOn": [
         "enemy"
       ],
-      "skill": "genre-2d-shooter-feedback",
       "feelIntent": "Combat feedback (muzzle/hitmarker/shake/hitstop). Explicit gaps: hitstop-measurement, screenshake-measurement.",
       "acceptance": {
         "gates": [
@@ -88,7 +83,6 @@
       "dependsOn": [
         "enemy"
       ],
-      "skill": "genre-2d-shooter-hud",
       "feelIntent": "HUD (health/ammo/score).",
       "acceptance": {
         "gates": [
@@ -105,7 +99,6 @@
       "dependsOn": [
         "enemy"
       ],
-      "skill": "genre-2d-shooter-end-state",
       "feelIntent": "Death / victory end-state.",
       "acceptance": {
         "gates": [

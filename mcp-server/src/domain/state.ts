@@ -15,6 +15,18 @@ import path from "node:path";
 
 export const LOOMBRIDGE_DIRNAME = ".loombridge";
 
+/**
+ * The PLACEHOLDER genre in a STATE bootstrapped before any `plan` ran — `loombridge target set`
+ * can create STATE first, and at that point no genre has been chosen.
+ *
+ * It is a sentinel, not a genre, and `plan` must never preserve it across a bare re-plan. Named
+ * rather than inlined because the distinction it draws is load-bearing: `plan` preserves ANY other
+ * recorded genre, including a free-form one with no registered pack. Testing "is it registered?"
+ * instead of "is it the placeholder?" silently converted free-form projects into platformers on a
+ * bare re-plan — and upgraded their coverage claim from `ungraded` to `graded` on the way.
+ */
+export const UNPLANNED_GENRE = "unknown";
+
 /** Readiness of the Design Target (the annotated hero shot — plan §3c). */
 export type DesignTargetStatus = "missing" | "draft" | "approved";
 
@@ -93,6 +105,12 @@ export interface LoombridgePaths {
   slices: string;
   /** `.loombridge/ASSET_MANIFEST.json` — approved visual asset source contract. */
   assetManifest: string;
+  /**
+   * `.loombridge/GENRE_PROMOTION.json` — the promotion report `plan --genre-contract` writes. Present
+   * only for a project planned from a genre contract, and the DISK TRUTH that decides genre coverage
+   * for an unregistered genre (`capabilities/genre/genre-coverage.ts`).
+   */
+  genrePromotion: string;
   /** `.loombridge/design/` — the Design Target Phase artifacts (plan §3c). */
   design: string;
   /** `.loombridge/reports/` */
@@ -124,6 +142,7 @@ export function loombridgePaths(root: string): LoombridgePaths {
     acceptance: path.join(dir, "ACCEPTANCE.json"),
     slices: path.join(dir, "SLICES.json"),
     assetManifest: path.join(dir, "ASSET_MANIFEST.json"),
+    genrePromotion: path.join(dir, "GENRE_PROMOTION.json"),
     design: path.join(dir, "design"),
     reports: path.join(dir, "reports"),
     traces: path.join(dir, "traces"),
@@ -220,7 +239,7 @@ export function nextActionFor(state: LoombridgeState): string {
     case "planned":
       return designReady
         ? "Design Target approved — run `loombridge build` to build the next planned slice."
-        : "Establish + approve the Design Target (annotated hero shot) in `.loombridge/design/` via `loombridge design set/approve`, then `loombridge build`.";
+        : "Establish + approve the Design Target (annotated hero shot) in `.loombridge/design/` via `loombridge target set/approve`, then `loombridge build`.";
     case "built-unverified":
       return "Drive every `capturePack` state into `.loombridge/verify/<state>/`, run the independent hero-shot review, then `loombridge verify --vlm … --strict` and `loombridge doneness`.";
     case "verified-failing":
@@ -306,7 +325,7 @@ export async function updateState(
 ): Promise<LoombridgeState> {
   const prev = await readState(paths);
   const base: LoombridgeState =
-    prev ?? { genre: "unknown", engine: "unity", phase: "planned", lastVerdict: null, updatedAt: nowIso() };
+    prev ?? { genre: UNPLANNED_GENRE, engine: "unity", phase: "planned", lastVerdict: null, updatedAt: nowIso() };
   const next: LoombridgeState = { ...base, ...patch, updatedAt: nowIso() };
   await writeState(paths, next);
   return next;

@@ -5,8 +5,9 @@ import path from "node:path";
 import test from "node:test";
 
 import { renderGameSpec, runPlan } from "../../../../capabilities/verification/plan.js";
-import { nextActionFor, readState, loombridgePaths, type LoombridgeState } from "../../../../domain/state.js";
+import { fileExists, nextActionFor, readState, loombridgePaths, type LoombridgeState } from "../../../../domain/state.js";
 import { setDesignTarget } from "../../../../capabilities/verification/design.js";
+import { deriveGenreCoverage } from "../../../../capabilities/genre/genre-coverage.js";
 
 async function tmpRoot(): Promise<string> {
   return fs.mkdtemp(path.join(os.tmpdir(), "loombridge-plan-"));
@@ -73,7 +74,9 @@ function stateWith(patch: Partial<LoombridgeState>): LoombridgeState {
 test("nextActionFor — planned without an approved target points at the Design Target", () => {
   const action = nextActionFor(stateWith({ phase: "planned", designTarget: "missing" }));
   assert.match(action, /Design Target/);
-  assert.match(action, /loombridge design/);
+  // The verb was renamed `design` -> `target` (CommandSurfaceRedesign §4); `design` remains a
+  // deprecated alias, but the guidance we hand a developer must name the CANONICAL verb.
+  assert.match(action, /loombridge target/);
 });
 
 test("nextActionFor — planned WITH approval points at build", () => {
@@ -206,7 +209,10 @@ test("runPlan — --genre-contract promotes acceptance, slices, and report", asy
     assert.equal(acceptance.feel.extra?.fireIntervalMs, undefined, "target bands stay report-only");
     assert.equal(slices.genre, "2d-shooter");
     const weaponSlice = slices.slices.find((slice: { id?: string }) => slice.id === "weapon");
-    assert.equal(weaponSlice?.skill, "shooter-weapon");
+    // The REGISTERED 2d-shooter pack template supplies the binding, and it names a skill consumers
+    // actually receive. It used to name `shooter-weapon`, which ships nowhere; the repo guard
+    // `slice-skill-bindings.test.ts` is what keeps it resolvable.
+    assert.equal(weaponSlice?.skill, "unity-2d-game");
     assert.ok(weaponSlice?.acceptance.gates.includes("visual-artifacts"));
     assert.equal(report.sourceGenreId, "2d-shooter");
     assert.ok(report.measurability.some((row: { target?: string; targetBand?: { min?: number } }) => row.target === "fireIntervalMs" && row.targetBand?.min === 90));
@@ -219,14 +225,28 @@ test("runPlan — --genre-contract promotes acceptance, slices, and report", asy
   }
 });
 
-test("runPlan — --genre-contract refuses unregistered promoted genres", async () => {
+/** The shipped 2d-shooter contract, re-pointed at an UNREGISTERED genre id. */
+async function unregisteredContractAt(
+  root: string,
+  genreId: string,
+  mutate?: (contract: Record<string, unknown>) => void,
+): Promise<string> {
+  const sourcePath = path.join(process.cwd(), "src", "capabilities", "genre", "genre-contract", "examples", "2d-shooter.contract.json");
+  const source = JSON.parse(await fs.readFile(sourcePath, "utf-8"));
+  source.genreId = genreId;
+  mutate?.(source);
+  const contractPath = path.join(root, `${genreId}.contract.json`);
+  await fs.writeFile(contractPath, JSON.stringify(source), "utf-8");
+  return contractPath;
+}
+
+test("runPlan — --genre-contract PLANS an unregistered genre (coverage, not refusal)", async () => {
+  // W1 (CommandSurfaceRedesign): this used to exit 2. The registry lookup it tripped over was a pure
+  // gatekeeper — on the promoted path the pack's acceptance template is never even read, because the
+  // contract supplies acceptance AND slices. The closed set now governs what `verify` CLAIMS instead.
   const root = await tmpRoot();
   try {
-    const sourcePath = path.join(process.cwd(), "src", "capabilities", "genre", "genre-contract", "examples", "2d-shooter.contract.json");
-    const source = JSON.parse(await fs.readFile(sourcePath, "utf-8"));
-    source.genreId = "unregistered-shooter";
-    const contractPath = path.join(root, "unregistered.contract.json");
-    await fs.writeFile(contractPath, JSON.stringify(source), "utf-8");
+    const contractPath = await unregisteredContractAt(root, "unregistered-shooter");
     const code = await runPlan({
       root,
       genre: "2d-shooter",
@@ -235,7 +255,120 @@ test("runPlan — --genre-contract refuses unregistered promoted genres", async 
       force: false,
       allowMissingDesignTarget: true,
     });
-    assert.equal(code, 2);
+    assert.equal(code, 0, "an unregistered genre with a valid contract must plan, not refuse");
+
+    const paths = loombridgePaths(root);
+    // All three promoted artifacts exist and bind to the unregistered genre...
+    const slices = JSON.parse(await fs.readFile(paths.slices, "utf-8"));
+    const report = JSON.parse(await fs.readFile(paths.genrePromotion, "utf-8"));
+    assert.equal(slices.genre, "unregistered-shooter");
+    assert.equal(report.sourceGenreId, "unregistered-shooter");
+    assert.ok(JSON.parse(await fs.readFile(paths.acceptance, "utf-8")).game);
+    // ...and STATE records it, which is what `verify`/`doneness` resolve coverage from.
+    assert.equal((await readState(paths))?.genre, "unregistered-shooter");
+
+    // The claim is scoped: partially-graded, with a non-empty gap list.
+    const coverage = deriveGenreCoverage({ genre: "unregistered-shooter", promotion: report });
+    assert.equal(coverage.coverage, "partially-graded");
+    assert.ok(coverage.gaps.length > 0);
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test("runPlan — a bare --genre naming an unregistered genre plans FREE-FORM from the generic template", async () => {
+  // W2 asserted this exited 2, because the templated path had nothing to seed from. Shipping the
+  // genre-neutral `_generic` pack removed that blocker, which is what finally makes `ungraded` a
+  // state a real project can be in — and therefore what makes D1's "an ungraded game may reach
+  // doneness" mean anything at all.
+  const root = await tmpRoot();
+  try {
+    const code = await runPlan({
+      root,
+      genre: "unregistered-shooter",
+      genreExplicit: true,
+      engine: "unity",
+      force: false,
+      allowMissingDesignTarget: true,
+    });
+    assert.notEqual(code, 2, "an unregistered genre must no longer be refused at the door");
+
+    const paths = loombridgePaths(root);
+    assert.equal(await fileExists(paths.acceptance), true, "the generic contract must be seeded");
+    // STATE records the DEVELOPER'S genre string, never "generic" — coverage binds to what they
+    // said they are building, and `_generic` is a template, not an identity.
+    assert.equal((await readState(paths))?.genre, "unregistered-shooter");
+
+    // And the claim is the narrowest one: ungraded, with its limits enumerated.
+    const coverage = deriveGenreCoverage({ genre: "unregistered-shooter", promotion: null });
+    assert.equal(coverage.coverage, "ungraded");
+    assert.ok(coverage.gaps.length > 0);
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test("runPlan — an unregistered genre carries its contract's fidelityCriteria into the promotion report", async () => {
+  // The contract-side equivalent of a pack registration: this is what lets a promoted genre certify a
+  // design-targeted build without borrowing another genre's criteria. It must survive promotion, since
+  // doneness reads it from GENRE_PROMOTION.json, not from the contract file.
+  const root = await tmpRoot();
+  try {
+    const contractPath = await unregisteredContractAt(root, "topdown-brawler", (c) => {
+      c.fidelityCriteria = ["composition-match", "arena-framing"];
+    });
+    assert.equal(
+      await runPlan({ root, genre: "2d-shooter", genreContractPath: contractPath, engine: "unity", force: false, allowMissingDesignTarget: true }),
+      0,
+    );
+    const report = JSON.parse(await fs.readFile(loombridgePaths(root).genrePromotion, "utf-8"));
+    assert.deepEqual(report.fidelityCriteria, ["composition-match", "arena-framing"]);
+    // With criteria declared, the fidelity gap drops out of the coverage gap list...
+    const coverage = deriveGenreCoverage({ genre: "topdown-brawler", promotion: report });
+    assert.ok(!coverage.gaps.some((g) => /no hero-shot fidelity criteria/.test(g)));
+    // ...but the feel-oracle gap is structural and survives, so the list is still non-empty.
+    assert.ok(coverage.gaps.length > 0);
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test("runPlan — re-planning onto a registered genre CLEARS the stale promotion report", async () => {
+  // Without this, the legitimate "I promoted a contract, now I want a shipped pack" switch leaves a
+  // report describing artifacts that no longer exist, the disk contradicts itself, and the coverage
+  // derivation refuses forever. The refusal is correct; stranding the developer on it is not.
+  const root = await tmpRoot();
+  try {
+    const contractPath = await unregisteredContractAt(root, "puzzle-hypercasual");
+    assert.equal(
+      await runPlan({ root, genre: "2d-shooter", genreContractPath: contractPath, engine: "unity", force: false, allowMissingDesignTarget: true }),
+      0,
+    );
+    const paths = loombridgePaths(root);
+    assert.equal(await fileExists(paths.genrePromotion), true, "precondition: the promoted report exists");
+
+    // Switch to a registered genre, re-seeding acceptance from its pack template.
+    await runPlan({ root, genre: "platformer-2d", genreExplicit: true, engine: "unity", force: true, allowMissingDesignTarget: true });
+    assert.equal(await fileExists(paths.genrePromotion), false, "the stale report must be removed, not left to contradict STATE");
+    assert.equal((await readState(paths))?.genre, "platformer-2d");
+    // And coverage resolves cleanly to the registered genre — no contradiction.
+    assert.equal(deriveGenreCoverage({ genre: "platformer-2d", promotion: null }).coverage, "graded");
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test("runPlan — a contract declaring an UNGRADABLE fidelity criterion is refused at plan time", async () => {
+  // Refuse at authoring rather than at doneness: a criterion outside VLM_REVIEW_CRITERION_IDS can
+  // never appear in vlm-review.json, so accepting it would hand the developer a genre whose doneness
+  // is unreachable-green and only tell them at the very end.
+  const root = await tmpRoot();
+  try {
+    const contractPath = await unregisteredContractAt(root, "bad-criteria", (c) => {
+      c.fidelityCriteria = ["looks-great-honestly"];
+    });
+    const code = await runPlan({ root, genre: "2d-shooter", genreContractPath: contractPath, engine: "unity", force: false, allowMissingDesignTarget: true });
+    assert.equal(code, 2, "an ungradable declared criterion must refuse");
   } finally {
     await fs.rm(root, { recursive: true, force: true });
   }
@@ -262,11 +395,23 @@ test("runPlan — --genre-contract refuses to mix with existing artifacts withou
   }
 });
 
-test("runPlan — an unregistered genre is REFUSED (exit 2), never defaulted", async () => {
+test("runPlan — an unregistered genre is never SILENTLY DEFAULTED to another genre's pack", async () => {
+  // The original invariant, which survives the free-form entry unchanged: refusing at the door was
+  // only ever a means to it. An unregistered genre must not inherit platformer (or any registered
+  // genre's) contract — that is the false-green the registry refusal existed to prevent. It now
+  // seeds the GENRE-NEUTRAL template instead, which asserts nothing about the game.
   const root = await tmpRoot();
   try {
     const code = await runPlan({ root, genre: "fps-3d-unregistered", engine: "unity", force: false, allowMissingDesignTarget: true });
-    assert.equal(code, 2, "unknown genre must exit 2, not silently plan a default genre");
+    assert.notEqual(code, 2);
+
+    const contract = JSON.parse(await fs.readFile(loombridgePaths(root).acceptance, "utf-8"));
+    // Not the platformer default...
+    assert.equal(contract.platformer, undefined, "must not inherit the platformer section");
+    assert.equal(contract.win.rule, "declared-by-project", "the win rule is an explicit placeholder");
+    // ...and not any registered genre's feel bands, which would be graded against a game that never
+    // agreed to them.
+    assert.deepEqual(contract.feel, { extra: {} }, "a free-form seed declares NO feel targets");
   } finally {
     await fs.rm(root, { recursive: true, force: true });
   }
@@ -328,6 +473,35 @@ test("runPlan — a bare re-plan PRESERVES the promoted STATE.genre instead of r
       0,
     );
     assert.equal((await readState(paths))?.genre, "2d-shooter", "explicit --genre overrides the preserved genre");
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test("REGRESSION: a FREE-FORM genre survives a bare re-plan (no silent downgrade to the default)", async () => {
+  // Found by adversarial review of the free-form entry path, reproduced end-to-end before the fix.
+  //
+  // Genre preservation tested "is `prev.genre` REGISTERED?", which was equivalent to "was it really
+  // planned?" only while every plannable genre was registered. Free-form broke that equivalence, and
+  // a bare `loombridge plan` after `plan --genre my-weird-game` silently rewrote STATE.genre to
+  // platformer-2d. Two things went wrong at once: the developer's project became a platformer, and
+  // its coverage claim was UPGRADED from `ungraded` to `graded` — a full Tier-1 claim over a
+  // genre-neutral contract that asserts nothing. That is the silent-default false green the registry
+  // refusal existed to stop, re-entering through the new door.
+  //
+  // LITMUS: restore the `resolveGenrePack(prev.genre)` test and this fails with "platformer-2d".
+  const root = await tmpRoot();
+  try {
+    const paths = loombridgePaths(root);
+    await runPlan({ root, genre: "my-weird-game", genreExplicit: true, engine: "unity", force: false, allowMissingDesignTarget: true });
+    assert.equal((await readState(paths))?.genre, "my-weird-game", "precondition: planned free-form");
+
+    // A BARE re-plan — no --genre, so the parser hands in the registry default.
+    await runPlan({ root, genre: "platformer-2d", genreExplicit: false, engine: "unity", force: false, allowMissingDesignTarget: true });
+    assert.equal((await readState(paths))?.genre, "my-weird-game", "the free-form genre must survive");
+
+    // And the claim must not have been upgraded behind the developer's back.
+    assert.equal(deriveGenreCoverage({ genre: "my-weird-game", promotion: null }).coverage, "ungraded");
   } finally {
     await fs.rm(root, { recursive: true, force: true });
   }

@@ -16,9 +16,7 @@
   "commands": [
     "./commands/loombridge/plan.md",
     "./commands/loombridge/status.md",
-    "./commands/loombridge/ask.md",
     "./commands/loombridge/build.md",
-    "./commands/loombridge/verify.md",
-    "./commands/loombridge/e2e.md"
+    "./commands/loombridge/verify.md"
   ]
 }

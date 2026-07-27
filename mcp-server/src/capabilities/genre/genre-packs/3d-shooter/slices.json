@@ -6,7 +6,6 @@
       "id": "arena",
       "title": "Frame the 3D range (camera, perspective, bounds)",
       "dependsOn": [],
-      "skill": "shooter-3d-arena-design",
       "feelIntent": "Establish a bounded 3D range with a single perspective camera so every later slice composes inside it.",
       "acceptance": {
         "gates": ["framing", "console-clean"]
@@ -17,7 +16,6 @@
       "id": "controller-camera",
       "title": "Player controller + camera/look",
       "dependsOn": ["arena"],
-      "skill": "shooter-3d-controller-camera",
       "feelIntent": "Local non-Fusion movement plus the camera/aim rig. Controller and camera are ONE slice for 3D because look direction is part of firing correctness (per the extraction plan). The 3C slice now supports deterministic look input, aim-relative WASD, and shot direction following aim forward; the look/shot metrics (lookInputToYawLatencyMs, shotAimAlignmentDeg) are now promoted to measurable-now with committed live evidence, and recoil/ADS plus subjective aiming feel remain gaps.",
       "acceptance": {
         "gates": ["manifest", "console-clean"]
@@ -28,7 +26,6 @@
       "id": "weapon",
       "title": "Weapon core: fire -> projectile + impact",
       "dependsOn": ["controller-camera"],
-      "skill": "shooter-3d-weapon",
       "feelIntent": "Firing spawns a visible 3D projectile with a crisp cadence (fireIntervalMs / fireInputToSpawnLatency are measure-only; true 3D projectile speed and recoil are explicit gaps).",
       "acceptance": {
         "gates": ["manifest", "visual-artifacts", "console-clean"]
@@ -39,7 +36,6 @@
       "id": "enemy-target",
       "title": "Reference enemy/target + health/damage + death",
       "dependsOn": ["weapon"],
-      "skill": "shooter-3d-enemy-target",
       "feelIntent": "Reference target takes projectile damage and dies; first-hit to death (ttkMs) is measure-only. No AI/cover/waves in the seed.",
       "acceptance": {
         "gates": ["manifest", "console-clean"]
@@ -50,7 +46,6 @@
       "id": "feedback",
       "title": "Combat feedback (muzzle / hit-spark / shake / hit-stop)",
       "dependsOn": ["enemy-target"],
-      "skill": "shooter-3d-juice",
       "feelIntent": "Fire and impact read clearly through muzzle flash, hit spark, shake, and hit-stop. The hit-stop WINDOW duration (hitstopMs) and the camera-DISPLACEMENT magnitude (true-3D screenShakeMag) are now measurable and live-proven in the repo-owned fixture (demos/evidence-bundles/3d-impact-feedback/, causality-gated); muzzle flash, hit-spark, and feedback QUALITY remain design intent / gaps, not measured green.",
       "acceptance": {
         "gates": ["visual-artifacts", "console-clean"]
@@ -61,7 +56,6 @@
       "id": "hud",
       "title": "HUD (reticle / ammo / health / score)",
       "dependsOn": ["enemy-target"],
-      "skill": "shooter-3d-hud",
       "feelIntent": "Reticle, ammo, health, and score read clearly and stay inside the safe area.",
       "acceptance": {
         "gates": ["manifest", "ui-conformance", "console-clean"]
@@ -72,7 +66,6 @@
       "id": "end-state",
       "title": "Defeat / victory end-state",
       "dependsOn": ["enemy-target"],
-      "skill": "shooter-3d-end-state",
       "feelIntent": "Clearing the range (all reference enemies defeated) shows a clean win/end state.",
       "acceptance": {
         "gates": ["manifest", "console-clean"]

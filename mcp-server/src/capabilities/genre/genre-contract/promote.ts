@@ -25,6 +25,18 @@ export interface PromotedMeasurabilityRow {
 export interface GenrePromotionReport {
   schemaVersion: typeof GENRE_PROMOTION_REPORT_SCHEMA_VERSION;
   sourceGenreId: string;
+  /**
+   * sha256 of the raw source-contract bytes this report was promoted from. Present whenever the
+   * caller supplied it (`loombridge plan` always does); absent on a report written by an older
+   * release.
+   *
+   * WHAT IT PROVES, EXACTLY: that this report came from a specific contract file, and WHICH bytes.
+   * It does NOT prove the contract was any good — `validateGenreContract` owns that and runs before
+   * promotion. It does not make the report unforgeable either: someone writing a report by hand can
+   * also write a digest. It raises the cost of claiming a promotion that never happened, and it lets
+   * a reviewer confirm the contract in the repo is the one that produced the plan on disk.
+   */
+  sourceContractSha256?: string;
   sourceConfidence: GenreContract["confidence"];
   generatedAcceptance: string;
   generatedSlices: string;
@@ -34,6 +46,14 @@ export interface GenrePromotionReport {
   measurability: PromotedMeasurabilityRow[];
   refusalConditions: GenreContract["refusalConditions"];
   humanOracleChecks: GenreContract["humanOracleChecks"];
+  /**
+   * The contract's declared hero-shot fidelity criteria, carried through VERBATIM so `doneness` can
+   * resolve them for an unregistered genre from the on-disk `GENRE_PROMOTION.json` rather than from
+   * the contract file (which need not travel with the project). Omitted when the contract declares
+   * none — and an absent list is a REFUSAL at doneness for a design-targeted build, never a fallback
+   * to another genre's criteria.
+   */
+  fidelityCriteria?: string[];
 }
 
 export interface GenrePromotionResult {
@@ -45,6 +65,15 @@ export interface GenrePromotionResult {
 export interface GenrePromotionOptions {
   /** Optional registered pack slice template; matching ids preserve pack-owned skill/gate guidance. */
   sliceTemplate?: SlicePlan;
+  /**
+   * sha256 of the RAW source-contract bytes, computed by the caller that read the file. Recorded on
+   * the report so a promotion is pinned to the exact input it came from.
+   *
+   * Raw BYTES, never `JSON.stringify(contract)` — a re-serialization is canonicalization-dependent
+   * (key order, spacing, unicode escaping), so it would drift between Node versions and between a
+   * hand-formatted file and a generated one, and a digest that drifts proves nothing.
+   */
+  sourceContractSha256?: string;
 }
 
 const HUD_ANCHORS: HudAnchor[] = ["top-left", "top-center", "top-right", "bottom-left", "bottom-right"];
@@ -158,7 +187,9 @@ function buildManifest(contract: GenreContract): AcceptanceContract["manifest"] 
   };
 }
 
-function buildSlice(node: SliceNode, genreId: string, template?: SlicePlan["slices"][number]) {
+// `genreId` was only ever read to mint the synthetic skill name removed below; nothing else in a
+// promoted slice is genre-derived, so the parameter went with it.
+function buildSlice(node: SliceNode, template?: SlicePlan["slices"][number]) {
   if (!node.gates || node.gates.length === 0) return null;
   const gaps = node.gaps?.length ? ` Explicit gaps: ${node.gaps.join(", ")}.` : "";
   const gates = [...new Set([...(node.gates ?? []), ...(template?.acceptance.gates ?? [])])];
@@ -166,7 +197,12 @@ function buildSlice(node: SliceNode, genreId: string, template?: SlicePlan["slic
     id: node.id,
     title: node.title,
     dependsOn: node.dependsOn,
-    skill: template?.skill ?? `genre-${sanitizeId(genreId)}-${sanitizeId(node.id)}`,
+    // Only a registered pack template can supply a skill binding. GenreContract's `SliceNode` has no
+    // `skill` field at all, so the previous `genre-<genreId>-<sliceId>` fallback could only ever name
+    // something that does not exist — EVERY promoted contract emitted bindings that were dangling by
+    // construction, and `plan` printed them to the agent as the skill to build with. Omit instead:
+    // "no skill pack covers this" is a true statement, and an invented name is not.
+    ...(template?.skill ? { skill: template.skill } : {}),
     feelIntent: `${template?.feelIntent ?? node.title}.${gaps}`.trim(),
     acceptance: { gates },
     state: "pending" as const,
@@ -259,7 +295,7 @@ export function promoteGenreContract(input: unknown, options: GenrePromotionOpti
   }
   const templateById = new Map((options.sliceTemplate?.slices ?? []).map((slice) => [slice.id, slice]));
   const promotedCoreSlices = contract.sliceDag.coreVertical
-    .map((node) => buildSlice(node, contract.genreId, templateById.get(node.id)))
+    .map((node) => buildSlice(node, templateById.get(node.id)))
     .filter((slice): slice is NonNullable<ReturnType<typeof buildSlice>> => slice !== null);
   const slices = assertValidSlicePlan({
     schemaVersion: SLICES_SCHEMA_VERSION,
@@ -270,6 +306,7 @@ export function promoteGenreContract(input: unknown, options: GenrePromotionOpti
   const report: GenrePromotionReport = {
     schemaVersion: GENRE_PROMOTION_REPORT_SCHEMA_VERSION,
     sourceGenreId: contract.genreId,
+    ...(options.sourceContractSha256 ? { sourceContractSha256: options.sourceContractSha256 } : {}),
     sourceConfidence: contract.confidence,
     generatedAcceptance: ".loombridge/ACCEPTANCE.json",
     generatedSlices: ".loombridge/SLICES.json",
@@ -291,6 +328,11 @@ export function promoteGenreContract(input: unknown, options: GenrePromotionOpti
     })),
     refusalConditions: contract.refusalConditions,
     humanOracleChecks: contract.humanOracleChecks,
+    // Verbatim, and only when declared — the absent case must stay absent so doneness refuses rather
+    // than reading an empty list as "no fidelity requirement".
+    ...(contract.fidelityCriteria && contract.fidelityCriteria.length > 0
+      ? { fidelityCriteria: [...contract.fidelityCriteria] }
+      : {}),
   };
 
   return { acceptance: validAcceptance, slices, report };

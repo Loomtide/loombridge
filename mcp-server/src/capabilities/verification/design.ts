@@ -1,5 +1,9 @@
 /**
- * `loombridge design` — the deterministic half of the Design Target Phase (plan §3c).
+ * `loombridge target` (was `loombridge design`) — the deterministic half of the Design Target
+ * Phase (plan §3c). The verb FREEZES the hero shot; it does not design the game.
+ *
+ * The module filename and `.loombridge/design/` on disk deliberately did NOT move: every existing
+ * consumer project has that directory, so renaming it would be a data migration, not a rename.
  *
  * The Design Target is an *approved, frozen* annotated hero shot: the visual
  * contract `build` converges on and `verify`'s VLM review compares against. The
@@ -275,7 +279,7 @@ export async function approveDesignTarget(args: { root: string; note?: string })
   const dp = designPaths(paths);
   const meta = await readMeta(dp);
   if (!meta) {
-    throw new Error("No design target to approve — run `loombridge design set --image <path>` first.");
+    throw new Error("No design target to approve — run `loombridge target set --image <path>` first.");
   }
   const hash = await sha256OrNull(dp.heroPng);
   if (!hash) throw new Error(`Hero shot missing at ${dp.heroPng}; cannot approve.`);
@@ -299,14 +303,14 @@ export async function approveDesignTarget(args: { root: string; note?: string })
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// CLI (`loombridge design <status|set|approve>`) — a non-headline helper the plan
+// CLI (`loombridge target <status|set|approve>`) — a non-headline helper the plan
 // flow calls; not part of the two-verb surface.
 // ─────────────────────────────────────────────────────────────────────────────
 
 function printUsage(): void {
   console.log(
     [
-      "Usage: loombridge design <status|set|approve> [options]",
+      "Usage: loombridge target <status|set|approve> [options]",
       "",
       "Manage the Design Target (annotated hero shot) in .loombridge/design/.",
       "",
@@ -369,7 +373,7 @@ function parseFlags(args: string[]): DesignFlags {
   return f;
 }
 
-/** CLI entry: `loombridge design <action> [flags]`. */
+/** CLI entry: `loombridge target <action> [flags]`. */
 export async function run(args: string[]): Promise<number> {
   const action = args[0];
   if (!action || action === "--help" || action === "-h") {
@@ -380,7 +384,7 @@ export async function run(args: string[]): Promise<number> {
   try {
     flags = parseFlags(args.slice(1));
   } catch (error) {
-    console.error(`[loombridge design] ${error instanceof Error ? error.message : String(error)}`);
+    console.error(`[loombridge target] ${error instanceof Error ? error.message : String(error)}`);
     printUsage();
     return 2;
   }
@@ -395,7 +399,7 @@ export async function run(args: string[]): Promise<number> {
             ? " (composition-reference: unlocks scene assembly only — capture a Unity frame + `set --kind rendered-unity-frame --approve` before doneness)"
             : "";
         console.error(
-          `[loombridge design] status=${report.status}${frozen} kind=${report.kind} png=${report.hasPng} html=${report.hasHtml}` +
+          `[loombridge target] status=${report.status}${frozen} kind=${report.kind} png=${report.hasPng} html=${report.hasHtml}` +
             `${report.mode ? ` mode=${report.mode}` : ""}${report.referenceGame ? ` ref=${report.referenceGame}` : ""}${compRefNote}`,
         );
         return flags.requireApproved ? exitCodeForDesignReadiness(report) : 0;
@@ -412,21 +416,21 @@ export async function run(args: string[]): Promise<number> {
           note: flags.note,
           approve: flags.approve,
         });
-        console.error(`[loombridge design] set hero shot (status=${meta.status}, kind=${meta.kind ?? DEFAULT_DESIGN_TARGET_KIND}, mode=${meta.mode}).`);
+        console.error(`[loombridge target] set hero shot (status=${meta.status}, kind=${meta.kind ?? DEFAULT_DESIGN_TARGET_KIND}, mode=${meta.mode}).`);
         return 0;
       }
       case "approve": {
         const meta = await approveDesignTarget({ root: flags.root, note: flags.note });
-        console.error(`[loombridge design] approved (frozen sha256=${meta.pngSha256.slice(0, 12)}…).`);
+        console.error(`[loombridge target] approved (frozen sha256=${meta.pngSha256.slice(0, 12)}…).`);
         return 0;
       }
       default:
-        console.error(`[loombridge design] unknown action "${action}".`);
+        console.error(`[loombridge target] unknown action "${action}".`);
         printUsage();
         return 2;
     }
   } catch (error) {
-    console.error(`[loombridge design] ${error instanceof Error ? error.message : String(error)}`);
+    console.error(`[loombridge target] ${error instanceof Error ? error.message : String(error)}`);
     return 1;
   }
 }

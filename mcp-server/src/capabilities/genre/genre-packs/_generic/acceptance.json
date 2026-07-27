@@ -1,0 +1,97 @@
+{
+  "schemaVersion": "1",
+  "game": "generic-ungraded-seed",
+  "source": {
+    "note": "GENRE-NEUTRAL SEED for a game with no registered pack (CommandSurfaceRedesign W1/D). `loombridge plan --genre <anything-unregistered>` seeds from this instead of exiting 2, and the build verifies as `genreCoverage: ungraded` with its gaps enumerated. The underscore prefix keeps this directory OUT of knownGenreIds(): it is a fallback template, never a selectable genre, so it can never be planned as a genre of its own or claim a coverage it has no oracle for. It deliberately claims as little as possible — every value here is a SCAFFOLD the developer is expected to replace, not a taste decision made on their behalf. It declares only the sections validateAcceptanceContract requires (game/fonts/palette/hud/framing/feel/juice/manifest/win) and marks every genre-shaped gate not_applicable, so a free-form build is never asked for platformer or shooter captures it cannot produce. It ships NO feel bands: an unregistered genre has no feel oracle, and inventing target numbers here would be exactly the fiction the coverage split exists to prevent."
+  },
+
+  "fonts": {
+    "global": {
+      "family": "Arial",
+      "note": "Placeholder UI face — replace with the project's own. Chosen only because it resolves on every platform without an imported asset."
+    }
+  },
+
+  "palette": {
+    "entries": [
+      { "hex": "#101418", "roles": ["background"], "name": "backdrop" },
+      { "hex": "#e6e6e6", "roles": ["hud-accent"], "name": "hud-foreground" }
+    ]
+  },
+
+  "hud": {
+    "elements": [
+      {
+        "id": "status",
+        "role": "Primary readout — replace with this game's actual HUD element(s)",
+        "anchor": "top-left",
+        "insetPx": 16,
+        "colorRole": "hud-accent",
+        "required": true
+      }
+    ]
+  },
+
+  "framing": {
+    "aspect": { "w": 16, "h": 9 },
+    "cameraMode": "static",
+    "playerAnchor": {
+      "centerXFraction": 0.5,
+      "tolerance": 0.4,
+      "note": "Deliberately loose. With no genre, nothing is known about how this game should frame its subject, so the band is wide enough not to assert a composition the developer never chose. Tighten it once the real framing is decided."
+    },
+    "note": "16:9 static frame — the least-committal rig that still lets the framing gate run. Replace cameraMode/anchor with the project's real framing."
+  },
+
+  "feel": {
+    "extra": {}
+  },
+
+  "juice": {
+    "hitStop": { "ms": 0, "note": "None declared. A generic seed has no impact model to freeze on." },
+    "screenShake": { "amplitudePx": 0, "decayMs": 0, "trigger": "none", "note": "None declared." }
+  },
+
+  "manifest": {
+    "matching": "regex",
+    "caseSensitive": false,
+    "extrasAreFailure": false,
+    "elements": [
+      {
+        "nameRegex": "player|hero|avatar|character",
+        "type": "GameObject",
+        "primitive": "player",
+        "required": true
+      },
+      {
+        "nameRegex": "Camera|MainCamera|CameraRig",
+        "type": "GameObject",
+        "primitive": "camera",
+        "required": true
+      },
+      {
+        "nameRegex": "GameManager|GameController",
+        "type": "GameObject",
+        "required": true
+      }
+    ]
+  },
+
+  "win": {
+    "rule": "declared-by-project",
+    "endStateMode": "modal",
+    "restartAction": "R",
+    "note": "PLACEHOLDER. Replace with this game's real win condition before claiming doneness — a build whose win rule is still `declared-by-project` has not decided what winning means."
+  },
+
+  "verification": {
+    "gates": {
+      "reachability": "not_applicable",
+      "placement": "not_applicable",
+      "platform-tiles": "not_applicable",
+      "tile-render": "not_applicable",
+      "parallax-motion": "not_applicable",
+      "prop-purpose": "not_applicable"
+    }
+  }
+}

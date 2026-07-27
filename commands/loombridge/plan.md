@@ -52,33 +52,33 @@ so the two agents cannot drift.
    NOT skip this. Check the current state:
 
    ```bash
-   loombridge design status --root .
+   loombridge target status --root .
    ```
 
    If it is not `approved`, pick an input path *with the user* (ask which they want):
 
    - **Provide:** the user points to a mock / screenshot / HTML. Save the image, then:
      ```bash
-     loombridge design set --image <path.png> [--html <path.html>] --mode provided
+     loombridge target set --image <path.png> [--html <path.html>] --mode provided
      ```
    - **Generate (default):** produce an **annotated hero shot built from the genre's asset
      registry** (Claude Design / frontend-design — a single in-game frame at native scale,
      with callouts for HUD / camera / parallax / juice). Screenshot it to a PNG, then:
      ```bash
-     loombridge design set --image hero-shot.png --html hero-shot.html --mode generated
+     loombridge target set --image hero-shot.png --html hero-shot.html --mode generated
      ```
      Keep it to assets that actually exist (no concept art) so the build can match it.
    - **Reference game:** name a game (e.g. Celeste), research its visual + feel conventions,
      generate the hero shot in that style, **and** map it to a feel preset:
      ```bash
-     loombridge design set --image hero-shot.png --mode reference-game --reference-game "Celeste"
+     loombridge target set --image hero-shot.png --mode reference-game --reference-game "Celeste"
      ```
 
    Then **show the hero shot to the user and get explicit approval** — this is the one human
    checkpoint that earns its cost. On approval:
 
    ```bash
-   loombridge design approve --note "approved by <user>"
+   loombridge target approve --note "approved by <user>"
    ```
 
    (`set --approve` does both in one step when the user pre-approves.)
@@ -99,19 +99,19 @@ so the two agents cannot drift.
 
    1. **Create + approve a composition reference** (the 2D mock as a guide):
       ```bash
-      loombridge design set --image style-reference.png --mode generated \
+      loombridge target set --image style-reference.png --mode generated \
         --kind composition-reference --approve
       ```
    2. **Assemble the 3D scene** with the chosen registry assets (`build`).
    3. **Capture a real Unity frame** of the assembled hero shot.
    4. **Approve/freeze the rendered frame** — this replaces the composition reference:
       ```bash
-      loombridge design set --image unity-hero-frame.png --mode provided \
+      loombridge target set --image unity-hero-frame.png --mode provided \
         --kind rendered-unity-frame --approve
       ```
    5. **Only then** run the independent hero-shot fidelity review + `loombridge doneness`.
 
-   `loombridge design status` shows the kind; while it is a `composition-reference` it prints a
+   `loombridge target status` shows the kind; while it is a `composition-reference` it prints a
    reminder that the captured frame still has to be frozen before doneness will certify.
 
 4. **Record and approve the asset strategy.** Before slices exist, ask the developer which

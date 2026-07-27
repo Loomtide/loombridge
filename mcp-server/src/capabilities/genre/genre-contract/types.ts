@@ -338,6 +338,24 @@ export interface GenreContract {
    * (an array of known evidence-class names); a present-but-malformed value IS refused.
    */
   requiredEvidenceClasses?: EvidenceClassName[];
+
+  /**
+   * OPTIONAL hero-shot fidelity criteria for an UNREGISTERED genre — the contract-side equivalent of a
+   * registered pack's `fidelityCriteria` in `genre-registry.ts`. This is what lets a promoted genre
+   * reach `doneness` with an APPROVED Design Target without ever borrowing another genre's criteria.
+   *
+   * Every id MUST be in `VLM_REVIEW_CRITERION_IDS` (`verification/gates/vlm-criteria.ts`) and the list
+   * MUST be non-empty when present: an id outside that set can never appear in `vlm-review.json`, and
+   * an empty set would make the structural fidelity check pass VACUOUSLY. Both are refused here AND
+   * re-checked by doneness at gate time — the contract travels with the project, so authoring-time
+   * validation is not a trust boundary.
+   *
+   * BACKWARD-COMPAT CONTRACT: entirely OPTIONAL. Absent ⇒ a legacy contract validates and promotes
+   * byte-identically, and a build of that genre with an approved Design Target is REFUSED at doneness
+   * (declare criteria here, or declare `art: { "mode": "deferred" }` in ACCEPTANCE.json) — never
+   * silently graded against some other genre's criteria.
+   */
+  fidelityCriteria?: string[];
 }
 
 /* ------------------------------------------------------------------ validation result types */

@@ -62,14 +62,30 @@ export interface SliceAcceptance {
   criteria?: Record<string, unknown>;
 }
 
+/**
+ * How a slice's skill binding is RENDERED to an agent. Shared by every surface that shows it
+ * (`plan`'s next-slice block, `ask`'s slice details) so an unbound slice can never reach an agent as
+ * the literal string "undefined" on one surface while reading correctly on another.
+ *
+ * The binding is optional by design: for most genres no shipped skill pack covers a given slice, and
+ * naming one that does not exist is worse than naming none, because the agent goes looking for it.
+ */
+export function renderSliceSkill(skill: string | undefined): string {
+  return skill ?? "(none ships for this slice — build with the generic `unity_*` MCP ops)";
+}
+
 /** One slice entry (mirrors slices.schema.json `slice`). */
 export interface SliceEntry {
   id: string;
   title: string;
   /** Build order — `plan` walks the DAG to pick the next unblocked slice. */
   dependsOn: string[];
-  /** Which skill pack/component builds this slice. */
-  skill: string;
+  /**
+   * OPTIONAL. Which skill pack builds this slice. ABSENT is the honest answer when no shipped skill
+   * covers it: `plan` then tells the agent to use the generic ops rather than naming a skill that
+   * does not exist. Present ⇒ non-empty (see the validator).
+   */
+  skill?: string;
   /** Genre/animation/feel notes for this slice. */
   feelIntent: string;
   acceptance: SliceAcceptance;
@@ -158,8 +174,16 @@ export function assertValidSlicePlan(input: unknown): SlicePlan {
           }
         }
       }
-      if (!isNonEmptyString(slice.skill)) {
-        issues.push(`${p}.skill: is required.`);
+      // OPTIONAL, present-only. Absent means "no shipped skill pack covers this slice", which is a
+      // real and honest answer — 18 slices across the 3D packs are in exactly that position, and
+      // naming a fiction there is what this became. But present-but-empty is still REFUSED: `""`
+      // reads as a binding while naming nothing, which is the same failure wearing a different hat.
+      //
+      // Membership in the shipped skill set is deliberately NOT checked here. A consumer's SLICES.json
+      // may name a skill they wrote themselves; the closed-set claim is about OUR templates, and it
+      // lives in `__tests__/unit/repo/slice-skill-bindings.test.ts`.
+      if (slice.skill !== undefined && !isNonEmptyString(slice.skill)) {
+        issues.push(`${p}.skill: when present, must be a non-empty string (omit it if no skill pack applies).`);
       }
       if (!isNonEmptyString(slice.feelIntent)) {
         issues.push(`${p}.feelIntent: is required.`);
@@ -316,7 +340,10 @@ export function instantiateSlicePlan(template: SlicePlan): SlicePlan {
       id: slice.id,
       title: slice.title,
       dependsOn: [...slice.dependsOn],
-      skill: slice.skill,
+      // Conditional: a plain `skill: slice.skill` would write `"skill": undefined`, which
+      // `JSON.stringify` drops from the file but which every in-memory reader still sees as a
+      // present key. Omit it properly so absent means absent on both sides.
+      ...(slice.skill ? { skill: slice.skill } : {}),
       feelIntent: slice.feelIntent,
       acceptance: {
         gates: [...slice.acceptance.gates],
