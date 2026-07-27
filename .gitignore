@@ -31,3 +31,6 @@ crashlytics-build.properties
 # --- OS ---
 .DS_Store
 Thumbs.db
+
+# Claude Code local settings (machine-specific, never shared)
+.claude/settings.local.json
