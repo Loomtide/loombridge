@@ -1,6 +1,6 @@
 /**
  * SfxPlayer probe CONTRACT (SFX dogfood backlog High #6 "Production SfxPlayer
- * contract"; `Docs/Assets/GeneratedSfxWorkflow.md` "Verification").
+ * contract"; internal audio-workflow notes, "Verification").
  *
  * This is the DOCUMENTED probe-field contract the SFX runtime + latency gates read.
  * It is NOT the MonoBehaviour — the actual `SfxPlayer` C# component (pooled sources,

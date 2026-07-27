@@ -28,32 +28,32 @@ promote as a genre constant.
 - Platform target (desktop / mobile-landscape / mobile-portrait / tablet) and its safe-area insets.
 - The required **state list** (see Stage 2) and, for touch builds, tap-target + safe-area budgets.
 - Provider access for generation (ImageGen). Keys live in env/secret file/keychain per
-  `GeneratedArtWorkflow.md` — never in chat, commits, or reports.
+  internal art-workflow notes — never in chat, commits, or reports.
 
 ## DO-NOT rules (each burned a real session)
 
 - **Never luma/alpha-key a dark UI element.** Generate on pure magenta `#FF00FF`, ask for no
   shadow/glow bleed, chroma-key + despill offline. Dark useful pixels read as transparent against a
-  light key. `[VALIDATED: dogfood-ui #3 + GeneratedArtWorkflow "UI Skin Passes" + GRL-C12 settings-restyle reuse]`
+  light key. `[VALIDATED: dogfood-ui #3 + internal art-workflow notes "UI Skin Passes" + GRL-C12 settings-restyle reuse]`
 - **Never split a multi-element sheet at a fixed midline.** One element per image where possible; a
   hard 50% split clipped the joystick ring AND thumb, and a later unguarded utility re-import reverted
   the content-aware fix. Guard every extraction side effect behind `if __name__ == "__main__"`.
-  `[VALIDATED: dogfood-ui #4 + GeneratedArtWorkflow]`
+  `[VALIDATED: dogfood-ui #4 + internal art-workflow notes]`
 - **Never assign a `Type=Filled` Image with no sprite and expect it to fill.** A uGUI `Image` set to
   Filled but left spriteless silently ignores `fillAmount` — loot/extract/sprint bars "don't fill".
   Assign a real sprite (even a 16×16 white). `[VALIDATED: GRL-B31 + dogfood-ui #8 sprint-fill]`
 - **Never fight a per-frame runtime writer at the child Image.** If a driver script rewrites
   `Image.color`/`fillAmount` every frame (e.g. a `SprintHud` writing `_readyColor`/`_sprintingColor`),
   restyle the driver's **serialized state fields**, not the child.
-  `[VALIDATED: dogfood-ui #7 + codex-tuning #10 + GeneratedArtWorkflow]`
+  `[VALIDATED: dogfood-ui #7 + codex-tuning #10 + internal art-workflow notes]`
 - **Never judge a new sprite over old tint.** Existing UI Images carry old flat `Image.color`; assigning
   new art without neutralizing tint double-tints it. Reset to white (or preserve tint intentionally) and
   capture before/after. `[VALIDATED: dogfood-ui #6]`
 - **Never approve UI from one idle screenshot.** Review every state (Stage 2). A CRT result-overlay
-  looked fine in play and read as a giant red slab in the death state. `[VALIDATED: dogfood-ui #11 + GeneratedArtWorkflow]`
+  looked fine in play and read as a giant red slab in the death state. `[VALIDATED: dogfood-ui #11 + internal art-workflow notes]`
 - **Never ship a 9-slice bar with a noisy center.** Chroma residue in the stretchable center smears into
   a visible band as the bar drains. Repaint the center uniform; inset the fill inside the frame slot.
-  `[VALIDATED: dogfood-ui #9 + GeneratedArtWorkflow]`
+  `[VALIDATED: dogfood-ui #9 + internal art-workflow notes]`
 - **Never ship a filled/cooldown/charge overlay whose alpha shape differs from its base control.** A
   square fill over a rounded button reads square when full. Give the overlay the same rounded sprite/mask
   so it clips to the same shape in every state. `[VALIDATED: dogfood-ui #8]`
@@ -98,7 +98,7 @@ promote as a genre constant.
 - Define and capture EVERY state that changes UI visuals or semantics: idle, active gameplay,
   low-health/damaged, interaction/hold (looting/extracting), win/extract, fail/death, pause/menu, and —
   for touch controls — the charge/cooldown/disabled states. Also capture bar value states: full / mid /
-  low / empty / charging / ready. `[VALIDATED: dogfood-ui #10/#11 + GeneratedArtWorkflow]`
+  low / empty / charging / ready. `[VALIDATED: dogfood-ui #10/#11 + internal art-workflow notes]`
 - **Gate:** each required state has a capture (or an explicit unsupported reason). No single idle
   screenshot certifies UI polish.
 

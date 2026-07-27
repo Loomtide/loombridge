@@ -262,7 +262,10 @@ test("mobile-audit: oversize-texture rationale states role is not determinable (
   const f = report.findings.find((x) => x.id === "texture-oversize");
   assert.ok(f);
   assert.match(f!.rationale, /Texture role is not determinable from measured data/);
-  assert.match(f!.rationale, /Docs\/Assets\/GeneratedArtWorkflow\.md/);
+  // The rationale must stay actionable WITHOUT citing an unpublished internal doc:
+  // this is user-facing CLI output, and a reader has no way to open one.
+  assert.match(f!.rationale, /confirm this texture's role against your project's own caps/);
+  assert.doesNotMatch(f!.rationale, /Docs\/Assets\//, "no pointer to a doc that does not ship");
 });
 
 test("mobile-audit: stableStringify is deterministic and key-sorted", () => {

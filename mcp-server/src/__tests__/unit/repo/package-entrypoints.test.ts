@@ -66,6 +66,24 @@ test("package entrypoints: every dist/ or src/ path named by an npm script exist
   );
 });
 
+test("package entrypoints: test scripts avoid runner features CI's Node lacks", () => {
+  // CI pins Node 20; local dev is often newer. Node 22+ treats a positional as a GLOB,
+  // Node 20 treats it as a DIRECTORY — so `"dist/**/*.test.js"` passes locally and fails
+  // on CI with "Could not find ...", and `dist/<dir>` does the reverse. main's CI was red
+  // for two commits because of exactly that. Letting the SHELL expand the file list works
+  // on every version, so keep glob metacharacters out of the runner's arguments.
+  for (const name of ["test:unit", "test:integration"]) {
+    const cmd = String((pkg.scripts ?? {})[name] ?? "");
+    assert.ok(cmd, `${name} must exist`);
+    const positional = cmd.replace(/\$\([^)]*\)/g, ""); // drop $(find ...) — the shell handles it
+    assert.doesNotMatch(
+      positional,
+      /\*/,
+      `${name} passes a glob to node --test; Node 20 cannot expand it. Let the shell build the list.`,
+    );
+  }
+});
+
 test("package entrypoints LITMUS: the npm-script path check fires on a bogus path", () => {
   const bogus = "dist/definitely/not/here.js";
   assert.ok(!fs.existsSync(path.join(PKG_ROOT, bogus)), "fixture path must not exist");

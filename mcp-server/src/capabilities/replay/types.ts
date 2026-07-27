@@ -2,7 +2,7 @@
  * Replay Verification — trace + report types (Phase A, slice A1).
  *
  * These are the serializable shapes for an **action trace** (the uGUI,
- * EventSystem-driven flavor — see `Docs/FutureIdeas/ReplayVerification.md`
+ * EventSystem-driven flavor
  * "Trace Flavors") and the report a replay run emits. They are pure data: the
  * deterministic engine (`engine.ts`) consumes a `ReplayTrace` + a `ReplayDriver`
  * and produces a `ReplayReport`, with no coupling to the live Unity bridge.

@@ -24,7 +24,7 @@ hero-shot fidelity, animation feel, and weapon grip are HUMAN gates.
 - Asset categories mapped to gameplay footprints + readability goals (role, tier, silhouette, scale
   cue, signal color).
 - Provider availability: image generation, image-to-3D (Meshy-like), optional animation library. Keys
-  live in env/secret file/keychain per `GeneratedArtWorkflow.md` — never in chat, commits, or reports.
+  live in env/secret file/keychain per internal art-workflow notes — never in chat, commits, or reports.
 
 ## DO-NOT rules (High-Risk Failure Modes — each burned a real session)
 
@@ -108,7 +108,7 @@ by exact name; they land in the same release as this skill.
 
 ### Stage 3 — 3D import and review
 
-- Submit only approved images (one object each). Reuse via the cache key in `GeneratedArtWorkflow.md`
+- Submit only approved images (one object each). Reuse via the cache key in internal art-workflow notes
   before re-spending credits.
 - Download GLB/FBX + loose PBR maps under LFS. Build Unity materials from the loose maps — do NOT trust
   provider materials. Static props: GLB is usually fine for mesh scale. Animated characters: FBX +
@@ -117,7 +117,7 @@ by exact name; they land in the same release as this skill.
 - Stage every import in an `_AssetReview` lineup at gameplay scale, grouped by role/tier; capture a
   review screenshot.
 - **Human gate (hero-read):** review screenshot, provenance (provider/model/job/source-hash/cost/
-  balance/output-hash per `GeneratedArtWorkflow.md`), and hashes recorded before any real-scene dressing.
+  balance/output-hash per internal art-workflow notes), and hashes recorded before any real-scene dressing.
 
 ### Stage 4 — Scene dressing
 
@@ -137,7 +137,7 @@ by exact name; they land in the same release as this skill.
 
 - Build a SEAMLESS local tile plus a level-scale macro overlay (verify PIL↔Unity V-axis when authoring
   overlays programmatically — they disagree). Add transparent decals, additive cards, amber pools,
-  beacon beams, blob shadows as textures/quads on the baked-signal budget (`GeneratedArtWorkflow.md`
+  beacon beams, blob shadows as textures/quads on the baked-signal budget (internal art-workflow notes
   Mobile Art Defaults: one directional light + emission/bloom, bake the rest).
 - Boundary is a DESIGN pass before mesh work: it must read "the world continues, you cannot," read from
   the top-down camera, not occlude the south/front edge, stay signal-neutral, and vary (modular rhythm +
@@ -208,7 +208,7 @@ promoting into canonical docs, skills, or gates. Do not bury corrections in chat
 - Keep Loombridge core generic: use `unity_*` / `runtime_*` ops and the CLI verbs. Do not add
   game-specific bridge operations.
 - Missing source hash, provider job id, output hash, import diagnostics, or review capture ⇒ `blocked` /
-  `incomplete`, never green (`GeneratedArtWorkflow.md` Failure Semantics).
+  `incomplete`, never green (internal art-workflow notes, Failure Semantics).
 - A dirty or unexpected active scene during mutation ⇒ refuse until saved/switched or an explicit guarded
   override is passed.
 - Do not promote the source dogfood project's exact art choices, Meshy job/clip names, one-off UI aesthetics, or game-specific
