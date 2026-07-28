@@ -13,6 +13,7 @@ import {
   actionSceneSlugs,
   assignObjectIds,
   buildFlowEvidence,
+  computeFlowStall,
   objectIdFromPath,
   perDeviceKey,
   planCaptureFromTrace,
@@ -867,4 +868,81 @@ test("buildFlowEvidence: single actuation → actuation; multi → steps; trigge
   assert.equal(flow.transitions[0].steps, undefined);
   assert.equal(flow.transitions[1].steps?.length, 2, "multi tap → steps[]");
   assert.equal(flow.transitions[1].actuation, undefined);
+});
+
+test("computeFlowStall: a trailing all-dead run is reported from its FIRST dead dispatch (the KidsChef pour shape)", () => {
+  // Live shape: pour raced the phase gate, so pour AND everything after it died.
+  const stall = computeFlowStall([
+    { actuated: true, kind: "tap", target: "/Canvas/Tiles/Tile_KidsChef" },
+    { actuated: true, kind: "drag", source: "/Canvas/MixPanel/Ingredient_milk", target: "/Canvas/MixPanel/MixZone" },
+    { actuated: false, kind: "drag", source: "/Canvas/CookPanel/Ingredient_pour", target: "/Canvas/CookPanel/Ingredient_pour" },
+    { actuated: false, kind: "drag", source: "/Canvas/DecorPanel/TrayGroup/Topping_strawberry", target: "/Canvas/DecorPanel/TrayGroup/Topping_strawberry" },
+    { actuated: false, kind: "tap", target: "/Canvas/DecorPanel/DoneButton" },
+  ]);
+  assert.ok(stall);
+  assert.equal(stall.target, "/Canvas/CookPanel/Ingredient_pour");
+  assert.equal(stall.kind, "drag");
+  assert.equal(stall.deadCount, 3);
+  assert.equal(stall.totalDispatches, 5);
+});
+
+test("computeFlowStall LITMUS: healthy drives and single-flake endings do NOT report a stall", () => {
+  // All actuated: no stall (the guard must not cry wolf on a green drive).
+  assert.equal(
+    computeFlowStall([
+      { actuated: true, kind: "tap", target: "/A" },
+      { actuated: true, kind: "drag", source: "/B", target: "/C" },
+    ]),
+    undefined,
+  );
+  // A single dead FINAL dispatch could be one flaky tap, not a stall.
+  assert.equal(
+    computeFlowStall([
+      { actuated: true, kind: "tap", target: "/A" },
+      { actuated: false, kind: "tap", target: "/Done" },
+    ]),
+    undefined,
+  );
+  // A dead dispatch RECOVERED from (later ones actuate) is not a trailing stall.
+  assert.equal(
+    computeFlowStall([
+      { actuated: false, kind: "drag", source: "/A", target: "/A" },
+      { actuated: true, kind: "tap", target: "/B" },
+    ]),
+    undefined,
+  );
+  // Empty drive: nothing to grade.
+  assert.equal(computeFlowStall([]), undefined);
+});
+
+test("buildFlowEvidence: carries the stall marker verbatim; omits the key when absent", () => {
+  const transitions = [{ from: "a", to: "b", actuations: [{ actuated: false, kind: "tap" as const, target: "/X" }] }];
+  const stall = { target: "/X", kind: "tap" as const, deadCount: 2, totalDispatches: 4 };
+  assert.deepEqual(buildFlowEvidence(transitions, stall).stall, stall);
+  assert.ok(!("stall" in buildFlowEvidence(transitions)), "no stall key on a healthy drive");
+});
+
+test("buildCaptureSummary: a flow stall is surfaced loudly with the first dead gesture and the state-signal fix", () => {
+  const plan: CapturePlan = { states: [], flatActions: [], unreached: [] };
+  const out = buildCaptureSummary(
+    ["active", "success_reward"],
+    plan,
+    "captures",
+    "g.minigame.json",
+    ".",
+    undefined,
+    undefined,
+    undefined,
+    false,
+    undefined,
+    { target: "/Canvas/CookPanel/Ingredient_pour", kind: "drag", deadCount: 7, totalDispatches: 16 },
+  ).join("\n");
+  assert.match(out, /Flow stall/);
+  assert.match(out, /7 of 16/);
+  assert.match(out, /\/Canvas\/CookPanel\/Ingredient_pour/);
+  assert.match(out, /STALLED frame/);
+  assert.match(out, /--auto-state-signal|stateSignal/);
+  // LITMUS twin: without a stall, the block must be absent.
+  const clean = buildCaptureSummary(["active"], plan, "captures", "g.minigame.json", ".").join("\n");
+  assert.doesNotMatch(clean, /Flow stall/);
 });

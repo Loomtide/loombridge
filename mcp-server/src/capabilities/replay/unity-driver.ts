@@ -684,6 +684,41 @@ export class UnityDriver implements ReplayDriver {
         : typeof obj.visibilityReason === "string"
           ? obj.visibilityReason
           : undefined;
+    // The uGUI hit-target pattern: a handler target whose OWN Image is alpha-0 (or
+    // disabled) with the visible art on child objects. The recorder anchors on the
+    // handler target, so a strict own-graphic rule fails an anchor the player can
+    // plainly see and tap (live case: KidsAdventure's hub tiles). The bridge reports
+    // `descendantVisible` for exactly these two reasons; accept it as anchor-visible.
+    // Every other failure (inactive, canvas-disabled, off-screen, zero-size, and
+    // transparent WITHOUT visible child art) stays a refusal.
+    if (
+      obj.isVisible !== true &&
+      (reason === "graphic-transparent" || reason === "graphic-disabled") &&
+      obj.descendantVisible === true
+    ) {
+      return { isVisible: true };
+    }
+    // The bare invisible gesture catcher: an alpha-0, SPRITE-LESS Image whose whole job
+    // is to receive drags/taps (live case: KidsChef's MixZone stir surface; its visible
+    // cues, bowl and whisk, are SIBLINGS, so descendantVisible is honestly false). Such
+    // an element was never going to be "visible"; the recorded gesture actuated on it,
+    // and the honest anchor question is "is the catcher ready to receive input": active
+    // (else reason is `inactive`), unhidden by canvas/CanvasGroup (else those reasons),
+    // ON-screen, and raycastable. Transparent-only: a DISABLED graphic does not raycast,
+    // so it can never be "ready". An element WITH a sprite is real art fading out, not a
+    // catcher; it stays a refusal. Phase-readiness is the state gates' job, not this
+    // anchor's. `descendantVisible === false` also pins the bridge to one that emits the
+    // field: on an older bridge nothing is relaxed.
+    if (
+      obj.isVisible !== true &&
+      reason === "graphic-transparent" &&
+      obj.descendantVisible === false &&
+      obj.raycastTarget === true &&
+      obj.isOffScreen !== true &&
+      obj.spriteName == null
+    ) {
+      return { isVisible: true };
+    }
     return { isVisible: obj.isVisible === true, reason };
   }
 

@@ -215,6 +215,65 @@ namespace UnityBridge.Tests
             Assert.IsNotNull(entry);
             Assert.IsFalse(entry.Value<bool>("isVisible"));
             Assert.AreEqual("graphic-transparent", entry.Value<string>("visibilityReason"));
+            // LITMUS for the hit-target-proxy field: a transparent element with NO visible child
+            // art must report descendantVisible=false, or the replay anchor relaxation would
+            // accept a genuinely invisible control (a silent-skip in disguise).
+            Assert.IsFalse(entry.Value<bool>("descendantVisible"),
+                "transparent element without visible children must not claim visible descendants");
+        }
+
+        [Test]
+        public void GetScreenRects_TransparentHitTargetWithVisibleChildArt_ReportsDescendantVisible()
+        {
+            // The common uGUI hit-target pattern (KidsAdventure hub tile): the parent Image is
+            // alpha-0 with raycastTarget on, and the visible art lives on child objects. The
+            // element's own visibility verdict must NOT soften (verify gates read isVisible),
+            // but the additive descendantVisible field tells a replay anchor the control's art
+            // IS on screen.
+            var canvas = MakeWorldCanvas();
+            var tile = MakeButton(canvas, "Tile", new Vector2(3, 2), Vector2.zero);
+            tile.GetComponent<Image>().color = new Color(1f, 1f, 1f, 0f);
+            var icon = new GameObject("Icon");
+            icon.transform.SetParent(tile.transform, false);
+            icon.AddComponent<Image>().color = Color.white;
+            var irt = icon.GetComponent<RectTransform>();
+            irt.anchorMin = irt.anchorMax = new Vector2(0.5f, 0.5f);
+            irt.pivot = new Vector2(0.5f, 0.5f);
+            irt.sizeDelta = new Vector2(1, 1);
+            Canvas.ForceUpdateCanvases();
+
+            JObject result = UIScreenSpaceIntrospection.GetScreenRects(new JArray { InstanceLocator(tile) }, null);
+            JObject entry = FindEntry(result, "Tile");
+
+            Assert.IsNotNull(entry);
+            Assert.IsFalse(entry.Value<bool>("isVisible"), "own-graphic verdict must not soften");
+            Assert.AreEqual("graphic-transparent", entry.Value<string>("visibilityReason"));
+            Assert.IsTrue(entry.Value<bool>("descendantVisible"), "visible child art must be reported");
+        }
+
+        [Test]
+        public void GetScreenRects_TransparentHitTargetWithZeroAlphaGroupOverChildArt_NoDescendantVisible()
+        {
+            // A CanvasGroup with alpha 0 BETWEEN the hit-target and its child art hides the art;
+            // descendantVisible must honour it, not just the child Graphic's own color.
+            var canvas = MakeWorldCanvas();
+            var tile = MakeButton(canvas, "TileHidden", new Vector2(3, 2), Vector2.zero);
+            tile.GetComponent<Image>().color = new Color(1f, 1f, 1f, 0f);
+            var holder = new GameObject("Holder");
+            holder.transform.SetParent(tile.transform, false);
+            holder.AddComponent<CanvasGroup>().alpha = 0f;
+            var icon = new GameObject("Icon");
+            icon.transform.SetParent(holder.transform, false);
+            icon.AddComponent<Image>().color = Color.white;
+            Canvas.ForceUpdateCanvases();
+
+            JObject result = UIScreenSpaceIntrospection.GetScreenRects(new JArray { InstanceLocator(tile) }, null);
+            JObject entry = FindEntry(result, "TileHidden");
+
+            Assert.IsNotNull(entry);
+            Assert.IsFalse(entry.Value<bool>("isVisible"));
+            Assert.IsFalse(entry.Value<bool>("descendantVisible"),
+                "child art behind a zero-alpha CanvasGroup is not visible");
         }
 
         [Test]

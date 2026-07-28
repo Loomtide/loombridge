@@ -19,7 +19,7 @@ import { createHash } from "node:crypto";
 
 import { sceneSlug } from "./minigame-scene-inference.js";
 import type { MinigameCaptureObject } from "./types.js";
-import type { FlowActuation, FlowEvidence } from "./flow-evidence.js";
+import type { FlowActuation, FlowEvidence, FlowStall } from "./flow-evidence.js";
 import type { MinigameContract, MinigameReachedCondition } from "./profiles/types.js";
 import type { Action, ReplayTrace } from "../replay/types.js";
 
@@ -887,7 +887,7 @@ export interface RecordedTransition {
  * `steps[]`. Honest by construction — the values are verbatim dispatch results, so
  * a grouping mistake surfaces as a visible flow fault, never a fabricated green.
  */
-export function buildFlowEvidence(transitions: RecordedTransition[]): FlowEvidence {
+export function buildFlowEvidence(transitions: RecordedTransition[], stall?: FlowStall): FlowEvidence {
   return {
     schemaVersion: "1",
     transitions: transitions.map((t) => {
@@ -897,5 +897,29 @@ export function buildFlowEvidence(transitions: RecordedTransition[]): FlowEviden
         ? { ...base, actuation: t.actuations[0] }
         : { ...base, steps: t.actuations };
     }),
+    ...(stall ? { stall } : {}),
+  };
+}
+
+/**
+ * Detect a trailing run of DEAD dispatches (actuated never true) across the base
+ * drive's full dispatch sequence. A recorded trace only contains gestures the human
+ * really performed, so once every remaining dispatch stops actuating, the game has
+ * almost certainly stopped consuming input (live case: a pour drag racing the phase
+ * gate stalls KidsChef, and every later topping/done dispatch is dead). Everything
+ * "captured" after that point is really the stalled frame. A single dead dispatch
+ * at the very end could be one flaky tap, so a stall needs at least two.
+ */
+export function computeFlowStall(dispatches: FlowActuation[]): FlowStall | undefined {
+  let start = dispatches.length;
+  while (start > 0 && dispatches[start - 1]?.actuated !== true) start--;
+  const deadCount = dispatches.length - start;
+  if (deadCount < 2) return undefined;
+  const first = dispatches[start];
+  return {
+    target: (first.kind === "drag" ? first.source : undefined) ?? first.target,
+    kind: first.kind,
+    deadCount,
+    totalDispatches: dispatches.length,
   };
 }

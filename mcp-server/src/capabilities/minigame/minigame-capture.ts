@@ -39,6 +39,7 @@ import {
 import {
   assignObjectIds,
   buildFlowEvidence,
+  computeFlowStall,
   objectIdFromPath,
   perDeviceKey,
   planCaptureFromTrace,
@@ -68,7 +69,7 @@ import { BACKGROUND_DATA_FILE } from "./run-minigame-gates.js";
 const BACKGROUND_CANDIDATES_FILE = "background-candidates.json";
 import { ICON, unityConnectionHint } from "../../shared/cli-ui.js";
 import { printNextStep } from "./minigame-next.js";
-import type { FlowActuation } from "./flow-evidence.js";
+import type { FlowActuation, FlowStall } from "./flow-evidence.js";
 import { UnityClient } from "../../bridge/unity-client.js";
 import { resolveCliProjectPin } from "../setup/cli-project-pin.js";
 import { resilientSend } from "../replay/resilient-send.js";
@@ -260,6 +261,8 @@ export interface DriveAccumulators {
   partial: { stateId: string; missing: string[]; sequential: string[] }[];
   /** Per-transition actuation evidence — base drive only (flow is device-invariant). */
   transitions: RecordedTransition[];
+  /** EVERY base-drive ui dispatch in drive order (transition-independent), for stall detection. */
+  dispatches: FlowActuation[];
   /** input-response before/after dumps — base drive only (the stimulus is device-invariant). */
   respBefore?: RawScreenRects;
   respAfter?: RawScreenRects;
@@ -507,7 +510,7 @@ export async function driveDeviceOnce(
       acc.respAfter = (await driver.dumpScreenRects()) as RawScreenRects;
     }
     if (isBase && isUiDispatch(action) && res.raw) {
-      bucket.push({
+      const rec: FlowActuation = {
         actuated: res.raw.actuated,
         handlerTarget: res.raw.handlerTarget,
         raycastHit: res.raw.raycastHit,
@@ -517,7 +520,11 @@ export async function driveDeviceOnce(
         // so the flow gate corroborates against `source` + a drag signal for these.
         kind: action.do === "drag" ? "drag" : "tap",
         source: actionSourcePath(action),
-      });
+      };
+      bucket.push(rec);
+      // The flat drive-order record feeds stall detection: a trailing all-dead run means the
+      // game stopped consuming input mid-flow (per-transition buckets can't see that shape).
+      acc.dispatches.push(rec);
     }
     for (const sp of checkpoints.after.get(i) ?? []) await captureState(sp);
   }
@@ -533,7 +540,7 @@ async function captureLive(
   capturesDir: string,
   settleMs: number,
   projectPathCanonical: string | undefined,
-): Promise<{ captured: string[]; notReached: { stateId: string; reason: string }[]; partial: { stateId: string; missing: string[]; sequential: string[] }[]; response?: ResponseObservation; candidates?: BackgroundCandidates } | { blocked: string }> {
+): Promise<{ captured: string[]; notReached: { stateId: string; reason: string }[]; partial: { stateId: string; missing: string[]; sequential: string[] }[]; response?: ResponseObservation; candidates?: BackgroundCandidates; stall?: FlowStall } | { blocked: string }> {
   await fs.mkdir(capturesDir, { recursive: true });
   // Pin the editor explicitly: an unpinned client follows endpoint-discovery-latest.json,
   // which every running editor overwrites on its heartbeat, so with two editors open a
@@ -585,6 +592,7 @@ async function captureLive(
       notReached: [],
       partial: [],
       transitions: [],
+      dispatches: [],
     };
 
     for (const [di, device] of devices.entries()) {
@@ -667,10 +675,12 @@ async function captureLive(
       );
     }
 
-    // flow.json — honest per-transition actuation evidence (from the BASE drive only).
+    // flow.json: honest per-transition actuation evidence (from the BASE drive only),
+    // plus the stall marker when the drive ended in a run of dead dispatches.
+    const stall = computeFlowStall(acc.dispatches);
     await fs.writeFile(
       path.join(capturesDir, "flow.json"),
-      `${JSON.stringify(buildFlowEvidence(transitions), null, 2)}\n`,
+      `${JSON.stringify(buildFlowEvidence(transitions, stall), null, 2)}\n`,
       "utf-8",
     );
 
@@ -720,7 +730,7 @@ async function captureLive(
       candidates = undefined;
     }
 
-    return { captured, notReached, partial, response, candidates };
+    return { captured, notReached, partial, response, candidates, stall };
   } finally {
     // Restore the editor's original Game View size so capture leaves it as it found it.
     // Best-effort: a failed restore must not mask the real result (or a teardown error).
@@ -788,7 +798,7 @@ export async function runCapture(argv: string[], root: string = process.cwd()): 
 
   const plan = planCaptureFromTrace(contract, trace);
 
-  let result: { captured: string[]; notReached: { stateId: string; reason: string }[]; partial: { stateId: string; missing: string[]; sequential: string[] }[]; response?: ResponseObservation; candidates?: BackgroundCandidates } | { blocked: string };
+  let result: { captured: string[]; notReached: { stateId: string; reason: string }[]; partial: { stateId: string; missing: string[]; sequential: string[] }[]; response?: ResponseObservation; candidates?: BackgroundCandidates; stall?: FlowStall } | { blocked: string };
   try {
     result = await captureLive(
       contract,
@@ -829,6 +839,7 @@ export async function runCapture(argv: string[], root: string = process.cwd()): 
       result.candidates,
       contract.checks.deterministic.includes(BACKGROUND_COVERAGE_GATE),
       result.partial,
+      result.stall,
     ).join("\n"),
   );
   // The guided footer only makes sense on the STANDARD workspace layout (<ws>/captures) the
@@ -850,6 +861,7 @@ export function buildCaptureSummary(
   candidates?: BackgroundCandidates,
   backgroundAlreadyBound: boolean = false,
   partial?: { stateId: string; missing: string[] }[],
+  stall?: FlowStall,
 ): string[] {
   // Multi-aspect: each state is captured at every device. Note the per-device breadth in the
   // header (e.g. "× 3 devices") and the per-device artifact stems, while keeping the legacy
@@ -872,6 +884,21 @@ export function buildCaptureSummary(
     lines.push("", `${ICON.gated} Not captured · outcome-gated (by design; a read-only verifier can't drive these on a non-deterministic game):`);
     for (const u of gated) lines.push(`   ${ICON.gated} ${u.stateId} — ${u.reason}`);
     lines.push("   (verify reports these as not asserted / outcome-gated — never a failure.)");
+  }
+  // Flow stall: the drive's trailing dispatches all reported actuated=false, so the game most
+  // likely stopped consuming input at the named gesture, and everything "captured" after that
+  // point is really the stalled frame. Surfaced loudly so the developer doesn't chase phantom
+  // per-screen findings from mislabeled captures.
+  if (stall) {
+    lines.push(
+      "",
+      `${ICON.warn} Flow stall: the last ${stall.deadCount} of ${stall.totalDispatches} input dispatches all reported actuated=false, starting at the ${stall.kind ?? "tap"} on '${stall.target ?? "<unknown>"}'.`,
+      "   The game most likely stopped consuming input there (the usual cause: a gesture racing the",
+      "   game's phase gate or an activation animation, so \"visible\" was not yet \"consumable\").",
+      "   Screens captured after that point show the STALLED frame, not the later states.",
+      "   Fix: re-record with a state signal (--auto-state-signal, or declare \"stateSignal\" in the",
+      "   contract) so capture phase-aligns each gesture, then re-run capture.",
+    );
   }
   if (traceGap.length > 0) {
     lines.push("", `${ICON.cantVerify} Not captured — your recorded trace never reaches these screens (fix the recording, don't fake it):`);

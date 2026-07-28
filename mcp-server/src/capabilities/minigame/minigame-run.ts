@@ -58,11 +58,16 @@ export function stepArgv(at: ExecutableAt, f: WorkspaceFacts, opts: { recordScen
   const traceId = `${f.id}-happy-path`;
   switch (at) {
     case "record": {
-      // Thread the declared/auto-detected stateSignal so the chained record phase-aligns each gesture
-      // (the same flag `minigame next` prints) — without it a multi-screen/gesture game records degraded.
+      // Thread the declared stateSignal so the chained record phase-aligns each gesture (the same
+      // flag `minigame next` prints). When the contract declares NONE, fall back to live per-scene
+      // auto-detection (--auto-state-signal): the scan can only see the scanned scene, so a
+      // hub-to-game recording would otherwise record with no phase gates at all, and capture then
+      // races activation animations ("visible" is not "consumable"; live case: KidsChef's pour
+      // bowl pops in before its phase flips, so an ungated drag lands in the Cooking gate and the
+      // flow stalls with every later dispatch dead).
       const stateSignal = f.stateSignal
         ? ["--state-signal", `${f.stateSignal.locator}:${f.stateSignal.component ?? ""}:${f.stateSignal.property}`]
-        : [];
+        : ["--auto-state-signal"];
       // Record can RESET to a different scene than the scanned contract scene (a hub→game flow: scan the
       // game scene for the contract, but start the demonstration on the home/hub scene). The contract's
       // scene stays the game; only the record reset target changes.
