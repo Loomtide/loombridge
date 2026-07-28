@@ -270,10 +270,10 @@ unsupported configuration, not a feature. Report vulnerabilities privately per
 
 ## Roadmap and non-goals
 
-Loombridge is pre-1.0. Near-term: Unity Test Runner results as a bound gate, a
-player-build gate, doneness binding for the tuning-snapshot drift report, N-capture
-averaging for snapshot baselines, broader genre packs, and deeper feel tiers on the same
-deterministic contract. Two recent additions worth knowing: feel profiles split grammar
+The full, current roadmap lives in [`ROADMAP.md`](ROADMAP.md). Loombridge is pre-1.0.
+Near-term: one unified `verify` front door over every verification asset, Unity Test
+Runner results as a bound gate, a player-build gate, CI-headless robustness, and
+N-capture averaging for snapshot baselines. Two recent additions worth knowing: feel profiles split grammar
 from taste (universal feel-grammar checks gate pass/fail; archetype targets are
 descriptive placement unless you opt in with `--enforce-taste`), and the tuning snapshot
 (freeze how the game measurably plays once a human accepts it, then catch kinematic
