@@ -1476,7 +1476,10 @@ test("verify --stage construct is diagnostic — writes verify-<stage>.json, lea
     const state = await readState(paths);
     assert.equal(state?.phase, "built-unverified", "a staged run must NOT flip the phase");
     assert.equal(state?.currentBuild?.runId, "run-stage-test", "currentBuild preserved");
-    assert.ok(code === 0 || code === 1, "returns an exit code without throwing");
+    // With an EMPTY inputs dir no gate consumed a capture, so this staged run graded
+    // nothing, so the engine's nothing-graded refusal (exit 2) applies here too. A
+    // restricted stage already cannot certify; it must also not read as green.
+    assert.equal(code, 2, "a staged run that graded nothing refuses rather than exiting 0");
   } finally {
     await fs.rm(root, { recursive: true, force: true });
   }

@@ -29,6 +29,7 @@ import { run as minigameRun } from "../../../../capabilities/minigame/minigame.j
 import {
   BASELINE_MANIFEST,
   compareStateToBaseline,
+  loadBaselineManifest,
   type BaselineManifest,
   type BaselineStateInputs,
 } from "../../../../capabilities/minigame/minigame-baseline.js";
@@ -298,6 +299,37 @@ test("baseline approve: writes the bundle + manifest (per-state png/rects + mask
       await fs.access(path.join(ref, `${s}.png`));
       await fs.access(path.join(ref, `${s}.ui-rects.json`));
     }
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test("baseline approve: stamps the owning PROJECT root, and a legacy unstamped bundle still compares", async () => {
+  // The bundle lives outside the game repo, so nothing about its location proves
+  // which project it grades. The stamp is what lets unified `verify` refuse project
+  // B's screens being compared against project A's approved layout.
+  const root = await tmp("s6e-stamp-");
+  const ref = path.join(root, "baseline");
+  try {
+    const contractPath = path.join(root, "c.json");
+    await writeJson(contractPath, makeContract(ref));
+    const caps = path.join(root, "caps");
+    await writeCleanPack(caps);
+    assert.equal(await approve(root, contractPath, caps), 0);
+
+    const manifestPath = path.join(ref, BASELINE_MANIFEST);
+    const manifest = JSON.parse(await fs.readFile(manifestPath, "utf-8")) as BaselineManifest;
+    assert.equal(manifest.projectRoot, path.resolve(root), "a new approval names the project it is for");
+
+    // Schema tolerance: a bundle frozen before the field existed must still load and
+    // compare exactly as before: an unstamped baseline is legacy, never tampering.
+    delete (manifest as { projectRoot?: string }).projectRoot;
+    await fs.writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf-8");
+    const legacy = await loadBaselineManifest(ref);
+    assert.ok(legacy, "a legacy manifest still loads");
+    assert.equal(legacy.projectRoot, undefined);
+    const { code } = await verify(root, contractPath, caps, path.join(root, "r.json"));
+    assert.equal(code, 0, "a legacy bundle still compares clean");
   } finally {
     await fs.rm(root, { recursive: true, force: true });
   }

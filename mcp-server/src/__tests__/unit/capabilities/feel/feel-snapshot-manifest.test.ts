@@ -118,6 +118,57 @@ test("LITMUS: editing the frozen measurements after approve fails the sha check"
   assert.ok(integrity.failures.some((f) => f.includes("measurements sha256 mismatch")), integrity.failures.join("; "));
 });
 
+test("the ownership stamp: a new approval records the PROJECT root, and a legacy manifest without it still verifies", async () => {
+  // The snapshot lives in an external workspace derived from the project's BASENAME,
+  // so two checkouts can resolve to the same workspace. The stamp is what lets a
+  // reader refuse project B being graded against project A's frozen feel.
+  const root = await stageCandidate("feel.json");
+  const candidate = path.join(root, "candidate");
+  const currentDir = path.join(root, "stamped");
+  const measurements = await loadMeasurements(path.join(candidate, SNAPSHOT_MEASUREMENTS_FILE));
+  const view = rederiveView(measurements);
+  const metrics: FeelSnapshotManifest["metrics"] = {};
+  for (const [id, value] of Object.entries(measurements.metrics)) {
+    metrics[id] = { value, confidence: view.verified.has(id) ? "verified" : "reported" };
+  }
+  const written = await writeSnapshotBundle({
+    candidateDir: candidate,
+    currentDir,
+    engine: { engine: "unity" },
+    capturedAt: "2026-07-28T00:00:00.000Z",
+    approvedAt: "2026-07-28T00:00:00.000Z",
+    tolerancePolicy: DEFAULT_SNAPSHOT_TOLERANCES,
+    metrics,
+    rederivation: { pass: view.pass, total: view.total },
+    projectRoot: "/projects/knights-quest",
+    contractStats: { interactions: 2, metrics: 3 },
+  });
+  assert.equal(written.projectRoot, "/projects/knights-quest");
+  const loaded = await loadSnapshotManifest(currentDir);
+  assert.equal(loaded?.projectRoot, "/projects/knights-quest");
+  assert.equal((await verifySnapshotIntegrity(currentDir)).ok, true);
+
+  // Schema tolerance: the legacy shape (no stamp) must still load AND verify. An
+  // unstamped snapshot is a provenance gap for the caller, never tampering here.
+  const legacyDir = path.join(root, "legacy");
+  await writeSnapshotBundle({
+    candidateDir: candidate,
+    currentDir: legacyDir,
+    engine: { engine: "unity" },
+    capturedAt: "2026-07-28T00:00:00.000Z",
+    approvedAt: "2026-07-28T00:00:00.000Z",
+    tolerancePolicy: DEFAULT_SNAPSHOT_TOLERANCES,
+    metrics,
+    rederivation: { pass: view.pass, total: view.total },
+    contractStats: { interactions: 2, metrics: 3 },
+  });
+  const legacy = await loadSnapshotManifest(legacyDir);
+  assert.ok(legacy, "a legacy manifest still loads");
+  assert.equal(legacy.projectRoot, undefined);
+  const integrity = await verifySnapshotIntegrity(legacyDir);
+  assert.equal(integrity.ok, true, integrity.failures.join("; "));
+});
+
 test("LITMUS: swapping the frozen capture contract fails the sha check (binding is to HOW it was measured)", async () => {
   const root = await stageCandidate("feel.json");
   const { currentDir } = await approveFixture(root);

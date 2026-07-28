@@ -17,6 +17,11 @@ export interface FleetTraceResult {
   blockedReason?: BlockedReason;
   /** True if any capture drifted from its baseline (a warning, per the design). */
   visualDrift: boolean;
+  /**
+   * True if a capture's visual comparison could not be made (unreadable actual or
+   * baseline PNG): a capture gap, NOT drift. Optional so an older roll-up parses.
+   */
+  visualHarnessFault?: boolean;
   /** A brief first-divergence summary for the index (full detail in the per-trace report). */
   firstDivergence?: { kind: DivergenceKind; segment: string | null };
   /** Present when the trace could not be replayed at all (bad JSON, bridge failure). */
@@ -37,7 +42,12 @@ export interface FleetCounts {
 
 export interface FleetReport {
   generatedAt: string;
-  /** Worst status across the fleet: any fail → fail; else any blocked → blocked; else pass. */
+  /**
+   * Worst status across the fleet: any fail → fail; else any blocked OR any
+   * unreadable-capture harness fault → blocked; else pass. A harness fault rides
+   * `blocked` because that is this vocabulary's "no verdict was produced" value:
+   * a roll-up that read `pass` while the run exited 2 would be a false green on disk.
+   */
   status: ReplayStatus;
   counts: FleetCounts;
   traces: FleetTraceResult[];
@@ -54,7 +64,8 @@ export function summarizeFleet(
     blocked: traces.filter((t) => t.status === "blocked").length,
     drift: traces.filter((t) => t.visualDrift).length,
   };
+  const harnessFaults = traces.filter((t) => t.visualHarnessFault).length;
   const status: ReplayStatus =
-    counts.fail > 0 ? "fail" : counts.blocked > 0 ? "blocked" : "pass";
+    counts.fail > 0 ? "fail" : counts.blocked > 0 || harnessFaults > 0 ? "blocked" : "pass";
   return { generatedAt, status, counts, traces };
 }

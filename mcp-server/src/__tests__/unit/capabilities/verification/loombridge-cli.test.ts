@@ -75,12 +75,80 @@ test("plan accepts an unknown genre as free-form (no usage refusal at the door)"
 
 // ── verify ───────────────────────────────────────────────────────────────────
 
-test("verify writes a verdict, updates STATE, and enforces strict on warn", async () => {
+/** Run `fn` with console.error captured, returning the emitted lines. */
+async function captureStderr<T>(fn: () => Promise<T>): Promise<{ result: T; lines: string[] }> {
+  const lines: string[] = [];
+  const original = console.error;
+  console.error = (...a: unknown[]) => void lines.push(a.map(String).join(" "));
+  try {
+    return { result: await fn(), lines };
+  } finally {
+    console.error = original;
+  }
+}
+
+test("verify REFUSES (exit 2) when NOTHING graded, and leaves STATE untouched", async () => {
+  // The motivating defect (RFC UnifiedVerify): a planned-but-uncaptured project used
+  // to exit 0 here with every gate at `warn` and STATE flipped to `verified-warn`,
+  // an artifact an agent could quote as "verify passed". The refusal lives in the
+  // ENGINE, so the bare CLI, every --inputs form, and the MCP tool all inherit it.
   const root = await tmpRoot();
   await runPlan({ root, genre: "platformer-2d", engine: "unity", force: false, allowMissingDesignTarget: true });
   const paths = loombridgePaths(root);
 
-  // No captures in .loombridge/verify -> every gate degrades to WARN -> status warn.
+  const { result: code, lines } = await captureStderr(() =>
+    runVerify({
+      root,
+      inputsDir: paths.verifyInputs,
+      acceptancePath: paths.acceptance,
+      outputPath: paths.verdict,
+      strict: false,
+    }),
+  );
+  assert.equal(code, 2, "a run that graded nothing is a refusal, never a pass");
+  assert.ok(
+    lines.some((l) => /REFUSED/.test(l) && /nothing was graded/.test(l)),
+    lines.join("\n"),
+  );
+  assert.ok(lines.some((l) => l.includes(paths.verifyInputs)), "the refusal names the resolved inputs dir");
+  assert.ok(lines.some((l) => /loombridge capture/.test(l)), "the refusal names the capture command");
+
+  // The verdict is still written (the run is auditable: its warns name every missing
+  // capture). What must not happen is the phase flip.
+  assert.ok(await fileExists(paths.verdict), "build-verdict.json written for auditability");
+  const verdict = JSON.parse(await fs.readFile(paths.verdict, "utf-8"));
+  assert.equal(verdict.status, "warn", "empty captures degrade every gate to warn");
+
+  const state = await readState(paths);
+  assert.equal(state?.phase, "planned", "a run that graded nothing must NOT flip the phase");
+  assert.equal(state?.lastVerdict ?? null, null, "no verdict is recorded on STATE");
+
+  // --strict does not rescue it either: still the refusal tier, never 1.
+  const strictCode = await captureStderr(() =>
+    runVerify({
+      root,
+      inputsDir: paths.verifyInputs,
+      acceptancePath: paths.acceptance,
+      outputPath: paths.verdict,
+      strict: true,
+    }),
+  );
+  assert.equal(strictCode.result, 2);
+});
+
+test("verify writes a verdict, updates STATE, and enforces strict on warn (PARTIALLY graded)", async () => {
+  // The engine semantics the build loop and the MCP tool rely on: once at least ONE
+  // gate consumed a real capture, a warn verdict is a real result over a real subset:
+  // exit 0 without --strict, 1 with it, STATE flipped. Only the ZERO-graded case is a
+  // refusal, so this is where the boundary is pinned.
+  const root = await tmpRoot();
+  await runPlan({ root, genre: "platformer-2d", engine: "unity", force: false, allowMissingDesignTarget: true });
+  const paths = loombridgePaths(root);
+
+  // A real captured input for exactly one gate: console-clean reads console.json.
+  await fs.mkdir(paths.verifyInputs, { recursive: true });
+  await fs.writeFile(path.join(paths.verifyInputs, "console.json"), JSON.stringify({ logs: [] }), "utf-8");
+
   const code = await runVerify({
     root,
     inputsDir: paths.verifyInputs,
@@ -92,7 +160,8 @@ test("verify writes a verdict, updates STATE, and enforces strict on warn", asyn
 
   assert.ok(await fileExists(paths.verdict), "build-verdict.json written");
   const verdict = JSON.parse(await fs.readFile(paths.verdict, "utf-8"));
-  assert.equal(verdict.status, "warn", "empty captures degrade every gate to warn");
+  assert.equal(verdict.status, "warn", "the ungraded gates still degrade the verdict to warn");
+  assert.equal(verdict.gates["console-clean"], "pass", "the staged capture really graded a gate");
 
   const state = await readState(paths);
   assert.equal(state?.phase, "verified-warn");

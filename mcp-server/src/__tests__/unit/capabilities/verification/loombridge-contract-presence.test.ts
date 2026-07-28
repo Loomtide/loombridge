@@ -243,8 +243,15 @@ test("verify does NOT refuse once a contract exists (guard is backward-compatibl
   try {
     await runPlan({ root, genre: "platformer-2d", engine: "unity", force: false, allowMissingDesignTarget: true });
     console.error = () => {};
-    // With a contract present but no captured inputs, verify proceeds to grade
-    // (it FAILs the gates) — the point is it does NOT short-circuit as a contract refusal.
+    // Stage ONE real capture so the run actually grades a gate. Without it the engine's
+    // nothing-graded refusal also exits 2, and this assertion could no longer tell a
+    // missing-contract refusal apart from an ungraded run. The two are different
+    // defects and this test is about the first.
+    const paths = loombridgePaths(root);
+    await fs.mkdir(paths.verifyInputs, { recursive: true });
+    await fs.writeFile(path.join(paths.verifyInputs, "console.json"), JSON.stringify({ logs: [] }), "utf-8");
+    // With a contract present, verify proceeds to grade. The point is it does NOT
+    // short-circuit as a contract refusal.
     const code = await runVerify(verifyArgs(root));
     console.error = original;
     assert.notEqual(code, 2, "a present contract must not be treated as missing");
@@ -490,6 +497,11 @@ test("runLoombridgeVerifyTool does NOT refuse once a contract exists (writes a r
   const root = await tmpRoot();
   try {
     await runPlan({ root, genre: "platformer-2d", engine: "unity", force: false, allowMissingDesignTarget: true });
+    // One real capture: the MCP tool shares the engine, so an ungraded run would also
+    // exit 2 and blur what this test pins (a present contract is not a refusal).
+    const paths = loombridgePaths(root);
+    await fs.mkdir(paths.verifyInputs, { recursive: true });
+    await fs.writeFile(path.join(paths.verifyInputs, "console.json"), JSON.stringify({ logs: [] }), "utf-8");
     const payload = await runLoombridgeVerifyTool(root);
     assert.notEqual(payload.exitCode, 2, "a present contract must not read as a missing-contract refusal");
     assert.equal(payload.refused, false);

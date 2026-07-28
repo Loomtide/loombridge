@@ -14,7 +14,7 @@ import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
-import { runGates, isGateInStage, VERIFY_STAGES, type ReviewFindings } from "../../../../capabilities/verification/run-gates.js";
+import { gradedGates, runGates, isGateInStage, VERIFY_STAGES, type ReviewFindings } from "../../../../capabilities/verification/run-gates.js";
 import type { AcceptanceContract } from "../../../../capabilities/verification/types.js";
 import { createDraftAssetManifest, type AssetManifest } from "../../../../capabilities/assets/asset-manifest.js";
 import { REPO_ROOT as REPO_ROOT_SUPPORT } from "../../../_support/paths.js";
@@ -916,6 +916,65 @@ test("runGates --stage construct: a FAILING in-stage gate DOES fail the stage", 
     const staged = await runGates({ acceptance, inputsDir: dir, stage: "construct" });
     assert.equal(staged.status, "fail", "a broken in-stage gate must fail the stage");
     assert.equal(staged.gates["manifest"], "fail");
+  } finally {
+    await fs.rm(dir, { recursive: true, force: true });
+  }
+});
+
+// ── gradedGates: did this run actually CHECK anything? ───────────────────────
+
+test("gradedGates: only gates whose evaluator consumed a real capture count as graded", async () => {
+  const acceptance = await loadAcceptance();
+
+  // Empty inputs: every gate degrades to a capture-missing WARN, so NOTHING graded.
+  const empty = await mkTmpDir();
+  try {
+    const report = await runGates({ acceptance, inputsDir: empty });
+    assert.ok(Object.keys(report.gates).length > 0, "the report still lists every gate");
+    assert.equal(report.status, "warn", "a warn status alone cannot answer 'did anything grade?'");
+    assert.deepEqual(gradedGates(report), [], "a warn-because-missing gate is not a graded gate");
+  } finally {
+    await fs.rm(empty, { recursive: true, force: true });
+  }
+
+  // One real capture: exactly the gates that read it grade, and nothing else does.
+  const one = await mkTmpDir();
+  try {
+    await writeCaptures(one, { "console.json": conformantCaptures()["console.json"] });
+    const report = await runGates({ acceptance, inputsDir: one });
+    assert.deepEqual(gradedGates(report), ["console-clean"]);
+  } finally {
+    await fs.rm(one, { recursive: true, force: true });
+  }
+
+  // A full conformant pack grades many gates (the partial/full boundary is real).
+  const full = await mkTmpDir();
+  try {
+    await writeCaptures(full, conformantCaptures());
+    const graded = gradedGates(await runGates({ acceptance, inputsDir: full }));
+    assert.ok(graded.length > 1, `expected several graded gates, got ${JSON.stringify(graded)}`);
+    assert.ok(graded.includes("console-clean") && graded.includes("manifest"), JSON.stringify(graded));
+  } finally {
+    await fs.rm(full, { recursive: true, force: true });
+  }
+});
+
+test("gradedGates: a not_applicable gate never counts, however it became not_applicable", async () => {
+  const acceptance = await loadAcceptance();
+  const dir = await mkTmpDir();
+  try {
+    await writeCaptures(dir, conformantCaptures());
+    // Out of stage: the excluded gates report not_applicable, so they drop out of the
+    // graded set even though their capture files are sitting right there.
+    const staged = await runGates({ acceptance, inputsDir: dir, stage: "construct" });
+    const graded = gradedGates(staged);
+    assert.ok(graded.length > 0, "the in-stage gates still grade");
+    for (const gate of graded) {
+      assert.notEqual(staged.gates[gate], "not_applicable", `${gate} must not be counted`);
+    }
+    // Slice selection is the other route to not_applicable, and behaves identically.
+    const sliced = await runGates({ acceptance, inputsDir: dir, selectGates: new Set(["console-clean"]) });
+    assert.deepEqual(gradedGates(sliced), ["console-clean"]);
   } finally {
     await fs.rm(dir, { recursive: true, force: true });
   }

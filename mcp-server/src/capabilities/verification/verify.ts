@@ -13,7 +13,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 
-import { runGates, VERIFY_STAGES, type VerifyStage } from "./run-gates.js";
+import { gradedGates, runGates, VERIFY_STAGES, type VerifyStage } from "./run-gates.js";
 import { deriveEvidenceClasses } from "./gates/evidence-classes.js";
 import { assertValidAcceptanceContract } from "./validator.js";
 import type { AcceptanceContract } from "./types.js";
@@ -220,6 +220,35 @@ function isDiagnosticStage(stage: VerifyStage | undefined): boolean {
 }
 
 /**
+ * The nothing-graded refusal (RFC UnifiedVerify: "a verify that checked nothing
+ * must never exit 0").
+ *
+ * The motivating defect, observed live on a fresh project: a planned-but-uncaptured
+ * project got a bare `verify` that exited 0 with every gate at `warn` and flipped
+ * STATE to `verified-warn`, which an agent can quote as "verify passed". Only
+ * `doneness` refused it. The refusal lives HERE, in the engine, so it closes for the
+ * bare CLI, every `--inputs` form, and the `loombridge_verify` MCP tool at once.
+ *
+ * "Nothing graded" is read from the assembled report's own gates + checks
+ * (`gradedGates`), never from an empty inputs directory: emptiness is a proxy that
+ * disagrees with the report the moment a gate is contract-`not_applicable` or its
+ * capture is staged from elsewhere.
+ */
+function refuseNothingGraded(args: { inputsDir: string; root: string; reportPath: string }): void {
+  console.error(
+    "[loombridge verify] REFUSED: nothing was graded. No gate consumed a captured input " +
+      `(every gate is warn-on-missing-capture or not_applicable). Inputs dir: ${args.inputsDir}`,
+  );
+  console.error(
+    `[loombridge verify] a verdict that measured nothing is NOT a pass; STATE was left untouched. Report: ${args.reportPath}`,
+  );
+  console.error(
+    "[loombridge verify] capture the evidence first, then re-run: " +
+      `loombridge capture --root ${args.root} --slice <id>  (or save each MCP op's output into ${args.inputsDir}; see \`loombridge capture --help\`).`,
+  );
+}
+
+/**
  * Run `verify` programmatically. Returns the enforcement exit code.
  * Exported for tests.
  */
@@ -270,9 +299,15 @@ export async function runVerify(args: VerifyArgs): Promise<number> {
       .filter(([, v]) => v !== "not_applicable")
       .map(([g, v]) => `${g}=${v}`)
       .join(" ");
-    const code = exitCodeForVerdict(report.status, { strict: args.strict });
+    const staged = gradedGates(report);
+    const code = staged.length === 0 ? 2 : exitCodeForVerdict(report.status, { strict: args.strict });
     console.error(`[loombridge verify] stage=${args.stage} (DIAGNOSTIC) status=${report.status} | ${gateLine}`);
     console.error(`[loombridge verify] report=${args.outputPath} exit=${code} — not a certifiable verdict; run the full \`verify\` for §3a.`);
+    // A staged run that graded nothing is still a run that checked nothing: it must
+    // not read as green just because a restricted stage cannot certify anyway.
+    if (staged.length === 0) {
+      refuseNothingGraded({ inputsDir: args.inputsDir, root: args.root, reportPath: args.outputPath });
+    }
     return code;
   }
 
@@ -319,6 +354,19 @@ export async function runVerify(args: VerifyArgs): Promise<number> {
 
   await fs.mkdir(path.dirname(args.outputPath), { recursive: true });
   await fs.writeFile(args.outputPath, `${JSON.stringify(reportOut, null, 2)}\n`, "utf-8");
+
+  // Nothing graded ⇒ refuse (2) with the verdict written but STATE untouched. The
+  // verdict file stays so the run is auditable (its `warn` gates name every missing
+  // capture); what must NOT happen is the phase flipping to `verified-warn`, which is
+  // the artifact an agent quotes as "verify passed". A PARTIALLY graded run (at least
+  // one gate consumed a real capture) keeps today's semantics exactly (0 non-strict,
+  // 1 under --strict, STATE flipped): a real green over a real subset is a real result,
+  // and the coverage line below is what scopes the claim.
+  const graded = gradedGates(report);
+  if (graded.length === 0) {
+    refuseNothingGraded({ inputsDir: args.inputsDir, root: args.root, reportPath: args.outputPath });
+    return 2;
+  }
 
   // STATE.md bookkeeping — preserve genre/engine + supervisor block, record the
   // verdict + phase.

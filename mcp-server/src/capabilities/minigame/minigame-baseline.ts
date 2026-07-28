@@ -82,6 +82,19 @@ export interface BaselineManifest {
   schemaVersion: "1";
   kind: "minigame-baseline";
   contractId: string;
+  /**
+   * OWNERSHIP STAMP: the absolute PROJECT root this baseline was approved for.
+   *
+   * The bundle lives outside the game repo (an external workspace, or wherever
+   * `--ref` points), so nothing about its location proves which project it grades.
+   * Unified `verify` discovery refuses a stamp that names a different root rather
+   * than comparing project B's screens against project A's approved layout.
+   *
+   * OPTIONAL by design (schema-tolerant): bundles approved before this field
+   * existed carry no stamp and must still load and compare. An unstamped bundle is
+   * not tampering; it is a non-anchor ("re-approve to stamp") for the caller.
+   */
+  projectRoot?: string;
   capturedAt: string;
   masks: string[];
   approvedStatus: "pass";
@@ -371,6 +384,8 @@ export async function writeBaselineBundle(args: {
   refDir: string;
   capturedAt: string;
   approvedSummary: BaselineManifest["approvedSummary"];
+  /** Absolute PROJECT root this approval is for (the ownership stamp). */
+  projectRoot?: string;
 }): Promise<BaselineManifest> {
   const { contract, capturesDir, refDir, capturedAt, approvedSummary } = args;
   await fs.mkdir(refDir, { recursive: true });
@@ -419,6 +434,7 @@ export async function writeBaselineBundle(args: {
     schemaVersion: "1",
     kind: "minigame-baseline",
     contractId: contract.id,
+    ...(args.projectRoot !== undefined ? { projectRoot: args.projectRoot } : {}),
     capturedAt,
     masks: contract.baseline?.masks ?? [],
     approvedStatus: "pass",

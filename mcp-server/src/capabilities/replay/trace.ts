@@ -30,6 +30,13 @@ import {
   type ReplayRunArtifact,
 } from "./index.js";
 import { observeRecordLive } from "./observe-record-live.js";
+import {
+  sha256,
+  traceBaselineManifestPath,
+  writeTraceBaselineManifest,
+  type TraceBaselineManifest,
+  type TraceBaselinePng,
+} from "./trace-baseline-manifest.js";
 import { isScenePath } from "../minigame/profiles/types.js";
 import { runLiveReplay } from "./run-live.js";
 import { resolveCliProjectPin } from "../setup/cli-project-pin.js";
@@ -348,17 +355,23 @@ async function runReplayAll(args: TraceArgs): Promise<number> {
 
   console.error(`[loombridge trace] replaying ${ids.length} trace(s)…`);
   const results: FleetTraceResult[] = [];
+  // Worst tier across the fleet, computed by the SAME `replayExitCode` the single
+  // replay door uses, so the two doors cannot disagree about what blocked or an
+  // unreadable capture means (2 beats 1 beats 0).
+  let worstExit = 0;
   for (const id of ids) {
     try {
       const { artifact, reportJson, htmlPath } = await replayOneTrace(paths, id, {
         html: args.html,
         projectPathCanonical: resolveCliProjectPin({ root: args.root }),
       });
+      worstExit = Math.max(worstExit, replayExitCode(artifact, args.strictVisual));
       results.push({
         id,
         status: artifact.status,
         blockedReason: artifact.blockedReason,
         visualDrift: artifact.visualDrift ?? false,
+        visualHarnessFault: artifact.visualHarnessFault ?? false,
         firstDivergence: artifact.firstDivergence
           ? { kind: artifact.firstDivergence.kind, segment: artifact.firstDivergence.segment }
           : undefined,
@@ -373,6 +386,7 @@ async function runReplayAll(args: TraceArgs): Promise<number> {
       // dead bridge will recur per trace; short-circuiting that is a follow-on.)
       const detail = message(error);
       results.push({ id, status: "fail", visualDrift: false, error: detail, durationMs: 0, report: "" });
+      worstExit = Math.max(worstExit, 1);
       console.error(`[loombridge trace]   ${id}: ERROR — ${detail}`);
     }
   }
@@ -388,14 +402,14 @@ async function runReplayAll(args: TraceArgs): Promise<number> {
   }
 
   const c = fleet.counts;
+  const unreadable = results.filter((r) => r.visualHarnessFault).length;
   console.error(
-    `[loombridge trace] fleet: ${fleet.status.toUpperCase()} — ${c.pass}/${c.total} pass, ${c.fail} fail, ${c.blocked} blocked, ${c.drift} drift`,
+    `[loombridge trace] fleet: ${fleet.status.toUpperCase()}: ${c.pass}/${c.total} pass, ${c.fail} fail, ${c.blocked} blocked, ${c.drift} drift` +
+      (unreadable > 0 ? `, ${unreadable} unreadable capture(s)` : ""),
   );
   console.error(`[loombridge trace] fleet report → ${path.relative(args.root, fleetReport)}`);
 
-  if (fleet.status !== "pass") return 1;
-  if (c.drift > 0 && args.strictVisual) return 1;
-  return 0;
+  return worstExit;
 }
 
 /** Discover trace ids from `<dir>/<id>.trace.json` (safe ids only). Exported for tests. */
@@ -414,14 +428,27 @@ export async function discoverTraces(dir: string): Promise<string[]> {
 }
 
 /**
- * Exit code for a replay run. A non-pass status fails (1). Visual drift is a
- * WARNING by default (GPU/AA noise shouldn't fail CI) — `--strict-visual`
- * promotes it to a failure. Pure + exported for unit tests.
+ * Exit code for a replay run, in the product's three tiers: 0 pass, 1 game defect,
+ * 2 harness fault / capture gap.
+ *
+ * `blocked` is the HARNESS tier, not the game tier: it means replay could not drive
+ * the trace at all (an unsupported input backend, a reset it could not perform), so
+ * it never produced an opinion about the game, so reporting it as 1 miscasts a missing
+ * capability as a regression. A PNG that could not be decoded
+ * (`visualHarnessFault`) is the same shape and tiers the same way.
+ *
+ * A real perceptual drift keeps its meaning: a WARNING by default (GPU/AA noise
+ * shouldn't fail CI), promoted to a game-tier failure (1) by `--strict-visual`.
+ *
+ * Pure + exported for unit tests; the fleet door calls this same function so the two
+ * doors cannot drift apart.
  */
 export function replayExitCode(
-  artifact: Pick<ReplayRunArtifact, "status" | "visualDrift">,
+  artifact: Pick<ReplayRunArtifact, "status" | "visualDrift" | "visualHarnessFault">,
   strictVisual: boolean,
 ): number {
+  if (artifact.status === "blocked") return 2;
+  if (artifact.visualHarnessFault) return 2;
   if (artifact.status !== "pass") return 1;
   if (artifact.visualDrift && strictVisual) return 1;
   return 0;
@@ -449,9 +476,25 @@ async function runApprove(args: TraceArgs): Promise<number> {
     return 1;
   }
 
+  // An approval is a PROVENANCE record, not just a file copy: it has to say which
+  // demonstration these frames belong to. Read the trace bytes first and refuse
+  // (harness tier) if they are gone: a baseline that cannot name its trace is not
+  // an anchor, and unified `verify` would have to treat it as unstamped anyway.
+  const traceFile = path.join(paths.replayTraces, `${args.id}.trace.json`);
+  let traceSha256: string;
+  try {
+    traceSha256 = sha256(await fs.readFile(traceFile));
+  } catch (error) {
+    console.error(
+      `[loombridge trace] cannot approve "${args.id}": its trace is unreadable at ` +
+        `${path.relative(args.root, traceFile)} (${message(error)}). An approved baseline must bind to the demonstration it froze.`,
+    );
+    return 2;
+  }
+
   const baselineDir = path.join(paths.replayBaselines, args.id);
   await fs.mkdir(baselineDir, { recursive: true });
-  let approved = 0;
+  const pngs: TraceBaselinePng[] = [];
   for (const segment of parsed.segments) {
     for (const capture of segment.captures) {
       if (!capture.artifact) continue;
@@ -463,27 +506,100 @@ async function runApprove(args: TraceArgs): Promise<number> {
       }
       const dest = path.join(baselineDir, `${capture.id}.png`);
       try {
-        await fs.copyFile(capture.artifact, dest);
-        approved += 1;
+        const bytes = await fs.readFile(capture.artifact);
+        await fs.writeFile(dest, bytes);
+        pngs.push({ captureId: capture.id, sha256: sha256(bytes) });
       } catch {
         console.error(`[loombridge trace] could not approve capture "${capture.id}" (missing actual).`);
       }
     }
   }
+
+  // Drop baselines this approval did NOT promote. A stale PNG left behind would
+  // still be picked up as the comparison anchor for its capture id while sitting
+  // outside the manifest: an unapproved frame silently grading a later run.
+  const pruned = await pruneUndeclaredBaselines(baselineDir, pngs);
+
+  const manifest: TraceBaselineManifest = {
+    kind: "trace-baseline",
+    schemaVersion: "1",
+    traceId: args.id,
+    traceSha256,
+    approvedAt: new Date().toISOString(),
+    sourceReportSha256: sha256(raw),
+    pngs,
+  };
+  await writeTraceBaselineManifest(baselineDir, manifest);
+
   console.error(
-    `[loombridge trace] approved ${approved} baseline(s) → ${path.relative(args.root, baselineDir)}`,
+    `[loombridge trace] approved ${pngs.length} baseline(s) → ${path.relative(args.root, baselineDir)}` +
+      (pruned > 0 ? ` (pruned ${pruned} stale baseline(s))` : ""),
   );
-  return approved > 0 ? 0 : 1;
+  console.error(
+    `[loombridge trace] stamped ${path.relative(args.root, traceBaselineManifestPath(baselineDir))}: approvedAt ${manifest.approvedAt}, bound to trace ${traceSha256.slice(0, 12)}…`,
+  );
+  return pngs.length > 0 ? 0 : 1;
 }
 
-/** Annotate each capture with its perceptual diff vs the approved baseline. */
-async function applyVisualDiff(
+/** Remove `*.png` in a baseline dir that this approval did not promote. Returns the count. */
+async function pruneUndeclaredBaselines(dir: string, pngs: TraceBaselinePng[]): Promise<number> {
+  const keep = new Set(pngs.map((p) => `${p.captureId}.png`));
+  let removed = 0;
+  let entries: string[];
+  try {
+    entries = await fs.readdir(dir);
+  } catch {
+    return 0;
+  }
+  for (const entry of entries.filter((e) => e.endsWith(".png")).sort()) {
+    if (keep.has(entry)) continue;
+    try {
+      await fs.rm(path.join(dir, entry));
+      removed += 1;
+    } catch {
+      /* best-effort: a PNG we cannot remove is reported by verifyTraceBaseline as undeclared */
+    }
+  }
+  return removed;
+}
+
+/**
+ * The programmatic seam unified `verify` drives a trace through: one replay, its
+ * per-trace JSON report, and the tier that replay earns. No HTML (the unified
+ * report links the JSON), no argv, no `TraceArgs` (the verb's argv shape stays
+ * private so the orchestrator cannot grow a second, drifting CLI).
+ *
+ * The unified flow always passes `strictVisual: true` (S1 amendment A5: pixel-drift
+ * gating is the DEFAULT there: an approved pixel baseline that a human froze is an
+ * anchor, so drifting from it is a result, not a warning). The `trace` verb's own
+ * default is unchanged.
+ */
+export async function replayTraceForVerify(
+  layout: ReplayLayout,
+  id: string,
+  opts: { strictVisual: boolean; projectPathCanonical?: string },
+): Promise<{ artifact: ReplayRunArtifact; reportJson: string; exitTier: number }> {
+  const { artifact, reportJson } = await replayOneTrace(layout, id, {
+    html: false,
+    projectPathCanonical: opts.projectPathCanonical,
+  });
+  return { artifact, reportJson, exitTier: replayExitCode(artifact, opts.strictVisual) };
+}
+
+/**
+ * Annotate each capture with its perceptual diff vs the approved baseline.
+ *
+ * Exported for tests: the tier a run earns depends on this function distinguishing
+ * real drift from an undecodable file, and the only other way in is a live replay.
+ */
+export async function applyVisualDiff(
   paths: ReplayLayout,
   id: string,
   artifact: ReplayRunArtifact,
 ): Promise<void> {
   const baselineDir = path.join(paths.replayBaselines, id);
   let anyDrift = false;
+  let anyUnreadable = false;
   for (const segment of artifact.segments) {
     for (const capture of segment.captures) {
       if (!capture.artifact) continue;
@@ -509,15 +625,21 @@ async function applyVisualDiff(
         capture.visualStatus = diff.status;
         if (diff.status === "drift") anyDrift = true;
       } catch (error) {
-        // Unreadable actual/baseline → treat as drift, never a silent match.
+        // Unreadable actual/baseline → the comparison could not be made. Never a
+        // silent match, and never DRIFT either: a corrupt/truncated PNG is a capture
+        // gap (harness tier 2), and calling it drift would report a harness fault as a
+        // game defect. `replayExitCode` reads `visualHarnessFault` for the tier.
         capture.baseline = baselinePath;
-        capture.visualStatus = "drift";
-        anyDrift = true;
-        console.error(`[loombridge trace] visual diff failed for "${capture.id}": ${message(error)}`);
+        capture.visualStatus = "unreadable";
+        anyUnreadable = true;
+        console.error(
+          `[loombridge trace] visual diff UNREADABLE for "${capture.id}" (capture gap, not drift): ${message(error)}`,
+        );
       }
     }
   }
   if (anyDrift) artifact.visualDrift = true;
+  if (anyUnreadable) artifact.visualHarnessFault = true;
 }
 
 async function runReport(args: TraceArgs): Promise<number> {
@@ -815,7 +937,7 @@ function printUsage(): void {
       "              editor and write .loombridge/replays/reports/<id>.report.{json,html},",
       "              diffing each capture against its approved baseline.",
       "  replay-all  Replay EVERY trace under .loombridge/replays/traces/ and write a",
-      "              roll-up .loombridge/replays/fleet.report.{json,html}. Exit by worst status.",
+      "              roll-up .loombridge/replays/fleet.report.{json,html}. Exit by worst tier.",
       "  approve     Promote the latest run's captures to the approved baseline",
       "              (.loombridge/replays/baselines/<id>/).",
       "  report      Re-render the HTML report from an existing <id>.report.json.",
@@ -844,7 +966,9 @@ function printUsage(): void {
       "  --title <text>    record: human-readable trace title.",
       "  --intent <text>   record: what the trace is meant to verify.",
       "",
-      "Exit: 0 pass · 1 fail/blocked/error (or drift with --strict-visual) · 2 usage.",
+      "Exit: 0 pass · 1 game defect: fail/error (or drift with --strict-visual)",
+      "      2 harness fault: blocked (undrivable), an unreadable capture/baseline PNG,",
+      "        or a usage error. A harness fault is never reported as a game defect.",
     ].join("\n"),
   );
 }

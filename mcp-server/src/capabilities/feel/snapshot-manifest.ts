@@ -89,6 +89,20 @@ export interface FeelSnapshotManifest {
   kind: "feel-snapshot";
   /** From the capture contract's `game`, when present. */
   game?: string;
+  /**
+   * OWNERSHIP STAMP: the absolute PROJECT root this snapshot was approved for.
+   *
+   * The snapshot lives in an external workspace (`~/.loombridge/projects/<id>/`),
+   * derived from the project's basename, so two different checkouts that sanitize
+   * to the same id resolve to the SAME workspace, and a verify run in project B
+   * would silently grade against project A's frozen feel. Discovery refuses a stamp
+   * that names a different root.
+   *
+   * OPTIONAL by design (schema-tolerant): manifests approved before this field
+   * existed carry no stamp and must still load and verify. An unstamped snapshot is
+   * not tampering; it is a non-anchor ("re-approve to stamp") for the caller.
+   */
+  projectRoot?: string;
   engine: { engine: string | null };
   capturedAt: string;
   approvedAt: string;
@@ -203,6 +217,8 @@ export interface WriteSnapshotBundleArgs {
   coverageGaps?: FeelCaptureCoverageEntry[];
   rederivation: { pass: number; total: number };
   game?: string;
+  /** Absolute PROJECT root this approval is for (the ownership stamp). */
+  projectRoot?: string;
   contractStats: { interactions: number; metrics: number };
 }
 
@@ -217,6 +233,7 @@ export async function writeSnapshotBundle(args: WriteSnapshotBundleArgs): Promis
     schemaVersion: "1",
     kind: "feel-snapshot",
     ...(args.game !== undefined ? { game: args.game } : {}),
+    ...(args.projectRoot !== undefined ? { projectRoot: args.projectRoot } : {}),
     engine: args.engine,
     capturedAt: args.capturedAt,
     approvedAt: args.approvedAt,

@@ -174,6 +174,10 @@ async function runApprove(args: BaselineArgs): Promise<number> {
       refDir,
       capturedAt: args.at ?? nowIso(),
       approvedSummary: { pass: summary.pass, warn: summary.warn, fail: summary.fail, notApplicable: summary.notApplicable },
+      // Ownership stamp (A4): the PROJECT root this approval is for. `--root` (default
+      // cwd) is the only project identity this verb is given: the contract, captures,
+      // and ref all live in the external workspace, none of which names the game repo.
+      projectRoot: path.resolve(args.root),
     });
     console.error(
       `[loombridge minigame] baseline APPROVED for '${contract.id}' → ${path.relative(args.root, refDir)} ` +

@@ -384,6 +384,10 @@ async function runSnapshotApprove(cli: SnapshotCliArgs): Promise<number> {
     coverageGaps: cli.allowPartial && coverageGaps.length > 0 ? coverageGaps : undefined,
     rederivation: { pass: view.pass, total: view.total },
     game: typeof contract.game === "string" ? contract.game : undefined,
+    // Ownership stamp (A4): the PROJECT root this "feels right" was said about, NOT
+    // the workspace, which is derived from the project basename and therefore shared
+    // by any checkout with the same folder name.
+    projectRoot: path.resolve(cli.root),
     contractStats: {
       interactions: Array.isArray(contract.interactions) ? contract.interactions.length : 0,
       metrics: Array.isArray(contract.metrics) ? contract.metrics.length : 0,

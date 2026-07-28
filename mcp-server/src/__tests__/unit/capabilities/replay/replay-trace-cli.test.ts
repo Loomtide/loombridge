@@ -4,8 +4,19 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import { discoverTraces, parseStateSignal, readEnter, replayExitCode, run } from "../../../../capabilities/replay/trace.js";
+import { deflateSync } from "node:zlib";
+
+import {
+  applyVisualDiff,
+  discoverTraces,
+  parseStateSignal,
+  readEnter,
+  replayExitCode,
+  run,
+} from "../../../../capabilities/replay/trace.js";
+import { loadTraceBaselineManifest } from "../../../../capabilities/replay/trace-baseline-manifest.js";
 import { flatReplayLayout, standardReplayLayout } from "../../../../domain/state.js";
+import type { ReplayRunArtifact } from "../../../../capabilities/replay/types.js";
 
 test("parseStateSignal: <path>:<Component>:<property> → meta shape", () => {
   assert.deepEqual(parseStateSignal("/Canvas/GM:ChefGameManager:phase"), {
@@ -60,6 +71,29 @@ async function writeReport(
     durationMs: 1,
   };
   await fs.writeFile(path.join(reports, `${id}.report.json`), JSON.stringify(artifact));
+}
+
+/**
+ * Plant the trace `approve` binds its baseline manifest to. An approval that cannot
+ * name the demonstration it froze is refused (exit 2), so every approve fixture has
+ * to carry one, the same thing a real run has after `trace record`.
+ */
+async function writeTrace(root: string, id: string): Promise<string> {
+  const traces = path.join(root, ".loombridge", "replays", "traces");
+  await fs.mkdir(traces, { recursive: true });
+  const file = path.join(traces, `${id}.trace.json`);
+  await fs.writeFile(
+    file,
+    JSON.stringify({
+      schemaVersion: "0.1",
+      id,
+      start: { scene: "Assets/Scenes/Game.unity", reset: "scene-load" },
+      input: { backend: "ui-events" },
+      segments: [{ id: "s", actions: [] }],
+      outcome: { expected: "success" },
+    }),
+  );
+  return file;
 }
 
 // These cases never touch the Unity bridge: `--id` validation rejects before
@@ -209,6 +243,7 @@ test("trace approve: copies the run's captures to the baseline dir (exit 0)", as
       durationMs: 1,
     };
     await fs.writeFile(path.join(reports, "demo.report.json"), JSON.stringify(artifact));
+    await writeTrace(root, "demo");
 
     assert.equal(await run(["approve", "--id", "demo", "--root", root]), 0);
     const baseline = path.join(root, ".loombridge", "replays", "baselines", "demo", "cap.png");
@@ -234,6 +269,7 @@ test("trace approve: an unsafe capture.id is skipped — no traversal write (exi
     await fs.mkdir(path.dirname(actual), { recursive: true });
     await fs.writeFile(actual, Buffer.from("png-bytes"));
     await writeReport(root, "demo", [{ id: "../../EVIL", artifact: actual }]);
+    await writeTrace(root, "demo");
 
     assert.equal(await run(["approve", "--id", "demo", "--root", root]), 1, "nothing approved");
     await assert.rejects(
@@ -251,6 +287,7 @@ test("trace approve: a capture.artifact outside .loombridge/replays is not copie
   try {
     await fs.writeFile(secret, "SECRET");
     await writeReport(root, "demo", [{ id: "cap", artifact: secret }]);
+    await writeTrace(root, "demo");
 
     assert.equal(await run(["approve", "--id", "demo", "--root", root]), 1, "nothing approved");
     await assert.rejects(
@@ -263,12 +300,208 @@ test("trace approve: a capture.artifact outside .loombridge/replays is not copie
   }
 });
 
-test("replayExitCode: pass→0, pass+drift→0 (warn) unless --strict-visual, non-pass→1", () => {
+test("replayExitCode: pass→0, drift→0 (warn) unless --strict-visual, fail→1", () => {
   assert.equal(replayExitCode({ status: "pass" }, false), 0);
   assert.equal(replayExitCode({ status: "pass", visualDrift: true }, false), 0);
   assert.equal(replayExitCode({ status: "pass", visualDrift: true }, true), 1);
   assert.equal(replayExitCode({ status: "fail" }, false), 1);
-  assert.equal(replayExitCode({ status: "blocked" }, true), 1);
+  assert.equal(replayExitCode({ status: "fail" }, true), 1);
+});
+
+test("replayExitCode: blocked is the HARNESS tier (2), never a game defect (1)", () => {
+  // `blocked` means replay could not drive the trace at all (unsupported backend,
+  // a reset it cannot perform). It never formed an opinion about the game, so
+  // grading it 1 would report a missing capability as a regression.
+  assert.equal(replayExitCode({ status: "blocked" }, false), 2);
+  assert.equal(replayExitCode({ status: "blocked" }, true), 2);
+});
+
+test("replayExitCode: an unreadable capture/baseline is the harness tier (2), even with drift alongside", () => {
+  assert.equal(replayExitCode({ status: "pass", visualHarnessFault: true }, false), 2);
+  assert.equal(replayExitCode({ status: "pass", visualDrift: true, visualHarnessFault: true }, true), 2);
+  // 2 dominates 1: once part of the run could not be trusted, the run is not a clean
+  // game verdict in either direction.
+  assert.equal(replayExitCode({ status: "fail", visualHarnessFault: true }, false), 2);
+});
+
+// ── visual diff tiering: drift is a game signal, an undecodable file is not ──
+
+/** A minimal, real RGBA PNG so `readPng` decodes it (no image library needed). */
+function crc32(buf: Buffer): number {
+  let crc = 0xffffffff;
+  for (let i = 0; i < buf.length; i += 1) {
+    crc ^= buf[i]!;
+    for (let k = 0; k < 8; k += 1) crc = crc & 1 ? (crc >>> 1) ^ 0xedb88320 : crc >>> 1;
+  }
+  return (crc ^ 0xffffffff) >>> 0;
+}
+function chunk(type: string, data: Buffer): Buffer {
+  const t = Buffer.from(type, "ascii");
+  const len = Buffer.alloc(4);
+  len.writeUInt32BE(data.length, 0);
+  const crc = Buffer.alloc(4);
+  crc.writeUInt32BE(crc32(Buffer.concat([t, data])), 0);
+  return Buffer.concat([len, t, data, crc]);
+}
+function pngBuffer(width: number, height: number, rgb: [number, number, number]): Buffer {
+  const sig = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(width, 0);
+  ihdr.writeUInt32BE(height, 4);
+  ihdr[8] = 8;
+  ihdr[9] = 6;
+  const raw = Buffer.alloc(height * (1 + width * 4));
+  let o = 0;
+  for (let y = 0; y < height; y += 1) {
+    raw[o++] = 0;
+    for (let x = 0; x < width; x += 1) {
+      raw[o++] = rgb[0];
+      raw[o++] = rgb[1];
+      raw[o++] = rgb[2];
+      raw[o++] = 255;
+    }
+  }
+  return Buffer.concat([sig, chunk("IHDR", ihdr), chunk("IDAT", deflateSync(raw)), chunk("IEND", Buffer.alloc(0))]);
+}
+
+/** A one-capture artifact pointing at `actualPng`, ready for `applyVisualDiff`. */
+function artifactWithCapture(id: string, actualPng: string): ReplayRunArtifact {
+  return {
+    traceId: id,
+    status: "pass",
+    resetTier: "scene-load",
+    segments: [{ id: "s", status: "pass", anchorsReached: [], captures: [{ id: "cap", artifact: actualPng }] }],
+    assertions: [],
+    console: { status: "pass", errorCount: 0, errors: [] },
+    startedAt: "t",
+    finishedAt: "t",
+    durationMs: 1,
+  };
+}
+
+/** Stage `<reports>/<id>/actual/cap.png` + `<baselines>/<id>/cap.png` and diff them. */
+async function diffFixture(
+  actual: Buffer,
+  baseline: Buffer,
+): Promise<{ artifact: ReplayRunArtifact; root: string }> {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "trace-vdiff-"));
+  const layout = standardReplayLayout(root);
+  const actualDir = path.join(layout.replayReports, "demo", "actual");
+  await fs.mkdir(actualDir, { recursive: true });
+  const actualPng = path.join(actualDir, "cap.png");
+  await fs.writeFile(actualPng, actual);
+  const baselineDir = path.join(layout.replayBaselines, "demo");
+  await fs.mkdir(baselineDir, { recursive: true });
+  await fs.writeFile(path.join(baselineDir, "cap.png"), baseline);
+
+  const artifact = artifactWithCapture("demo", actualPng);
+  await applyVisualDiff(layout, "demo", artifact);
+  return { artifact, root };
+}
+
+test("applyVisualDiff: an UNREADABLE baseline is a capture gap (exit 2), never reported as drift", async () => {
+  // The corrupt baseline is the whole point: a truncated/undecodable PNG says nothing
+  // about the game, so calling it drift would report a harness fault as a regression.
+  const { artifact, root } = await diffFixture(pngBuffer(4, 4, [255, 255, 255]), Buffer.from("not-a-png"));
+  try {
+    const capture = artifact.segments[0]!.captures[0]!;
+    assert.equal(capture.visualStatus, "unreadable");
+    assert.notEqual(capture.visualStatus, "drift", "an undecodable file must not be laundered into drift");
+    assert.equal(artifact.visualDrift, undefined, "no drift is claimed");
+    assert.equal(artifact.visualHarnessFault, true);
+    assert.equal(replayExitCode(artifact, false), 2);
+    assert.equal(replayExitCode(artifact, true), 2);
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test("applyVisualDiff: a REAL drift keeps its meaning: 0 by default, 1 under --strict-visual", async () => {
+  const { artifact, root } = await diffFixture(pngBuffer(4, 4, [0, 0, 0]), pngBuffer(4, 4, [255, 255, 255]));
+  try {
+    assert.equal(artifact.segments[0]!.captures[0]!.visualStatus, "drift");
+    assert.equal(artifact.visualDrift, true);
+    assert.equal(artifact.visualHarnessFault, undefined, "real drift is a GAME signal, not a harness fault");
+    assert.equal(replayExitCode(artifact, false), 0);
+    assert.equal(replayExitCode(artifact, true), 1);
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test("applyVisualDiff: matching frames are a match, and no baseline is `no-baseline` (never a pass claim)", async () => {
+  const same = pngBuffer(4, 4, [10, 20, 30]);
+  const { artifact, root } = await diffFixture(same, same);
+  try {
+    assert.equal(artifact.segments[0]!.captures[0]!.visualStatus, "match");
+    assert.equal(replayExitCode(artifact, true), 0);
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+
+  const bare = await fs.mkdtemp(path.join(os.tmpdir(), "trace-vdiff-"));
+  try {
+    const layout = standardReplayLayout(bare);
+    const actualDir = path.join(layout.replayReports, "demo", "actual");
+    await fs.mkdir(actualDir, { recursive: true });
+    const actualPng = path.join(actualDir, "cap.png");
+    await fs.writeFile(actualPng, same);
+    const artifact2 = artifactWithCapture("demo", actualPng);
+    await applyVisualDiff(layout, "demo", artifact2);
+    assert.equal(artifact2.segments[0]!.captures[0]!.visualStatus, "no-baseline");
+    assert.equal(artifact2.visualHarnessFault, undefined);
+  } finally {
+    await fs.rm(bare, { recursive: true, force: true });
+  }
+});
+
+// ── approve stamps the baseline manifest ─────────────────────────────────────
+
+test("trace approve: stamps baseline-manifest.json binding the trace, the source report, and every png", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "trace-approve-"));
+  try {
+    const layout = standardReplayLayout(root);
+    const actualDir = path.join(layout.replayReports, "demo", "actual");
+    await fs.mkdir(actualDir, { recursive: true });
+    const actualPng = path.join(actualDir, "cap.png");
+    await fs.writeFile(actualPng, Buffer.from("png-bytes"));
+    await writeReport(root, "demo", [{ id: "cap", artifact: actualPng }]);
+    await writeTrace(root, "demo");
+
+    assert.equal(await run(["approve", "--id", "demo", "--root", root]), 0);
+
+    const loaded = await loadTraceBaselineManifest(path.join(layout.replayBaselines, "demo"));
+    assert.ok(loaded && !("error" in loaded), `expected a manifest, got ${JSON.stringify(loaded)}`);
+    assert.equal(loaded.kind, "trace-baseline");
+    assert.equal(loaded.traceId, "demo");
+    assert.match(loaded.traceSha256, /^[0-9a-f]{64}$/);
+    assert.match(loaded.sourceReportSha256, /^[0-9a-f]{64}$/);
+    assert.ok(Date.parse(loaded.approvedAt) > 0, "approvedAt is an ISO timestamp");
+    assert.deepEqual(
+      loaded.pngs.map((p) => p.captureId),
+      ["cap"],
+    );
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test("trace approve: REFUSES (exit 2) when the trace it would bind to is gone", async () => {
+  // An approval that cannot name the demonstration it froze is not an anchor.
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "trace-approve-"));
+  try {
+    const layout = standardReplayLayout(root);
+    const actualDir = path.join(layout.replayReports, "demo", "actual");
+    await fs.mkdir(actualDir, { recursive: true });
+    const actualPng = path.join(actualDir, "cap.png");
+    await fs.writeFile(actualPng, Buffer.from("png-bytes"));
+    await writeReport(root, "demo", [{ id: "cap", artifact: actualPng }]);
+
+    assert.equal(await run(["approve", "--id", "demo", "--root", root]), 2);
+    await assert.rejects(fs.access(path.join(layout.replayBaselines, "demo", "cap.png")));
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
 });
 
 test("trace report --flat: reads/writes the FLAT workspace layout (no nested .loombridge/)", async () => {

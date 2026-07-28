@@ -17,8 +17,8 @@ export interface CaptureImage {
   base64?: string;
   /** Approved baseline PNG as base64, when one exists. */
   baselineBase64?: string;
-  /** Visual verdict vs the baseline. */
-  visualStatus?: "match" | "drift" | "no-baseline";
+  /** Visual verdict vs the baseline (`unreadable` = a capture gap, not drift). */
+  visualStatus?: "match" | "drift" | "no-baseline" | "unreadable";
   /** Fraction of perceptually-differing pixels, in [0,1]. */
   diffFraction?: number;
 }
@@ -46,7 +46,7 @@ export function statusClass(status: string): string {
   return STATUS_CLASSES.has(status) ? `status-${status}` : "status-unknown";
 }
 
-const VSTATUS_CLASSES: ReadonlySet<string> = new Set(["match", "drift", "no-baseline"]);
+const VSTATUS_CLASSES: ReadonlySet<string> = new Set(["match", "drift", "no-baseline", "unreadable"]);
 
 /** Whitelist the visual-status css class (same trust boundary as `statusClass`). */
 function vstatusClass(visualStatus: string): string {
@@ -139,6 +139,7 @@ export function renderReplayReportHtml(
   .vstatus-match { color: #1a7f37; background: #eaffea; }
   .vstatus-drift { color: #cf222e; background: #fff5f5; }
   .vstatus-none { color: #57606a; background: #f6f8fa; }
+  .vstatus-unreadable { color: #9a6700; background: #fff8c5; }
 </style>
 </head>
 <body>

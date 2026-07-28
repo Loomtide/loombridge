@@ -510,13 +510,62 @@ function notApplicableGateReport(spec: Pick<GateSpec, "gate">, acceptance: Accep
 function degradedAssetSourceFidelityReport(): GateReport {
   return makeGateReport("asset-source-fidelity", [
     {
-      id: "asset-source.input",
+      // `<gate>.input` (NOT the evaluator's own `asset-source.*` id namespace) so this
+      // degraded report carries the same capture-absent marker every other one does:
+      // `gradedGates` below recovers per-gate graded-ness from the flat check list and
+      // must not have to special-case one gate's spelling.
+      id: "asset-source-fidelity.input",
       expected: "asset-manifest.json staged in verification inputs",
       actual: "(missing)",
       status: "warn",
       detail: "No asset-manifest.json in --inputs; asset-source fidelity was requested but could not be evaluated.",
     },
   ]);
+}
+
+/**
+ * The `actual` a report writes when the input a gate needed was ABSENT. Every
+ * "this gate did not grade" report in this module writes it: `degradedGateReport`,
+ * `degradedAssetSourceFidelityReport`, the SFX missing-capture report, and the SFX
+ * blocked-cue-map report.
+ */
+const CAPTURE_ABSENT_ACTUAL = "(missing)";
+
+/** The exact check ids those reports use, per gate (`<gate>.input`, `<gate>.cue-map`). */
+function captureAbsentCheckIds(gate: string): string[] {
+  return [`${gate}.input`, `${gate}.cue-map`];
+}
+
+/**
+ * Which gates in an ASSEMBLED verdict actually GRADED: an evaluator consumed a
+ * real captured input and said something about the game.
+ *
+ * Derived from the verdict's OWN gates + checks, which is the only truth that
+ * cannot disagree with the verdict itself. Directory listings are NOT usable as a
+ * proxy: a gate can be `not_applicable` by contract while its file exists, several
+ * gates share one file (`feel.json` feeds four), and `asset-manifest.json` is
+ * staged into the inputs dir by `verify` itself, so "the inputs dir has files" and
+ * "a gate graded" are different questions.
+ *
+ * A gate did NOT grade when it is `not_applicable` (out of stage, unselected by a
+ * slice, or declared N/A by the contract) or when it carries the capture-absent
+ * marker. Everything else ran a real evaluator, whatever its verdict.
+ *
+ * `runVerify` refuses a run where this comes back empty: a verdict that graded
+ * nothing is not a pass (RFC UnifiedVerify: "a verify that checked nothing must
+ * never exit 0"). Pure + exported so that rule is unit-tested without fixtures.
+ */
+export function gradedGates(verdict: Pick<BuildVerdict, "gates" | "checks">): string[] {
+  const graded: string[] = [];
+  for (const [gate, status] of Object.entries(verdict.gates)) {
+    if (status === "not_applicable") continue;
+    const absentIds = captureAbsentCheckIds(gate);
+    const captureAbsent = verdict.checks.some(
+      (c) => absentIds.includes(c.id) && c.actual === CAPTURE_ABSENT_ACTUAL,
+    );
+    if (!captureAbsent) graded.push(gate);
+  }
+  return graded;
 }
 
 /** Capture filename each SFX gate consumes (the bridge-side spec; see capture-shapes.ts). */
