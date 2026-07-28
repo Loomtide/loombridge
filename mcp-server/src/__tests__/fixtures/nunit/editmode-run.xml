@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8" standalone="no"?>
+<!--
+  A Unity EditMode NUnit3 result document, authored from the documented NUnit3 schema and
+  Unity's Test Runner output shape (test-run > EditMode suite > Assembly suite > namespace
+  suite > TestFixture > test-case).
+
+  TODO-SWAP: replace this with a TRIMMED REAL file the moment the stage-B2 final test runs
+  `loombridge tests run` against unity-dev-project. Keep the same counts assertion in
+  nunit-parse.test.ts so the swap either passes untouched or names exactly what differs.
+  An authored fixture proves the parser handles the shape; only a real one proves the shape
+  is right.
+
+  It deliberately carries the awkward parts of real output:
+    - a property VALUE containing a literal '>' (legal XML, and the exact input a naive
+      /<[^>]*>/ tokenizer mis-splits, silently dropping the rest of the fixture);
+    - a CDATA failure message with newlines and markup-looking text;
+    - an entity-encoded failure message;
+    - a skipped case with an <reason><message> block;
+    - two assemblies, so the manifest's assembly binding has something to bind.
+-->
+<test-run id="2" testcasecount="6" result="Failed" total="6" passed="4" failed="1" inconclusive="0" skipped="1" asserts="0" engine-version="3.5.0.0" clr-version="Unity Version: 6000.3.20f1" start-time="2026-07-27 09:12:03Z" end-time="2026-07-27 09:12:09Z" duration="6.113">
+  <test-suite type="TestSuite" id="1000" name="EditMode" fullname="EditMode" runstate="Runnable" testcasecount="6" result="Failed" site="Child" start-time="2026-07-27 09:12:03Z" end-time="2026-07-27 09:12:09Z" duration="6.101" total="6" passed="4" failed="1" inconclusive="0" skipped="1" asserts="0">
+    <test-suite type="Assembly" id="1001" name="Loombridge.Editor.Tests.dll" fullname="/Users/ci/dev-project/Library/ScriptAssemblies/Loombridge.Editor.Tests.dll" runstate="Runnable" testcasecount="4" result="Failed" site="Child" duration="4.221" total="4" passed="2" failed="1" inconclusive="0" skipped="1" asserts="0">
+      <properties>
+        <property name="_PID" value="41221" />
+        <property name="_APPDOMAIN" value="Unity Child Domain" />
+      </properties>
+      <test-suite type="TestSuite" id="1002" name="Loombridge" fullname="Loombridge" runstate="Runnable" testcasecount="4" result="Failed" site="Child" duration="4.210" total="4" passed="2" failed="1" inconclusive="0" skipped="1" asserts="0">
+        <test-suite type="TestFixture" id="1003" name="EntityIdCompatTests" fullname="Loombridge.EntityIdCompatTests" classname="Loombridge.EntityIdCompatTests" runstate="Runnable" testcasecount="4" result="Failed" site="Child" duration="4.198" total="4" passed="2" failed="1" inconclusive="0" skipped="1" asserts="0">
+          <test-case id="1004" name="ResolvesObjectByEntityId" fullname="Loombridge.EntityIdCompatTests.ResolvesObjectByEntityId" methodname="ResolvesObjectByEntityId" classname="Loombridge.EntityIdCompatTests" runstate="Runnable" seed="1477220000" result="Passed" start-time="2026-07-27 09:12:04Z" end-time="2026-07-27 09:12:04Z" duration="0.031" asserts="1" />
+          <test-case id="1005" name="RoundTripsThroughLocator" fullname="Loombridge.EntityIdCompatTests.RoundTripsThroughLocator" methodname="RoundTripsThroughLocator" classname="Loombridge.EntityIdCompatTests" runstate="Runnable" seed="1477220001" result="Passed" start-time="2026-07-27 09:12:04Z" end-time="2026-07-27 09:12:04Z" duration="0.017" asserts="2">
+            <properties>
+              <property name="Description" value="ordering holds when index > 0 for sibling paths" />
+            </properties>
+          </test-case>
+          <test-case id="1006" name="RefusesUnknownInstanceId" fullname="Loombridge.EntityIdCompatTests.RefusesUnknownInstanceId" methodname="RefusesUnknownInstanceId" classname="Loombridge.EntityIdCompatTests" runstate="Runnable" seed="1477220002" result="Failed" label="Error" start-time="2026-07-27 09:12:05Z" end-time="2026-07-27 09:12:05Z" duration="0.104" asserts="1">
+            <failure>
+              <message><![CDATA[  Expected: null
+  But was:  <Scene:/Root/Player[0]>
+  Locator lookup returned a stale handle after the domain reload.]]></message>
+              <stack-trace><![CDATA[at Loombridge.EntityIdCompatTests.RefusesUnknownInstanceId () [0x0004a] in ./Assets/Tests/EntityIdCompatTests.cs:118]]></stack-trace>
+            </failure>
+          </test-case>
+          <test-case id="1007" name="SkippedUntilEditorSupportsEntityId" fullname="Loombridge.EntityIdCompatTests.SkippedUntilEditorSupportsEntityId" methodname="SkippedUntilEditorSupportsEntityId" classname="Loombridge.EntityIdCompatTests" runstate="Ignored" seed="1477220003" result="Skipped" label="Ignored" start-time="2026-07-27 09:12:05Z" end-time="2026-07-27 09:12:05Z" duration="0.001" asserts="0">
+            <properties>
+              <property name="_SKIPREASON" value="EntityId APIs require 6000.5 or newer" />
+            </properties>
+            <reason>
+              <message>EntityId APIs require &gt;= 6000.5 &amp; a Hub install &lt;= 6000.9</message>
+            </reason>
+          </test-case>
+        </test-suite>
+      </test-suite>
+    </test-suite>
+    <test-suite type="Assembly" id="1010" name="Loombridge.Runtime.Tests.dll" fullname="/Users/ci/dev-project/Library/ScriptAssemblies/Loombridge.Runtime.Tests.dll" runstate="Runnable" testcasecount="2" result="Passed" duration="1.870" total="2" passed="2" failed="0" inconclusive="0" skipped="0" asserts="0">
+      <test-suite type="TestSuite" id="1011" name="Loombridge" fullname="Loombridge" runstate="Runnable" testcasecount="2" result="Passed" duration="1.860" total="2" passed="2" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <test-suite type="TestFixture" id="1012" name="LocatorParseTests" fullname="Loombridge.LocatorParseTests" classname="Loombridge.LocatorParseTests" runstate="Runnable" testcasecount="2" result="Passed" duration="1.851" total="2" passed="2" failed="0" inconclusive="0" skipped="0" asserts="0">
+          <test-case id="1013" name="ParsesSceneQualifiedPath" fullname="Loombridge.LocatorParseTests.ParsesSceneQualifiedPath" methodname="ParsesSceneQualifiedPath" classname="Loombridge.LocatorParseTests" runstate="Runnable" seed="99001" result="Passed" duration="0.012" asserts="3" />
+          <test-case id="1014" name="ParsesIndexedSibling" fullname="Loombridge.LocatorParseTests.ParsesIndexedSibling" methodname="ParsesIndexedSibling" classname="Loombridge.LocatorParseTests" runstate="Runnable" seed="99002" result="Passed" duration="0.009" asserts="3" />
+        </test-suite>
+      </test-suite>
+    </test-suite>
+  </test-suite>
+</test-run>
