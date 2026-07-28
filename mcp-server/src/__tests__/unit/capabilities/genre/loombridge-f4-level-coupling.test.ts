@@ -321,9 +321,16 @@ test("F4 review #1: an otherwise-green headline SURFACES that reachability was n
   // It can still be 'pass', but the headline must say reachability wasn't run.
   const ctx = {
     status: "pass" as const,
-    summary: { total: 3, pass: 3, fail: 0, notMeasured: 0 },
+    summary: { total: 3, pass: 3, fail: 0, outOfBand: 0, notMeasured: 0 },
     confidence: { verified: 3, reported: 0, rejected: 0, unmeasured: 0 },
     profile: { id: "precision", title: "Precision Platformer", summary: "" },
+    placement: {
+      status: "no_taste_measured" as const,
+      entries: [],
+      notMeasured: [],
+      excluded: [],
+      detail: "no taste metrics measured",
+    },
   };
   const withSkip = headlineFor(ctx, true, true, false, true);
   const withRun = headlineFor(ctx, true, true, false, false);

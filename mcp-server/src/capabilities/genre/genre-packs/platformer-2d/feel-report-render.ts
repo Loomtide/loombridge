@@ -81,6 +81,7 @@ function measuredText(metric: ProfileMetricResult): string {
 const STATUS_LABEL: Record<ProfileMetricStatus, string> = {
   pass: "PASS",
   fail: "FAIL",
+  out_of_band: "OUT OF BAND (taste)",
   not_measured: "NOT MEASURED",
 };
 
@@ -94,6 +95,8 @@ const CONFIDENCE_LABEL: Record<MetricConfidence, string> = {
 function statusClass(status: ProfileMetricStatus): string {
   if (status === "pass") return "ok";
   if (status === "fail") return "bad";
+  // Descriptive taste mismatch: warn styling, never the red fail class.
+  if (status === "out_of_band") return "warn";
   return "muted";
 }
 
@@ -133,7 +136,9 @@ function renderMetricRows(report: ProfileVerifyReport): string {
                   ? `<b>Fix:</b> ${esc(m.suggestion)}`
                   : ""
             }</div>`
-          : "";
+          : m.status === "out_of_band"
+            ? `<div class="metric-note taste">Off this archetype's target: descriptive only, never gates. Re-run with the nearer profile if that is the intended feel, or pass <b>--enforce-taste</b> to gate it.</div>`
+            : "";
       return `<tr>
         <td><b>${esc(m.label)}</b><span>${esc(m.id)}</span></td>
         <td>${esc(measuredText(m))}</td>
@@ -168,6 +173,23 @@ function renderRederivation(report: ProfileVerifyReport): string {
   return `${provenance}<h3>Re-derivation checks</h3><ul>${report.rederivation
     .map((v) => `<li><span class="pill ${v.status === "pass" ? "ok" : v.status === "fail" ? "bad" : "muted"}">${esc(v.status.toUpperCase())}</span> <b>${esc(v.metric)}</b>: ${esc(v.detail)}</li>`)
     .join("")}</ul>`;
+}
+
+function renderPlacement(report: ProfileVerifyReport): string {
+  const p = report.placement;
+  if (p.status !== "computed") {
+    return `<p class="muted-text">${esc(p.detail)}</p>`;
+  }
+  const overall = p.overallNearest
+    ? `<p><b>Overall nearest archetype:</b> ${esc(p.overallNearest)} <span class="muted-text">(descriptive only; taste enforcement was ${esc(report.tasteEnforcement)})</span></p>`
+    : "";
+  const notMeasured = p.notMeasured.length
+    ? `<p class="muted-text">Not placed (unmeasured): ${esc(p.notMeasured.join(", "))}</p>`
+    : "";
+  const excluded = p.excluded.length
+    ? `<ul>${p.excluded.map((e) => `<li><span class="pill bad">rejected</span> ${esc(e.id)}: ${esc(e.reason)}</li>`).join("")}</ul>`
+    : "";
+  return `${overall}<ul>${p.entries.map((entry) => `<li>${esc(entry.detail)}</li>`).join("")}</ul>${notMeasured}${excluded}`;
 }
 
 function renderAlsoMeasured(report: ProfileVerifyReport): string {
@@ -239,6 +261,8 @@ export function renderFeelReportMarkdown(report: ProfileVerifyReport): string {
       if (m.whyItMatters) lines.push(`| ${mdEsc(`Why: ${m.whyItMatters}`)} |  |  |  |  |`);
       if (m.confidence === "rejected") lines.push("| Fix: re-capture honestly; the reported value did not match raw samples. |  |  |  |  |");
       else if (m.suggestion) lines.push(`| ${mdEsc(`Fix: ${m.suggestion}`)} |  |  |  |  |`);
+    } else if (m.status === "out_of_band") {
+      lines.push("| Taste: off this archetype's target; descriptive only, never gates (pass --enforce-taste to gate). |  |  |  |  |");
     }
   }
   lines.push("");
@@ -272,6 +296,15 @@ export function renderFeelReportMarkdown(report: ProfileVerifyReport): string {
   lines.push(`## ${mdEsc(reachabilityTitle(report.reachability))}`);
   if (report.reachability.status === "not_run") lines.push(`- ${mdEsc(report.reachability.reason ?? "No level layout supplied.")}`);
   else for (const check of report.reachability.checks) lines.push(`- ${check.status.toUpperCase()}: ${mdEsc(check.detail)}`);
+  lines.push("");
+  lines.push("## Archetype Placement");
+  if (report.placement.status !== "computed") lines.push(`- ${mdEsc(report.placement.detail)}`);
+  else {
+    if (report.placement.overallNearest) lines.push(`- Overall nearest archetype: ${mdEsc(report.placement.overallNearest)} (descriptive only; taste enforcement was ${report.tasteEnforcement}).`);
+    for (const entry of report.placement.entries) lines.push(`- ${mdEsc(entry.detail)}`);
+    if (report.placement.notMeasured.length > 0) lines.push(`- Not placed (unmeasured): ${mdEsc(report.placement.notMeasured.join(", "))}`);
+    for (const e of report.placement.excluded) lines.push(`- Not placed (rejected): ${mdEsc(e.id)} - ${mdEsc(e.reason)}`);
+  }
   lines.push("");
   lines.push("## Also Measured");
   if (report.alsoMeasured.length === 0) lines.push("- No unbanded metrics were reported.");
@@ -318,6 +351,7 @@ export function renderFeelReportHtml(report: ProfileVerifyReport): string {
     .pill.warn { color: #80520f; background: #fff1cc; }
     .pill.muted { color: #526070; background: #edf1f5; }
     .metric-note { color: #344054; background: #fbfcfe; border-left: 3px solid #c93535; padding: 10px 12px; }
+    .metric-note.taste { border-left-color: #b7791f; }
     .muted-text { color: #667085; }
     .summary { display: grid; grid-template-columns: 1fr; gap: 8px; color: #344054; }
     @media (max-width: 760px) { main { padding: 18px 12px 36px; } .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } table { font-size: 13px; } th:nth-child(3), td:nth-child(3) { display: none; } }
@@ -348,6 +382,7 @@ export function renderFeelReportHtml(report: ProfileVerifyReport): string {
     ${section("Evidence Trust", renderRederivation(report), "evidence-trust")}
     ${section("Mechanisms", renderMechanisms(report), "mechanisms")}
     ${section(reachabilityTitle(report.reachability), renderReachability(report.reachability), "reachability")}
+    ${section("Archetype Placement", renderPlacement(report), "archetype-placement")}
     ${section("Also Measured", renderAlsoMeasured(report), "also-measured")}
   </main>
 </body>

@@ -11,7 +11,7 @@ import type { ProfileVerifyReport } from "../../../../capabilities/genre/genre-p
 function baseReport(over: Partial<ProfileVerifyReport> = {}): ProfileVerifyReport {
   return {
     kind: "feel-profile",
-    schemaVersion: "1",
+    schemaVersion: "2",
     producedAt: "2026-06-20T00:00:00.000Z",
     producedBy: {
       tool: "loombridge",
@@ -51,6 +51,10 @@ function baseReport(over: Partial<ProfileVerifyReport> = {}): ProfileVerifyRepor
         id: "jumpApex",
         label: "Jump apex",
         family: "jump",
+        // Fixture keeps jumpApex as an ENFORCED fail (the --enforce-taste shape)
+        // so the fail-note rendering stays covered.
+        gating: "taste",
+        enforced: true,
         target: 3,
         unit: "u",
         bandLabel: "+/-12%",
@@ -65,6 +69,8 @@ function baseReport(over: Partial<ProfileVerifyReport> = {}): ProfileVerifyRepor
         id: "timeToApex",
         label: "Time to apex",
         family: "jump",
+        gating: "taste",
+        enforced: true,
         target: 310,
         unit: "ms",
         bandLabel: "+/-15%",
@@ -77,6 +83,8 @@ function baseReport(over: Partial<ProfileVerifyReport> = {}): ProfileVerifyRepor
         id: "shortHopApex",
         label: "Short-hop apex",
         family: "jump",
+        gating: "grammar",
+        enforced: true,
         target: 1.2,
         unit: "u",
         bandLabel: "+/-15%",
@@ -117,7 +125,28 @@ function baseReport(over: Partial<ProfileVerifyReport> = {}): ProfileVerifyRepor
       reason: "no level layout supplied",
       checks: [],
     },
-    summary: { total: 3, pass: 1, fail: 1, notMeasured: 1 },
+    tasteEnforcement: "enforced",
+    placement: {
+      status: "computed",
+      entries: [
+        {
+          id: "jumpApex",
+          label: "Jump apex height",
+          unit: "u",
+          measured: 2.1,
+          nearest: "precision",
+          distances: [
+            { profileId: "precision", target: 3, bandLabel: "±12%", inBand: false, normalizedDistance: 2.5 },
+          ],
+          detail: "jumpApex 2.1u: nearest precision (3u ±12%)",
+        },
+      ],
+      notMeasured: [],
+      excluded: [],
+      overallNearest: "precision",
+      detail: "Taste placement across 1 metric(s): overall nearest 'precision'.",
+    },
+    summary: { total: 3, pass: 1, fail: 1, outOfBand: 0, notMeasured: 1 },
     confidence: { verified: 1, reported: 1, rejected: 0, unmeasured: 1 },
     status: "fail",
     headline: "1 of 3 Precision Platformer metric(s) failed.",
@@ -163,6 +192,67 @@ test("Markdown report is PR-friendly and keeps capture gaps separate from metric
   assert.match(md, /REFUSED: airDash could not be probed/);
   assert.match(md, /Reachability not run/);
   assert.match(md, /Input latency \(inputLatency\): 42ms \[verified\] - informational, not graded/);
+});
+
+test("out_of_band taste metric renders as a warn pill with the placement section, never the fail styling", () => {
+  const report = baseReport({
+    metrics: [
+      {
+        id: "runSpeed",
+        label: "Run speed",
+        family: "run",
+        gating: "taste",
+        enforced: false,
+        target: 9,
+        unit: "u/s",
+        bandLabel: "+/-15%",
+        measured: 13.2,
+        status: "out_of_band",
+        confidence: "verified",
+        detail: "Run speed out of band (taste).",
+      },
+    ],
+    tasteEnforcement: "descriptive",
+    placement: {
+      status: "computed",
+      entries: [
+        {
+          id: "runSpeed",
+          label: "Run speed",
+          unit: "u/s",
+          measured: 13.2,
+          nearest: "momentum",
+          distances: [
+            { profileId: "precision", target: 9, bandLabel: "±15%", inBand: false, normalizedDistance: 3.1 },
+            { profileId: "momentum", target: 14, bandLabel: "±20%", inBand: true, normalizedDistance: 0.29 },
+          ],
+          detail: "runSpeed 13.2u/s: nearest momentum (14u/s ±20%)",
+        },
+      ],
+      notMeasured: ["jumpApex"],
+      excluded: [{ id: "dashDistance", reason: "reported value != raw samples" }],
+      overallNearest: "momentum",
+      detail: "Taste placement across 1 metric(s): overall nearest 'momentum'.",
+    },
+    summary: { total: 1, pass: 0, fail: 0, outOfBand: 1, notMeasured: 0 },
+    status: "pass",
+  });
+
+  const html = renderFeelReportHtml(report);
+  assert.match(html, /OUT OF BAND \(taste\)/);
+  assert.match(html, /pill warn/);
+  assert.match(html, /Archetype Placement/);
+  assert.match(html, /nearest momentum/);
+  assert.match(html, /--enforce-taste/);
+  assert.match(html, /Not placed \(unmeasured\): jumpApex/);
+  // Taste note uses the warn-styled note, not the red fail note.
+  assert.match(html, /metric-note taste/);
+
+  const md = renderFeelReportMarkdown(report);
+  assert.match(md, /OUT OF BAND \(taste\)/);
+  assert.match(md, /## Archetype Placement/);
+  assert.match(md, /Overall nearest archetype: momentum/);
+  assert.match(md, /Not placed \(rejected\): dashDistance/);
 });
 
 test("Markdown report escapes external text from measurements and coverage", () => {

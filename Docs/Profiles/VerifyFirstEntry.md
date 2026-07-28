@@ -33,6 +33,19 @@ then passes the resulting measurements to the same deterministic profile grader.
 **Honest status:** a metric with no measurement is reported `not measured` (status
 `incomplete`), never silently skipped and never folded into a green summary.
 
+**Grammar vs taste (report schemaVersion "2"):** metrics carry a gating class from the
+vocabulary. GRAMMAR metrics (coyoteTime, jumpBuffer, fallGravityMultiplier,
+shortHopApex, dashCooldown, inputLatency) gate pass/fail in every mode. TASTE metrics
+(archetype targets: runSpeed, jumpApex, timeToApex, accel/decel, maxFallSpeed, dash
+reach) are DESCRIPTIVE by default: an out-of-band value reads `out_of_band` (never a
+fail) and feeds an archetype-placement block naming the nearest shipped profile per
+metric and overall. Pass `--enforce-taste` to re-arm taste metrics as gates when the
+build explicitly targets the archetype. Two invariants hold in both modes: a
+§0-rejected value forces `fail` regardless of class (and earns no placement), and an
+unmeasured taste metric still drives `incomplete` (a capture gap never turns green;
+the live-capture path still exits `2` on it). See
+[PlatformerFeelProfiles.md](PlatformerFeelProfiles.md) for the classification table.
+
 **Confidence (the report's "warn" axis, S5d):** alongside pass/fail, every metric carries a
 `confidence` that says how much to trust the number — without ever changing the pass/fail
 `status` (grading is band + §0 distrust only):

@@ -15,7 +15,8 @@ import {
   runVerifyProfile,
 } from "../../../../capabilities/genre/genre-packs/platformer-2d/verify-profile.js";
 import { parseMeasurements } from "../../../../capabilities/genre/genre-packs/platformer-2d/measurements.js";
-import { loadProfile } from "../../../../capabilities/genre/genre-packs/platformer-2d/profiles.js";
+import { loadProfile, SHIPPED_PROFILE_IDS } from "../../../../capabilities/genre/genre-packs/platformer-2d/profiles.js";
+import { KNOWN_PROFILE_METRICS } from "../../../../capabilities/genre/genre-packs/platformer-2d/types.js";
 import { SHORT_HOP_CANONICAL_TAP_TICKS } from "../../../../capabilities/genre/genre-packs/platformer-2d/measure-recipe.js";
 import { REPO_ROOT as REPO_ROOT_SUPPORT } from "../../../_support/paths.js";
 
@@ -179,18 +180,68 @@ test("--profile is mutually exclusive with --slice and --stage", async () => {
 
 // ── grading against bands ────────────────────────────────────────────────────
 
-test("evaluateProfile: in-band passes, out-of-band fails, absent is not_measured", async () => {
+test("evaluateProfile: in-band passes, grammar out-of-band fails, absent is not_measured", async () => {
   const precision = await loadProfile("precision"); // jumpApex 3u ±12% -> [2.64, 3.36]
   const { metrics, status, summary } = evaluateProfile(precision, {
-    metrics: { jumpApex: 3.0, runSpeed: 100 }, // jumpApex in-band, runSpeed wildly out
+    metrics: { jumpApex: 3.0, coyoteTime: 9 }, // jumpApex in-band, coyoteTime (grammar) wildly out
   });
   const byId = Object.fromEntries(metrics.map((m) => [m.id, m]));
   assert.equal(byId.jumpApex.status, "pass");
-  assert.equal(byId.runSpeed.status, "fail");
-  assert.equal(byId.coyoteTime.status, "not_measured");
-  assert.equal(byId.coyoteTime.measured, null);
-  assert.equal(status, "fail"); // any fail wins
+  assert.equal(byId.jumpApex.gating, "taste");
+  assert.equal(byId.coyoteTime.status, "fail");
+  assert.equal(byId.coyoteTime.gating, "grammar");
+  assert.equal(byId.coyoteTime.enforced, true);
+  assert.equal(byId.jumpBuffer.status, "not_measured");
+  assert.equal(byId.jumpBuffer.measured, null);
+  assert.equal(status, "fail"); // any enforced fail wins
   assert.ok(summary.fail >= 1 && summary.pass >= 1 && summary.notMeasured >= 1);
+});
+
+test("evaluateProfile grammar/taste split: taste out-of-band is descriptive by default, gates only under enforceTaste", async () => {
+  const precision = await loadProfile("precision");
+  // runSpeed (taste) wildly out; no grammar metric failing.
+  const descriptive = evaluateProfile(precision, { metrics: { runSpeed: 100 } });
+  const byId = Object.fromEntries(descriptive.metrics.map((m) => [m.id, m]));
+  assert.equal(byId.runSpeed.status, "out_of_band");
+  assert.equal(byId.runSpeed.gating, "taste");
+  assert.equal(byId.runSpeed.enforced, false);
+  assert.match(byId.runSpeed.detail, /--enforce-taste/);
+  assert.equal(descriptive.summary.outOfBand, 1);
+  assert.equal(descriptive.summary.fail, 0);
+  // Not a fail; the unmeasured remainder keeps the run incomplete (honest, not green).
+  assert.equal(descriptive.status, "incomplete");
+
+  // The SAME inputs gate under enforceTaste (LITMUS: proves the inputs are
+  // genuinely out of band, so the descriptive default is not vacuous).
+  const enforced = evaluateProfile(precision, { metrics: { runSpeed: 100 } }, new Map(), new Set(), {
+    enforceTaste: true,
+  });
+  const enforcedById = Object.fromEntries(enforced.metrics.map((m) => [m.id, m]));
+  assert.equal(enforcedById.runSpeed.status, "fail");
+  assert.equal(enforcedById.runSpeed.enforced, true);
+  assert.equal(enforced.status, "fail");
+});
+
+test("GUARD: for every shipped profile, all-taste-out-of-band + all-grammar-at-target never yields fail", async () => {
+  for (const id of SHIPPED_PROFILE_IDS) {
+    const profile = await loadProfile(id);
+    const metrics: Record<string, number> = {};
+    for (const [metricId, targetRaw] of Object.entries(profile.metrics)) {
+      const target = (targetRaw as { target: number }).target;
+      const spec = KNOWN_PROFILE_METRICS[metricId];
+      // Taste: push far out of band (10x + 50 covers sign/zero cases); grammar: dead on target.
+      metrics[metricId] = spec?.gating === "taste" ? target * 10 + 50 : target;
+    }
+    const result = evaluateProfile(profile, { metrics });
+    assert.notEqual(result.status, "fail", `profile '${id}' failed on taste-only mismatch`);
+    assert.equal(result.summary.fail, 0, `profile '${id}' counted a taste mismatch as fail`);
+    assert.ok(result.summary.outOfBand > 0, `profile '${id}' guard is vacuous: no taste metric went out of band`);
+
+    // LITMUS twin: the same inputs MUST fail under enforceTaste, proving the
+    // guard exercises genuinely out-of-band values.
+    const enforced = evaluateProfile(profile, { metrics }, new Map(), new Set(), { enforceTaste: true });
+    assert.equal(enforced.status, "fail", `profile '${id}' enforceTaste litmus did not fire`);
+  }
 });
 
 test("status rule: all measured in-band -> pass; measured+unmeasured (no fail) -> incomplete", async () => {
@@ -213,13 +264,28 @@ test("fail status returns exit 1; incomplete returns 1 only under --strict", asy
   const workspace = `${root}-ws`; // external workspace (a sibling, never inside the project)
   const mPath = path.join(root, "m.json");
 
-  // out-of-band -> fail -> exit 1 even without --strict
-  await fs.writeFile(mPath, JSON.stringify({ metrics: { jumpApex: 9 } }), "utf-8");
+  // grammar out-of-band -> fail -> exit 1 even without --strict
+  await fs.writeFile(mPath, JSON.stringify({ metrics: { coyoteTime: 9 } }), "utf-8");
   assert.equal(await runVerifyCli(["--profile", "precision", "--root", root, "--workspace", workspace, "--measurements", mPath]), 1);
+
+  // taste out-of-band alone -> descriptive, never exit 1 without --enforce-taste
+  // (the run is `incomplete` from the unmeasured remainder: exit 0, 1 under --strict)
+  await fs.writeFile(mPath, JSON.stringify({ metrics: { jumpApex: 9 } }), "utf-8");
+  assert.equal(await runVerifyCli(["--profile", "precision", "--root", root, "--workspace", workspace, "--measurements", mPath]), 0);
+  // --enforce-taste re-arms the same value as a gate -> exit 1
+  assert.equal(
+    await runVerifyCli(["--profile", "precision", "--root", root, "--workspace", workspace, "--measurements", mPath, "--enforce-taste"]),
+    1,
+  );
 
   // no measurements -> incomplete -> exit 0, but 1 under --strict
   assert.equal(await runVerifyCli(["--profile", "precision", "--root", root, "--workspace", workspace]), 0);
   assert.equal(await runVerifyCli(["--profile", "precision", "--root", root, "--workspace", workspace, "--strict"]), 1);
+});
+
+test("--enforce-taste is refused outside --profile mode", async () => {
+  const root = await tmpRoot();
+  assert.equal(await runVerifyCli(["--enforce-taste", "--root", root]), 2);
 });
 
 test("live capture profile verdict maps incomplete evidence to exit 2, never shell-success", async () => {
@@ -689,7 +755,7 @@ const LIVE_DIR = path.join(
   "s5cb-live-capture",
 );
 
-test("S5d: live capture grades as an honest band-fail with every metric VERIFIED", async () => {
+test("S5d live capture: taste mismatch on the real artifact is DESCRIPTIVE (out_of_band, verified), and gates under --enforce-taste", async () => {
   const root = await tmpRoot(true);
   const report = await buildProfileReport({
     root,
@@ -698,15 +764,22 @@ test("S5d: live capture grades as an honest band-fail with every metric VERIFIED
     strict: false,
   });
 
-  // A generic controller is not a precision platformer → honest band fail.
-  assert.equal(report.status, "fail");
+  // A generic controller is not a precision platformer — but runSpeed/jumpApex/
+  // timeToApex are TASTE metrics, so the archetype mismatch is descriptive, not a
+  // defect. Not a fail; the unmeasured remainder keeps the run incomplete.
+  assert.equal(report.status, "incomplete");
+  assert.equal(report.tasteEnforcement, "descriptive");
 
-  // The three measured metrics re-derive from their own raw samples → verified.
+  // The three measured metrics re-derive from their own raw samples → verified,
+  // and read out_of_band (descriptive), never fail.
   const byId = Object.fromEntries(report.metrics.map((m) => [m.id, m]));
   for (const id of ["runSpeed", "jumpApex", "timeToApex"]) {
     assert.equal(byId[id].confidence, "verified", `${id} should be verified`);
-    assert.equal(byId[id].status, "fail", `${id} is out of the precision band`);
+    assert.equal(byId[id].status, "out_of_band", `${id} is off the precision archetype, descriptively`);
+    assert.equal(byId[id].gating, "taste");
   }
+  assert.equal(report.summary.fail, 0);
+  assert.equal(report.summary.outOfBand, 3);
   // Every re-derivation verdict passed (nothing rejected).
   assert.ok(report.rederivation.length >= 3);
   assert.ok(report.rederivation.every((v: any) => v.status === "pass"));
@@ -717,11 +790,25 @@ test("S5d: live capture grades as an honest band-fail with every metric VERIFIED
   assert.ok(report.confidence.unmeasured > 0);
   assert.ok(report.metrics.some((m) => m.confidence === "unmeasured" && m.status === "not_measured"));
 
-  // Headline names the failure honestly; next action points at the out-of-band metrics.
-  // All 3 fail on the band (none rejected), so the headline says "outside band", not "rejected".
-  assert.match(report.headline, /3 outside band/i);
-  assert.doesNotMatch(report.headline, /rejected/i);
-  assert.match(report.nextAction, /runSpeed|jumpApex|timeToApex/);
+  // Headline carries the taste count; placement answers "then what is it?".
+  assert.match(report.headline, /3 taste metric\(s\) off the 'precision' archetype/i);
+  assert.equal(report.placement.status, "computed");
+  assert.ok(report.placement.entries.length >= 3);
+  assert.match(report.nextAction, /--enforce-taste/);
+
+  // LITMUS twin on the SAME artifact: --enforce-taste restores the hard fail, so
+  // the descriptive default provably changed the verdict, not the measurement.
+  const enforced = await buildProfileReport({
+    root,
+    profile: "precision",
+    measurementsPath: path.join(LIVE_DIR, "feel.json"),
+    strict: false,
+    enforceTaste: true,
+  });
+  assert.equal(enforced.status, "fail");
+  assert.equal(enforced.tasteEnforcement, "enforced");
+  assert.match(enforced.headline, /3 outside band/i);
+  assert.match(enforced.nextAction, /runSpeed|jumpApex|timeToApex/);
 });
 
 test("S5d: tampered jumpApex (samples unchanged) is REJECTED, others stay verified", async () => {
@@ -735,20 +822,29 @@ test("S5d: tampered jumpApex (samples unchanged) is REJECTED, others stay verifi
 
   const byId = Object.fromEntries(report.metrics.map((m) => [m.id, m]));
   // jumpApex was hand-set to 3.0 (on the band) but its samples re-derive to 0.8.
+  // §0 outranks the grammar/taste split: a tampered TASTE metric still forces a
+  // hard fail in descriptive mode (tampering never pays).
   assert.equal(byId.jumpApex.confidence, "rejected");
+  assert.equal(byId.jumpApex.gating, "taste");
   assert.equal(byId.jumpApex.status, "fail");
   assert.match(byId.jumpApex.detail, /rejected/i);
-  // Surgical: the untampered metrics are still verified.
+  // Surgical: the untampered metrics are still verified — and being taste, their
+  // band mismatch is descriptive (out_of_band), not a fail.
   assert.equal(byId.runSpeed.confidence, "verified");
+  assert.equal(byId.runSpeed.status, "out_of_band");
   assert.equal(byId.timeToApex.confidence, "verified");
+  assert.equal(byId.timeToApex.status, "out_of_band");
   assert.equal(report.confidence.rejected, 1);
   assert.equal(report.status, "fail");
   // The next action calls out the rejection explicitly.
   assert.match(report.nextAction, /re-derivation|reject/i);
-  // Headline must NOT lump the in-band-but-rejected jumpApex under "outside band":
-  // 3 failed = 2 outside band (runSpeed, timeToApex) + 1 rejected (jumpApex, which is on the band).
-  assert.match(report.headline, /2 outside band/i);
+  // Headline: ONLY the rejection is a failure; the two verified out-of-band taste
+  // metrics are reported as taste, never lumped under "outside band".
   assert.match(report.headline, /1 rejected by re-derivation/i);
+  assert.doesNotMatch(report.headline, /outside band/i);
+  assert.match(report.headline, /2 taste metric\(s\) off the 'precision' archetype/i);
+  // A rejected value earns no placement (a tampered number describes nothing).
+  assert.ok(report.placement.excluded.some((e) => e.id === "jumpApex"));
 });
 
 test("S5d: an in-band number with NO re-derivable capture is `reported`, not `verified`", async () => {
@@ -875,11 +971,14 @@ test("S5d: confidence counts are additive and never change pass/fail status", as
 
 test("F3: graded band-fail on a non-Unity root leads with the verdict, not 'nothing graded'", async () => {
   const root = await tmpRoot(false); // scratch root: engine not detected
+  // enforceTaste: the artifact's band failures are all taste metrics; this test
+  // pins the F3 headline behavior for a FAIL, not the grammar/taste split.
   const report = await buildProfileReport({
     root,
     profile: "precision",
     measurementsPath: path.join(LIVE_DIR, "feel.json"),
     strict: false,
+    enforceTaste: true,
   });
 
   // Grading is engine-independent: the band fail still stands.
@@ -940,11 +1039,14 @@ test("F3: a partial (some-unmeasured) graded run on a non-Unity root keeps the c
 
 test("F3: a graded fail on a UNITY root carries NO engine caveat (suffix is non-Unity-only)", async () => {
   const root = await tmpRoot(true); // confirmed Unity root
+  // enforceTaste: the artifact's band failures are all taste metrics; this test
+  // pins the F3 caveat behavior for a FAIL, not the grammar/taste split.
   const report = await buildProfileReport({
     root,
     profile: "precision",
     measurementsPath: path.join(LIVE_DIR, "feel.json"),
     strict: false,
+    enforceTaste: true,
   });
   assert.equal(report.engine.engine, "unity");
   assert.equal(report.status, "fail");

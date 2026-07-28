@@ -200,6 +200,11 @@ export interface VerifyArgs {
   contractPath?: string;
   /** Per-state capture dir (required in `--minigame` mode). */
   capturesDir?: string;
+  /**
+   * `--enforce-taste` (profile mode only): gate TASTE metrics as failures.
+   * Default false: taste out-of-band is descriptive placement.
+   */
+  enforceTaste?: boolean;
 }
 
 /** A restricted stage is a diagnostic checkpoint, not a certifiable full run. */
@@ -605,6 +610,7 @@ function parseArgs(args: string[]): VerifyArgs | ParseHelp {
   let minigame = false;
   let contractPath: string | undefined;
   let capturesDir: string | undefined;
+  let enforceTaste = false;
 
   for (let i = 0; i < args.length; i += 1) {
     const arg = args[i];
@@ -617,6 +623,7 @@ function parseArgs(args: string[]): VerifyArgs | ParseHelp {
     else if (arg === "--verbose") verbose = true;
     else if (arg === "--quiet-next") quietNext = true;
     else if (arg === "--profile") profile = args[(i += 1)] ?? "";
+    else if (arg === "--enforce-taste") enforceTaste = true;
     else if (arg === "--id") feelWorkspaceId = args[(i += 1)] ?? "";
     else if (arg === "--workspace") feelWorkspace = path.resolve(args[(i += 1)] ?? "");
     else if (arg === "--measurements") measurementsPath = path.resolve(args[(i += 1)] ?? "");
@@ -695,7 +702,7 @@ function parseArgs(args: string[]): VerifyArgs | ParseHelp {
     if (offenders.length > 0) {
       console.error(
         `[loombridge verify] --profile mode ignores contract flags; remove: ${offenders.join(", ")}. ` +
-          "Allowed: --root, --profile, --id, --workspace, --measurements, --layout, --setup-capture, setup/capture drive flags, --strict, --output.",
+          "Allowed: --root, --profile, --id, --workspace, --measurements, --layout, --setup-capture, setup/capture drive flags, --enforce-taste, --strict, --output.",
       );
       return { help: true, usageError: true };
     }
@@ -804,7 +811,8 @@ function parseArgs(args: string[]): VerifyArgs | ParseHelp {
     project !== undefined ||
     sourceRoot !== undefined ||
     feelWorkspaceId !== undefined ||
-    feelWorkspace !== undefined
+    feelWorkspace !== undefined ||
+    enforceTaste
   ) {
     console.error("[loombridge verify] profile capture/setup flags require --profile.");
     return { help: true, usageError: true };
@@ -908,6 +916,7 @@ function parseArgs(args: string[]): VerifyArgs | ParseHelp {
     minigame,
     contractPath,
     capturesDir,
+    enforceTaste,
   };
 }
 
@@ -955,6 +964,10 @@ function printUsage(): void {
       "                        must be OUTSIDE the project — artifacts never pollute the game repo).",
       "  --measurements <path> Measured feel values for --profile mode (optional; absent",
       "                        metrics report as 'not measured', never green).",
+      "  --enforce-taste       Profile mode: gate TASTE metrics (archetype tuning targets",
+      "                        like runSpeed/jumpApex) as failures. Default: taste out-of-band",
+      "                        is descriptive placement; grammar metrics (coyote time, jump",
+      "                        buffer, gravity asymmetry, jump-cut) always gate.",
       "  --setup-capture      Profile mode: propose/write a generic existing-game capture",
       "                        contract instead of grading. Requires --player. Default:",
       "                        <workspace>/feel/capture-contract.json.",
@@ -1205,6 +1218,7 @@ export async function run(args: string[]): Promise<number> {
           layout,
           outputPath: reportPath,
           strict: parsed.strict,
+          enforceTaste: parsed.enforceTaste,
         });
         return await exitCodeForLiveProfileCapture({ reportPath, verifierCode });
       } catch (error) {
@@ -1221,6 +1235,7 @@ export async function run(args: string[]): Promise<number> {
         layout,
         outputPath: parsed.outputExplicit ? parsed.outputPath : workspacePaths.report,
         strict: parsed.strict,
+        enforceTaste: parsed.enforceTaste,
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);

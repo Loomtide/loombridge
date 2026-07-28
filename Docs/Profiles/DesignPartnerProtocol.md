@@ -126,6 +126,11 @@ S5cbLiveProof.md (the operator recipe). Do **not** duplicate them here. The prot
    `derivation:"trajectory"` + their raw `samples`).
 6. **Grade:** `loombridge verify --profile <id> --measurements <feel.json>`. Capture the JSON report
    and the terminal output verbatim.
+6b. **Placement pass:** read the archetype-placement block with the partner. A taste
+   metric off the chosen archetype is a conversation ("your runSpeed sits nearest
+   momentum; is precision really the target?"), never a defect report. Only grammar
+   fails and §0 rejections are defects. If the partner confirms the archetype is the
+   target, re-grade with `--enforce-taste` so taste bands gate.
 7. **Confidence pass:** read the per-metric confidence — every band claim should be `verified`
    (re-derived) or honestly `reported`/`not measured`; investigate any `rejected`.
 8. **Prove non-mutation** (`git status` clean) and **hand back / discard** the copy.

@@ -1076,4 +1076,24 @@ test("no shipped profile bands a sync-family metric (measure-only invariant)", a
       );
     }
   }
+  // The grammar/taste split absorbed this convention into the vocabulary itself:
+  // every sync-family metric must carry gating "measure-only" (the validator's
+  // BANDED_MEASURE_ONLY refusal keys off THAT field, not the family), and the
+  // shipped profiles must not band ANY measure-only metric of any family.
+  const measureOnlyIds = new Set(
+    Object.values(KNOWN_PROFILE_METRICS)
+      .filter((m) => m.gating === "measure-only")
+      .map((m) => m.id),
+  );
+  for (const id of syncMetricIds) {
+    assert.ok(measureOnlyIds.has(id), `sync metric '${id}' must be gating: "measure-only"`);
+  }
+  for (const profile of await loadAllProfiles()) {
+    for (const bandedId of Object.keys(profile.metrics)) {
+      assert.ok(
+        !measureOnlyIds.has(bandedId),
+        `profile '${profile.id}' bands measure-only metric '${bandedId}'`,
+      );
+    }
+  }
 });

@@ -23,7 +23,7 @@
     "metrics": {
       "type": "object",
       "minProperties": 1,
-      "description": "Measurable target bands keyed by a known platformer metric id. Must be non-empty (a profile with no measurable metrics is refused). Property names are constrained to the KNOWN_PROFILE_METRICS vocabulary.",
+      "description": "Measurable target bands keyed by a known platformer metric id. Must be non-empty (a profile with no measurable metrics is refused). Property names are constrained to the KNOWN_PROFILE_METRICS vocabulary. Each metric carries a gating class in that vocabulary: 'grammar' metrics gate pass/fail in every mode, 'taste' metrics are descriptive placement unless the run opts in with --enforce-taste, and 'measure-only' metrics may never be banded (runtime refusal BANDED_MEASURE_ONLY; this enum already excludes them structurally).",
       "propertyNames": {
         "enum": [
           "runSpeed",

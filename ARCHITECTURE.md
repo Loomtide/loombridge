@@ -225,7 +225,7 @@ Verification is Loombridge's core. Three proven verticals share the deterministi
 
 ### 2. Verify-First Feel Profiles (`verify --profile`)
 
-Standalone grading of an **existing** Unity 2D platformer — no contract, no mutation. A declared input map + `runtime.capture_input_motion` (keys injected inside the sampling loop, focus-independent) produce raw trajectories; `feel-derive.ts` derives runSpeed/jumpApex/timeToApex/etc.; profiles (`precision`/`classic`/`momentum`, band-required schema) grade them. Every metric carries `confidence ∈ {verified, reported, rejected, unmeasured}` from §0 re-derivation. Proven end-to-end on projects Loombridge did not build (Design Partner Protocol: `Docs/Profiles/DesignPartnerProtocol.md`).
+Standalone grading of an **existing** Unity 2D platformer — no contract, no mutation. A declared input map + `runtime.capture_input_motion` (keys injected inside the sampling loop, focus-independent) produce raw trajectories; `feel-derive.ts` derives runSpeed/jumpApex/timeToApex/etc.; profiles (`precision`/`classic`/`momentum`, band-required schema) grade them. Every metric carries `confidence ∈ {verified, reported, rejected, unmeasured}` from §0 re-derivation. Metrics split by gating class: GRAMMAR metrics (coyote time, jump buffer, gravity asymmetry, jump-cut) gate pass/fail in every mode, while TASTE metrics (archetype targets like runSpeed and jumpApex) are descriptive placement against the nearest archetype unless `--enforce-taste` re-arms them; measure-only metrics can never be banded (`BANDED_MEASURE_ONLY`). Proven end-to-end on projects Loombridge did not build (Design Partner Protocol: `Docs/Profiles/DesignPartnerProtocol.md`).
 
 ### 3. Mini-Game Release Verification (`verify --minigame`)
 

@@ -68,9 +68,17 @@ loombridge verify --root . --profile precision \
 
 This writes `<workspace>/feel/reports/feel-profile.{json,html,md}`. The JSON is the
 machine/audit record; the HTML and Markdown are the developer-readable report. Missing
-measurements keep the report `incomplete`; out-of-band measured metrics fail. A measurements file may include
+measurements keep the report `incomplete`. Out-of-band GRAMMAR metrics (coyote time,
+jump buffer, gravity asymmetry, jump-cut) fail; out-of-band TASTE metrics (archetype
+targets like runSpeed/jumpApex) read `out_of_band` with an archetype-placement block
+(nearest shipped profile per metric and overall) and never fail unless you pass
+`--enforce-taste`. A tampered (§0-rejected) value fails in both modes. A measurements file may include
 `captureCoverage[]` so the report can distinguish measured evidence from setup blockers,
 unsupported input paths, and not-yet-run recipes.
+
+Interpreting a taste mismatch: it is an archetype disagreement, not a defect. The
+honest next steps are either re-run against the nearer archetype the placement block
+names, or pass `--enforce-taste` when the build explicitly targets this archetype.
 
 To create an existing-game capture contract from explicit drive facts:
 

@@ -79,6 +79,45 @@ test("each shipped profile defines measurable metrics with known ids, canonical 
   }
 });
 
+test("every metric banded by a shipped profile is classified grammar or taste (never unclassified, never measure-only)", async () => {
+  const profiles = await loadAllProfiles();
+  for (const p of profiles) {
+    for (const id of Object.keys(p.metrics)) {
+      const spec = KNOWN_PROFILE_METRICS[id];
+      assert.ok(spec, `${p.id}.${id} must be a known metric`);
+      assert.ok(
+        spec.gating === "grammar" || spec.gating === "taste",
+        `${p.id}.${id} gating must be grammar or taste (got '${spec.gating}')`,
+      );
+    }
+    // Non-vacuous: each shipped profile must band at least one of EACH class,
+    // or the split silently degenerates to all-gating / all-descriptive.
+    const classes = new Set(Object.keys(p.metrics).map((id) => KNOWN_PROFILE_METRICS[id]?.gating));
+    assert.ok(classes.has("grammar"), `${p.id} bands no grammar metric`);
+    assert.ok(classes.has("taste"), `${p.id} bands no taste metric`);
+  }
+});
+
+test("NEGATIVE + LITMUS: banding a measure-only (sync) metric refuses with BANDED_MEASURE_ONLY", () => {
+  const bad = baseProfile();
+  (bad.metrics as Record<string, unknown>).inputToSfxLatency = {
+    target: 50,
+    unit: "ms",
+    band: { abs: 20 },
+  };
+  const result = validatePlatformerProfile(bad);
+  assert.equal(result.valid, false);
+  assert.ok(
+    result.issues.some((i) => i.code === "BANDED_MEASURE_ONLY" && i.path === "metrics.inputToSfxLatency"),
+    JSON.stringify(result.issues),
+  );
+  // LITMUS: the SAME profile without that band validates — the refusal is driven
+  // by the band on the measure-only metric, not an artifact of the fixture.
+  const good = baseProfile();
+  const goodResult = validatePlatformerProfile(good);
+  assert.equal(goodResult.valid, true, JSON.stringify(goodResult.issues));
+});
+
 test("the three profiles meaningfully differ (no copy-paste of one feel)", async () => {
   const [precision, classic, momentum] = await loadAllProfiles();
   // Classic jumps higher and hangs longer than precision; momentum runs fastest.
