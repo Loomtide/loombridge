@@ -1018,6 +1018,16 @@ test("gradedGates: the BARE staged asset manifest is not graded evidence; the WR
       "the staged-document marker is missing; nothing distinguishes a declaration from a capture",
     );
     assert.deepEqual(gradedGates(report), [], "a staged project document is not a graded gate");
+    // S1 final-test HIGH-1: a VALID bare staged manifest must not FAIL the gate. The
+    // artDeferred flag is injected at the wrapper level, never into the manifest document,
+    // so schema validation sees the same clean manifest either way. A fail here would be a
+    // harness artifact reported as a tier-1 game defect (exit 1, verified-failing STATE)
+    // on a project with nothing wrong with it.
+    assert.notEqual(
+      report.gates["asset-source-fidelity"],
+      "fail",
+      "a valid staged declaration failed the gate: the harness manufactured a game defect",
+    );
   } finally {
     await fs.rm(bare, { recursive: true, force: true });
   }

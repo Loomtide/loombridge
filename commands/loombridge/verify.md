@@ -37,9 +37,9 @@ loombridge verify --root . --live   # also replay traces + grade feel drift
 - **Each section says whether it compared a frozen anchor.** The report carries
   `anchored` per section plus `anchoredSections`/`unanchoredSections`, so "green" and "green
   against nothing a human froze" never print identically.
-- **`--report <path>`** resolves relative to `--root` and is **refused** (exit `2`, nothing
-  written, nothing run) when it would overwrite a project artifact or any file that is not a
-  previous unified report. The screens section writes to a verify-owned
+- **`--report <path>`** resolves relative to `--root`, must stay inside the project root, and
+  is **refused** (exit `2`, nothing written, nothing run) when it escapes the root, would
+  overwrite a project artifact, or targets any file that is not a previous unified report. The screens section writes to a verify-owned
   `.loombridge/reports/verify-screens.json`, never the guided flow's workspace report.
 - **`doneness` reads this report when it exists.** A unified run that exited non-zero adds a
   refusal to `loombridge doneness`, so a green contract gate cannot certify a project whose

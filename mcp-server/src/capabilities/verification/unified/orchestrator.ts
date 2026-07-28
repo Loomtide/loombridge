@@ -36,7 +36,7 @@ import {
   standardReplayLayout,
   type ReplayLayout,
 } from "../../../domain/state.js";
-import { projectWorkspace, sanitizeWorkspaceId } from "../../../domain/workspace-paths.js";
+import { isInside, projectWorkspace, sanitizeWorkspaceId } from "../../../domain/workspace-paths.js";
 import { resolveCliProjectPin } from "../../setup/cli-project-pin.js";
 import { gradedGates } from "../run-gates.js";
 import { discoverVerificationAssets, type DiscoveredAsset } from "./discovery.js";
@@ -151,6 +151,18 @@ export async function runUnifiedVerify(opts: UnifiedVerifyOpts): Promise<number>
   // the contract, the roadmap, or a verdict it is supposed to be reading. This refuses
   // FIRST: before discovery, before the plan, before a single section runs, so a
   // refused invocation leaves the project byte-identical.
+  // Containment first: the docs promise --report "resolves relative to --root", and a
+  // path that escapes the root would let a verify run write outside the project it is
+  // grading (observed in the S1 final test: `--report ../../escape.json` was accepted).
+  // Refuse rather than clamp: a silently relocated report is a report nobody finds.
+  if (!isInside(reportPath, root)) {
+    console.error(`${TAG} REFUSED: --report ${reportPath} resolves outside the project root ${root}`);
+    console.error(
+      `${TAG} nothing was written and nothing ran. Point --report inside the project, or omit it to use ` +
+        `${path.relative(root, unifiedVerifyReportPath(paths.reports))}.`,
+    );
+    return 2;
+  }
   const collision = await reportCollision(paths, reportPath);
   if (collision) {
     console.error(`${TAG} REFUSED: --report ${path.relative(root, reportPath)} ${collision}`);

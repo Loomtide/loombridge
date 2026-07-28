@@ -843,10 +843,6 @@ export async function runGates(args: {
   // the staged input to skip asset-source fidelity on unprovenanced primitiveFinal roles. Override any
   // input-supplied flag with the contract's declared art mode (the same disk-truth doneness reads).
   const assetArtDeferred = args.acceptance.art?.mode === "deferred";
-  const assetSourceInput =
-    assetManifestInput !== null && typeof assetManifestInput === "object" && !Array.isArray(assetManifestInput)
-      ? { ...(assetManifestInput as Record<string, unknown>), artDeferred: assetArtDeferred }
-      : assetManifestInput;
   // WRAPPED (`{ manifest, observedAssets }`) is a capture of what the build used; BARE
   // (the manifest document itself) is the staged project declaration. Same discriminator
   // the gate's own `manifestCandidate` uses, so the two can never disagree about which
@@ -856,6 +852,21 @@ export async function runGates(args: {
     && typeof assetManifestInput === "object"
     && !Array.isArray(assetManifestInput)
     && "manifest" in (assetManifestInput as Record<string, unknown>);
+  // Inject `artDeferred` at the WRAPPER level, never into the manifest document itself.
+  // A bare staged document must first be normalized to the wrapped shape: spreading the
+  // flag straight onto the bare document plants an unknown field INSIDE the manifest, and
+  // schema validation then fails a perfectly valid manifest. That failure is a harness
+  // artifact reported as a tier-1 game defect (exit 1, STATE verified-failing), observed
+  // live during the S1 final test on a clean project. Harness fault is never a game defect.
+  const assetSourceInput =
+    assetManifestInput !== null && typeof assetManifestInput === "object" && !Array.isArray(assetManifestInput)
+      ? {
+          ...(assetSourceIsCapture
+            ? (assetManifestInput as Record<string, unknown>)
+            : { manifest: assetManifestInput }),
+          artDeferred: assetArtDeferred,
+        }
+      : assetManifestInput;
   if (assetManifestInput !== null && assetSourceInScope) {
     const assetSourceReport = evaluateAssetSourceFidelity(assetSourceInput);
     reports.push(assetSourceIsCapture ? assetSourceReport : withStagedDocumentMarker(assetSourceReport));

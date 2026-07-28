@@ -1024,6 +1024,20 @@ test("--report is refused when it would overwrite a project artifact, before any
       runVerifyCli(["--root", root, "--workspace", workspace, "--report", "reports/mine.json"]),
     );
     assert.equal(again.result, 0, again.lines.join("\n"));
+
+    // S1 final-test LOW-1: a path that ESCAPES the root is refused outright, even a fresh
+    // one. The docs promise --report resolves relative to --root; a verify run must never
+    // write outside the project it is grading.
+    const escape = await captured(() =>
+      runVerifyCli(["--root", root, "--workspace", workspace, "--report", "../escape.json"]),
+    );
+    assert.equal(escape.result, 2);
+    assert.match(escape.lines.join("\n"), /resolves outside the project root/);
+    assert.equal(
+      await fileExists(path.join(path.dirname(root), "escape.json")),
+      false,
+      "nothing may be written outside the root",
+    );
   } finally {
     await fs.rm(root, { recursive: true, force: true });
     await fs.rm(workspace, { recursive: true, force: true });
