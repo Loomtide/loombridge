@@ -364,6 +364,13 @@ platformer: runSpeed 2.8 vs 9, apex 0.8 vs 3, rise 44ms vs 280ms) — **the expe
 Crucially, all three `rederivation` verdicts **PASS** (reported value bit-matches re-derivation from the
 source's own samples): the metrics fail on band, **not** on distrust.
 
+> **Reproduction note (2026-07-27, grammar/taste split):** this run predates report
+> `schemaVersion: "2"`. `runSpeed`, `jumpApex`, and `timeToApex` are all TASTE-class
+> metrics, so re-running the same command today records them as `out_of_band`
+> (descriptive placement, no fail). Add `--enforce-taste` to reproduce the original
+> `status=fail` verdict. The N1 tamper below is unaffected: a §0-rejected value forces
+> `fail` in every mode, taste or not.
+
 **N1 tamper (the decisive negative).** Edited the reported `jumpApex` `0.8 → 3.0` — a value sitting
 *exactly* on the precision target (`3u → 3u ±12%`, so it sails through a naive band check) — while
 leaving the samples byte-identical. Re-run → `rederivation jumpApex: status=fail, reported=3,

@@ -3,7 +3,7 @@
 Loombridge is **the agent layer for building and verifying Unity games** ([loomtide.ai](https://loomtide.ai)) — a production-grade plan → build → verify pipeline that helps AI agents construct games and proves the result against measurable targets (framing, assets, UI, playability, audio, and feel). "Playwright for Unity" describes the *mechanism*, not the product: AI agents see, control, and verify Unity projects through MCP. Unity is the first supported engine; the deterministic CLI core is engine-agnostic. Architecturally there are two major layers:
 
 1. **The bridge** — a two-process MCP system: a Node.js MCP server (stdio) talks to a C# plugin inside the Unity Editor over WebSocket (IPC or TCP), exposing 121 generic `unity_*` tools across 12 op categories.
-2. **The `loombridge` CLI product layer** — a deterministic, agent-agnostic command set (`plan` / `build` / `verify` / `doneness` plus `minigame`, `trace`, `design`, `assets`, `capture`, `status`, `ask`, and the setup verbs `install-bridge` / `doctor` / `update`) that owns project state in `.loombridge/`, enforces verification contracts, and supervises agent-driven builds so a "done" claim can never be self-graded.
+2. **The `loombridge` CLI product layer** — a deterministic, agent-agnostic command set (`plan` / `build` / `verify` / `doneness` plus `minigame`, `trace`, `feel`, `design`, `assets`, `capture`, `status`, `ask`, and the setup verbs `install-bridge` / `doctor` / `update`) that owns project state in `.loombridge/`, enforces verification contracts, and supervises agent-driven builds so a "done" claim can never be self-graded.
 
 Around these sit two supporting subsystems: the **replay verification** engine (record-by-demonstration → deterministic trace replay → perceptual baseline diff) and the **asset layer** (a local curated registry plus a live public hosted asset catalog on R2 + Postgres with an in-Unity browser).
 
@@ -175,12 +175,13 @@ GameObjects are addressed by **locators**, not instance IDs (instance IDs die on
 |------|--------------|---------|--------------|
 | `plan` | Scaffold `.loombridge/` (contract, slice roadmap, design stubs); `plan --go` approves a verified slice and advances | yes | no |
 | `build` | Mint a §3a build runId, gate preconditions (approved Design Target), point `currentBuild` at the current slice | yes | no |
-| `verify` | Run Tier-1 deterministic gates → `reports/build-verdict.json`; modes: `--slice <id>`, `--stage <phase>` (diagnostic), `--profile <feel-profile>`, `--minigame` | yes | no (grades captures) |
+| `verify` | Run Tier-1 deterministic gates → `reports/build-verdict.json`; modes: `--slice <id>`, `--stage <phase>` (diagnostic), `--profile <feel-profile>`, `--minigame`, `--snapshot` (tuning-drift against the approved feel snapshot) | yes | no (grades captures) |
 | `capture` | Write slice gate evidence (screen rects, console, tile/parallax captures) from raw bridge ops with provenance | yes | yes |
 | `doneness` | The only path to a "done" claim: fresh + green + runId-bound verdict, all slices approved, hero-shot fidelity | no | no |
 | `design` | `status` / `set` / `approve` the Design Target (annotated hero shot, frozen by sha256) | set/approve | no |
 | `minigame` | `init` (contract scaffold) / `setup` (guided onboarding) / `capture` (drive the recorded trace → capture pack) / `finalize` (fill real locators from captures) / `baseline approve\|status` | some | capture |
 | `trace` | Replay verification: `record --observe` / `replay` / `replay-all` / `approve` / `report` | some | record/replay |
+| `feel` | Tuning snapshot: `feel snapshot capture` (profile-less live measurement) / `approve` (human freezes the baseline once) / `status`; `verify --snapshot` then grades kinematic drift against it | workspace | capture |
 | `assets` | Deterministic Asset Manifest approval: `registry-plan/apply`, `generated-plan/apply` | apply | no |
 | `install-bridge` | Install the bridge into a consumer project as a `file:` tarball dependency (`--embedded` fallback); writes `ProjectSettings/LoombridgeInstall.json` | project | no |
 | `doctor` | Health-check the local install + a project's bridge wiring (`--project`/`--live`/`--ci`); actionable fix per row; exit `0`/`1`/`2` | no | `--live` only |
