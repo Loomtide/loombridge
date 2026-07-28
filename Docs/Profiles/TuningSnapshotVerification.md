@@ -81,6 +81,36 @@ validated against the candidate's metric ids and FROZEN into the manifest. There
 deliberately no verify-time loosening flag: a lockfile whose tolerance widens at check
 time is not a lockfile. Re-approval is the change path.
 
+The overrides file shape (per-metric overrides MUST sit under `perMetric`):
+
+```jsonc
+{
+  "defaultRelPct": 0.05,                      // optional
+  "defaultAbsFloorByDerivation": { ... },     // optional, merged over the defaults
+  "perMetric": {
+    "fallGravityMultiplier": { "abs": 0.4 },
+    "runDeceleration": { "abs": 30 }
+  }
+}
+```
+
+Any unrecognized top-level key is REFUSED (exit 2), never silently ignored: a flat
+metric map without the `perMetric` wrapper would otherwise freeze a manifest with
+pure-default tolerances while the operator believes their overrides are in force,
+and wrong tolerances in a frozen manifest are a wrong gate.
+
+### Metric stability: when to widen per-metric tolerances
+
+Not every metric is equally stable capture-to-capture, and stability is a property of
+the GAME as much as of the metric. First live e2e (KnightsQuest, legacy-input mobile):
+`jumpApex`/`shortHopApex`/`doubleJumpApex` were byte-stable across runs, `runSpeed` and
+`timeToApex` within ~1%, but `fallGravityMultiplier` and `runDeceleration`
+(tail-of-trajectory derivations) spread 2x or more between identical runs. Capture two
+or three candidates back-to-back BEFORE approving; if a metric's spread exceeds its
+default tolerance on an unchanged game, freeze a wider per-metric tolerance for it (and
+note why in `--note`), or its drift signal is noise. Multi-capture averaging
+(`captureRuns`) is the reserved seam for making this automatic.
+
 ## The drift gate (`verify --snapshot`)
 
 Input modes:

@@ -178,6 +178,20 @@ that the declared control was acted on. Refuse-on-absent: an absent/unparseable
 }
 ```
 
+`flow.json` may also carry a top-level `stall` marker, written when the base drive's
+TRAILING dispatches (two or more) all reported `actuated: false`:
+
+```jsonc
+"stall": { "target": "/Canvas/CookPanel/Ingredient_pour", "kind": "drag",
+           "deadCount": 7, "totalDispatches": 16 }
+```
+
+It means the game most likely stopped consuming input at that gesture (the usual cause: a
+gesture racing the game's phase gate, so "visible" was not yet "consumable") and every
+screen captured after that point shows the STALLED frame. Capture prints it loudly with
+the state-signal fix. Informational: the flow gate still grades each declared transition
+from its own actuation evidence.
+
 Actuation honesty (all three required; weak/partial evidence is a **harness fault**,
 never a pass): `actuated === true`, the declared `target` matches `handlerTarget` **or**
 `raycastHit`, and `handlersFired` carries a click signal (`pointerClick`/`click`).
