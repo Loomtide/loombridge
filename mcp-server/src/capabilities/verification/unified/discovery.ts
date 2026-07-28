@@ -272,7 +272,11 @@ async function discoverTraceAssets(root: string): Promise<DiscoveredAsset[]> {
     }
     row.runnable = "live";
     row.approvedAt = integrity.manifest!.approvedAt;
-    row.approvedBy = `replay report ${integrity.manifest!.sourceReportSha256.slice(0, 12)}`;
+    // RECORDED, not audited (L13). The frame shas above were re-derived from disk, so
+    // the FRAMES are audited; the source report is a provenance note copied from the
+    // manifest, and the report it names may not even exist any more. The wording says
+    // which of the two this is, so the plan cannot be read as claiming more.
+    row.approvedBy = `recorded from replay report ${integrity.manifest!.sourceReportSha256.slice(0, 12)}`;
     rows.push(row);
   }
   return rows;
@@ -336,8 +340,9 @@ async function discoverFeelSnapshotAsset(root: string, workspace: string): Promi
  *
  * A DRAFT contract is not-runnable, never broken (A10): the placeholders are what
  * `finalize` is for, and grading them would measure the scaffold, not the game. An
- * approved layout baseline with no ownership stamp is a non-anchor (A4); with a stamp
- * naming another project it is broken.
+ * APPROVED LAYOUT BASELINE IS REQUIRED for the row to run at all (H1, see below); one
+ * with no ownership stamp is a non-anchor (A4), and one stamped for another project is
+ * broken.
  */
 async function discoverScreenContractAsset(root: string, workspace: string): Promise<DiscoveredAsset[]> {
   const contractPath = await findContract(workspace);
@@ -379,36 +384,48 @@ async function discoverScreenContractAsset(root: string, workspace: string): Pro
     return [row];
   }
 
-  // The layout baseline is the OPTIONAL frozen half. Its absence is not a defect (the
-  // declared contract is itself a human-authored anchor), but an unreadable or
-  // foreign-project one is.
+  // THE APPROVED LAYOUT BASELINE IS REQUIRED, not optional (H1).
+  //
+  // An earlier cut treated its absence as a qualification on a runnable row: "declared
+  // screens are graded, drift is not enforced". That was the one hole in the unified
+  // door big enough to drive a manufactured pass through. A screen contract and its
+  // capture pack are BOTH producible by the same agent in the same session, so with no
+  // frozen third thing the section grades a document against captures of that document
+  // and reports `pass`. Nothing a human ever approved is involved, yet the roll-up
+  // reads `pass` and exit 0. The baseline manifest is the only artifact on this path a
+  // human's `baseline approve` had to produce, and its `projectRoot` stamp is also what
+  // binds the workspace (whose id is derived from a FOLDER NAME two checkouts can share)
+  // to the root being verified. No stamped baseline, no execution.
   const manifestPresent = await fileExists(path.join(baselineDir, BASELINE_MANIFEST));
-  if (manifestPresent) {
-    const manifest = await loadBaselineManifest(baselineDir);
-    if (!manifest) {
-      row.notRunClass = "broken";
-      row.reason = "the approved layout baseline cannot be read";
-      row.broken = `${path.join(baselineDir, BASELINE_MANIFEST)} is unreadable or not a screen-contract baseline`;
-      return [row];
-    }
-    if (manifest.projectRoot === undefined) {
-      row.notRunClass = "non-anchor";
-      row.reason =
-        "unstamped layout baseline (approved before ownership stamping): re-approve with " +
-        "`loombridge minigame baseline approve` so the verdict is bound to this project";
-      return [row];
-    }
-    if (path.resolve(manifest.projectRoot) !== root) {
-      row.notRunClass = "broken";
-      row.reason = "the approved layout baseline belongs to another project";
-      row.broken = `baseline projectRoot is ${manifest.projectRoot}, verifying ${root}`;
-      return [row];
-    }
-    row.approvedAt = manifest.capturedAt;
-    row.approvedBy = `screen contract '${manifest.contractId}'`;
-  } else {
-    row.reason = "no approved layout baseline: declared screens are graded, drift is not enforced";
+  if (!manifestPresent) {
+    row.notRunClass = "non-anchor";
+    row.reason =
+      "declared screens without an approved layout baseline: run `loombridge minigame baseline approve` " +
+      "(a contract graded against captures of itself is not a human anchor)";
+    return [row];
   }
+  const manifest = await loadBaselineManifest(baselineDir);
+  if (!manifest) {
+    row.notRunClass = "broken";
+    row.reason = "the approved layout baseline cannot be read";
+    row.broken = `${path.join(baselineDir, BASELINE_MANIFEST)} is unreadable or not a screen-contract baseline`;
+    return [row];
+  }
+  if (manifest.projectRoot === undefined) {
+    row.notRunClass = "non-anchor";
+    row.reason =
+      "unstamped layout baseline (approved before ownership stamping): re-approve with " +
+      "`loombridge minigame baseline approve` so the verdict is bound to this project";
+    return [row];
+  }
+  if (path.resolve(manifest.projectRoot) !== root) {
+    row.notRunClass = "broken";
+    row.reason = "the approved layout baseline belongs to another project";
+    row.broken = `baseline projectRoot is ${manifest.projectRoot}, verifying ${root}`;
+    return [row];
+  }
+  row.approvedAt = manifest.capturedAt;
+  row.approvedBy = `screen contract '${manifest.contractId}'`;
   row.runnable = "offline";
   return [row];
 }

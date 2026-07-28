@@ -19,7 +19,17 @@ import path from "node:path";
 
 import type { DiscoveredAsset, DiscoveredAssetKind, NotRunClass } from "./discovery.js";
 
-/** The unified report filename under `.loombridge/reports/`. ONE constant; see A8. */
+/**
+ * The unified report filename under `.loombridge/reports/`. ONE constant; see A8.
+ *
+ * DOCUMENTED LIMITATION (L14). This file carries NO self-integrity stamp: nothing in
+ * it proves it was written by the run it describes, and anyone who can edit the
+ * project can write a green one by hand. That is why `doneness` consumes it as a
+ * REFUSE-ONLY input: a non-zero `exit` ADDS a refusal reason, and a zero `exit` adds
+ * nothing at all. A forged passing report therefore buys exactly one thing, the
+ * absence of one extra refusal, while every existing doneness gate still applies. It
+ * is never a source of green.
+ */
 export const UNIFIED_VERIFY_REPORT = "verify.json";
 
 /**
@@ -88,10 +98,18 @@ export interface UnifiedAssetOutcome {
   exit: number;
   reportPath?: string;
   reportSha256?: string | null;
+  /** Why this asset carries no report of its own (M5: "no report produced this run"). */
+  note?: string;
 }
 
 export interface UnifiedVerifySection {
-  /** The per-asset engine's own status word, verbatim (never re-spelled here). */
+  /**
+   * The per-asset engine's own status word, verbatim (never re-spelled here), with ONE
+   * exception this module owns: `"refused"`, recorded when the engine exited at the
+   * harness tier having graded nothing. The engine writes `warn` on that path (its
+   * verdict file records every missing capture), and copying `warn` up here would put
+   * the mildest word in the product on the run that measured nothing at all.
+   */
   status: string;
   /** The tier this section earned: 0 pass, 1 game defect, 2 harness fault. */
   exit: number;
@@ -101,8 +119,28 @@ export interface UnifiedVerifySection {
    * A8 binding: sha256 of that per-asset report's bytes at write time. Without it the
    * roll-up merely NAMES a file; with it, the roll-up is bound to the exact bytes it
    * summarized, so a later hand-edit of the per-asset report is detectable.
+   *
+   * Both this and `reportPath` are stamped ONLY when THIS run actually (re)wrote the
+   * file (M5): an engine that refused before writing would otherwise leave the previous
+   * run's report standing, and the roll-up would present a stale sha as this run's
+   * evidence. When nothing was written, both are omitted and `note` says so.
    */
   reportSha256?: string | null;
+  /**
+   * Why this section carries no report of its own, or any other one-line qualification
+   * the summary must print alongside the status word.
+   */
+  note?: string;
+  /**
+   * M8: was a FROZEN, human-approved anchor actually compared in this section?
+   *
+   * A green section is not automatically an anchored one. The contract section grades
+   * declared gates whether or not a design target was ever approved; the screens section
+   * can grade declared screens while the layout baseline comparison did not happen. This
+   * field is the machine-readable answer to "what did a human freeze, and was it used",
+   * kept separate from `status` so neither can be inferred from the other.
+   */
+  anchored: boolean;
   /** Every asset this section executed, when the section covers more than one. */
   assets?: UnifiedAssetOutcome[];
 }
@@ -116,6 +154,13 @@ export interface UnifiedVerifyReport {
    * A8 binding: the run this verdict certifies (`STATE.currentBuild.runId`), or null
    * when no build is in flight. The SAME rule `build-verdict.json` uses, so the two
    * can be checked against each other.
+   *
+   * DOCUMENTED LIMITATION (M7). This stamp is CONTEXTUAL, not an enforcement: it
+   * records which build was in flight when the run happened, and nothing here refuses
+   * a report whose runId has since gone stale. Freshness enforcement remains
+   * `doneness`'s job (`verdict.runId === currentBuild.runId` plus the producedAt
+   * ordering), and this field exists so the two documents can be cross-checked, not so
+   * this one can self-certify.
    */
   runId: string | null;
   /** Whether live-only assets were executed (`--live`). */
@@ -125,6 +170,13 @@ export interface UnifiedVerifyReport {
   /** Discovered assets that did not execute, and why. Never folded into pass. */
   notRun: UnifiedNotRun[];
   sections: Partial<Record<UnifiedSectionName, UnifiedVerifySection>>;
+  /**
+   * M8: which executed sections compared a frozen, human-approved anchor, and which
+   * did not. A roll-up that reported only pass/fail would let "green" and "green
+   * against nothing frozen" print identically.
+   */
+  anchoredSections: UnifiedSectionName[];
+  unanchoredSections: UnifiedSectionName[];
   status: UnifiedVerifyStatus;
   exit: number;
   notes: string[];
@@ -164,28 +216,34 @@ function notRunTier(why: NotRunReason): number {
  *
  *   executed empty                            -> nothing-checked, 2
  *   any executed tier 2                       -> harness-fault,   2
- *   any executed tier 1 (no 2)                -> fail,            max(1, notRun tiers)
+ *   any executed tier 1 (no 2)                -> fail,            1
  *   all executed 0, notRun empty              -> pass,            0
  *   all executed 0, notRun all live-only      -> partial,         0
  *   all executed 0, notRun has any other      -> partial,         2
  *
- * `partial` never rounds up to `pass`: the summary line names every unmeasured
- * anchor, and only the operator's own `--live` omission is allowed to keep the exit
- * at 0.
+ * A FOUND GAME DEFECT KEEPS EXIT 1, whatever else went unmeasured. The earlier cut
+ * raised it to 2 whenever an anchor could not be measured, which quietly broke the
+ * one promise the exit codes make: "2 is never a game verdict". A `fail` at exit 2
+ * is a game verdict wearing the harness tier's clothes, and it is exactly the shape
+ * an agent misreads as "the harness is flaky, re-run it". The unmeasured anchors do
+ * not vanish: they are still every row of `notRun`, and the summary line names each
+ * one, which is where coverage honesty belongs.
+ *
+ * `partial` never rounds up to `pass`: only the operator's own `--live` omission is
+ * allowed to keep the exit at 0.
  */
 export function resolveUnifiedOutcome(input: {
   executed: readonly { section: UnifiedSectionName; exit: number }[];
   notRun: readonly UnifiedNotRun[];
 }): { status: UnifiedVerifyStatus; exit: number } {
-  const notRunExit = worstExitTier(input.notRun.map((n) => notRunTier(n.why)));
   if (input.executed.length === 0) return { status: "nothing-checked", exit: 2 };
 
   const executedExit = worstExitTier(input.executed.map((e) => e.exit));
-  const exit = worstExitTier([executedExit, notRunExit]);
-  if (executedExit === 2) return { status: "harness-fault", exit };
-  if (executedExit === 1) return { status: "fail", exit };
-  if (input.notRun.length === 0) return { status: "pass", exit };
-  return { status: "partial", exit };
+  if (executedExit === 2) return { status: "harness-fault", exit: 2 };
+  if (executedExit === 1) return { status: "fail", exit: 1 };
+  if (input.notRun.length === 0) return { status: "pass", exit: 0 };
+  const notRunExit = worstExitTier(input.notRun.map((n) => notRunTier(n.why)));
+  return { status: "partial", exit: notRunExit };
 }
 
 /**
@@ -200,6 +258,58 @@ export async function reportSha256(absPath: string | undefined): Promise<string 
   } catch {
     return null;
   }
+}
+
+/**
+ * A per-asset report file as it stood at a point in time: the bytes' sha plus the
+ * mtime. Both, because either alone can miss a rewrite (identical bytes rewritten,
+ * or a filesystem with coarse mtime granularity).
+ */
+export interface ReportFingerprint {
+  sha256: string | null;
+  mtimeMs: number | null;
+}
+
+/** Fingerprint a per-asset report path. An absent or unreadable file is all-null. */
+export async function fingerprintReport(absPath: string | undefined): Promise<ReportFingerprint> {
+  if (!absPath) return { sha256: null, mtimeMs: null };
+  try {
+    const [bytes, stat] = await Promise.all([fs.readFile(absPath), fs.stat(absPath)]);
+    return { sha256: createHash("sha256").update(bytes).digest("hex"), mtimeMs: stat.mtimeMs };
+  } catch {
+    return { sha256: null, mtimeMs: null };
+  }
+}
+
+/**
+ * Did THIS run (re)write the report? (M5)
+ *
+ * The attack this closes is cheap and quiet: run `verify` once so a good per-asset
+ * report lands on disk, then break the asset so the engine refuses BEFORE writing
+ * anything. The section would still find the old file, hash it, and stamp the
+ * previous run's sha as this run's evidence, so the roll-up would name a report that
+ * says nothing about the run it is attached to. A file that is absent both before and
+ * after is likewise "not produced", never a silent pass.
+ */
+export function reportWasWritten(before: ReportFingerprint, after: ReportFingerprint): boolean {
+  if (after.sha256 === null) return false;
+  if (before.sha256 === null) return true;
+  return before.sha256 !== after.sha256 || before.mtimeMs !== after.mtimeMs;
+}
+
+/**
+ * A per-asset report path as recorded ON the report: relative to the project root when
+ * it lives inside it, absolute when it does not.
+ *
+ * The workspace assets (feel, screens) live OUTSIDE the project by design, so a blind
+ * `path.relative` produces a `../../..` string that means nothing without knowing the
+ * cwd it will be resolved against. An escaping relative path is a path nothing can
+ * walk, so it is stored absolute instead.
+ */
+export function reportPathFor(root: string, absPath: string | undefined): string | undefined {
+  if (!absPath) return undefined;
+  const rel = path.relative(root, absPath);
+  return rel === "" || rel.startsWith("..") || path.isAbsolute(rel) ? absPath : rel;
 }
 
 /** Serialize the report to `outputPath`, creating the reports dir. */

@@ -13,8 +13,11 @@ import test from "node:test";
 import {
   UNIFIED_SCREENS_REPORT,
   UNIFIED_VERIFY_REPORT,
+  fingerprintReport,
   notRunFor,
+  reportPathFor,
   reportSha256,
+  reportWasWritten,
   resolveUnifiedOutcome,
   unifiedScreensReportPath,
   unifiedVerifyReportPath,
@@ -105,11 +108,29 @@ test("resolveUnifiedOutcome: an executed game defect is fail; an executed harnes
     }),
     { status: "harness-fault", exit: 2 },
   );
-  // A game defect keeps its tier even when nothing else ran; a skipped anchor raises
-  // the exit but never demotes the fail into a pass.
+});
+
+test("resolveUnifiedOutcome: a FOUND GAME DEFECT stays at exit 1, however much went unmeasured", () => {
+  // The pin that changed on purpose. An earlier cut raised a `fail` to exit 2 whenever an
+  // anchor could not be measured, which quietly broke the one promise the exit codes make:
+  // 2 is never a game verdict. A `fail` at 2 is a game defect wearing the harness tier's
+  // clothes, and that is exactly the shape an agent misreads as "flaky harness, re-run it".
+  for (const notRun of [[NON_ANCHOR], [DRAFT], [BROKEN], [LIVE_SKIPPED], [LIVE_SKIPPED, BROKEN]]) {
+    assert.deepEqual(
+      resolveUnifiedOutcome({ executed: [{ section: "contract", exit: 1 }], notRun }),
+      { status: "fail", exit: 1 },
+      `a defect must not be re-tiered by ${notRun.map((n) => n.why).join("+")}`,
+    );
+  }
+  // The unmeasured anchors do not vanish: they are still every row of `notRun`, which the
+  // summary line names. Coverage honesty lives there, not in the exit code of a real defect.
   assert.deepEqual(
-    resolveUnifiedOutcome({ executed: [{ section: "contract", exit: 1 }], notRun: [NON_ANCHOR] }),
-    { status: "fail", exit: 2 },
+    resolveUnifiedOutcome({
+      executed: [{ section: "contract", exit: 1 }, { section: "screens", exit: 2 }],
+      notRun: [],
+    }),
+    { status: "harness-fault", exit: 2 },
+    "an executed harness fault still dominates: that part of the run could not be trusted",
   );
 });
 
@@ -148,6 +169,49 @@ test("reportSha256 binds a section to the exact bytes it summarized; an unreadab
   }
 });
 
+test("reportWasWritten: only a report THIS run produced may be stamped (M5)", async () => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "unified-report-"));
+  try {
+    const file = path.join(dir, "report.json");
+
+    // Absent before AND after: nothing was produced, so nothing may be stamped.
+    const absent = await fingerprintReport(file);
+    assert.equal(reportWasWritten(absent, await fingerprintReport(file)), false);
+
+    // Written for the first time.
+    await fs.writeFile(file, '{"status":"pass"}\n', "utf-8");
+    assert.equal(reportWasWritten(absent, await fingerprintReport(file)), true);
+
+    // THE ATTACK: a prior good report on disk, and an engine that refuses before writing.
+    // The fingerprint is unchanged, so the previous run's sha must not be stamped as this
+    // run's evidence.
+    const prior = await fingerprintReport(file);
+    assert.equal(reportWasWritten(prior, await fingerprintReport(file)), false);
+
+    // A rewrite with different content is detected.
+    await fs.writeFile(file, '{"status":"fail"}\n', "utf-8");
+    assert.equal(reportWasWritten(prior, await fingerprintReport(file)), true);
+
+    // And a file that vanished cannot be stamped either.
+    await fs.rm(file);
+    assert.equal(reportWasWritten(prior, await fingerprintReport(file)), false);
+  } finally {
+    await fs.rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("reportPathFor: an ESCAPING relative path is stored absolute, never as `../..`", () => {
+  const root = path.resolve("/proj/game");
+  assert.equal(reportPathFor(root, path.join(root, ".loombridge", "reports", "x.json")),
+    path.join(".loombridge", "reports", "x.json"));
+
+  // The workspace assets live OUTSIDE the project by design. A `../../..` string means
+  // nothing without knowing the cwd it will be resolved against, so it is stored absolute.
+  const outside = path.resolve("/home/u/.loombridge/projects/game/feel/drift.json");
+  assert.equal(reportPathFor(root, outside), outside);
+  assert.equal(reportPathFor(root, undefined), undefined);
+});
+
 test("the report path helpers are the ONLY spelling of the two declared filenames", async () => {
   assert.equal(unifiedVerifyReportPath("/r"), path.join("/r", UNIFIED_VERIFY_REPORT));
   assert.equal(unifiedScreensReportPath("/r"), path.join("/r", UNIFIED_SCREENS_REPORT));
@@ -165,6 +229,8 @@ test("the report path helpers are the ONLY spelling of the two declared filename
       plan: [],
       notRun: [],
       sections: {},
+      anchoredSections: [],
+      unanchoredSections: [],
       status: "nothing-checked",
       exit: 2,
       notes: [],

@@ -49,6 +49,18 @@ import {
   sanitizeWorkspaceId,
 } from "../../domain/workspace-paths.js";
 
+/**
+ * Stage the project's approved `ASSET_MANIFEST.json` into the inputs dir so the
+ * asset-source gate has a document to check the CAPTURED observations against.
+ *
+ * NEVER OVERWRITES (M6). The staged copy is the BARE manifest document; what a real
+ * capture run writes at the same path is the WRAPPED shape (`{ manifest,
+ * observedAssets }`), which is the only form that carries what the build actually
+ * used. Clobbering the wrapped capture with the bare document turned a valid graded
+ * gate into a tier-1 UNKNOWN_FIELD fail, i.e. a real capture was destroyed by the
+ * convenience copy taken on the way past. Absent file, stage it; present file, leave
+ * it alone and let the gate grade whatever the run captured.
+ */
 async function stageAssetManifestInput(root: string, inputsDir: string): Promise<void> {
   const paths = loombridgePaths(root);
   try {
@@ -56,8 +68,15 @@ async function stageAssetManifestInput(root: string, inputsDir: string): Promise
   } catch {
     return;
   }
+  const staged = path.join(inputsDir, "asset-manifest.json");
+  try {
+    await fs.access(staged);
+    return; // a captured input is already there: never clobber evidence
+  } catch {
+    /* absent → stage the project document below */
+  }
   await fs.mkdir(inputsDir, { recursive: true });
-  await fs.copyFile(paths.assetManifest, path.join(inputsDir, "asset-manifest.json"));
+  await fs.copyFile(paths.assetManifest, staged);
 }
 
 /**
@@ -625,7 +644,7 @@ export const ORCHESTRATOR_FLAGS: ReadonlySet<string> = new Set([
 ]);
 
 /** The subset of {@link ORCHESTRATOR_FLAGS} that consumes the following argv token. */
-const ORCHESTRATOR_VALUE_FLAGS: ReadonlySet<string> = new Set(["--root", "--report", "--id", "--workspace"]);
+export const ORCHESTRATOR_VALUE_FLAGS: ReadonlySet<string> = new Set(["--root", "--report", "--id", "--workspace"]);
 
 /** The orchestrator-only flags: `parseArgs` (the legacy engine) does not know them. */
 const ORCHESTRATOR_ONLY_FLAGS: ReadonlySet<string> = new Set(["--live", "--report"]);
@@ -646,9 +665,14 @@ interface OrchestratorArgs {
  *
  * A value-flag whose value is missing or flag-like also returns null: that is a malformed
  * invocation, and `parseArgs` already owns exactly how those are reported.
+ *
+ * Exported so `unified-verify-flags.test.ts` can drive the REAL router with one argv per
+ * accepted flag. A guard that only compared two sets would keep passing if someone
+ * hijacked this function with an inline set of its own.
  */
-function classifyOrchestratorArgs(args: string[]): OrchestratorArgs | null {
+export function classifyOrchestratorArgs(args: string[]): OrchestratorArgs | null {
   const parsed: OrchestratorArgs = { root: process.cwd(), strict: false, live: false };
+  let rawReport: string | undefined;
   for (let i = 0; i < args.length; i += 1) {
     const arg = args[i]!;
     if (!ORCHESTRATOR_FLAGS.has(arg)) return null;
@@ -661,10 +685,16 @@ function classifyOrchestratorArgs(args: string[]): OrchestratorArgs | null {
     if (value === undefined || value.startsWith("--")) return null;
     i += 1;
     if (arg === "--root") parsed.root = path.resolve(value);
-    else if (arg === "--report") parsed.reportPath = path.resolve(value);
+    else if (arg === "--report") rawReport = value;
     else if (arg === "--id") parsed.workspaceId = value;
     else parsed.workspace = path.resolve(value);
   }
+  // `--report` resolves against `--root`, NOT the cwd (L12), and it is resolved after
+  // the loop so flag order cannot change where it lands. A report path is a statement
+  // about the project being verified; resolving it against wherever the operator
+  // happened to `cd` puts the run's own record somewhere the project cannot find it,
+  // and in CI that "somewhere" is a scratch dir that gets thrown away.
+  if (rawReport !== undefined) parsed.reportPath = path.resolve(parsed.root, rawReport);
   return parsed;
 }
 
@@ -1124,12 +1154,19 @@ function printUsage(): void {
       "  loombridge verify                     # offline assets, plan first",
       "  loombridge verify --live              # also replay traces + grade feel drift",
       "",
-      "Passing ANY other flag below selects a legacy mode instead, unchanged.",
+      "Six flags stay on the unified run and combine only with each other: --root,",
+      "--strict, --live, --report, --id, --workspace. EVERY OTHER flag below is a mode",
+      "or engine flag, and passing any one of them selects that legacy mode instead,",
+      "unchanged (--inputs, --acceptance, --output, --vlm, --slice, --stage, --profile,",
+      "--snapshot, --minigame and their companions).",
       "",
       "Bare-run options (combinable only with each other):",
       "  --live                Also run the assets that need a running Unity editor",
       "                        (trace replay with pixel-drift gating, feel snapshot).",
-      "  --report <path>       Unified report path (default: .loombridge/reports/verify.json)",
+      "  --report <path>       Unified report path, resolved relative to --root",
+      "                        (default: .loombridge/reports/verify.json). Refused when it",
+      "                        would overwrite a project artifact or any file that is not a",
+      "                        previous unified report.",
       "",
       "Options:",
       "  --root <dir>          Project root (default: cwd)",
@@ -1139,7 +1176,9 @@ function printUsage(): void {
       "                        In --profile mode, overrides the profile report path",
       "                        (or setup capture contract path with --setup-capture).",
       "  --vlm <path>          Advisory VLM findings (optional)",
-      "  --strict              Treat warnings as failures (require all-green)",
+      "  --strict              Treat warnings as failures (require all-green). On a bare",
+      "                        run, applies to the unified run (see above) and is mirrored",
+      "                        into every section that has an all-green mode.",
       "  --verbose             (--minigame) Print the full per-finding breakdown in the",
       "                        terminal (default: slim — the detail lives in the report)",
       "  --quiet-next          (--minigame) Suppress the resolved next-step footer (the",

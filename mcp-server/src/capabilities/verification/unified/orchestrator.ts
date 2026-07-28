@@ -37,15 +37,20 @@ import {
   type ReplayLayout,
 } from "../../../domain/state.js";
 import { projectWorkspace, sanitizeWorkspaceId } from "../../../domain/workspace-paths.js";
+import { resolveCliProjectPin } from "../../setup/cli-project-pin.js";
+import { gradedGates } from "../run-gates.js";
 import { discoverVerificationAssets, type DiscoveredAsset } from "./discovery.js";
 import {
+  fingerprintReport,
   notRunFor,
-  reportSha256,
+  reportPathFor,
+  reportWasWritten,
   resolveUnifiedOutcome,
   unifiedScreensReportPath,
   unifiedVerifyReportPath,
   worstExitTier,
   writeUnifiedVerifyReport,
+  type ReportFingerprint,
   type UnifiedAssetOutcome,
   type UnifiedNotRun,
   type UnifiedSectionName,
@@ -84,7 +89,7 @@ export interface UnifiedSectionDeps {
   runFlowTrace(
     layout: ReplayLayout,
     id: string,
-    opts: { strictVisual: boolean },
+    opts: { strictVisual: boolean; projectPathCanonical?: string },
   ): Promise<{ status: string; exitTier: number }>;
   runFeel(args: { root: string; workspace: string; strict: boolean }): Promise<number>;
 }
@@ -139,6 +144,22 @@ export async function runUnifiedVerify(opts: UnifiedVerifyOpts): Promise<number>
   const root = path.resolve(opts.root);
   const paths = loombridgePaths(root);
   const deps: UnifiedSectionDeps = { ...(await realDeps()), ...opts.deps };
+  const reportPath = opts.reportPath ?? unifiedVerifyReportPath(paths.reports);
+
+  // `--report` IS A WRITE, so it is validated before anything else happens (M4). A
+  // path that collides with a project artifact would have the run silently overwrite
+  // the contract, the roadmap, or a verdict it is supposed to be reading. This refuses
+  // FIRST: before discovery, before the plan, before a single section runs, so a
+  // refused invocation leaves the project byte-identical.
+  const collision = await reportCollision(paths, reportPath);
+  if (collision) {
+    console.error(`${TAG} REFUSED: --report ${path.relative(root, reportPath)} ${collision}`);
+    console.error(
+      `${TAG} nothing was written and nothing ran. Point --report at a new path, or omit it to use ` +
+        `${path.relative(root, unifiedVerifyReportPath(paths.reports))}.`,
+    );
+    return 2;
+  }
 
   // Resolve the out-of-project workspace ONCE, here, and hand the resolved directory to
   // discovery. The alternative (letting discovery derive it, then recovering it from a
@@ -194,8 +215,16 @@ export async function runUnifiedVerify(opts: UnifiedVerifyOpts): Promise<number>
   }
   const traceAssets = runnable.filter((a) => a.kind === "trace");
   if (traceAssets.length > 0) {
-    record("flow", await runSection("flow", () => flowSection(deps, root, traceAssets)));
+    // PIN THE EDITOR (F-pin). `endpoint-discovery-latest.json` is a single shared
+    // pointer every running editor overwrites on its heartbeat, so an UNPINNED replay
+    // drives whichever project published most recently. Observed live: identical
+    // `trace replay` invocations alternating PASS/BLOCKED as two editors flapped. The
+    // trace verb resolves the pin the same way; the unified door must not be the one
+    // path that replays a demonstration against someone else's game.
+    const projectPathCanonical = resolveCliProjectPin({ root });
+    record("flow", await runSection("flow", () => flowSection(deps, root, traceAssets, projectPathCanonical)));
   }
+
   const feelAsset = runnable.find((a) => a.kind === "feel-snapshot");
   if (feelAsset) {
     // A feel row cannot exist without a workspace: discovery only looks for one inside a
@@ -204,7 +233,7 @@ export async function runUnifiedVerify(opts: UnifiedVerifyOpts): Promise<number>
   }
 
   const outcome = resolveUnifiedOutcome({ executed, notRun });
-  const reportPath = opts.reportPath ?? unifiedVerifyReportPath(paths.reports);
+  const sectionNames = Object.keys(sections) as UnifiedSectionName[];
   const report: UnifiedVerifyReport = {
     kind: "unified-verify",
     schemaVersion: "1",
@@ -217,6 +246,8 @@ export async function runUnifiedVerify(opts: UnifiedVerifyOpts): Promise<number>
     plan: assets,
     notRun,
     sections,
+    anchoredSections: sectionNames.filter((n) => sections[n]!.anchored),
+    unanchoredSections: sectionNames.filter((n) => !sections[n]!.anchored),
     status: outcome.status,
     exit: outcome.exit,
     notes,
@@ -245,8 +276,27 @@ async function runSection(
     return await body();
   } catch (error) {
     console.error(`${TAG} ${name}: harness fault (not a game defect): ${message(error)}`);
-    return { status: "harness-fault", exit: 2 };
+    return { status: "harness-fault", exit: 2, anchored: false };
   }
+}
+
+/**
+ * Stamp a section's report binding ONLY when this run produced the file (M5).
+ *
+ * `before` is the fingerprint taken before the engine ran. When the engine exited
+ * without touching the file, the section says so instead of naming (and hashing) the
+ * report a previous run left behind.
+ */
+async function bindReport(
+  root: string,
+  absPath: string | undefined,
+  before: ReportFingerprint,
+): Promise<Pick<UnifiedVerifySection, "reportPath" | "reportSha256" | "note">> {
+  const after = await fingerprintReport(absPath);
+  if (!reportWasWritten(before, after)) {
+    return { note: "no report produced this run" };
+  }
+  return { reportPath: reportPathFor(root, absPath), reportSha256: after.sha256 };
 }
 
 /**
@@ -261,6 +311,7 @@ async function contractSection(
   paths: ReturnType<typeof loombridgePaths>,
   asset: DiscoveredAsset,
 ): Promise<UnifiedVerifySection> {
+  const before = await fingerprintReport(paths.verdict);
   const exit = await deps.runContract({
     root,
     inputsDir: paths.verifyInputs,
@@ -268,13 +319,36 @@ async function contractSection(
     outputPath: paths.verdict,
     strict: opts.strict,
   });
-  const verdict = await readJson<{ status?: string }>(paths.verdict);
+  const verdict = await readJson<VerdictShape>(paths.verdict);
+  // L9/M-refused: the engine's nothing-graded refusal writes a `warn` verdict (its
+  // gates name every missing capture) and exits 2. Copying `warn` up here would give
+  // the run that measured NOTHING the same word as a run that measured a real subset
+  // and found small problems. `refused` is the honest word, and it is derived from the
+  // verdict's own gates + checks (`gradedGates`), the same pure predicate the engine
+  // refused on, never from matching the refusal's prose.
+  const refused = refusedNothingGraded(exit, verdict);
+  const binding = await bindReport(root, paths.verdict, before);
   return {
-    status: verdict?.status ?? tierWord(exit),
+    status: refused ? "refused" : verdict?.status ?? tierWord(exit),
     exit,
-    reportPath: path.relative(root, paths.verdict),
-    reportSha256: await reportSha256(paths.verdict),
+    // The contract's frozen half is the approved design target, and only a target that
+    // is BOTH approved and unchanged since approval is an anchor a comparison used.
+    anchored: asset.approvedAt !== undefined,
+    ...binding,
+    ...(refused ? { note: "nothing graded" } : {}),
   };
+}
+
+/** The shape the contract section reads back off `build-verdict.json`. */
+type VerdictShape = { status?: string; gates?: Record<string, string>; checks?: { id: string; actual: string }[] };
+
+/**
+ * Did the contract engine refuse because NOTHING graded? Read from the verdict's own
+ * gates + checks, which is the same disk truth `runVerify` refused on.
+ */
+function refusedNothingGraded(exit: number, verdict: VerdictShape | null): boolean {
+  if (exit !== 2 || !verdict?.gates || !verdict.checks) return false;
+  return gradedGates({ gates: verdict.gates, checks: verdict.checks } as Parameters<typeof gradedGates>[0]).length === 0;
 }
 
 /**
@@ -295,6 +369,7 @@ async function screensSection(
   asset: DiscoveredAsset,
 ): Promise<UnifiedVerifySection> {
   const outputPath = unifiedScreensReportPath(paths.reports);
+  const before = await fingerprintReport(outputPath);
   const exit = await deps.runScreens({
     root,
     contractPath: asset.paths.asset,
@@ -306,12 +381,13 @@ async function screensSection(
   });
   const report = await readJson<{ status?: string; baseline?: { present?: boolean } }>(outputPath);
 
-  // A3: discovery verified an approved layout baseline (it has an `approvedAt`), so a
-  // comparison that reports it as not-present means the two disagree about what is on
-  // disk. That is a broken asset (harness tier), never a quiet pass over no baseline.
-  let tier = exit;
-  if (asset.approvedAt !== undefined && report?.baseline?.present === false) {
-    tier = 2;
+  // A3: discovery verified an approved layout baseline (H1 makes that a precondition
+  // for running at all), so a comparison that reports it as not-present means the two
+  // disagree about what is on disk. That is a broken asset (harness tier), never a
+  // quiet pass over no baseline.
+  const compared = report?.baseline?.present === true;
+  const tier = compared ? exit : 2;
+  if (!compared && report !== null) {
     console.error(
       `${TAG} screens: the approved layout baseline at ${path.relative(root, asset.paths.baseline!)} ` +
         "was discovered but the comparison could not use it (broken asset, harness tier 2).",
@@ -320,8 +396,8 @@ async function screensSection(
   return {
     status: report?.status ?? tierWord(tier),
     exit: tier,
-    reportPath: path.relative(root, outputPath),
-    reportSha256: await reportSha256(outputPath),
+    anchored: compared,
+    ...(await bindReport(root, outputPath, before)),
   };
 }
 
@@ -337,26 +413,35 @@ async function flowSection(
   deps: UnifiedSectionDeps,
   root: string,
   traces: DiscoveredAsset[],
+  projectPathCanonical: string | undefined,
 ): Promise<UnifiedVerifySection> {
   const layout = standardReplayLayout(root);
   const outcomes: UnifiedAssetOutcome[] = [];
   for (const asset of traces) {
-    const reportPath = asset.paths.report ? path.relative(root, asset.paths.report) : undefined;
+    const before = await fingerprintReport(asset.paths.report);
     try {
-      const { status, exitTier } = await deps.runFlowTrace(layout, asset.id, { strictVisual: true });
+      const { status, exitTier } = await deps.runFlowTrace(layout, asset.id, {
+        strictVisual: true,
+        projectPathCanonical,
+      });
       outcomes.push({
         kind: "trace",
         id: asset.id,
         status,
         exit: exitTier,
-        reportPath,
-        reportSha256: await reportSha256(asset.paths.report),
+        ...(await bindReport(root, asset.paths.report, before)),
       });
     } catch (error) {
       console.error(
         `${TAG} flow: trace "${asset.id}" could not be replayed (harness fault, not a game defect): ${message(error)}`,
       );
-      outcomes.push({ kind: "trace", id: asset.id, status: "harness-fault", exit: 2, reportPath });
+      outcomes.push({
+        kind: "trace",
+        id: asset.id,
+        status: "harness-fault",
+        exit: 2,
+        ...(await bindReport(root, asset.paths.report, before)),
+      });
     }
   }
   const exit = worstExitTier(outcomes.map((o) => o.exit));
@@ -364,8 +449,13 @@ async function flowSection(
   return {
     status: worst.status,
     exit,
+    // Every trace that reaches this section passed baseline-manifest verification at
+    // discovery (unstamped and tampered baselines never become runnable rows), so a
+    // section that executed at all compared a frozen anchor.
+    anchored: traces.length > 0,
     reportPath: worst.reportPath,
     reportSha256: worst.reportSha256,
+    ...(worst.note ? { note: worst.note } : {}),
     assets: outcomes,
   };
 }
@@ -382,13 +472,17 @@ async function feelSection(
   workspace: string,
   asset: DiscoveredAsset,
 ): Promise<UnifiedVerifySection> {
+  const before = await fingerprintReport(asset.paths.report);
   const exit = await deps.runFeel({ root, workspace, strict: opts.strict });
   const report = await readJson<{ status?: string }>(asset.paths.report);
   return {
     status: report?.status ?? tierWord(exit),
     exit,
-    reportPath: asset.paths.report ? path.relative(root, asset.paths.report) : undefined,
-    reportSha256: await reportSha256(asset.paths.report),
+    // Discovery only marks a feel row runnable when `verifySnapshotIntegrity` passed
+    // AND the snapshot's `projectRoot` stamp names this project, so an executed feel
+    // section is by construction a comparison against a frozen, owned anchor.
+    anchored: asset.approvedAt !== undefined,
+    ...(await bindReport(root, asset.paths.report, before)),
   };
 }
 
@@ -419,9 +513,17 @@ function disposition(asset: DiscoveredAsset, live: boolean): string {
   return "will run (offline)";
 }
 
-/** WHEN and by WHAT this asset's anchor was approved: the RFC's human-anchor invariant. */
+/**
+ * WHEN and by WHAT this asset's anchor was approved: the RFC's human-anchor invariant.
+ *
+ * The parenthetical is the provenance AS RECORDED (L13). Discovery re-derives the
+ * integrity shas from disk, so the frozen bytes are audited; the source it names
+ * (a replay report, a contract id, a human's note) is copied off the manifest and is
+ * not re-checked here. The wording keeps those two apart so a reader cannot take the
+ * line as a claim that the named source was verified.
+ */
 function provenance(asset: DiscoveredAsset): string {
-  if (asset.approvedAt) return `approved ${asset.approvedAt}${asset.approvedBy ? ` by ${asset.approvedBy}` : ""}`;
+  if (asset.approvedAt) return `approved ${asset.approvedAt}${asset.approvedBy ? ` (${asset.approvedBy})` : ""}`;
   if (asset.runnable !== "no" && asset.reason) return `no frozen anchor (${asset.reason})`;
   return "no frozen anchor";
 }
@@ -452,7 +554,11 @@ export function summaryLines(report: UnifiedVerifyReport, live: boolean): string
       ? ` [${section.assets.map((a) => `${a.id}=${a.status}`).join(", ")}]`
       : "";
     const where = section.reportPath ? ` → ${section.reportPath}` : "";
-    lines.push(`${TAG} ${name}: ${section.status} (exit ${section.exit})${detail}${where}`);
+    const qualifier = section.note ? `${section.note}, exit ${section.exit}` : `exit ${section.exit}`;
+    // M8: say out loud when an executed section compared no frozen anchor. "pass" and
+    // "pass against nothing a human froze" must not print identically.
+    const anchor = section.anchored ? "" : " [no frozen anchor compared]";
+    lines.push(`${TAG} ${name}: ${section.status} (${qualifier})${detail}${anchor}${where}`);
   }
   if (report.notRun.length > 0) {
     // Name EVERY unmeasured anchor (A6). A partial that exits 0 must still say out loud
@@ -488,6 +594,60 @@ export function summaryLines(report: UnifiedVerifyReport, live: boolean): string
 }
 
 // ── helpers ──────────────────────────────────────────────────────────────────
+
+/**
+ * Would writing the unified report at `target` destroy something? (M4)
+ *
+ * Returns the refusal sentence, or null when the path is safe. Two rules, in order:
+ *
+ *  1. a DECLARED project artifact is refused whether or not it exists yet, because
+ *     "ACCEPTANCE.json does not exist" is not a reason to be willing to create the
+ *     unified report there;
+ *  2. any other EXISTING file is refused unless it is a previous unified report
+ *     (`kind: "unified-verify"`), which is the one file this run is entitled to
+ *     replace.
+ *
+ * The known-artifact list is resolved from `loombridgePaths` + the report constants,
+ * never re-spelled here: a renamed artifact moves both ends at once.
+ */
+async function reportCollision(
+  paths: ReturnType<typeof loombridgePaths>,
+  target: string,
+): Promise<string | null> {
+  const declared: [string, string][] = [
+    [paths.acceptance, "is the acceptance contract"],
+    [paths.slices, "is the slice roadmap"],
+    [paths.state, "is the project STATE"],
+    [paths.gameSpec, "is the game spec"],
+    [paths.feelSpec, "is the feel spec"],
+    [paths.assetManifest, "is the approved asset manifest"],
+    [paths.genrePromotion, "is the genre promotion report"],
+    [paths.verdict, "is the Tier-1 build verdict"],
+    [unifiedScreensReportPath(paths.reports), "is the unified run's own screens report"],
+  ];
+  for (const [artifact, what] of declared) {
+    if (path.resolve(artifact) === target) return what;
+  }
+  // The whole design directory: the frozen hero shot and its metadata live there, and
+  // nothing under it is ever a report destination.
+  const designDir = path.resolve(paths.design);
+  if (target === designDir || target.startsWith(`${designDir}${path.sep}`)) {
+    return "is inside the Design Target directory";
+  }
+
+  const existing = await readJson<{ kind?: unknown }>(target);
+  if (existing !== null) {
+    if (existing.kind === "unified-verify") return null;
+    return "already exists and is not a previous unified verify report";
+  }
+  try {
+    await fs.access(target);
+    // Present but not JSON we could read: still someone else's file.
+    return "already exists and is not a previous unified verify report";
+  } catch {
+    return null;
+  }
+}
 
 async function readJson<T>(file: string | undefined): Promise<T | null> {
   if (!file) return null;

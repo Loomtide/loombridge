@@ -27,16 +27,31 @@ loombridge verify --root . --live   # also replay traces + grade feel drift
 - **Offline by default.** Trace replay and feel-snapshot capture need a running editor, so
   they are listed as `not run: needs --live` and are **never folded into a pass**.
 - **A row that cannot execute is named, never skipped.** An unapproved trace, an unstamped
-  legacy baseline, a draft screen contract, a baseline approved for a *different* project: each
+  legacy baseline, a draft screen contract, a screen contract with **no approved layout
+  baseline** (a contract graded against captures of itself is not a human anchor: run
+  `loombridge minigame baseline approve`), a baseline approved for a *different* project: each
   is a visible row that cannot contribute a pass.
 - **No assets at all** prints the on-ramp (`trace record --observe` → `trace replay` →
   `trace approve`, then `verify --live`) and exits `2`. Recording is a **human** step: the play
   session *is* the approval moment. Do not claim it as an agent action.
+- **Each section says whether it compared a frozen anchor.** The report carries
+  `anchored` per section plus `anchoredSections`/`unanchoredSections`, so "green" and "green
+  against nothing a human froze" never print identically.
+- **`--report <path>`** resolves relative to `--root` and is **refused** (exit `2`, nothing
+  written, nothing run) when it would overwrite a project artifact or any file that is not a
+  previous unified report. The screens section writes to a verify-owned
+  `.loombridge/reports/verify-screens.json`, never the guided flow's workspace report.
+- **`doneness` reads this report when it exists.** A unified run that exited non-zero adds a
+  refusal to `loombridge doneness`, so a green contract gate cannot certify a project whose
+  other anchors went unmeasured. An absent report changes nothing.
 - **Exit codes:** `0` pass, or a partial whose only unmeasured assets were skipped for lack of
   `--live` · `1` a game defect (gate fail, drift, baseline regression) · `2` a harness fault, a
-  broken asset, or nothing graded. A run that checked nothing is never a pass.
+  broken asset, or nothing graded. A run that checked nothing is never a pass, and a `2` is
+  never a game verdict (a found defect stays at `1` however much else went unmeasured).
 
-Passing any other flag below selects a legacy mode instead, unchanged.
+Six flags stay on the unified run and combine only with each other: `--root`, `--strict`,
+`--live`, `--report`, `--id`, `--workspace`. Every other flag below is a mode or engine flag,
+and passing any one of them selects that legacy mode instead, unchanged.
 
 ## Process
 
@@ -61,7 +76,10 @@ Passing any other flag below selects a legacy mode instead, unchanged.
    > writes per-state captures.
    >
    > **That case is now a REFUSAL, not a green.** If no gate consumed a captured input (every
-   > gate `warn`-on-missing-capture or `not_applicable`), the engine prints `REFUSED: nothing
+   > gate `warn`-on-missing-capture, `not_applicable`, or graded only from a **staged project
+   > document** rather than a capture: `verify` copies `.loombridge/ASSET_MANIFEST.json` into
+   > the inputs dir itself, and that declaration is not evidence that this run measured the
+   > game), the engine prints `REFUSED: nothing
    > was graded`, writes the verdict for audit, leaves `STATE.md` **untouched**, and exits `2`.
    > It applies to the bare run, every `--inputs` form, and the `loombridge_verify` MCP tool.
    > A run that measured nothing is never a pass. A **partially** graded run is unchanged: at

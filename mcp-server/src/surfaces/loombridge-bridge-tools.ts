@@ -404,7 +404,17 @@ export interface LoombridgeVerifyToolPayload {
   headline: string;
   /** The full gate output, verbatim (stderr + stdout lines) — no summarization. */
   output: string[];
-  /** Tier-1 verdict `status` read from disk, or null when no verdict was written (e.g. a refusal). */
+  /**
+   * Tier-1 verdict `status` read from disk, or null when no verdict was written.
+   *
+   * `refused: true` does NOT imply this is null. The nothing-graded refusal WRITES its
+   * verdict (its `warn` gates name every missing capture, which is what makes the run
+   * auditable) and then exits 2 without flipping STATE, so the honest reading of that
+   * payload is `exitCode: 2` + `refused: true` + `verdictStatus: "warn"`. The
+   * missing-contract refusal is the case that writes nothing and leaves this null.
+   * The authoritative verdict is `exitCode`; this field is the verdict file's own word
+   * about the gates it did assemble, never a substitute for the tier.
+   */
   verdictStatus: string | null;
   /** Verdict report path relative to `root`. */
   verdictPath: string;
@@ -432,7 +442,8 @@ export async function runLoombridgeVerifyTool(root: string): Promise<LoombridgeV
     verdictExists = true;
     verdictStatus = typeof raw.status === "string" ? raw.status : null;
   } catch {
-    /* no verdict on disk (a refusal writes none) */
+    /* no verdict on disk (the missing-contract refusal writes none; the nothing-graded
+       refusal DOES write one, so a refusal is not by itself a reason to expect nothing) */
   }
   const refused = exitCode === 2 && output.some((l) => /REFUSED/.test(l));
   return {

@@ -31,7 +31,20 @@ import {
 } from "../../../../capabilities/verification/unified/report.js";
 import { run as runTrace } from "../../../../capabilities/replay/trace.js";
 import { run as runMinigame } from "../../../../capabilities/minigame/minigame.js";
+import { resolveCliProjectPin } from "../../../../capabilities/setup/cli-project-pin.js";
+import { createDraftAssetManifest, type AssetManifest } from "../../../../capabilities/assets/asset-manifest.js";
+import { feelPaths } from "../../../../capabilities/feel/feel-workspace.js";
+import { loadMeasurements } from "../../../../capabilities/feel/measurements.js";
+import {
+  DEFAULT_SNAPSHOT_TOLERANCES,
+  SNAPSHOT_CONTRACT_FILE,
+  SNAPSHOT_MEASUREMENTS_FILE,
+  rederiveView,
+  writeSnapshotBundle,
+  type FeelSnapshotManifest,
+} from "../../../../capabilities/feel/snapshot-manifest.js";
 import { fileExists, loombridgePaths, readState, standardReplayLayout } from "../../../../domain/state.js";
+import { REPO_ROOT } from "../../../_support/paths.js";
 
 async function tmpDir(prefix: string): Promise<string> {
   return fs.mkdtemp(path.join(os.tmpdir(), prefix));
@@ -79,6 +92,31 @@ async function plannedProject(
   return root;
 }
 
+/** A project root `resolveCliProjectPin` recognises as a real Unity project. */
+async function unityLikeProject(prefix: string): Promise<string> {
+  const root = await tmpDir(prefix);
+  await fs.mkdir(path.join(root, "Assets"), { recursive: true });
+  return root;
+}
+
+/**
+ * The BARE approved asset manifest, exactly the document a hand-written attack (or
+ * `verify`'s own staging step) would drop into the inputs dir: every role
+ * `primitiveFinal`, which under an `art: deferred` contract passes the gate on the
+ * declaration alone, with NO `observedAssets` anywhere.
+ */
+function bareApprovedManifest(): AssetManifest {
+  const manifest = createDraftAssetManifest({
+    mode: "generated",
+    heroShot: { path: ".loombridge/design/hero-shot.png", sha256: "f".repeat(64) },
+  });
+  manifest.status = "approved";
+  manifest.approvedAt = "2026-07-28T00:00:00.000Z";
+  manifest.assetSources = manifest.assetSources.map((s) => ({ ...s, approved: true, license: "project-generated" }));
+  manifest.assets = manifest.assets.map((a) => ({ ...a, status: "approved", primitiveFinal: true }));
+  return manifest;
+}
+
 // ── trace fixtures (same shape as unified-discovery.test.ts) ─────────────────
 
 /** Plant `<traces>/<id>.trace.json`: a recorded demonstration with NO approved baseline. */
@@ -122,6 +160,54 @@ async function plantApprovedTrace(root: string, id: string): Promise<void> {
   );
   const approved = await captured(() => runTrace(["approve", "--id", id, "--root", root]));
   assert.equal(approved.result, 0, `approve ${id}:\n${approved.lines.join("\n")}`);
+}
+
+// ── feel-snapshot fixture (same technique as unified-discovery.test.ts) ──────
+
+/** The REAL live-capture artifacts the feel-snapshot tests use (re-derives cleanly). */
+const LIVE_DIR = path.join(REPO_ROOT, "Docs", "Profiles", "artifacts", "s5cb-live-capture");
+
+const CAPTURE_CONTRACT_FIXTURE = {
+  schemaVersion: "1",
+  game: "fixture-game",
+  subjects: [{ id: "player", locator: { path: "/Player" } }],
+  interactions: [{ id: "jump", kind: "key-tap", key: "space" }],
+  metrics: [{ metric: "jumpApex", interactionId: "jump", derivation: "trajectory" }],
+};
+
+/** Freeze a REAL snapshot bundle into the workspace, stamped as owned by `projectRoot`. */
+async function plantSnapshot(workspace: string, projectRoot: string): Promise<void> {
+  const staging = await tmpDir("unified-cli-snapshot-candidate-");
+  const candidate = path.join(staging, "candidate");
+  await fs.mkdir(candidate, { recursive: true });
+  await fs.copyFile(path.join(LIVE_DIR, "feel.json"), path.join(candidate, SNAPSHOT_MEASUREMENTS_FILE));
+  await fs.writeFile(
+    path.join(candidate, SNAPSHOT_CONTRACT_FILE),
+    JSON.stringify(CAPTURE_CONTRACT_FIXTURE, null, 2),
+    "utf-8",
+  );
+
+  const measurements = await loadMeasurements(path.join(candidate, SNAPSHOT_MEASUREMENTS_FILE));
+  const view = rederiveView(measurements);
+  const metrics: FeelSnapshotManifest["metrics"] = {};
+  for (const [id, value] of Object.entries(measurements.metrics)) {
+    metrics[id] = { value, derivation: "trajectory", confidence: view.verified.has(id) ? "verified" : "reported" };
+  }
+  await writeSnapshotBundle({
+    candidateDir: candidate,
+    currentDir: feelPaths(workspace).snapshotCurrentDir,
+    engine: { engine: "unity" },
+    capturedAt: "2026-07-28T00:00:00.000Z",
+    approvedAt: "2026-07-28T00:00:00.000Z",
+    note: "feels right",
+    tolerancePolicy: DEFAULT_SNAPSHOT_TOLERANCES,
+    metrics,
+    rederivation: { pass: view.pass, total: view.total },
+    game: "fixture-game",
+    projectRoot,
+    contractStats: { interactions: 1, metrics: 1 },
+  });
+  await fs.rm(staging, { recursive: true, force: true });
 }
 
 // ── screen-contract fixtures (PNG writer as in minigame-baseline.test.ts) ────
@@ -342,6 +428,15 @@ test("planned but uncaptured: the plan names the contract, the engine refuses, S
     assert.equal(report.exit, 2);
     assert.equal(report.sections.contract?.reportPath, path.relative(root, paths.verdict));
     assert.ok(report.sections.contract?.reportSha256, "the section is BOUND to the bytes it summarized");
+
+    // L9: the section says REFUSED, not the engine's `warn`. The verdict file legitimately
+    // records `warn` (its gates name every missing capture), but copying that word up into
+    // the roll-up would give the run that measured NOTHING the mildest word in the product.
+    assert.equal(report.sections.contract?.status, "refused");
+    assert.equal(report.sections.contract?.note, "nothing graded");
+    assert.match(text, /contract: refused \(nothing graded, exit 2\)/);
+    const verdict = JSON.parse(await fs.readFile(paths.verdict, "utf-8")) as { status: string };
+    assert.equal(verdict.status, "warn", "…and the engine's own verdict file is untouched by that relabelling");
   } finally {
     await fs.rm(root, { recursive: true, force: true });
     await fs.rm(workspace, { recursive: true, force: true });
@@ -427,6 +522,11 @@ test("screens execute OFFLINE against the discovered baseline and write to the v
     assert.equal(report.sections.screens?.status, "pass");
     assert.equal(report.sections.screens?.reportPath, path.relative(root, verifyOwned));
     assert.equal(report.status, "pass");
+    // M8: this section really did compare the frozen layout baseline, and says so.
+    assert.equal(report.sections.screens?.anchored, true);
+    assert.deepEqual(report.anchoredSections, ["screens"]);
+    assert.deepEqual(report.unanchoredSections, []);
+    assert.ok(!text.includes("no frozen anchor compared"), "an anchored section must not be labelled unanchored");
   } finally {
     await fs.rm(root, { recursive: true, force: true });
     await fs.rm(workspace, { recursive: true, force: true });
@@ -473,7 +573,14 @@ test("an approved trace alone is NOTHING-CHECKED offline, and the hint names `ve
     const text = lines.join("\n");
     assert.equal(result, 2, "zero executed is never exit 0");
     assert.match(text, /trace 'happy-path': not run: needs --live/);
-    assert.match(text, /approved 2\d{3}-.*replay report/, "the plan names when and from what it was approved");
+    // L13: the provenance is printed AS RECORDED. The frame shas were re-derived from disk,
+    // so the frozen bytes are audited; the source report is copied off the manifest and is
+    // not re-checked, and the wording must not let a reader take it as a verified claim.
+    assert.match(
+      text,
+      /approved 2\d{3}-.*\(recorded from replay report [0-9a-f]{12}\)/,
+      "the plan names when it was approved and, as recorded, from what",
+    );
     assert.match(text, /Re-run with: loombridge verify --live/);
 
     const report = await readUnified(root);
@@ -608,6 +715,395 @@ test("a section that throws is caught as ITS harness fault; the later sections s
     assert.equal(report.sections.contract?.exit, 2);
     assert.equal(report.sections.contract?.status, "harness-fault");
     assert.equal(report.sections.flow?.exit, 0, "the flow section still ran after the contract section threw");
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+    await fs.rm(workspace, { recursive: true, force: true });
+  }
+});
+
+// ── feel + flow: the real section seams (injected; both need a live editor) ───
+
+test("--live: the feel section carries the engine's own tier, pass and integrity gap alike", async () => {
+  // FX8. The feel section is production code that nothing drove: its tier comes straight
+  // from `runVerifySnapshot` (0 clean / 1 drift / 2 integrity-or-capture-gap), and a
+  // section that silently re-derived a tier would put a second opinion next to the
+  // engine's. Both ends of that contract are pinned here.
+  const root = await tmpDir("unified-cli-feel-");
+  const workspace = await tmpDir("unified-cli-ws-");
+  try {
+    await plantSnapshot(workspace, root);
+
+    for (const [engineExit, expectedStatus] of [[0, "pass"], [2, "harness-fault"]] as const) {
+      const seen: { root: string; workspace: string; strict: boolean }[] = [];
+      const { result } = await captured(() =>
+        runUnifiedVerify({
+          root,
+          strict: false,
+          live: true,
+          workspace,
+          deps: {
+            async runFeel(args) {
+              seen.push(args);
+              // The real engine writes its drift report here; the double does the same so
+              // the section's report binding is exercised rather than stubbed away.
+              await fs.mkdir(path.dirname(feelPaths(workspace).driftReport), { recursive: true });
+              await fs.writeFile(
+                feelPaths(workspace).driftReport,
+                JSON.stringify({ status: engineExit === 0 ? "clean" : "blocked", at: `${engineExit}` }),
+                "utf-8",
+              );
+              return engineExit;
+            },
+          },
+        }),
+      );
+      assert.equal(seen.length, 1, "the feel section really ran");
+      assert.equal(seen[0]!.workspace, workspace, "the section drives the RESOLVED workspace");
+
+      const report = await readUnified(root);
+      assert.equal(report.sections.feel?.exit, engineExit, "the engine's tier is taken as-is");
+      assert.equal(report.sections.feel?.status, engineExit === 0 ? "clean" : "blocked", "…and its own word");
+      assert.equal(report.status, expectedStatus);
+      assert.equal(result, engineExit);
+      assert.equal(
+        report.sections.feel?.anchored,
+        true,
+        "a feel row only becomes runnable after integrity + ownership verified, so it is anchored",
+      );
+      // FX10: the feel workspace lives OUTSIDE the project by design, so a blind
+      // `path.relative` would store `../../..`, a path nothing can walk without knowing
+      // the cwd it will be resolved against. An escaping path is stored ABSOLUTE.
+      const reportPath = report.sections.feel?.reportPath;
+      assert.equal(reportPath, feelPaths(workspace).driftReport);
+      assert.ok(path.isAbsolute(String(reportPath)), `report path must be absolute, got ${reportPath}`);
+      assert.ok(!String(reportPath).startsWith(".."), "never a `..`-escaping relative path");
+    }
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+    await fs.rm(workspace, { recursive: true, force: true });
+  }
+});
+
+test("--live: a trace at tier 1 (pixel DRIFT) is a game defect: the run exits 1, not 2", async () => {
+  // FX8 + FX5 together. The worst-selection line has to pick the tier-1 outcome as the
+  // section's, and a found defect must keep exit 1 even though a second anchor went
+  // unmeasured. A `fail` reported at the harness tier reads as "flaky harness, re-run it".
+  const root = await plannedProject("unified-cli-drift-", { graded: true });
+  const workspace = await tmpDir("unified-cli-ws-");
+  try {
+    await plantApprovedTrace(root, "a-clean");
+    await plantApprovedTrace(root, "b-drifted");
+    await plantTrace(root, "z-never-approved"); // an unmeasured anchor, on purpose
+
+    const { result, lines } = await captured(() =>
+      runUnifiedVerify({
+        root,
+        strict: false,
+        live: true,
+        workspace,
+        deps: {
+          async runFlowTrace(_layout, id) {
+            return id === "b-drifted"
+              ? { status: "visual-drift", exitTier: 1 }
+              : { status: "pass", exitTier: 0 };
+          },
+        },
+      }),
+    );
+
+    const report = await readUnified(root);
+    const flow = report.sections.flow!;
+    assert.equal(flow.exit, 1, "the section takes the worst tier its assets earned");
+    assert.equal(flow.status, "visual-drift", "…and the WORST asset's status word, not the first one's");
+    assert.deepEqual(flow.assets?.map((a) => [a.id, a.exit]), [["a-clean", 0], ["b-drifted", 1]]);
+
+    assert.equal(report.status, "fail");
+    assert.equal(report.exit, 1, "a found game defect is never re-tiered to 2 by an unmeasured anchor");
+    assert.equal(result, 1);
+    assert.match(lines.join("\n"), /NOT MEASURED \(never folded into pass\): trace 'z-never-approved'/);
+    assert.equal(report.notRun[0]!.why, "non-anchor", "the coverage gap is still reported, as a row");
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+    await fs.rm(workspace, { recursive: true, force: true });
+  }
+});
+
+test("--live: the flow section PINS the editor it replays against", async () => {
+  // FX3. `endpoint-discovery-latest.json` is one shared pointer every running editor
+  // overwrites on its heartbeat, so an unpinned replay drives whichever project published
+  // most recently. The trace verb resolves the pin the same way; this door must not be the
+  // one path that replays a demonstration against someone else's game.
+  const root = await unityLikeProject("unified-cli-pin-");
+  const workspace = await tmpDir("unified-cli-ws-");
+  try {
+    await plantApprovedTrace(root, "happy-path");
+    const opts: { strictVisual: boolean; projectPathCanonical?: string }[] = [];
+    await captured(() =>
+      runUnifiedVerify({
+        root,
+        strict: false,
+        live: true,
+        workspace,
+        deps: {
+          async runFlowTrace(_layout, _id, o) {
+            opts.push(o);
+            return { status: "pass", exitTier: 0 };
+          },
+        },
+      }),
+    );
+    assert.equal(opts.length, 1);
+    assert.equal(opts[0]!.strictVisual, true, "the unified flow section always gates pixel drift (A5)");
+    assert.equal(
+      opts[0]!.projectPathCanonical,
+      resolveCliProjectPin({ root }),
+      "the section must pass the SAME pin `trace replay` resolves for this root",
+    );
+    assert.equal(opts[0]!.projectPathCanonical, root, "…and for a real Unity project that pin is the root");
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+    await fs.rm(workspace, { recursive: true, force: true });
+  }
+});
+
+// ── H1: a screen contract with no approved baseline cannot manufacture a pass ─
+
+test("screens with NO approved layout baseline never execute: a contract graded against itself is not an anchor", async () => {
+  // The manufactured-pass attack: the contract and the capture pack are both producible by
+  // one agent in one session, so without a frozen third artifact the section would grade a
+  // document against captures of that document and report `pass` at exit 0.
+  const root = await tmpDir("unified-cli-nobaseline-");
+  const { workspace } = await screenWorkspace("unified-cli-nobaseline-ws-");
+  try {
+    // Deliberately NO `baseline approve`: the fixture's captures are perfect, so the only
+    // thing standing between this project and a green run is the missing human anchor.
+    const { result, lines } = await captured(() => runVerifyCli(["--root", root, "--workspace", workspace]));
+    assert.equal(result, 2, "no approved anchor, no pass");
+    assert.match(lines.join("\n"), /minigame baseline approve/, "the plan names the command that fixes it");
+
+    const report = await readUnified(root);
+    assert.equal(report.sections.screens, undefined, "the section must never run");
+    assert.equal(report.status, "nothing-checked");
+    assert.equal(report.notRun[0]!.why, "non-anchor");
+    assert.equal(
+      await fileExists(path.join(loombridgePaths(root).reports, UNIFIED_SCREENS_REPORT)),
+      false,
+      "nothing was graded, so no screens report exists to be quoted",
+    );
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+    await fs.rm(workspace, { recursive: true, force: true });
+  }
+});
+
+// ── H2: the staged asset manifest cannot carry a run ─────────────────────────
+
+test("H2: a hand-written BARE asset-manifest.json with zero captures still REFUSES, on both doors", async () => {
+  // The attack, verbatim: plan a project, declare `art.mode: "deferred"` so primitive-final
+  // roles need no provenance, hand-write the BARE manifest into the inputs dir, and capture
+  // nothing at all. The asset-source gate then RUNS over a declaration of intent, which made
+  // `gradedGates` non-empty, skipped the nothing-graded refusal, and let a run with zero
+  // captured evidence produce a Tier-1 GAME VERDICT and flip STATE to a quotable
+  // `verified-*`. The gate's own verdict is beside the point: what matters is that a staged
+  // project document was accepted as proof that this run measured the game.
+  for (const door of ["bare-argv", "runVerify"] as const) {
+    const root = await plannedProject(`unified-cli-h2-${door}-`);
+    const workspace = await tmpDir("unified-cli-ws-");
+    const paths = loombridgePaths(root);
+    try {
+      const contract = JSON.parse(await fs.readFile(paths.acceptance, "utf-8")) as Record<string, unknown>;
+      contract.art = { mode: "deferred" };
+      await fs.writeFile(paths.acceptance, JSON.stringify(contract, null, 2), "utf-8");
+
+      await fs.mkdir(paths.verifyInputs, { recursive: true });
+      await fs.writeFile(
+        path.join(paths.verifyInputs, "asset-manifest.json"),
+        JSON.stringify(bareApprovedManifest(), null, 2),
+        "utf-8",
+      );
+
+      const { result, lines } = await captured(() =>
+        door === "bare-argv"
+          ? runVerifyCli(["--root", root, "--workspace", workspace])
+          : runVerify({
+              root,
+              inputsDir: paths.verifyInputs,
+              acceptancePath: paths.acceptance,
+              outputPath: paths.verdict,
+              strict: false,
+            }),
+      );
+
+      assert.equal(result, 2, `${door}: a run whose only "evidence" is a staged declaration is not a pass`);
+      assert.match(lines.join("\n"), /REFUSED: nothing was graded/, door);
+
+      const state = await readState(paths);
+      assert.equal(state?.phase, "planned", `${door}: STATE must not flip`);
+      assert.equal(state?.lastVerdict ?? null, null, `${door}: no verdict recorded on STATE`);
+
+      // NON-VACUITY: the gate really did RUN over the planted document (it is not
+      // `not_applicable`), so without the staged-document marker it would be the one
+      // "graded" gate that satisfies the refusal check and lets this run report a verdict.
+      const verdict = JSON.parse(await fs.readFile(paths.verdict, "utf-8")) as {
+        gates: Record<string, string>;
+        checks: { id: string }[];
+      };
+      assert.ok(
+        verdict.gates["asset-source-fidelity"] !== undefined
+          && verdict.gates["asset-source-fidelity"] !== "not_applicable",
+        `${door}: the gate must really have evaluated the planted document, or this test proves nothing`,
+      );
+      assert.ok(
+        verdict.checks.some((c) => c.id === "asset-source-fidelity.staged-document"),
+        `${door}: the staged-document marker is what stops it counting`,
+      );
+    } finally {
+      await fs.rm(root, { recursive: true, force: true });
+      await fs.rm(workspace, { recursive: true, force: true });
+    }
+  }
+});
+
+test("M6: staging never CLOBBERS a captured asset-manifest.json", async () => {
+  // The other half of the same defect: `verify` copied the project's bare document over a
+  // valid WRAPPED capture on its way past, turning a graded gate into a tier-1 fail. The
+  // convenience copy must never destroy evidence.
+  const root = await plannedProject("unified-cli-clobber-", { assetManifest: true });
+  const paths = loombridgePaths(root);
+  try {
+    await fs.mkdir(paths.verifyInputs, { recursive: true });
+    const captured1 = { manifest: bareApprovedManifest(), observedAssets: [] };
+    const stagedPath = path.join(paths.verifyInputs, "asset-manifest.json");
+    await fs.writeFile(stagedPath, JSON.stringify(captured1, null, 2), "utf-8");
+
+    await captured(() =>
+      runVerify({
+        root,
+        inputsDir: paths.verifyInputs,
+        acceptancePath: paths.acceptance,
+        outputPath: paths.verdict,
+        strict: false,
+      }),
+    );
+
+    const after = JSON.parse(await fs.readFile(stagedPath, "utf-8")) as Record<string, unknown>;
+    assert.ok("manifest" in after, "the WRAPPED capture must survive the staging step untouched");
+    assert.ok("observedAssets" in after);
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+// ── M4: --report is a write, and is validated first ──────────────────────────
+
+test("--report is refused when it would overwrite a project artifact, before anything runs", async () => {
+  const root = await plannedProject("unified-cli-report-", { graded: true });
+  const workspace = await tmpDir("unified-cli-ws-");
+  const paths = loombridgePaths(root);
+  try {
+    const before = await fs.readFile(paths.acceptance, "utf-8");
+    const { result, lines } = await captured(() =>
+      runVerifyCli(["--root", root, "--workspace", workspace, "--report", ".loombridge/ACCEPTANCE.json"]),
+    );
+    assert.equal(result, 2);
+    assert.match(lines.join("\n"), /REFUSED: --report/);
+    assert.equal(await fs.readFile(paths.acceptance, "utf-8"), before, "the contract is byte-identical");
+    assert.ok(!lines.join("\n").includes("plan for "), "the refusal comes BEFORE the plan, so nothing ran");
+    assert.equal(await fileExists(paths.verdict), false, "no section executed");
+
+    // …and a fresh path under the project is accepted, so the guard is not a blanket no.
+    const ok = await captured(() =>
+      runVerifyCli(["--root", root, "--workspace", workspace, "--report", "reports/mine.json"]),
+    );
+    assert.equal(ok.result, 0, ok.lines.join("\n"));
+    const written = JSON.parse(await fs.readFile(path.join(root, "reports", "mine.json"), "utf-8")) as UnifiedVerifyReport;
+    assert.equal(written.kind, "unified-verify");
+
+    // Re-running over its own previous report is allowed (that is what --report is for).
+    const again = await captured(() =>
+      runVerifyCli(["--root", root, "--workspace", workspace, "--report", "reports/mine.json"]),
+    );
+    assert.equal(again.result, 0, again.lines.join("\n"));
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+    await fs.rm(workspace, { recursive: true, force: true });
+  }
+});
+
+test("--report resolves relative to --root, not the process cwd", async () => {
+  const root = await plannedProject("unified-cli-reportcwd-", { graded: true });
+  const workspace = await tmpDir("unified-cli-ws-");
+  try {
+    const { result } = await captured(() =>
+      runVerifyCli(["--report", "reports/rel.json", "--root", root, "--workspace", workspace]),
+    );
+    assert.equal(result, 0);
+    assert.ok(await fileExists(path.join(root, "reports", "rel.json")), "the report lands under --root");
+    assert.equal(
+      await fileExists(path.join(process.cwd(), "reports", "rel.json")),
+      false,
+      "…and never under whatever directory the operator happened to be standing in",
+    );
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+    await fs.rm(workspace, { recursive: true, force: true });
+  }
+});
+
+// ── M5: a stale report is never claimed as this run's ────────────────────────
+
+test("M5: a section that produced no report this run does not stamp the previous run's sha", async () => {
+  // Run once so a good screens report lands on disk, then break the contract so the engine
+  // refuses BEFORE writing anything. The section must not find the old file, hash it, and
+  // present it as this run's evidence.
+  const root = await tmpDir("unified-cli-stale-");
+  const { workspace, contractPath } = await screenWorkspace("unified-cli-stale-ws-");
+  try {
+    await approveScreens(root, workspace, contractPath);
+    const first = await captured(() => runVerifyCli(["--root", root, "--workspace", workspace]));
+    assert.equal(first.result, 0, first.lines.join("\n"));
+    const goodSha = (await readUnified(root)).sections.screens!.reportSha256;
+    assert.match(String(goodSha), /^[0-9a-f]{64}$/);
+
+    // The attack: a contract the engine refuses to load, so it writes no report at all.
+    const contract = JSON.parse(await fs.readFile(contractPath, "utf-8")) as Record<string, unknown>;
+    contract.visualProfile = "not-a-real-profile";
+    await fs.writeFile(contractPath, JSON.stringify(contract, null, 2), "utf-8");
+
+    const second = await captured(() => runVerifyCli(["--root", root, "--workspace", workspace]));
+    assert.notEqual(second.result, 0, "a refused engine is never a pass");
+
+    const report = await readUnified(root);
+    const screens = report.sections.screens;
+    if (screens) {
+      assert.notEqual(screens.reportSha256, goodSha, "the PREVIOUS run's sha must never be stamped as this run's");
+      if (screens.reportSha256 === undefined || screens.reportSha256 === null) {
+        assert.equal(screens.note, "no report produced this run", "…and the section says so out loud");
+        assert.equal(screens.reportPath, undefined, "an unwritten report is not named either");
+      }
+    }
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+    await fs.rm(workspace, { recursive: true, force: true });
+  }
+});
+
+// ── M8: anchor visibility ────────────────────────────────────────────────────
+
+test("M8: the report says which executed sections compared a frozen anchor", async () => {
+  const root = await plannedProject("unified-cli-anchored-", { graded: true });
+  const workspace = await tmpDir("unified-cli-ws-");
+  try {
+    const { lines } = await captured(() => runVerifyCli(["--root", root, "--workspace", workspace]));
+    const report = await readUnified(root);
+
+    // A planned project has no approved design target, so its contract section is green
+    // and UNANCHORED. Those two facts must be separately readable.
+    assert.equal(report.sections.contract?.exit, 0);
+    assert.equal(report.sections.contract?.anchored, false);
+    assert.deepEqual(report.anchoredSections, []);
+    assert.deepEqual(report.unanchoredSections, ["contract"]);
+    assert.match(lines.join("\n"), /no frozen anchor compared/, "the summary says it, not just the JSON");
   } finally {
     await fs.rm(root, { recursive: true, force: true });
     await fs.rm(workspace, { recursive: true, force: true });

@@ -23,7 +23,7 @@ import { readFileSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 
-import { PKG_ROOT } from "../../_support/paths.js";
+import { PKG_ROOT, REPO_ROOT } from "../../_support/paths.js";
 import {
   TRACE_BASELINE_MANIFEST,
   traceBaselineManifestPath,
@@ -97,6 +97,48 @@ test("the unified report filenames are spelled once each, in the module that exp
   );
   assert.equal(unifiedVerifyReportPath("/r"), path.join("/r", UNIFIED_VERIFY_REPORT));
   assert.equal(unifiedScreensReportPath("/r"), path.join("/r", UNIFIED_SCREENS_REPORT));
+});
+
+/**
+ * THE PROSE SITES. A declared path is not only a path two MODULES spell: the four places
+ * below tell a human (or an agent) where the unified report lives, and prose is invisible
+ * to a constant rename. Renaming `UNIFIED_VERIFY_REPORT` with the code alone leaves four
+ * documents confidently naming a file nothing writes any more, which is the same
+ * "declared path nothing walks" failure wearing different clothes.
+ *
+ * Each entry is (file, the constant-derived spelling it must contain).
+ */
+const PROSE_SITES: [string, string][] = [
+  [path.join(PKG_ROOT, "src", "capabilities", "verification", "verify.ts"), `.loombridge/reports/${UNIFIED_VERIFY_REPORT}`],
+  [path.join(PKG_ROOT, "src", "surfaces", "cli.ts"), `.loombridge/reports/${UNIFIED_VERIFY_REPORT}`],
+  [path.join(REPO_ROOT, "commands", "loombridge", "verify.md"), `.loombridge/reports/${UNIFIED_VERIFY_REPORT}`],
+  [path.join(REPO_ROOT, "Docs", "Design", "UnifiedVerify.md"), `.loombridge/reports/${UNIFIED_VERIFY_REPORT}`],
+  // The verify-owned screens report is named in the two docs that describe the bare run.
+  [path.join(REPO_ROOT, "commands", "loombridge", "verify.md"), `.loombridge/reports/${UNIFIED_SCREENS_REPORT}`],
+  [path.join(REPO_ROOT, "Docs", "Design", "UnifiedVerify.md"), `.loombridge/reports/${UNIFIED_SCREENS_REPORT}`],
+];
+
+test("the user-facing prose names the report paths with the CONSTANT-derived spelling", () => {
+  const missing: string[] = [];
+  for (const [file, spelling] of PROSE_SITES) {
+    if (!readFileSync(file, "utf-8").includes(spelling)) {
+      missing.push(`${path.relative(REPO_ROOT, file)} does not name "${spelling}"`);
+    }
+  }
+  assert.deepEqual(
+    missing,
+    [],
+    "a rename of the report constant left prose pointing at a file nothing writes; update these sites "
+      + "(help text, CLI summary, command prose, RFC) with the code",
+  );
+});
+
+test("LITMUS: the prose walk really fires when a site stops naming the path", () => {
+  // Feed the same predicate a renamed constant. If the sites still 'contain' it, the walk
+  // above is decorative.
+  const renamed = `.loombridge/reports/${UNIFIED_VERIFY_REPORT.replace(".json", "-renamed.json")}`;
+  const stillFound = PROSE_SITES.filter(([file]) => readFileSync(file, "utf-8").includes(renamed));
+  assert.deepEqual(stillFound, [], "a renamed path must not be found in any prose site");
 });
 
 test("LITMUS: the scan really fires on a second, hard-coded copy of a declared name", () => {

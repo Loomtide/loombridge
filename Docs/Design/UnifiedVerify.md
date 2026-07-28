@@ -184,6 +184,43 @@ S1 shipped as described, plus four things this RFC did not originally specify:
   with a good trace baseline should still get that trace checked. The engine path and the MCP
   tool keep the fatal tier.
 
+- **The unified report is written to `.loombridge/reports/verify.json`** alongside the
+  per-asset reports, and the screens section writes a verify-owned
+  `.loombridge/reports/verify-screens.json` rather than the guided flow's workspace report.
+  `--report <path>` overrides the first, resolved relative to `--root`, and is REFUSED when it
+  would overwrite a project artifact or any file that is not a previous unified report.
+- **`doneness` consumes the report** (the seam S1 originally left reserved). When
+  `.loombridge/reports/verify.json` is present and its `exit` is non-zero, `doneness` adds a
+  refusal on both its paths (whole-game and slice roll-up); an absent report changes nothing,
+  and a malformed one refuses rather than being skipped. It is a REFUSE-ONLY input: a green
+  report never adds certification, so it is not a laundering path.
+- **A found game defect stays at exit 1**, however many anchors went unmeasured. The earlier
+  cut raised a `fail` to 2 whenever a row could not be measured, which broke the promise that
+  "2 is never a game verdict". Unmeasured anchors are reported as `notRun` rows and named in
+  the summary; they do not change the tier of a defect that was actually found.
+- **A screen contract runs only against an APPROVED layout baseline.** A contract and its
+  capture pack are both producible in one agent session, so with no frozen third artifact the
+  section would grade a document against captures of that same document and report `pass`. No
+  stamped baseline manifest, no execution.
+- **Sections declare `anchored`**, and the report carries `anchoredSections` /
+  `unanchoredSections`, so "green" and "green against nothing a human froze" are
+  distinguishable without reading prose. Report paths and shas are stamped ONLY when the run
+  actually (re)wrote the per-asset report, so a refused section cannot inherit the previous
+  run's evidence.
+
+Documented limitations of the S1 shape, recorded rather than papered over:
+
+- `runId` on the unified report is CONTEXTUAL, not an enforcement. It records which build was
+  in flight; freshness enforcement (runId match plus the `producedAt` ordering) remains
+  `doneness`'s job, and the stamp exists so the two documents can be cross-checked.
+- The bare-run flag guard scans the `arg === "--x"` parser idiom that `verify.ts` uses today. A
+  parser rewritten to a different idiom (a map, a `startsWith`, a library) would need the scan
+  rewritten with it; the guard carries a LITMUS so a defused scan fails loudly rather than
+  passing over an empty set.
+- `verify.json` carries no self-integrity stamp and cannot: anyone who can edit the project can
+  write one. That is precisely why `doneness` treats it as refuse-only input and never as a
+  source of green.
+
 Not in S1, and unchanged as roadmap items: `--only` selectors, mode-flag deprecation notices,
 and routing the `loombridge_verify` MCP tool through the orchestrator (all S2).
 

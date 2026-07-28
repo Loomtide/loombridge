@@ -79,7 +79,7 @@ import {
   type VisualArtifactsInput,
   type VerifyManifestResult,
 } from "./gates/index.js";
-import type { BuildVerdict, CheckStatus } from "./gates/types.js";
+import type { BuildVerdict, CheckStatus, GateCheck } from "./gates/types.js";
 import { assertValidAcceptanceContract } from "./validator.js";
 import type { AcceptanceContract, SfxVerificationSection } from "./types.js";
 import { validateCueMapSchema, type CueMapSchema } from "../sfx/cue-map.js";
@@ -537,6 +537,52 @@ function captureAbsentCheckIds(gate: string): string[] {
 }
 
 /**
+ * The marker a gate carries when its input was a STAGED PROJECT DOCUMENT rather than a
+ * capture of what the build actually did (H2).
+ *
+ * `asset-manifest.json` is the only input `verify` puts in the inputs dir itself, by
+ * copying `.loombridge/ASSET_MANIFEST.json` there. That copy is the BARE manifest: a
+ * declaration of what the project intends, with no `observedAssets` and therefore no
+ * observation of the game at all. A capture run instead writes the WRAPPED shape
+ * (`{ manifest, observedAssets }`), which is the form that says what was really used.
+ *
+ * Without this distinction the bare copy could carry a whole run: hand-write a bare
+ * `asset-manifest.json` into an otherwise EMPTY inputs dir under an `art: deferred`
+ * contract, and the gate passes on the document alone, so `gradedGates` is non-empty,
+ * the nothing-graded refusal never fires, and STATE flips to a quotable `verified-*`
+ * with zero captures on disk. The gate still RUNS and its verdict still counts toward
+ * Tier-1 status (a declaration that contradicts itself is still a defect); what it must
+ * not do is stand in as the evidence that this run measured the game.
+ */
+const STAGED_DOCUMENT_ACTUAL = "(staged project document, not a capture)";
+
+/** The check id that marker uses, per gate. */
+function stagedDocumentCheckIds(gate: string): string[] {
+  return [`${gate}.staged-document`];
+}
+
+/** The marker check appended to a gate graded from a staged project document. */
+function stagedDocumentCheck(gate: string): GateCheck {
+  return {
+    id: `${gate}.staged-document`,
+    expected: "captured evidence of what the build used (observedAssets)",
+    actual: STAGED_DOCUMENT_ACTUAL,
+    // `not_applicable` so the marker cannot move the gate's own verdict: it records
+    // WHAT the gate read, it does not grade it.
+    status: "not_applicable",
+    detail:
+      "This gate read the staged .loombridge/ASSET_MANIFEST.json (the project's declaration), not a " +
+      "captured observation of the build. The verdict stands, but this gate is NOT evidence that this " +
+      "run measured the game; capture asset usage into --inputs to make it count.",
+  };
+}
+
+/** Append the staged-document marker to a gate report without changing its verdict. */
+function withStagedDocumentMarker(report: GateReport): GateReport {
+  return makeGateReport(report.gate, [...report.checks, stagedDocumentCheck(report.gate)]);
+}
+
+/**
  * Which gates in an ASSEMBLED verdict actually GRADED: an evaluator consumed a
  * real captured input and said something about the game.
  *
@@ -548,12 +594,16 @@ function captureAbsentCheckIds(gate: string): string[] {
  * "a gate graded" are different questions.
  *
  * A gate did NOT grade when it is `not_applicable` (out of stage, unselected by a
- * slice, or declared N/A by the contract) or when it carries the capture-absent
- * marker. Everything else ran a real evaluator, whatever its verdict.
+ * slice, or declared N/A by the contract), when it carries the capture-absent
+ * marker, or when it carries the STAGED-DOCUMENT marker (its input was a project
+ * document `verify` staged itself, never an observation of the build). Everything
+ * else ran a real evaluator over real captured evidence, whatever its verdict.
  *
  * `runVerify` refuses a run where this comes back empty: a verdict that graded
  * nothing is not a pass (RFC UnifiedVerify: "a verify that checked nothing must
- * never exit 0"). Pure + exported so that rule is unit-tested without fixtures.
+ * never exit 0"). Pure + exported so that rule is unit-tested without fixtures: it
+ * reads the assembled report and nothing else, so it cannot disagree with the
+ * verdict it is judging.
  */
 export function gradedGates(verdict: Pick<BuildVerdict, "gates" | "checks">): string[] {
   const graded: string[] = [];
@@ -563,7 +613,12 @@ export function gradedGates(verdict: Pick<BuildVerdict, "gates" | "checks">): st
     const captureAbsent = verdict.checks.some(
       (c) => absentIds.includes(c.id) && c.actual === CAPTURE_ABSENT_ACTUAL,
     );
-    if (!captureAbsent) graded.push(gate);
+    if (captureAbsent) continue;
+    const stagedIds = stagedDocumentCheckIds(gate);
+    const stagedDocument = verdict.checks.some(
+      (c) => stagedIds.includes(c.id) && c.actual === STAGED_DOCUMENT_ACTUAL,
+    );
+    if (!stagedDocument) graded.push(gate);
   }
   return graded;
 }
@@ -792,8 +847,18 @@ export async function runGates(args: {
     assetManifestInput !== null && typeof assetManifestInput === "object" && !Array.isArray(assetManifestInput)
       ? { ...(assetManifestInput as Record<string, unknown>), artDeferred: assetArtDeferred }
       : assetManifestInput;
+  // WRAPPED (`{ manifest, observedAssets }`) is a capture of what the build used; BARE
+  // (the manifest document itself) is the staged project declaration. Same discriminator
+  // the gate's own `manifestCandidate` uses, so the two can never disagree about which
+  // shape they are looking at.
+  const assetSourceIsCapture =
+    assetManifestInput !== null
+    && typeof assetManifestInput === "object"
+    && !Array.isArray(assetManifestInput)
+    && "manifest" in (assetManifestInput as Record<string, unknown>);
   if (assetManifestInput !== null && assetSourceInScope) {
-    reports.push(evaluateAssetSourceFidelity(assetSourceInput));
+    const assetSourceReport = evaluateAssetSourceFidelity(assetSourceInput);
+    reports.push(assetSourceIsCapture ? assetSourceReport : withStagedDocumentMarker(assetSourceReport));
   } else if (assetManifestInput !== null && !isGateInStage(args.stage, assetSourceGate)) {
     reports.push(outOfStageReport(assetSourceGate, args.stage!));
   } else if (assetManifestInput !== null && !isGateSelected(args.selectGates, assetSourceGate)) {

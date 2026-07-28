@@ -398,15 +398,24 @@ test("a DRAFT screen contract is not-runnable and NOT broken; alone it yields no
   }
 });
 
-test("screen-contract baselines: absent is still runnable (drift unenforced); unstamped is a non-anchor; foreign and unreadable are broken", async () => {
+test("screen-contract baselines: an APPROVED one is required to run; unstamped is a non-anchor; foreign and unreadable are broken", async () => {
   const root = await tmpDir("unified-screens-");
   const other = await tmpDir("unified-other-");
   const workspace = await tmpDir("unified-ws-");
   try {
+    // DELIBERATE CHANGE (H1). An earlier cut ran this row anyway, calling the declared
+    // contract "itself a human-authored anchor". It is not one: the contract and the
+    // capture pack are both producible by the same agent in the same session, so with no
+    // frozen third artifact the section grades a document against captures of that
+    // document and reports `pass` with nothing a human ever approved involved. The
+    // baseline manifest is the only artifact on this path that a human's `baseline
+    // approve` had to produce, so its absence is a non-anchor row, never an execution.
     await plantScreenContract(workspace, { id: "sc", baseline: "none" });
     const noBaseline = rowFor((await discoverVerificationAssets({ root, workspace })).assets, "screen-contract");
-    assert.equal(noBaseline.runnable, "offline", "the declared contract is itself a human-authored anchor");
-    assert.ok(noBaseline.reason?.includes("drift is not enforced"), noBaseline.reason);
+    assert.equal(noBaseline.runnable, "no", "no approved layout baseline means no execution");
+    assert.equal(noBaseline.notRunClass, "non-anchor");
+    assert.equal(noBaseline.broken, undefined, "an absent baseline is missing provenance, not tampering");
+    assert.ok(noBaseline.reason?.includes("minigame baseline approve"), noBaseline.reason);
 
     await plantScreenContract(workspace, { id: "sc", baseline: "unstamped" });
     const unstamped = rowFor((await discoverVerificationAssets({ root, workspace })).assets, "screen-contract");
