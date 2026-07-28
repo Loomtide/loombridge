@@ -139,6 +139,27 @@ test("feel snapshot approve: --tolerances overriding an unknown metric is a usag
   assert.equal(manifest?.tolerancePolicy.perMetric?.runSpeed.abs, 0.5);
 });
 
+test("feel snapshot approve: a --tolerances file with unrecognized top-level keys is REFUSED, never silently defaulted", async () => {
+  // Live KnightsQuest incident: a flat metric map (missing the "perMetric" wrapper) parsed
+  // to zero recognized keys, so approve froze a manifest with pure-default tolerances while
+  // the operator believed their per-metric overrides were in force. The next verify then
+  // graded the noisy metrics at the tight defaults. Unknown keys must refuse (exit 2), and
+  // nothing may be frozen by the refused approve.
+  const { root, ws } = await scaffold();
+  await stageCandidate(ws, "feel.json");
+  const flat = path.join(ws, "flat-tol.json");
+  await fs.writeFile(flat, JSON.stringify({ runSpeed: { abs: 0.5 } }), "utf-8");
+  assert.equal(await runFeelCli(["snapshot", "approve", "--root", root, "--workspace", ws, "--tolerances", flat]), 2);
+  assert.equal(await loadSnapshotManifest(feelPaths(ws).snapshotCurrentDir), null, "refused approve must freeze nothing");
+
+  // LITMUS twin: the SAME overrides under the correct wrapper freeze fine.
+  const wrapped = path.join(ws, "wrapped-tol.json");
+  await fs.writeFile(wrapped, JSON.stringify({ perMetric: { runSpeed: { abs: 0.5 } } }), "utf-8");
+  assert.equal(await runFeelCli(["snapshot", "approve", "--root", root, "--workspace", ws, "--tolerances", wrapped]), 0);
+  const manifest = await loadSnapshotManifest(feelPaths(ws).snapshotCurrentDir);
+  assert.equal(manifest?.tolerancePolicy.perMetric?.runSpeed.abs, 0.5);
+});
+
 test("feel snapshot approve: a hand-edited candidate-report cannot launder an approve (cleanliness is recomputed)", async () => {
   const { root, ws } = await scaffold();
   await stageCandidate(ws, "feel-tampered.json");
