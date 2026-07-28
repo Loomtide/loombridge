@@ -167,6 +167,14 @@ namespace UnityBridge.Introspection
             string reason = ResolveVisibilityReason(go, graphic, offScreen);
             entry["isVisible"] = reason == null;
             entry["visibilityReason"] = reason == null ? (JToken)JValue.CreateNull() : reason;
+            // The uGUI hit-target pattern: an element whose OWN Graphic is invisible (alpha-0 or
+            // disabled Image, raycastTarget on) with the visible art on child objects. The CONTROL
+            // is visible to the player even though its own Graphic is not, and a replay anchor
+            // waiting on the handler target needs that distinction. `isVisible` must NOT soften
+            // (verify gates read it), so this is a separate additive field, emitted only for the
+            // two own-graphic failure reasons where the pattern applies.
+            if (reason == "graphic-transparent" || reason == "graphic-disabled")
+                entry["descendantVisible"] = AnyDescendantGraphicVisible(go);
             return entry;
         }
 
@@ -199,6 +207,35 @@ namespace UnityBridge.Introspection
 
             if (offScreen) return "off-screen";
             return null;
+        }
+
+        /// <summary>
+        /// True when any ACTIVE descendant Graphic under an invisible-own-graphic element actually
+        /// renders: enabled, alpha above zero, and no zero-alpha CanvasGroup between it and this
+        /// element. The caller has already proven the element itself is active, on an enabled
+        /// canvas, and not hidden by an ancestor CanvasGroup (its own-graphic check is what
+        /// failed), so only the subtree below it needs checking here.
+        /// </summary>
+        private static bool AnyDescendantGraphicVisible(GameObject go)
+        {
+            foreach (Graphic g in go.GetComponentsInChildren<Graphic>(false))
+            {
+                if (g.gameObject == go) continue;
+                if (!g.enabled || g.color.a <= 0f) continue;
+                float alpha = 1f;
+                for (Transform t = g.transform; t != null && t.gameObject != go; t = t.parent)
+                {
+                    CanvasGroup grp = t.GetComponent<CanvasGroup>();
+                    if (grp != null)
+                    {
+                        alpha *= grp.alpha;
+                        if (grp.ignoreParentGroups) break;
+                    }
+                }
+                if (alpha <= 0f) continue;
+                return true;
+            }
+            return false;
         }
 
         // ─────────────────────────────────────────────

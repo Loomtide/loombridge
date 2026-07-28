@@ -147,6 +147,7 @@ test("stepArgv: each executable step's argv matches the resolver's intent (absol
   const f = facts({ workspace: "/ws/g", id: "g", scene: "Assets/Scenes/G.unity" });
   assert.deepEqual(stepArgv("record", f), [
     "trace", "record", "--observe", "--flat", "--id", "g-happy-path", "--scene", "Assets/Scenes/G.unity", "--root", "/ws/g",
+    "--auto-state-signal",
   ]);
   assert.deepEqual(stepArgv("capture", f), [
     "minigame", "capture", "--contract", "/ws/g/g.minigame.json", "--trace-root", "/ws/g", "--captures", "/ws/g/captures",
@@ -173,8 +174,9 @@ test("stepArgv (Phase 0): --record-scene resets the RECORD to a different scene 
 });
 
 test("stepArgv: the record step threads --state-signal when the contract declares/auto-detected one", () => {
-  // Without a stateSignal → no flag (covered above). With one → the chained record phase-aligns the
-  // gestures exactly like the `minigame next` record command does.
+  // Without a stateSignal → --auto-state-signal fallback (covered above: live per-scene detection,
+  // so a hub-to-game recording still gets phase gates). With one → the chained record phase-aligns
+  // the gestures exactly like the `minigame next` record command does, and the auto flag is absent.
   const withSig = facts({ workspace: "/ws/g", id: "g", scene: "Assets/Scenes/G.unity", stateSignal: { locator: "/Canvas/GM", component: "GM", property: "phase" } });
   assert.deepEqual(stepArgv("record", withSig), [
     "trace", "record", "--observe", "--flat", "--id", "g-happy-path", "--scene", "Assets/Scenes/G.unity", "--root", "/ws/g",

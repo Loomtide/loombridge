@@ -94,9 +94,12 @@ function commandsFor(f: WorkspaceFacts): Record<Exclude<NextStepAt, "done">, str
   // A declared stateSignal phase-aligns each recorded gesture (required for multi-screen/gesture
   // games). The CLI's --state-signal parses `<path>:<Component>:<property>` on `:`, so the locator
   // is bare (no scene prefix / no `:`, enforced by the validator); an absent component → `path::property`.
+  // With NO declared signal, fall back to live per-scene auto-detection: the scan only sees the
+  // scanned scene, so a hub-to-game recording would otherwise carry no phase gates and capture
+  // races activation animations ("visible" is not "consumable").
   const stateSignalFlag = f.stateSignal
     ? ` --state-signal ${f.stateSignal.locator}:${f.stateSignal.component ?? ""}:${f.stateSignal.property}`
-    : "";
+    : " --auto-state-signal";
   return {
     record: `loombridge trace record --observe --flat --id ${traceId} --scene ${f.scene} --root ${ws}${stateSignalFlag}`,
     capture: `loombridge minigame capture --contract ${contract} --trace-root ${ws} --captures ${captures}`,
@@ -114,14 +117,15 @@ function commandsFor(f: WorkspaceFacts): Record<Exclude<NextStepAt, "done">, str
 export function resolveNextStep(f: WorkspaceFacts): NextStep {
   const cmd = commandsFor(f);
   if (!f.traceRecorded) {
-    // When the contract declares no stateSignal, the printed record command can't phase-align
-    // gestures — fine for a single-screen game, but a multi-screen/gesture game needs one or
-    // capture is silently degraded. Nudge the dev to declare it (terse, one line).
+    // When the contract declares no stateSignal, the printed record command auto-detects one
+    // per scene at record time (--auto-state-signal). Still nudge the dev: an explicit declared
+    // signal beats the heuristic when the game has one worth naming.
     const summary = f.stateSignal
       ? "Record your happy path: play it in Unity (up to the active screen), then press Enter."
       : 'Record your happy path: play it in Unity (up to the active screen), then press Enter. ' +
-        'Multi-screen/gesture game? Declare a "stateSignal" in the contract so capture can phase-align, ' +
-        'e.g. "stateSignal": { "locator": "/Canvas/GameManager", "component": "GameManager", "property": "phase" }.';
+        "The recorder will AUTO-DETECT each scene's state signal to phase-align gestures; a game " +
+        'with a known phase field can declare it explicitly instead, e.g. "stateSignal": ' +
+        '{ "locator": "/Canvas/GameManager", "component": "GameManager", "property": "phase" }.';
     return { at: "record", summary, command: cmd.record };
   }
   if (!f.capturesPresent) {

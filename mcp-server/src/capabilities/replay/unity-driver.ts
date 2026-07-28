@@ -684,6 +684,20 @@ export class UnityDriver implements ReplayDriver {
         : typeof obj.visibilityReason === "string"
           ? obj.visibilityReason
           : undefined;
+    // The uGUI hit-target pattern: a handler target whose OWN Image is alpha-0 (or
+    // disabled) with the visible art on child objects. The recorder anchors on the
+    // handler target, so a strict own-graphic rule fails an anchor the player can
+    // plainly see and tap (live case: KidsAdventure's hub tiles). The bridge reports
+    // `descendantVisible` for exactly these two reasons; accept it as anchor-visible.
+    // Every other failure (inactive, canvas-disabled, off-screen, zero-size, and
+    // transparent WITHOUT visible child art) stays a refusal.
+    if (
+      obj.isVisible !== true &&
+      (reason === "graphic-transparent" || reason === "graphic-disabled") &&
+      obj.descendantVisible === true
+    ) {
+      return { isVisible: true };
+    }
     return { isVisible: obj.isVisible === true, reason };
   }
 

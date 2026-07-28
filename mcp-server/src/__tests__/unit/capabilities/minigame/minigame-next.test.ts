@@ -82,7 +82,7 @@ test("resolveNextStep: a STALE verify (captures newer than the report) → re-ve
 
 test("resolveNextStep: each non-done step is a runnable command; done is empty", () => {
   const record = resolveNextStep(base);
-  assert.match(record.command, /^loombridge trace record .*--root \/ws$/);
+  assert.match(record.command, /^loombridge trace record .*--root \/ws --auto-state-signal$/);
   assert.equal(resolveNextStep({ ...reached, verify: { status: "READY", stale: false }, baselineApproved: true }).command, "");
 });
 
@@ -92,20 +92,25 @@ test("formatNextStep: '👉 Next — <summary>' then the command", () => {
   assert.match(lines[1], /loombridge trace record/);
 });
 
-test("resolveNextStep (G1): a declared stateSignal is threaded into the record command; absent → omitted + a note", () => {
-  // Absent: the record command omits the flag, and the summary nudges the dev to declare one.
+test("resolveNextStep (G1): a declared stateSignal is threaded into the record command; absent → auto-detect + a note", () => {
+  // Absent: the record command falls back to live per-scene auto-detection (a hub-to-game
+  // recording would otherwise carry no phase gates and capture races activation animations),
+  // and the summary says the recorder will auto-detect while still nudging an explicit signal.
   const without = resolveNextStep(base);
   assert.equal(without.at, "record");
-  assert.doesNotMatch(without.command, /--state-signal/);
+  assert.doesNotMatch(without.command, / --state-signal/);
+  assert.match(without.command, / --auto-state-signal$/);
+  assert.match(without.summary, /AUTO-DETECT/);
   assert.match(without.summary, /stateSignal/);
   assert.match(without.summary, /phase-align/);
 
-  // Present (component set): `--state-signal <locator>:<component>:<property>`, NO note.
+  // Present (component set): `--state-signal <locator>:<component>:<property>`, NO auto flag.
   const withSig = resolveNextStep({
     ...base,
     stateSignal: { locator: "/Canvas/GameManager", component: "GameManager", property: "phase" },
   });
   assert.match(withSig.command, /--state-signal \/Canvas\/GameManager:GameManager:phase$/);
+  assert.doesNotMatch(withSig.command, /--auto-state-signal/);
   assert.doesNotMatch(withSig.summary, /stateSignal/);
 
   // The short `a:b:c` shape used by the task spec.
@@ -152,7 +157,8 @@ test("nextStepLinesFor (G6): the shared footer used by check/scan matches `minig
     );
     const joined = (await nextStepLinesFor(noSig)).join("\n");
     assert.match(joined, /loombridge trace record --observe/);
-    assert.doesNotMatch(joined, /--state-signal/);
+    assert.doesNotMatch(joined, / --state-signal/);
+    assert.match(joined, /--auto-state-signal/);
     assert.match(joined, /stateSignal/);
   } finally {
     await fs.rm(noSig, { recursive: true, force: true });

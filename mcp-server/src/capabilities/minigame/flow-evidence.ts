@@ -68,9 +68,28 @@ export interface FlowTransitionEvidence {
   console?: { errorCount?: number };
 }
 
+/**
+ * A trailing run of DEAD dispatches on the base drive: from `target` onward, every
+ * ui dispatch reported `actuated: false`, so the game most likely stopped consuming
+ * input there (the usual cause: a gesture racing the game's phase gate or an
+ * activation animation). Informational for humans/agents; the deterministic flow
+ * gate still grades each declared transition from its own actuation evidence.
+ */
+export interface FlowStall {
+  /** The first dispatch of the trailing dead run (its acted-on element). */
+  target?: string;
+  kind?: "tap" | "drag";
+  /** Consecutive trailing dispatches with actuated never true. */
+  deadCount: number;
+  /** Total base-drive ui dispatches, for scale. */
+  totalDispatches: number;
+}
+
 export interface FlowEvidence {
   schemaVersion?: string;
   transitions: FlowTransitionEvidence[];
+  /** Present when the base drive ended in a run of dead dispatches (see FlowStall). */
+  stall?: FlowStall;
 }
 
 export const FLOW_EVIDENCE_FILE = "flow.json";
@@ -92,5 +111,9 @@ export async function loadFlowEvidence(captureDir: string): Promise<FlowEvidence
   return {
     schemaVersion: typeof parsed.schemaVersion === "string" ? parsed.schemaVersion : undefined,
     transitions: Array.isArray(parsed.transitions) ? parsed.transitions : [],
+    stall:
+      parsed.stall && typeof parsed.stall === "object" && typeof parsed.stall.deadCount === "number"
+        ? parsed.stall
+        : undefined,
   };
 }

@@ -98,7 +98,7 @@ function fakeDriver(
 }
 
 function freshAcc(): DriveAccumulators {
-  return { rawByState: new Map(), consoleByState: new Map(), captured: [], notReached: [], partial: [], transitions: [] };
+  return { rawByState: new Map(), consoleByState: new Map(), captured: [], notReached: [], partial: [], transitions: [], dispatches: [] };
 }
 
 async function tmpDir(): Promise<string> {

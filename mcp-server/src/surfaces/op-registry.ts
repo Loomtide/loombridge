@@ -2341,7 +2341,9 @@ function buildOps(): OpDef[] {
       "screenRect{x,y,width,height} (pixels, origin bottom-left), viewportRect{...} (normalized 0..1), " +
       "active, isVisible + visibilityReason (inactive | canvas-disabled | canvasgroup-alpha-zero | " +
       "graphic-disabled | graphic-transparent | no-canvas | no-camera | no-rect-transform | off-screen), " +
-      "isFullyVisible/isPartiallyClipped/" +
+      "descendantVisible (only on graphic-disabled/graphic-transparent entries: true when active child " +
+      "art renders, i.e. the invisible-hit-target pattern where the CONTROL is visible but its own " +
+      "Graphic is not), isFullyVisible/isPartiallyClipped/" +
       "isOffScreen/clipSide, centerXFraction/centerYFraction, raycastTarget, role (button|text|image|rawimage|" +
       "graphic|container), canvasRenderMode/canvasLocator, plus identity extras (text/fontSize, spriteName, " +
       "interactable). Pixel→dp conversion for tap-target floors is the gate layer's job; this op returns pixel " +
