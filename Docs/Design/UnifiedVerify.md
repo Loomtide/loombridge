@@ -7,8 +7,15 @@ snapshot), which is where the fragmentation cost was measured first-hand.
 
 ## Thesis
 
-The pitch is one sentence: **Loombridge lets any agent build and verify Unity games, against
-ground truth a human approved once.** Two workflows hang from it:
+Positioning ([Positioning.md](Positioning.md)) fixes the frame this RFC works inside:
+provable doneness is the product, and the story has exactly **two doors**. `plan` is the
+door for a new game (the supervised build loop, with `doneness` as its strict certificate).
+`verify` is the door for an existing game: **you play once and approve once; your agent
+gets `verify` forever after.** This RFC is the program of record for making that second
+door one door, and in doing so it is the simplification program for the whole verify
+surface.
+
+Two workflows hang from the doors:
 
 - **Build**: bridge + MCP tools + commands/skills. Agents construct in-engine.
 - **Verify**: deterministic gates agents run locally and in CI, anchored to human-approved
@@ -19,7 +26,9 @@ The named third element is the **human approval surface**: a human approves grou
 (a design target, a trace baseline, a feel snapshot, a screen contract), and every later
 verdict is a deterministic comparison against that anchor. Without this anchor, "agents build
 and verify" reads as agents grading their own homework, which is the exact failure mode the
-product exists to kill.
+product exists to kill. The actors are deliberate and split: the approval steps (play,
+look, approve) are HUMAN steps and cannot be delegated to an agent; everything downstream
+of an approval is deterministic and belongs to agents and CI.
 
 Today the verify workflow does not look like one workflow. It looks like four:
 
@@ -57,6 +66,15 @@ plus the recipe to re-measure the live game against it:
 | screen contract | declared screens/objects/flow + approved layout baseline | capture pack + gates | `minigame/` |
 | acceptance contract | contract + design target | Tier-1 gate suite | `verification/` |
 
+This table is a CLOSED inventory: discovery walks exactly these kinds, and adding a kind is
+an RFC-level change, never a quiet case in a switch. One addition is reserved now: **test
+results** (Unity Test Runner EditMode/PlayMode output, bound to the run that produced it)
+lands as the FIRST new asset kind, which is how the roadmap's Test Runner gate arrives as a
+provider in this report instead of a sixth standalone mode. Deliberately NOT assets:
+`sfx/` (its probe contract and latency checks are gate inputs inside other assets, not an
+anchor a human approves) and `scenario/` (a step runner, machinery rather than a frozen
+anchor); if either ever grows a human-approved baseline, it enters through this table.
+
 `loombridge verify`, bare, becomes an orchestrator:
 
 1. **Discover** the project's assets DETERMINISTICALLY, from the workspace and `.loombridge/`
@@ -73,8 +91,12 @@ plus the recipe to re-measure the live game against it:
 **The empty-project behavior is the on-ramp, not usage soup.** `verify` with no assets prints
 the two-command path to the cheapest universal asset: `trace record --observe` (play it once),
 then approve. A recorded demonstration + baseline works for ANY game with input, needs no
-contract authoring, and gives an agent real regression protection minutes after install. This
-is the default entry for "agents verifying whatever they build."
+contract authoring, and gives real regression protection minutes after install. The on-ramp
+names its actors honestly: the recording session is a HUMAN playing the game (that play
+session IS the approval moment, the single human anchor everything hangs from), and the
+agent's entry point is the step after it, running `verify` against what was approved. The
+on-ramp text an agent sees must therefore say "ask your human to record a demonstration",
+never instruct the agent to perform a step it structurally cannot.
 
 ## What existing surfaces become
 
@@ -147,5 +169,9 @@ consumer project.
    per-asset reports, or replacing them? Leaning alongside (per-asset reports are consumed by
    existing tooling).
 3. Does bare `verify` run LIVE assets (feel snapshot, screen capture) by default in a local
-   run, or require `--live` the way doctor does? Leaning run-by-default locally with the plan
-   printed, and a `--offline` escape for CI stages that only grade existing artifacts.
+   run, or require `--live` the way doctor does? Leaning `--live` opt-in, matching doctor's
+   precedent: the ratchet door's dominant runtime is CI, and live-by-default would make the
+   least specific, most-typed command the one most likely to hit the post-reload stall
+   family (the least recoverable failure mode we have). Printing the plan first does not
+   mitigate that, because the plan prints and then runs anyway. The fresh-project
+   "verify looks useless" concern is already answered by the on-ramp text.

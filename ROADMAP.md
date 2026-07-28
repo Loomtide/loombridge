@@ -1,8 +1,15 @@
 # Loombridge Roadmap
 
-**Loombridge lets any agent build and verify Unity games, against ground truth a human
-approved once.** Agents build through the bridge; the deterministic CLI verifies against
-human-approved anchors; humans stay the arbiter of "good", exactly once per anchor.
+**Loombridge is the open agent layer for Unity: agents see, control, and build through a
+typed MCP bridge, and a deterministic CLI proves the result against ground truth a human
+approved once.** Two capabilities, one invariant: the hands (bridge + MCP), the judge
+(anchors + gates + `doneness`), and the rule that a self-graded "done" is refused.
+Positioning, the razor every item below passed, and the surface tiers:
+[Docs/Design/Positioning.md](Docs/Design/Positioning.md).
+
+Every item on this page serves one of two doors: **`plan`** (new game, the supervised build
+loop) or **`verify`** (existing game, the record-once ratchet). An item that serves neither
+does not belong here.
 
 This roadmap states direction, not dates. Loombridge is pre-1.0: surfaces can still be
 renamed (with deprecation aliases), and the sequencing below can be reshuffled by what
@@ -19,23 +26,30 @@ Two constraints bind everything on this page:
   re-derivable evidence. Harness faults exit in their own tier (2), never as a pass, never
   as a game bug.
 
-## Now (in progress or next up)
+## Now (in progress or next up, in this order)
 
-- **Unified verify front door.** One bare `loombridge verify` that discovers a project's
-  verification assets (demonstration, pixel baseline, feel snapshot, screen contract,
-  acceptance contract), prints its plan, runs everything into one report, and exits by worst
-  tier. Empty projects get a two-command on-ramp (record a demonstration, approve it) instead
-  of usage text. Design: [Docs/Design/UnifiedVerify.md](Docs/Design/UnifiedVerify.md).
-- **Unity Test Runner as a bound gate.** EditMode/PlayMode results consumed as a
-  deterministic gate bound to the run that produced them. The single biggest table-stakes gap
-  against the wider ecosystem.
-- **CI robustness for verification.** The headless story: surviving domain reloads, first
-  import indexing, and unfocused editors without a human clicking a window. Includes the
-  documented post-reload stall recovery and forced `runInBackground` paths.
-- **N-capture averaging for feel snapshots.** Some metrics are single-capture-noisy
-  (tail-of-trajectory derivations measured 2x spreads on real games). The manifest already
-  reserves `captureRuns`; capture N times, freeze the aggregate, and surface per-metric
-  stability at approve time.
+The order is a dependency chain, not a preference ranking. The unified front door lands
+first so that every later gate arrives as a provider inside one report, never as another
+top-level mode; that collapse is the simplification program for the whole verify surface.
+
+1. **Unified verify front door.** One bare `loombridge verify` that discovers a project's
+   verification assets (demonstration, pixel baseline, feel snapshot, screen contract,
+   acceptance contract), prints its plan, runs everything into one report, and exits by worst
+   tier. Empty projects get a two-command on-ramp (record a demonstration, approve it) instead
+   of usage text. Design: [Docs/Design/UnifiedVerify.md](Docs/Design/UnifiedVerify.md).
+2. **Unity Test Runner as a bound gate.** EditMode/PlayMode results consumed as a
+   deterministic gate bound to the run that produced them. The single biggest table-stakes gap
+   against the wider ecosystem. Sequenced after the front door on purpose: it ships as the
+   first new asset kind in the unified report (a proof of the row shape), not as a sixth
+   standalone mode.
+3. **CI robustness for verification.** The headless story: surviving domain reloads, first
+   import indexing, and unfocused editors without a human clicking a window. Includes the
+   documented post-reload stall recovery and forced `runInBackground` paths. Underpins both
+   items above; lands incrementally alongside them.
+4. **N-capture averaging for feel snapshots.** Some metrics are single-capture-noisy
+   (tail-of-trajectory derivations measured 2x spreads on real games). The manifest already
+   reserves `captureRuns`; capture N times, freeze the aggregate, and surface per-metric
+   stability at approve time. Independent of the chain above.
 
 ## Next
 
@@ -49,6 +63,12 @@ Two constraints bind everything on this page:
   contract it already is; `minigame` verbs remain as aliases.
 - **Snapshot hardening.** Refuse freezing a provenance-less baseline (all-`reported`,
   hand-typed measurements) without an explicit acknowledgement flag.
+- **Spec compilation hardening.** The design-doc path: `plan --brief` and `adopt` compile a
+  design document into a proposed contract the human approves as its faithful rendering;
+  the implementation is then verified against that contract, deterministically. The
+  machinery ships; what it needs is live validation on a real already-built game and a
+  first-class guide, because `adopt` is the conversion path from the `verify` door into the
+  build loop.
 - **Custom feel profiles.** Load a profile from a file, not only the shipped archetypes;
   profiles stay diagnostic (placement and grading), with gating owned by the snapshot.
 

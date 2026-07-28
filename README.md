@@ -107,15 +107,26 @@ bash ../scripts/loombridge-pack-bridge.sh # pack the bridge tarball install-brid
 ```
 </details>
 
-## Pick your entry path
+## Two doors in
+
+| Your situation | The door | What happens |
+|---|---|---|
+| **New game**, built by an agent | `loombridge plan` | Contract and hero shot are frozen before the first line of code; the agent builds slice by slice against a target it cannot redefine; `doneness` certifies with run-bound evidence. |
+| **Existing game**, about to let an agent in | `loombridge trace record --observe` | You play once and approve once. From then on, `loombridge verify` checks every agent change against what you approved: replay, pixel drift, feel drift. |
+
+The split of labor is the point: **a human plays and approves exactly once; the agent gets
+`verify` forever after.** Full positioning: [`Docs/Design/Positioning.md`](Docs/Design/Positioning.md).
+
+<details>
+<summary>Advanced entry points</summary>
 
 | I want to... | Start with | Needs |
 |---|---|---|
-| Build a new game with an agent, verified slice by slice | `loombridge plan` | Unity project + MCP client |
 | Feel-grade a 2D platformer I already have | `loombridge verify --profile precision\|classic\|momentum` | Just the project; no contract, no mutation ([guide](Docs/Profiles/VerifyFirstEntry.md)) |
 | Lock my game's feel and catch tuning drift in CI | `loombridge feel snapshot` then `verify --snapshot` | A reviewed capture contract; a human approves the baseline once ([guide](Docs/Profiles/TuningSnapshotVerification.md)) |
 | Release-verify a 2D mini-game in CI | `loombridge verify --minigame` | A recorded trace + capture pack, frozen `0/1/2` exit contract ([quickstart](Docs/Profiles/MiniGameVerifyQuickstart.md) · [CI guide](Docs/Profiles/MiniGameVerifyCI.md)) |
 | Adopt an already-built project into the contract | `loombridge adopt` | The project + its design docs (proposes a contract, never green on its own) |
+</details>
 
 ## The verification flow
 
@@ -285,6 +296,9 @@ drift the way `trace` catches pixel drift). Some things are permanent non-goals,
 - **No cloud requirement.** The core CLI and bridge run fully local. The hosted asset
   catalog is an optional, read-only convenience, never a dependency for
   plan/build/verify/doneness.
+- **Not a game factory.** Loombridge carries no opinion about what a good game is. It is
+  the machinery for stating yours once (a human approval) and enforcing it forever (a
+  deterministic gate). See [`Docs/Design/Positioning.md`](Docs/Design/Positioning.md).
 
 ## Asset catalog (optional)
 
