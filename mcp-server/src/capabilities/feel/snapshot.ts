@@ -256,6 +256,20 @@ async function readTolerances(
   if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
     return { error: "--tolerances must be a JSON object" };
   }
+  // Refuse-on-unknown, not silently-default: a fat-fingered schema (the live case: a flat
+  // metric map without the "perMetric" wrapper) would otherwise parse to zero recognized
+  // keys and FREEZE a lockfile with pure-default tolerances while the operator believes
+  // their overrides are in force. Wrong tolerances in a frozen manifest are a wrong gate.
+  const KNOWN_TOLERANCE_KEYS = new Set(["defaultRelPct", "defaultAbsFloorByDerivation", "perMetric"]);
+  const unknownKeys = Object.keys(raw).filter((k) => !KNOWN_TOLERANCE_KEYS.has(k));
+  if (unknownKeys.length > 0) {
+    return {
+      error:
+        `--tolerances has unrecognized top-level key(s): ${unknownKeys.join(", ")}. ` +
+        'Expected { defaultRelPct?, defaultAbsFloorByDerivation?, perMetric? }; per-metric ' +
+        'overrides go under "perMetric", e.g. {"perMetric":{"jumpApex":{"abs":0.1}}}.',
+    };
+  }
   const doc = raw as {
     defaultRelPct?: unknown;
     defaultAbsFloorByDerivation?: unknown;
