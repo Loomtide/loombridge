@@ -49,15 +49,20 @@ export function unifiedScreensReportPath(reportsDir: string): string {
   return path.join(reportsDir, UNIFIED_SCREENS_REPORT);
 }
 
-/** One section per asset family. `flow` covers trace replay (actuation + pixels). */
-export type UnifiedSectionName = "contract" | "flow" | "feel" | "screens";
+/**
+ * One section per asset family. `flow` covers trace replay (actuation + pixels); `tests`
+ * grades a stamped Unity EditMode run offline.
+ */
+export type UnifiedSectionName = "contract" | "flow" | "feel" | "screens" | "tests";
 
 /**
  * The run's overall word.
  *
- * - `pass`            everything discovered executed, and every execution passed.
+ * - `pass`            everything discovered executed, every execution passed, AND every
+ *                     executed section compared a frozen human-approved anchor (G1).
  * - `partial`         everything that executed passed, but something discovered did
- *                     NOT execute. Honest about coverage instead of rounding up.
+ *                     NOT execute, or something that executed was measured against no
+ *                     human approval. Honest about coverage instead of rounding up.
  * - `fail`            an executed check found a game defect.
  * - `harness-fault`   an executed check could not be trusted (capture gap, broken
  *                     asset). Never reported as a game defect.
@@ -214,12 +219,25 @@ function notRunTier(why: NotRunReason): number {
  *
  * Truth table (executed = sections that actually ran):
  *
- *   executed empty                            -> nothing-checked, 2
- *   any executed tier 2                       -> harness-fault,   2
- *   any executed tier 1 (no 2)                -> fail,            1
- *   all executed 0, notRun empty              -> pass,            0
- *   all executed 0, notRun all live-only      -> partial,         0
- *   all executed 0, notRun has any other      -> partial,         2
+ *   executed empty                                       -> nothing-checked, 2
+ *   any executed tier 2                                  -> harness-fault,   2
+ *   any executed tier 1 (no 2)                           -> fail,            1
+ *   all 0, notRun empty, every section anchored          -> pass,            0
+ *   all 0, notRun empty, any section UNANCHORED          -> partial,         0
+ *   all 0, notRun all live-only                          -> partial,         0
+ *   all 0, notRun has any other                          -> partial,         2
+ *
+ * G1: `pass` REQUIRES EVERY EXECUTED SECTION TO BE ANCHORED, and the rule is general
+ * rather than a special case for one kind. A contract graded with no approved design
+ * target, a stamped test run (which has no human-approve step at all, and never will),
+ * a screens section whose baseline comparison did not happen: each is a real, green,
+ * deterministic result measured against nothing a human ever froze, and the product's
+ * whole claim is that a "done" verdict is anchored to a human approval. Printing the same
+ * word for both readings is how "agents grade their own homework" comes back in through
+ * the roll-up. The EXIT is unchanged (a green all-green run with no unmeasured anchor
+ * still exits 0): this narrows what may be called a pass, it does not invent a failure.
+ * `anchored` is REQUIRED on every entry rather than optional-with-a-default, so a caller
+ * that forgets it fails to compile instead of silently claiming an anchor.
  *
  * A FOUND GAME DEFECT KEEPS EXIT 1, whatever else went unmeasured. The earlier cut
  * raised it to 2 whenever an anchor could not be measured, which quietly broke the
@@ -233,7 +251,7 @@ function notRunTier(why: NotRunReason): number {
  * allowed to keep the exit at 0.
  */
 export function resolveUnifiedOutcome(input: {
-  executed: readonly { section: UnifiedSectionName; exit: number }[];
+  executed: readonly { section: UnifiedSectionName; exit: number; anchored: boolean }[];
   notRun: readonly UnifiedNotRun[];
 }): { status: UnifiedVerifyStatus; exit: number } {
   if (input.executed.length === 0) return { status: "nothing-checked", exit: 2 };
@@ -241,7 +259,12 @@ export function resolveUnifiedOutcome(input: {
   const executedExit = worstExitTier(input.executed.map((e) => e.exit));
   if (executedExit === 2) return { status: "harness-fault", exit: 2 };
   if (executedExit === 1) return { status: "fail", exit: 1 };
-  if (input.notRun.length === 0) return { status: "pass", exit: 0 };
+
+  // G1. Read as a positive requirement, never as "skip the check when the field is absent":
+  // the field is required by the type, and a `false` is what a section that compared nothing
+  // frozen is obliged to report.
+  const allAnchored = input.executed.every((e) => e.anchored);
+  if (input.notRun.length === 0 && allAnchored) return { status: "pass", exit: 0 };
   const notRunExit = worstExitTier(input.notRun.map((n) => notRunTier(n.why)));
   return { status: "partial", exit: notRunExit };
 }

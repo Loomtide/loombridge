@@ -79,6 +79,45 @@ jobs:
           testMode: EditMode
           artifactsPath: unity-test-results/${{ matrix.label }}
 
+      # G10. The GameCI action reports its own pass/fail, but nothing in this workflow ever
+      # read the NUnit3 XML with the SAME mapping `loombridge` uses, so the CLI's verdict and
+      # CI's could diverge silently. These three steps close that: the grade step runs the
+      # real `tests grade` over whatever XML landed, so a shape the CLI refuses (a skipped
+      # fixture, a cancelled run, zero cases) fails the job here too.
+      #
+      # `if: always()` on each: a red suite still exits GameCI non-zero, and the grading of
+      # WHY it was red is exactly what must not be skipped when that happens. The job stays
+      # inside the license gate, so a fork without UNITY_LICENSE never reaches these steps.
+      - name: Set up Node for grading
+        if: always()
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Build the loombridge CLI
+        if: always()
+        working-directory: mcp-server
+        run: |
+          npm ci
+          npm run build
+
+      - name: Grade Unity test results
+        if: always()
+        run: |
+          shopt -s nullglob
+          files=(unity-test-results/${{ matrix.label }}/*.xml)
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "No NUnit3 result XML was produced; a run that checked nothing is not a pass."
+            exit 2
+          fi
+          status=0
+          for f in "${files[@]}"; do
+            echo "::group::loombridge tests grade $f"
+            node mcp-server/dist/surfaces/cli.js tests grade --results "$f" || status=$?
+            echo "::endgroup::"
+          done
+          exit $status
+
       - name: Upload Unity test artifacts
         if: always()
         uses: actions/upload-artifact@v4

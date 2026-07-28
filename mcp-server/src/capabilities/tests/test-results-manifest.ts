@@ -30,15 +30,16 @@ import { createHash } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 
-import { LOOMBRIDGE_DIRNAME } from "../../domain/state.js";
+import { TEST_RESULTS_DIRNAME, loombridgePaths } from "../../domain/state.js";
 import type { TestsSummary } from "./nunit-parse.js";
 
 /**
- * The `.loombridge/` subdirectory the stamped pair lives in. ONE constant: the writer
- * here, the `LoombridgePaths` slot, and every reader resolve the name from it. A declared
- * path that two modules spell independently is a path nothing walks (CLAUDE.md).
+ * The `.loombridge/` subdirectory the stamped pair lives in. ONE constant, and it lives in
+ * `domain/state.ts` because `LoombridgePaths` needs it too and the layering forbids domain
+ * importing a capability. Re-exported here so a reader of this module still finds the whole
+ * path vocabulary in one place, without a second spelling existing anywhere.
  */
-export const TEST_RESULTS_DIRNAME = "tests";
+export { TEST_RESULTS_DIRNAME };
 
 /** The NUnit3 result document Unity's `-testResults` writes. */
 export const TEST_RESULTS_FILE = "test-results.xml";
@@ -49,9 +50,15 @@ export const TEST_RESULTS_MANIFEST = "test-results-manifest.json";
 /** The Unity editor log for the run (`-logFile`), kept as the compile-error evidence. */
 export const TEST_RUN_LOG_FILE = "test-run.log";
 
-/** `<root>/.loombridge/tests/`: the committed slot holding the stamped pair plus the log. */
+/**
+ * `<root>/.loombridge/tests/`: the committed slot holding the stamped pair plus the log.
+ *
+ * DELEGATES to `loombridgePaths` rather than re-joining the segments, so the producer here
+ * and the `LoombridgePaths.tests` slot the unified door reads are the SAME derivation, not
+ * two that happen to agree today.
+ */
 export function testResultsDir(root: string): string {
-  return path.join(root, LOOMBRIDGE_DIRNAME, TEST_RESULTS_DIRNAME);
+  return loombridgePaths(root).tests;
 }
 
 export function testResultsPath(dir: string): string {

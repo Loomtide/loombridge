@@ -36,8 +36,13 @@ import {
   type FeelSnapshotManifest,
 } from "../../../../capabilities/feel/snapshot-manifest.js";
 import { BASELINE_MANIFEST } from "../../../../capabilities/minigame/minigame-baseline.js";
-import { loombridgePaths, standardReplayLayout } from "../../../../domain/state.js";
+import { loombridgePaths, standardReplayLayout, updateState } from "../../../../domain/state.js";
 import { REPO_ROOT } from "../../../_support/paths.js";
+import { greenNUnitXml, plantTestResults } from "../../../_support/test-results-fixture.js";
+import {
+  TEST_RESULTS_MANIFEST,
+  testResultsPath,
+} from "../../../../capabilities/tests/test-results-manifest.js";
 
 /** The REAL live-capture artifacts the feel-snapshot tests use (re-derives cleanly). */
 const LIVE_DIR = path.join(REPO_ROOT, "Docs", "Profiles", "artifacts", "s5cb-live-capture");
@@ -189,7 +194,7 @@ test("an empty project discovers NOTHING: no invented assets, no notes it cannot
   }
 });
 
-test("all four kinds are discovered, deterministically ordered, with their anchors named", async () => {
+test("all five kinds are discovered, deterministically ordered, with their anchors named", async () => {
   const root = await tmpDir("unified-full-");
   const workspace = await tmpDir("unified-ws-");
   try {
@@ -198,12 +203,13 @@ test("all four kinds are discovered, deterministically ordered, with their ancho
     await plantApprovedTrace(root, "a-first");
     await plantSnapshot(workspace, root);
     await plantScreenContract(workspace, { id: "kids-adventure", baseline: { projectRoot: root } });
+    await plantTestResults(root);
 
     const { assets } = await discoverVerificationAssets({ root, workspace });
     assert.deepEqual(
       assets.map((a) => a.kind),
-      ["contract", "trace", "trace", "feel-snapshot", "screen-contract"],
-      "rows are grouped by the CLOSED inventory order",
+      ["contract", "trace", "trace", "feel-snapshot", "screen-contract", "test-results"],
+      "rows are grouped by the CLOSED inventory order, with test-results APPENDED LAST (G14)",
     );
     assert.deepEqual(
       assets.filter((a) => a.kind === "trace").map((a) => a.id),
@@ -211,9 +217,11 @@ test("all four kinds are discovered, deterministically ordered, with their ancho
       "ties inside a kind are sorted by id, so the plan is byte-stable",
     );
 
-    // Runnability follows D2: contract + screens are offline, trace + feel are live.
+    // Runnability follows D2: contract + screens + test-results are offline (T1: the
+    // unified door never launches an editor), trace + feel are live.
     assert.equal(rowFor(assets, "contract").runnable, "offline");
     assert.equal(rowFor(assets, "screen-contract").runnable, "offline");
+    assert.equal(rowFor(assets, "test-results").runnable, "offline");
     assert.equal(rowFor(assets, "trace", "a-first").runnable, "live");
     assert.equal(rowFor(assets, "feel-snapshot").runnable, "live");
 
@@ -224,6 +232,15 @@ test("all four kinds are discovered, deterministically ordered, with their ancho
       assert.ok(row.approvedBy, `${kind} row records what approved it`);
       assert.equal(row.broken, undefined);
     }
+
+    // …and the test-results row NEVER does (R8). It is a runnable row with no approval,
+    // permanently: a suite has no human-approve step, so approvedAt/approvedBy stay unset
+    // and the qualification says out loud what the binding does and does not prove.
+    const tests = rowFor(assets, "test-results");
+    assert.equal(tests.approvedAt, undefined, "there is no human approval for a test suite, ever");
+    assert.equal(tests.approvedBy, undefined);
+    assert.equal(tests.broken, undefined);
+    assert.match(String(tests.reason), /never human-approved/);
     assert.ok(assets.every((a) => a.paths.asset.length > 0), "every row names where it lives");
 
     // A plan of anchors alone is not a pass: nothing has executed yet.
@@ -245,9 +262,11 @@ test("ASSET_KINDS is the closed inventory: discovery emits no kind outside it", 
     await plantApprovedTrace(root, "demo");
     await plantSnapshot(workspace, root);
     await plantScreenContract(workspace, { id: "sc", baseline: { projectRoot: root } });
+    await plantTestResults(root);
     const { assets } = await discoverVerificationAssets({ root, workspace });
     assert.equal(new Set(assets.map((a) => a.kind)).size, ASSET_KINDS.length, "every declared kind is reachable");
     for (const a of assets) assert.ok((ASSET_KINDS as readonly string[]).includes(a.kind), `${a.kind} is declared`);
+    assert.equal(ASSET_KINDS[ASSET_KINDS.length - 1], "test-results", "G14: the new kind is APPENDED, never inserted");
   } finally {
     await fs.rm(root, { recursive: true, force: true });
     await fs.rm(workspace, { recursive: true, force: true });
@@ -266,7 +285,7 @@ test("a recorded-but-UNAPPROVED trace is a visible non-anchor row that never exe
     assert.equal(row.broken, undefined, "unapproved is a provenance gap, not tampering");
     assert.ok(row.reason?.includes("trace approve"), row.reason);
     assert.equal(row.approvedAt, undefined);
-    assert.equal(resolveUnifiedOutcome({ executed: [{ section: "contract", exit: 0 }], notRun: [notRunFor(row)] }).exit, 2);
+    assert.equal(resolveUnifiedOutcome({ executed: [{ section: "contract", exit: 0, anchored: true }], notRun: [notRunFor(row)] }).exit, 2);
   } finally {
     await fs.rm(root, { recursive: true, force: true });
     await fs.rm(workspace, { recursive: true, force: true });
@@ -311,7 +330,7 @@ test("LITMUS: a TAMPERED trace baseline PNG is a broken row at tier 2 (the sha c
     assert.equal(row.notRunClass, "broken");
     assert.ok(row.broken && row.broken.length > 0, "the failure is reported, not swallowed");
     assert.equal(
-      resolveUnifiedOutcome({ executed: [{ section: "contract", exit: 0 }], notRun: [notRunFor(row)] }).exit,
+      resolveUnifiedOutcome({ executed: [{ section: "contract", exit: 0, anchored: true }], notRun: [notRunFor(row)] }).exit,
       2,
       "a broken asset is the harness tier, never a pass",
     );
@@ -344,7 +363,7 @@ test("LITMUS: a hand-edited feel-snapshot metric makes the row broken and the ti
     assert.equal(row.notRunClass, "broken");
     assert.ok(row.broken && row.broken.includes(metric), `the refusal names the metric: ${row.broken}`);
     assert.equal(
-      resolveUnifiedOutcome({ executed: [{ section: "contract", exit: 0 }], notRun: [notRunFor(row)] }).exit,
+      resolveUnifiedOutcome({ executed: [{ section: "contract", exit: 0, anchored: true }], notRun: [notRunFor(row)] }).exit,
       2,
     );
   } finally {
@@ -471,6 +490,231 @@ test("an underivable workspace id skips the workspace kinds VISIBLY, via a note"
     assert.ok(/--id|--workspace/.test(notes[0]!), notes[0]);
   } finally {
     await fs.rm(parent, { recursive: true, force: true });
+  }
+});
+
+// ── test-results rows (T5 as amended by G6/G7/G9) ────────────────────────────
+
+test("a stamped, verifying test-results pair is runnable OFFLINE and PERMANENTLY unanchored", async () => {
+  const root = await tmpDir("unified-tests-ok-");
+  const workspace = await tmpDir("unified-ws-");
+  try {
+    await plantTestResults(root);
+    const row = rowFor((await discoverVerificationAssets({ root, workspace })).assets, "test-results");
+    assert.equal(row.runnable, "offline", "the unified door never launches an editor to grade tests (T1)");
+    assert.equal(row.approvedAt, undefined, "R8: no human approves a suite, so no approval may be printed");
+    assert.equal(row.approvedBy, undefined);
+    assert.equal(row.notRunClass, undefined);
+    assert.equal(row.broken, undefined);
+    assert.equal(row.paths.asset, testResultsPath(loombridgePaths(root).tests));
+  } finally {
+    for (const d of [root, workspace]) await fs.rm(d, { recursive: true, force: true });
+  }
+});
+
+test("an UNSTAMPED results XML is a non-anchor row: a hand-dropped file never grades", async () => {
+  const root = await tmpDir("unified-tests-unstamped-");
+  const workspace = await tmpDir("unified-ws-");
+  try {
+    await plantTestResults(root, { omitManifest: true });
+    const row = rowFor((await discoverVerificationAssets({ root, workspace })).assets, "test-results");
+    assert.equal(row.runnable, "no");
+    assert.equal(row.notRunClass, "non-anchor", "unstamped is missing provenance, not tampering");
+    assert.equal(row.broken, undefined);
+    assert.match(String(row.reason), /unstamped results/);
+    assert.match(String(row.reason), /loombridge tests run/, "the row names the command that fixes it");
+  } finally {
+    for (const d of [root, workspace]) await fs.rm(d, { recursive: true, force: true });
+  }
+});
+
+test("G9: a manifest with NO results XML is BROKEN, not 'no results were ever produced'", async () => {
+  // Deleting the evidence must not look like the innocent case. If it did, the cheapest way
+  // to silence a red suite would be `rm .loombridge/tests/test-results.xml`.
+  const root = await tmpDir("unified-tests-noxml-");
+  const workspace = await tmpDir("unified-ws-");
+  try {
+    await plantTestResults(root, { omitResults: true });
+    const row = rowFor((await discoverVerificationAssets({ root, workspace })).assets, "test-results");
+    assert.equal(row.runnable, "no");
+    assert.equal(row.notRunClass, "broken");
+    assert.ok(String(row.broken).length > 0, "the refusal is reported, not swallowed");
+    assert.equal(
+      resolveUnifiedOutcome({
+        executed: [{ section: "contract", exit: 0, anchored: true }],
+        notRun: [notRunFor(row)],
+      }).exit,
+      2,
+      "a broken asset is the harness tier, never a pass",
+    );
+  } finally {
+    for (const d of [root, workspace]) await fs.rm(d, { recursive: true, force: true });
+  }
+});
+
+test("LITMUS: an EDITED results XML and a FOREIGN projectRoot are both broken rows", async () => {
+  const root = await tmpDir("unified-tests-tamper-");
+  const other = await tmpDir("unified-tests-other-");
+  const workspace = await tmpDir("unified-ws-");
+  try {
+    const dir = await plantTestResults(root);
+    const clean = rowFor((await discoverVerificationAssets({ root, workspace })).assets, "test-results");
+    assert.equal(clean.runnable, "offline", "clean before tampering, so the LITMUS has something to break");
+
+    // "The failure is gone now, trust me." The bytes no longer hash to what was stamped.
+    const xml = await fs.readFile(testResultsPath(dir), "utf-8");
+    await fs.writeFile(testResultsPath(dir), xml.replace('result="Failed"', 'result="Passed"'), "utf-8");
+    const edited = rowFor((await discoverVerificationAssets({ root, workspace })).assets, "test-results");
+    assert.equal(edited.runnable, "no");
+    assert.equal(edited.notRunClass, "broken");
+    assert.match(String(edited.broken), /sha256 mismatch/);
+
+    // A manifest carried over from another checkout cannot vouch for this one. The binding
+    // is only LIVE because the unified door passes `root` into `verifyTestResults`.
+    await plantTestResults(root, { projectRootOverride: other });
+    const foreign = rowFor((await discoverVerificationAssets({ root, workspace })).assets, "test-results");
+    assert.equal(foreign.notRunClass, "broken");
+    assert.ok(String(foreign.broken).includes(other), foreign.broken);
+  } finally {
+    for (const d of [root, other, workspace]) await fs.rm(d, { recursive: true, force: true });
+  }
+});
+
+test("G7: results stamped under a DIFFERENT build runId are broken; a null on either side is not", async () => {
+  const root = await tmpDir("unified-tests-runid-");
+  const workspace = await tmpDir("unified-ws-");
+  try {
+    const paths = loombridgePaths(root);
+    await updateState(paths, { currentBuild: { runId: "run-B", startedAt: "2026-07-28T00:00:00.000Z" } });
+
+    await plantTestResults(root, { runId: "run-A" });
+    const stale = rowFor((await discoverVerificationAssets({ root, workspace })).assets, "test-results");
+    assert.equal(stale.runnable, "no");
+    assert.equal(stale.notRunClass, "broken");
+    assert.equal(stale.reason, "results from a different build run");
+    assert.ok(String(stale.broken).includes("run-A") && String(stale.broken).includes("run-B"), stale.broken);
+
+    // The SAME run is fine, which is what proves the check is about the ids and not about
+    // the presence of a build at all.
+    await plantTestResults(root, { runId: "run-B" });
+    assert.equal(
+      rowFor((await discoverVerificationAssets({ root, workspace })).assets, "test-results").runnable,
+      "offline",
+    );
+
+    // A null on the manifest side scopes the results to no build; that is a documented
+    // limitation, not a refusal, and refusing it would red out every pre-build run.
+    await plantTestResults(root, { runId: null });
+    assert.equal(
+      rowFor((await discoverVerificationAssets({ root, workspace })).assets, "test-results").runnable,
+      "offline",
+    );
+  } finally {
+    for (const d of [root, workspace]) await fs.rm(d, { recursive: true, force: true });
+  }
+});
+
+test("G6: a project that DECLARES tests but has no stamped results gets a visible non-anchor row", async () => {
+  // Presence is declared, so `rm -rf .loombridge/tests/` cannot make the gate disappear.
+  for (const declare of ["testables", "asmdef"] as const) {
+    const root = await tmpDir(`unified-tests-declared-${declare}-`);
+    const workspace = await tmpDir("unified-ws-");
+    try {
+      // Before the declaration exists: NO ROW AT ALL. Tests are opt-in, and absence is not
+      // a gap. This is also what makes the assertion below non-vacuous.
+      assert.equal(
+        (await discoverVerificationAssets({ root, workspace })).assets.filter((a) => a.kind === "test-results").length,
+        0,
+        "a project that declares no tests must not grow a test row out of nowhere",
+      );
+
+      if (declare === "testables") {
+        await fs.mkdir(path.join(root, "Packages"), { recursive: true });
+        await fs.writeFile(
+          path.join(root, "Packages", "manifest.json"),
+          JSON.stringify({ dependencies: {}, testables: ["com.loomtide.loombridge"] }, null, 2),
+          "utf-8",
+        );
+      } else {
+        const asmdefDir = path.join(root, "Assets", "Tests", "Editor");
+        await fs.mkdir(asmdefDir, { recursive: true });
+        await fs.writeFile(
+          path.join(asmdefDir, "Game.Editor.Tests.asmdef"),
+          JSON.stringify({ name: "Game.Editor.Tests", references: ["UnityEngine.TestRunner", "UnityEditor.TestRunner"] }),
+          "utf-8",
+        );
+      }
+
+      const row = rowFor((await discoverVerificationAssets({ root, workspace })).assets, "test-results");
+      assert.equal(row.runnable, "no");
+      assert.equal(row.notRunClass, "non-anchor");
+      assert.equal(row.broken, undefined, "a suite that was never run is a coverage gap, not tampering");
+      assert.match(String(row.reason), /tests declared, no stamped results/);
+      assert.match(String(row.reason), /loombridge tests run/);
+      assert.equal(
+        resolveUnifiedOutcome({
+          executed: [{ section: "contract", exit: 0, anchored: true }],
+          notRun: [notRunFor(row)],
+        }).exit,
+        2,
+        "a declared-but-unmeasured suite keeps the run at the harness tier",
+      );
+    } finally {
+      for (const d of [root, workspace]) await fs.rm(d, { recursive: true, force: true });
+    }
+  }
+});
+
+test("G6: an asmdef that does NOT reference the Test Runner declares nothing (the scan is not a filename sniff)", async () => {
+  const root = await tmpDir("unified-tests-notestrunner-");
+  const workspace = await tmpDir("unified-ws-");
+  try {
+    const dir = path.join(root, "Assets", "Scripts");
+    await fs.mkdir(dir, { recursive: true });
+    // Named like a test assembly, but it references nothing that can host NUnit tests.
+    await fs.writeFile(
+      path.join(dir, "Game.Tests.asmdef"),
+      JSON.stringify({ name: "Game.Tests", references: ["Unity.TextMeshPro"] }),
+      "utf-8",
+    );
+    assert.deepEqual(
+      (await discoverVerificationAssets({ root, workspace })).assets.filter((a) => a.kind === "test-results"),
+      [],
+      "the declaration signal is the Test Runner reference, never the file name",
+    );
+  } finally {
+    for (const d of [root, workspace]) await fs.rm(d, { recursive: true, force: true });
+  }
+});
+
+test("a MALFORMED test-results manifest is one broken row, and discovery still resolves everything else", async () => {
+  const root = await tmpDir("unified-tests-malformed-");
+  const workspace = await tmpDir("unified-ws-");
+  try {
+    await runPlan({ root, genre: "platformer-2d", engine: "unity", force: false, allowMissingDesignTarget: true });
+    const dir = await plantTestResults(root);
+    await fs.writeFile(path.join(dir, TEST_RESULTS_MANIFEST), "{ not json", "utf-8");
+
+    const { assets } = await discoverVerificationAssets({ root, workspace });
+    const row = rowFor(assets, "test-results");
+    assert.equal(row.notRunClass, "broken");
+    assert.ok(String(row.broken).includes(TEST_RESULTS_MANIFEST), row.broken);
+    assert.equal(rowFor(assets, "contract").runnable, "offline", "one bad asset must not blind the plan to the rest");
+  } finally {
+    for (const d of [root, workspace]) await fs.rm(d, { recursive: true, force: true });
+  }
+});
+
+test("a green stamped pair is discovered the same way a red one is: the row is about provenance, not the verdict", async () => {
+  const root = await tmpDir("unified-tests-green-");
+  const workspace = await tmpDir("unified-ws-");
+  try {
+    await plantTestResults(root, { xml: greenNUnitXml() });
+    const row = rowFor((await discoverVerificationAssets({ root, workspace })).assets, "test-results");
+    assert.equal(row.runnable, "offline");
+    assert.equal(row.approvedAt, undefined, "a green suite is still not a human approval");
+  } finally {
+    for (const d of [root, workspace]) await fs.rm(d, { recursive: true, force: true });
   }
 });
 

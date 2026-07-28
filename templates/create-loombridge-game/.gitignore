@@ -18,6 +18,14 @@
 .loombridge/replays/
 .loombridge/backups/
 
+# NOT ignored, on purpose: .loombridge/tests/ (the stamped Unity test results, their
+# binding manifest, and the run log). `loombridge tests run` produces them and
+# `loombridge verify` grades them OFFLINE, so committing them is what lets a reviewer,
+# a CI job, or a later verify read the evidence without re-running a multi-minute
+# editor. Ignoring this directory would make the results local-only, and a gate whose
+# evidence never leaves one machine is not a gate. A guard test walks this file against
+# the path constants, so an ignore rule added here fails the suite.
+
 # Legacy: CLIs before the .loombridge/backups/ move dropped the update backup here.
 ProjectSettings/LoombridgeInstall.json.bak
 

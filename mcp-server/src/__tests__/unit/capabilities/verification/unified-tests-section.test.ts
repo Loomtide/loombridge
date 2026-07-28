@@ -1,0 +1,392 @@
+/**
+ * The `tests` SECTION of the unified front door, driven the way a user drives it.
+ *
+ * The producer/consumer split (T1) means this door never launches Unity: `loombridge tests
+ * run` produced the bytes, and everything here is a pure function of what it left on disk.
+ * So the risks worth testing are not "does the parser work" (covered where the parser
+ * lives) but the three ways a stored artifact could buy a green it did not earn:
+ *
+ *  1. a hand-authored or hand-edited pair grading as if a real editor produced it;
+ *  2. a genuinely green suite printing as a full `pass`, when nothing a human approved was
+ *     ever compared (G1);
+ *  3. `--report` overwriting the stamped evidence the next run would have graded.
+ *
+ * Each case asserts the triple that matters together: what the plan SAID, what executed,
+ * and what the process exited with.
+ */
+
+import assert from "node:assert/strict";
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import test from "node:test";
+
+import { runPlan } from "../../../../capabilities/verification/plan.js";
+import { run as runVerifyCli } from "../../../../capabilities/verification/verify.js";
+import { onRampLines } from "../../../../capabilities/verification/unified/orchestrator.js";
+import {
+  unifiedVerifyReportPath,
+  type UnifiedVerifyReport,
+} from "../../../../capabilities/verification/unified/report.js";
+import {
+  TEST_RESULTS_FILE,
+  TEST_RESULTS_MANIFEST,
+  TEST_RUN_LOG_FILE,
+  sha256,
+  testResultsPath,
+} from "../../../../capabilities/tests/test-results-manifest.js";
+import { loombridgePaths } from "../../../../domain/state.js";
+import { greenNUnitXml, plantTestResults } from "../../../_support/test-results-fixture.js";
+
+async function tmpDir(prefix: string): Promise<string> {
+  return fs.mkdtemp(path.join(os.tmpdir(), prefix));
+}
+
+/** Run a verb with BOTH streams captured (the plan prints to stderr; nothing may leak). */
+async function captured<T>(fn: () => Promise<T>): Promise<{ result: T; lines: string[] }> {
+  const lines: string[] = [];
+  const origError = console.error;
+  const origLog = console.log;
+  const sink = (...a: unknown[]): void => void lines.push(a.map(String).join(" "));
+  console.error = sink;
+  console.log = sink;
+  try {
+    return { result: await fn(), lines };
+  } finally {
+    console.error = origError;
+    console.log = origLog;
+  }
+}
+
+async function readUnified(root: string): Promise<UnifiedVerifyReport> {
+  return JSON.parse(
+    await fs.readFile(unifiedVerifyReportPath(loombridgePaths(root).reports), "utf-8"),
+  ) as UnifiedVerifyReport;
+}
+
+/** A planned project with the one captured input that makes a contract gate really grade. */
+async function plannedProject(prefix: string): Promise<string> {
+  const root = await tmpDir(prefix);
+  await runPlan({ root, genre: "platformer-2d", engine: "unity", force: false, allowMissingDesignTarget: true });
+  const paths = loombridgePaths(root);
+  await fs.mkdir(paths.verifyInputs, { recursive: true });
+  await fs.writeFile(path.join(paths.verifyInputs, "console.json"), JSON.stringify({ logs: [] }), "utf-8");
+  return root;
+}
+
+// ── the red path: the gate exists for this ───────────────────────────────────
+
+test("a stamped RED suite grades OFFLINE, tier 1, and the run reports `fail` at exit 1", async () => {
+  // The committed EditMode fixture is a real red: 6 cases, one genuine assertion failure,
+  // one skipped case. Unity exits 2 on genuine test failures, so the stamped exitCode is 2
+  // and `exitCodeIsUnexplained` accounts for it: this must be an HONEST TIER 1, not a
+  // harness fault. A blanket "non-zero exit is tier 2" here would mean the gate could never
+  // report an assertion defect at all.
+  const root = await tmpDir("tests-section-red-");
+  const workspace = await tmpDir("tests-section-ws-");
+  try {
+    await plantTestResults(root);
+    const { result, lines } = await captured(() => runVerifyCli(["--root", root, "--workspace", workspace]));
+    const text = lines.join("\n");
+
+    assert.equal(result, 1, "a failing suite is a GAME DEFECT (tier 1), never the harness tier");
+    assert.match(text, /test-results 'editmode': will run \(offline\)/, "the plan says it grades offline");
+    assert.match(text, /6 test\(s\): 4 passed, 1 failed/, "the section prints the counts it derived");
+    assert.match(text, /RefusesUnknownInstanceId/, "…and names the failing case");
+
+    const report = await readUnified(root);
+    assert.equal(report.sections.tests?.exit, 1);
+    assert.equal(report.sections.tests?.status, "fail");
+    assert.equal(report.status, "fail");
+    assert.equal(report.exit, 1);
+    // T6: the per-failure detail is carried, not just the worst tier.
+    assert.deepEqual(
+      report.sections.tests?.assets?.map((a) => a.id),
+      ["Loombridge.EntityIdCompatTests.RefusesUnknownInstanceId"],
+    );
+    assert.match(String(report.sections.tests?.assets?.[0]?.note), /Expected: null/);
+  } finally {
+    for (const d of [root, workspace]) await fs.rm(d, { recursive: true, force: true });
+  }
+});
+
+// ── G1: a green suite is never a `pass` ──────────────────────────────────────
+
+test("G1: a FORGED all-green pair is at MOST `partial`, and the run never prints the word pass", async () => {
+  // The attack this closes. A green NUnit3 document is trivially authorable, and its
+  // manifest can be stamped so every sha and every cross-check agrees, which is exactly
+  // what the planter does here, using the production writer. Integrity is therefore NOT the
+  // thing standing in the way, and that is the point: binding proves provenance of bytes,
+  // never that a human approved anything. The tests section is permanently `anchored:
+  // false`, so G1 caps the run at `partial` and the summary says why.
+  const root = await tmpDir("tests-section-forged-");
+  const workspace = await tmpDir("tests-section-ws-");
+  try {
+    await plantTestResults(root, { xml: greenNUnitXml(), exitCode: 0 });
+    const { result, lines } = await captured(() => runVerifyCli(["--root", root, "--workspace", workspace]));
+    const text = lines.join("\n");
+
+    const report = await readUnified(root);
+    assert.equal(report.sections.tests?.exit, 0, "the suite really is green: the cap is about anchoring, not the tier");
+    assert.equal(report.sections.tests?.anchored, false, "PERMANENTLY unanchored (R8)");
+    assert.deepEqual(report.unanchoredSections, ["tests"]);
+    assert.deepEqual(report.anchoredSections, []);
+    assert.equal(report.status, "partial", "a green measured against nothing a human froze is not a pass");
+    assert.equal(report.exit, 0, "…and the exit tier is unchanged: G1 narrows the word, not the tier");
+    assert.equal(result, 0);
+
+    assert.notEqual(report.status as string, "pass");
+    assert.ok(!text.includes("status=pass"), `the run must never print a pass:\n${text}`);
+    assert.match(text, /no frozen anchor compared/, "the per-section marker says it");
+    assert.match(text, /PARTIAL: no frozen human approval was compared in: tests/, "and so does the summary");
+  } finally {
+    for (const d of [root, workspace]) await fs.rm(d, { recursive: true, force: true });
+  }
+});
+
+test("doneness needs ZERO code change: it reads the report's `exit`, which G1 leaves alone", async () => {
+  // The whole reason G1 caps the WORD and not the TIER. `doneness` consumes the unified
+  // report as a REFUSE-ONLY input keyed on `exit`, so a run that dropped from `pass` to
+  // `partial` must not start refusing certification for a project that got strictly more
+  // verification than before. Asserted here rather than trusted: the two documents are read
+  // by different modules and only the field they share keeps them agreeing.
+  const root = await tmpDir("tests-section-doneness-");
+  const workspace = await tmpDir("tests-section-ws-");
+  try {
+    await plantTestResults(root, { xml: greenNUnitXml(), exitCode: 0 });
+    await captured(() => runVerifyCli(["--root", root, "--workspace", workspace]));
+    const report = await readUnified(root);
+    assert.equal(report.status, "partial", "the word narrowed…");
+    assert.equal(report.exit, 0, "…and the field doneness actually reads did not");
+  } finally {
+    for (const d of [root, workspace]) await fs.rm(d, { recursive: true, force: true });
+  }
+});
+
+// ── the not-runnable rows never execute ──────────────────────────────────────
+
+test("an UNSTAMPED XML is a non-anchor: the section never runs and the run is not a pass", async () => {
+  const root = await plannedProject("tests-section-unstamped-");
+  const workspace = await tmpDir("tests-section-ws-");
+  try {
+    await plantTestResults(root, { xml: greenNUnitXml(), omitManifest: true });
+    const { result, lines } = await captured(() => runVerifyCli(["--root", root, "--workspace", workspace]));
+    assert.equal(result, 2, "an unmeasurable row keeps the exit at the harness tier");
+    assert.match(lines.join("\n"), /unstamped results/);
+
+    const report = await readUnified(root);
+    assert.equal(report.sections.tests, undefined, "a non-anchor row must never be executed");
+    assert.equal(report.notRun.find((n) => n.kind === "test-results")?.why, "non-anchor");
+    assert.equal(report.status, "partial");
+  } finally {
+    for (const d of [root, workspace]) await fs.rm(d, { recursive: true, force: true });
+  }
+});
+
+test("a manifest with NO results XML is broken: tier 2, and the section never runs", async () => {
+  const root = await plannedProject("tests-section-noxml-");
+  const workspace = await tmpDir("tests-section-ws-");
+  try {
+    await plantTestResults(root, { omitResults: true });
+    const { result } = await captured(() => runVerifyCli(["--root", root, "--workspace", workspace]));
+    assert.equal(result, 2);
+
+    const report = await readUnified(root);
+    assert.equal(report.sections.tests, undefined);
+    assert.equal(report.notRun.find((n) => n.kind === "test-results")?.why, "broken");
+  } finally {
+    for (const d of [root, workspace]) await fs.rm(d, { recursive: true, force: true });
+  }
+});
+
+test("G7: results from a DIFFERENT build run are broken; the section never grades them", async () => {
+  const root = await plannedProject("tests-section-runid-");
+  const workspace = await tmpDir("tests-section-ws-");
+  try {
+    const paths = loombridgePaths(root);
+    // A build in flight, and results stamped under a previous one.
+    const state = JSON.parse(
+      (await fs.readFile(paths.state, "utf-8")).match(/<!--\s*loombridge-state:\s*([\s\S]*?)-->/)![1]!.trim(),
+    );
+    state.currentBuild = { runId: "run-B", startedAt: "2026-07-28T00:00:00.000Z" };
+    await fs.writeFile(
+      paths.state,
+      (await fs.readFile(paths.state, "utf-8")).replace(
+        /<!--\s*loombridge-state:[\s\S]*?-->/,
+        `<!-- loombridge-state: ${JSON.stringify(state)} -->`,
+      ),
+      "utf-8",
+    );
+    await plantTestResults(root, { xml: greenNUnitXml(), exitCode: 0, runId: "run-A" });
+
+    const { result, lines } = await captured(() => runVerifyCli(["--root", root, "--workspace", workspace]));
+    assert.equal(result, 2, "evidence about another build is a harness fault, never a game verdict");
+    assert.match(lines.join("\n"), /results from a different build run/);
+
+    const report = await readUnified(root);
+    assert.equal(report.sections.tests, undefined, "a green suite from the wrong run must not grade");
+    assert.equal(report.notRun.find((n) => n.kind === "test-results")?.why, "broken");
+  } finally {
+    for (const d of [root, workspace]) await fs.rm(d, { recursive: true, force: true });
+  }
+});
+
+test("G6: a project that DECLARES tests but never ran them cannot reach a pass by deleting the evidence", async () => {
+  const root = await plannedProject("tests-section-declared-");
+  const workspace = await tmpDir("tests-section-ws-");
+  try {
+    await fs.mkdir(path.join(root, "Packages"), { recursive: true });
+    await fs.writeFile(
+      path.join(root, "Packages", "manifest.json"),
+      JSON.stringify({ dependencies: {}, testables: ["com.loomtide.loombridge"] }, null, 2),
+      "utf-8",
+    );
+
+    const { result, lines } = await captured(() => runVerifyCli(["--root", root, "--workspace", workspace]));
+    assert.equal(result, 2);
+    assert.match(lines.join("\n"), /tests declared, no stamped results: run `loombridge tests run`/);
+
+    const report = await readUnified(root);
+    assert.equal(report.notRun.find((n) => n.kind === "test-results")?.why, "non-anchor");
+  } finally {
+    for (const d of [root, workspace]) await fs.rm(d, { recursive: true, force: true });
+  }
+});
+
+// ── the grade-time cross-checks (G4/G12) ─────────────────────────────────────
+
+test("G12: a manifest summary that disagrees with the graded walk is refused at the harness tier", async () => {
+  // The forgery this catches: leave the XML alone (so every sha still verifies) and edit the
+  // manifest's summary to claim the run was clean. The grader re-derives the summary with
+  // the SAME function the producer stamped with, so any disagreement means one of the two
+  // was hand-written.
+  const root = await tmpDir("tests-section-summary-");
+  const workspace = await tmpDir("tests-section-ws-");
+  try {
+    await plantTestResults(root, {
+      tamper: (manifest) => {
+        manifest.summary = { total: 6, passed: 6, failed: 0, inconclusive: 0, skipped: 0 };
+      },
+    });
+    const { result, lines } = await captured(() => runVerifyCli(["--root", root, "--workspace", workspace]));
+    assert.equal(result, 2, "a self-contradicting manifest is untrustworthy evidence, not a red");
+    assert.match(lines.join("\n"), /manifest summary disagrees with the graded walk/);
+
+    const report = await readUnified(root);
+    assert.equal(report.sections.tests?.exit, 2);
+    assert.equal(report.status, "harness-fault");
+  } finally {
+    for (const d of [root, workspace]) await fs.rm(d, { recursive: true, force: true });
+  }
+});
+
+test("G4: compileErrors, mutatedProject, an unexplained exit, and an assembly mismatch each refuse at tier 2", async () => {
+  // Four independent producer-stamped facts, each of which means "this run did not check
+  // what it claims to have checked". A green XML is planted every time, so the ONLY thing
+  // that can move the tier is the stamped fact under test.
+  const cases: [string, Parameters<typeof plantTestResults>[1], RegExp][] = [
+    ["compileErrors", { tamper: (m) => void (m.compileErrors = 3) }, /compile error line/],
+    ["mutatedProject", { tamper: (m) => void (m.mutatedProject = true) }, /MUTATED ProjectSettings/],
+    ["unexplained exit", { exitCode: 3 }, /Unity exited 3/],
+    [
+      "assembly mismatch",
+      { tamper: (m) => void (m.assemblies = [...m.assemblies, "Never.Ran.Tests.dll"]) },
+      /assembly set disagrees with the manifest/,
+    ],
+  ];
+  for (const [label, opts, expected] of cases) {
+    const root = await tmpDir(`tests-section-g4-${label.replace(/\W+/g, "-")}-`);
+    const workspace = await tmpDir("tests-section-ws-");
+    try {
+      await plantTestResults(root, { xml: greenNUnitXml(), exitCode: 0, ...opts });
+      const { result, lines } = await captured(() => runVerifyCli(["--root", root, "--workspace", workspace]));
+      assert.equal(result, 2, `${label}: a run that checked nothing is never a pass`);
+      assert.match(lines.join("\n"), expected, label);
+      assert.equal((await readUnified(root)).sections.tests?.exit, 2, label);
+    } finally {
+      for (const d of [root, workspace]) await fs.rm(d, { recursive: true, force: true });
+    }
+  }
+});
+
+test("G12/F13: an XML edited AFTER stamping never reaches the grader", async () => {
+  const root = await tmpDir("tests-section-edited-");
+  const workspace = await tmpDir("tests-section-ws-");
+  try {
+    const dir = await plantTestResults(root);
+    const before = await captured(() => runVerifyCli(["--root", root, "--workspace", workspace]));
+    assert.equal(before.result, 1, "a real red before the edit, so the LITMUS has something to break");
+
+    // "The failing case is gone now." The bytes no longer hash to what was stamped.
+    await fs.writeFile(testResultsPath(dir), greenNUnitXml(), "utf-8");
+    const after = await captured(() => runVerifyCli(["--root", root, "--workspace", workspace]));
+    assert.equal(after.result, 2, "an edited results file is a refusal, never a silently re-graded run");
+    assert.match(after.lines.join("\n"), /sha256 mismatch/);
+    assert.equal((await readUnified(root)).sections.tests, undefined, "the section never ran on the edited bytes");
+  } finally {
+    for (const d of [root, workspace]) await fs.rm(d, { recursive: true, force: true });
+  }
+});
+
+test("an UNREADABLE results XML is the harness tier, never a pass over the cases it happened to see", async () => {
+  const root = await tmpDir("tests-section-truncated-");
+  const workspace = await tmpDir("tests-section-ws-");
+  try {
+    // Truncated mid-document, then RE-STAMPED (the sha is recomputed over the truncated
+    // bytes with the production hasher) so integrity passes cleanly and the ONLY thing left
+    // to catch it is the parser's own refusal at grade time. A killed editor or a full disk
+    // produces exactly this: a file that is honestly what the manifest says it is, and
+    // still unreadable.
+    const dir = await plantTestResults(root, { xml: greenNUnitXml(), exitCode: 0 });
+    const truncated = Buffer.from(greenNUnitXml().slice(0, greenNUnitXml().indexOf("<test-case") + 40), "utf-8");
+    await fs.writeFile(testResultsPath(dir), truncated);
+    const manifestPath = path.join(dir, TEST_RESULTS_MANIFEST);
+    const manifest = JSON.parse(await fs.readFile(manifestPath, "utf-8")) as Record<string, unknown>;
+    manifest.resultsSha256 = sha256(truncated);
+    await fs.writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf-8");
+    const { result, lines } = await captured(() => runVerifyCli(["--root", root, "--workspace", workspace]));
+    assert.equal(result, 2);
+    assert.match(lines.join("\n"), /is unreadable/);
+    assert.equal((await readUnified(root)).sections.tests?.exit, 2);
+  } finally {
+    for (const d of [root, workspace]) await fs.rm(d, { recursive: true, force: true });
+  }
+});
+
+// ── --report may not target the stamped evidence ─────────────────────────────
+
+test("--report is REFUSED for every file in the stamped test-results directory", async () => {
+  const root = await tmpDir("tests-section-report-");
+  const workspace = await tmpDir("tests-section-ws-");
+  try {
+    const dir = await plantTestResults(root);
+    const relDir = path.relative(root, dir).split(path.sep).join("/");
+    const before = await fs.readFile(testResultsPath(dir), "utf-8");
+
+    for (const name of [TEST_RESULTS_FILE, TEST_RESULTS_MANIFEST, TEST_RUN_LOG_FILE, "anything-else.json"]) {
+      const { result, lines } = await captured(() =>
+        runVerifyCli(["--root", root, "--workspace", workspace, "--report", `${relDir}/${name}`]),
+      );
+      assert.equal(result, 2, `${name}: the stamped pair is evidence, never a report destination`);
+      assert.match(lines.join("\n"), /REFUSED: --report/, name);
+      assert.ok(!lines.join("\n").includes("plan for "), `${name}: the refusal comes BEFORE the plan, so nothing ran`);
+    }
+    assert.equal(await fs.readFile(testResultsPath(dir), "utf-8"), before, "the evidence is byte-identical");
+  } finally {
+    for (const d of [root, workspace]) await fs.rm(d, { recursive: true, force: true });
+  }
+});
+
+// ── G15: the on-ramp is unchanged ────────────────────────────────────────────
+
+test("G15: the on-ramp text does NOT name the tests asset", () => {
+  // The on-ramp is the ONE place that names a human actor: the recording session IS the
+  // approval moment, and it is what the whole human-anchor story hangs from. `tests run` is
+  // self-serve and anchored to nothing, so adding it here would quietly convert a
+  // human-anchor on-ramp into a self-serve one and hand an agent a way to satisfy the empty
+  // project without a human ever playing the game.
+  const text = onRampLines("/proj").join("\n");
+  assert.ok(!text.includes("tests run"), `the on-ramp must not offer a self-serve asset:\n${text}`);
+  assert.ok(!text.includes("test-results"), text);
+  assert.match(text, /a HUMAN plays it/, "…and it still names the human actor, so this guard is not vacuous");
+});

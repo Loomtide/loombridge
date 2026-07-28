@@ -34,6 +34,17 @@ import {
   unifiedScreensReportPath,
   unifiedVerifyReportPath,
 } from "../../../capabilities/verification/unified/report.js";
+import {
+  TEST_RESULTS_DIRNAME,
+  TEST_RESULTS_FILE,
+  TEST_RESULTS_MANIFEST,
+  TEST_RUN_LOG_FILE,
+  testResultsDir,
+  testResultsManifestPath,
+  testResultsPath,
+  testRunLogPath,
+} from "../../../capabilities/tests/test-results-manifest.js";
+import { LOOMBRIDGE_DIRNAME, loombridgePaths } from "../../../domain/state.js";
 
 const SRC = path.join(PKG_ROOT, "src");
 
@@ -99,6 +110,62 @@ test("the unified report filenames are spelled once each, in the module that exp
   assert.equal(unifiedScreensReportPath("/r"), path.join("/r", UNIFIED_SCREENS_REPORT));
 });
 
+test("the test-results filenames are spelled once each, in the module that exports them", () => {
+  for (const name of [TEST_RESULTS_FILE, TEST_RESULTS_MANIFEST, TEST_RUN_LOG_FILE]) {
+    assert.deepEqual(
+      filesHardCodingName(name, ALL),
+      ["capabilities/tests/test-results-manifest.ts"],
+      `"${name}" must have exactly ONE spelling; every other module imports the constant`,
+    );
+  }
+  assert.equal(testResultsPath("/d"), path.join("/d", TEST_RESULTS_FILE));
+  assert.equal(testResultsManifestPath("/d"), path.join("/d", TEST_RESULTS_MANIFEST));
+  assert.equal(testRunLogPath("/d"), path.join("/d", TEST_RUN_LOG_FILE));
+});
+
+test("the test-results DIRECTORY has one declaration, and both layers resolve the same path from it", () => {
+  // The directory name is the one path constant that CROSSES A LAYER: `LoombridgePaths`
+  // (domain) needs it, and the capability that writes into it needs it, and the layering is
+  // one-directional so domain cannot import the capability. It therefore lives in
+  // `domain/state.ts` and the capability re-exports it. What must not exist is a second,
+  // independent spelling of the segment in either layer.
+  //
+  // Three other files quote the bare token, and NONE of them is spelling a path. They are
+  // pinned by name so that a NEW file which starts quoting it has to come through this test
+  // and justify itself:
+  //   - `surfaces/cli.ts`                the VERB name, in the dispatch switch;
+  //   - `unified/report.ts`              the SECTION name, in `UnifiedSectionName`;
+  //   - `unified/orchestrator.ts`        that same section name, at the record/run call.
+  // Different declarations that happen to share a word; a path is not one of them.
+  assert.deepEqual(filesHardCodingName(TEST_RESULTS_DIRNAME, ALL), [
+    "capabilities/verification/unified/orchestrator.ts",
+    "capabilities/verification/unified/report.ts",
+    "domain/state.ts",
+    "surfaces/cli.ts",
+  ]);
+
+  // …and the check that actually protects the PATH: the composed relative directory must be
+  // spelled nowhere in the source. Every module reaches it by joining the two constants, so
+  // a literal `".loombridge/tests"` anywhere is by definition a second, drifting spelling.
+  const composed = `${LOOMBRIDGE_DIRNAME}/${TEST_RESULTS_DIRNAME}`;
+  assert.deepEqual(filesHardCodingName(composed, ALL), []);
+
+  // LITMUS for that empty expectation: an empty result set is exactly what a defused scan
+  // returns, so plant the duplicate and confirm the REAL scan sees it.
+  const planted = path.join(SRC, "capabilities/tests/__planted__.ts");
+  const read = (p: string): string =>
+    p === planted ? `const dir = "${composed}";\nexport default dir;\n` : readFileSync(p, "utf-8");
+  assert.ok(
+    filesHardCodingName(composed, [...ALL, planted], read).includes("capabilities/tests/__planted__.ts"),
+    "the scan missed a planted duplicate of the composed directory path",
+  );
+
+  // BOTH ENDS MOVE AT ONCE: the `LoombridgePaths` slot the unified door reads and the
+  // capability's own resolver are the same path, derived from the same constants.
+  assert.equal(loombridgePaths("/r").tests, path.join("/r", LOOMBRIDGE_DIRNAME, TEST_RESULTS_DIRNAME));
+  assert.equal(testResultsDir("/r"), loombridgePaths("/r").tests);
+});
+
 /**
  * THE PROSE SITES. A declared path is not only a path two MODULES spell: the four places
  * below tell a human (or an agent) where the unified report lives, and prose is invisible
@@ -116,7 +183,62 @@ const PROSE_SITES: [string, string][] = [
   // The verify-owned screens report is named in the two docs that describe the bare run.
   [path.join(REPO_ROOT, "commands", "loombridge", "verify.md"), `.loombridge/reports/${UNIFIED_SCREENS_REPORT}`],
   [path.join(REPO_ROOT, "Docs", "Design", "UnifiedVerify.md"), `.loombridge/reports/${UNIFIED_SCREENS_REPORT}`],
+  // G11. The test-results trio is the newest declared path, and the prose that ROUTES an
+  // agent to it is the half a constant rename cannot reach. `verify.md` is what an agent
+  // opens to learn the gate exists; the CLI help and the RFC are where a human looks.
+  [
+    path.join(REPO_ROOT, "commands", "loombridge", "verify.md"),
+    `${LOOMBRIDGE_DIRNAME}/${TEST_RESULTS_DIRNAME}/${TEST_RESULTS_FILE}`,
+  ],
+  [
+    path.join(REPO_ROOT, "commands", "loombridge", "verify.md"),
+    `${LOOMBRIDGE_DIRNAME}/${TEST_RESULTS_DIRNAME}/${TEST_RESULTS_MANIFEST}`,
+  ],
+  [
+    path.join(REPO_ROOT, "Docs", "Design", "UnifiedVerify.md"),
+    `${TEST_RESULTS_DIRNAME}/${TEST_RESULTS_MANIFEST}`,
+  ],
+  [
+    path.join(PKG_ROOT, "src", "surfaces", "cli.ts"),
+    `${LOOMBRIDGE_DIRNAME}/${TEST_RESULTS_DIRNAME}/`,
+  ],
+  [
+    path.join(PKG_ROOT, "src", "capabilities", "verification", "verify.ts"),
+    `${LOOMBRIDGE_DIRNAME}/${TEST_RESULTS_DIRNAME}/`,
+  ],
 ];
+
+/**
+ * THE PRODUCER STEP. The test-results asset is the only kind a user cannot produce from
+ * inside `verify`: something has to run `loombridge tests run` first, and a plan row that
+ * names the command is no help if the documents an agent actually reads never mention it.
+ * These four sites are where that routing lives.
+ */
+const PRODUCER_SITES: string[] = [
+  path.join(REPO_ROOT, "commands", "loombridge", "verify.md"),
+  path.join(REPO_ROOT, "Docs", "Design", "UnifiedVerify.md"),
+  path.join(PKG_ROOT, "src", "capabilities", "setup", "routing-doc.ts"),
+  path.join(PKG_ROOT, "src", "capabilities", "verification", "unified", "discovery.ts"),
+];
+
+test("G11: every routing site names `loombridge tests run` as the producer step", () => {
+  const missing = PRODUCER_SITES.filter((file) => !readFileSync(file, "utf-8").includes("loombridge tests run"));
+  assert.deepEqual(
+    missing.map((f) => path.relative(REPO_ROOT, f)),
+    [],
+    "an asset whose producer is a separate verb is unreachable when the prose does not name that verb",
+  );
+});
+
+test("LITMUS: the producer-step walk really fires when a site stops naming the verb", () => {
+  // The same predicate, fed a verb nothing names. If the sites still 'contain' it, the walk
+  // above is decorative.
+  const renamed = "loombridge tests execute";
+  assert.deepEqual(
+    PRODUCER_SITES.filter((file) => readFileSync(file, "utf-8").includes(renamed)),
+    [],
+  );
+});
 
 test("the user-facing prose names the report paths with the CONSTANT-derived spelling", () => {
   const missing: string[] = [];

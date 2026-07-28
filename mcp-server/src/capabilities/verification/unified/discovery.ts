@@ -31,6 +31,7 @@ import path from "node:path";
 import {
   fileExists,
   loombridgePaths,
+  readState,
   standardReplayLayout,
   type LoombridgePaths,
 } from "../../../domain/state.js";
@@ -44,6 +45,14 @@ import { isDraftContract } from "../../minigame/minigame-draft.js";
 import { loadBaselineManifest, BASELINE_MANIFEST } from "../../minigame/minigame-baseline.js";
 import { assertValidAcceptanceContract } from "../validator.js";
 import { designStatus } from "../design.js";
+import { projectDeclaresTests } from "../../tests/test-declaration.js";
+import {
+  TEST_RESULTS_FILE,
+  testResultsManifestPath,
+  testResultsPath,
+  testRunLogPath,
+  verifyTestResults,
+} from "../../tests/test-results-manifest.js";
 
 /**
  * The CLOSED inventory (RFC "The model: verification assets"). Order is the plan's
@@ -53,8 +62,11 @@ import { designStatus } from "../design.js";
  * - `trace`           a recorded demonstration + its approved pixel baseline.
  * - `feel-snapshot`   frozen kinematics + the capture contract that measured them.
  * - `screen-contract` declared screens/objects/flow + the approved layout baseline.
+ * - `test-results`    a stamped Unity EditMode test run (`loombridge tests run`), graded
+ *                     offline from the stored bytes. APPENDED LAST (G14) so every existing
+ *                     plan keeps its print order and only gains a row at the end.
  */
-export const ASSET_KINDS = ["contract", "trace", "feel-snapshot", "screen-contract"] as const;
+export const ASSET_KINDS = ["contract", "trace", "feel-snapshot", "screen-contract", "test-results"] as const;
 
 export type DiscoveredAssetKind = (typeof ASSET_KINDS)[number];
 
@@ -145,6 +157,7 @@ export async function discoverVerificationAssets(opts: DiscoveryOpts): Promise<D
 
   assets.push(...(await discoverContractAsset(root, paths)));
   assets.push(...(await discoverTraceAssets(root)));
+  assets.push(...(await discoverTestResultsAsset(root, paths)));
 
   const workspaceId = opts.workspaceId ?? sanitizeWorkspaceId(path.basename(root));
   const workspace = opts.workspace ?? (workspaceId ? projectWorkspace(workspaceId) : undefined);
@@ -280,6 +293,94 @@ async function discoverTraceAssets(root: string): Promise<DiscoveredAsset[]> {
     rows.push(row);
   }
   return rows;
+}
+
+// ── test results (stamped Unity EditMode run) ────────────────────────────────
+
+/**
+ * The stamped Unity test run. OFFLINE by construction (T1): `loombridge tests run` is the
+ * only thing that launches an editor, and this door grades the bytes it left behind. Bare
+ * `verify` therefore never takes the license seat and never fights a domain reload.
+ *
+ * PERMANENTLY UNANCHORED (T5/R8). `approvedAt`/`approvedBy` are deliberately never set:
+ * there is no human-approve step for a test suite, and inventing one would put an
+ * approval-shaped word on something no human ever looked at. The row runs, and the section
+ * it feeds reports `anchored: false` forever, which is exactly what G1 then costs the run's
+ * status word. Binding does NOT substitute for approval, and it does not prove freshness
+ * relative to source edits either; it proves the provenance of these bytes, and `runId`
+ * scopes them to a build when one exists (G7).
+ *
+ * The five dispositions, in the order they are decided:
+ *  - manifest + XML, verifying, `projectRoot` matching this root -> runnable OFFLINE;
+ *  - manifest `runId` and the CURRENT STATE `runId` both set and different -> BROKEN (G7);
+ *  - XML with no manifest -> NON-ANCHOR (a hand-dropped file never grades, H1);
+ *  - manifest with no XML, a sha mismatch, or a foreign `projectRoot` -> BROKEN (G9);
+ *  - neither file, but the project DECLARES tests -> NON-ANCHOR (G6: deleting the
+ *    evidence must not delete the row);
+ *  - neither file and no declaration -> no row at all (tests are opt-in).
+ */
+async function discoverTestResultsAsset(root: string, paths: LoombridgePaths): Promise<DiscoveredAsset[]> {
+  const dir = paths.tests;
+  const row: DiscoveredAsset = {
+    kind: "test-results",
+    id: "editmode",
+    runnable: "no",
+    paths: {
+      asset: testResultsPath(dir),
+      inputs: testRunLogPath(dir),
+      baseline: testResultsManifestPath(dir),
+    },
+  };
+
+  // `root` is passed on purpose: it makes the `projectRoot` binding LIVE here, so a manifest
+  // copied out of another checkout is refused rather than quietly vouching for this one.
+  const integrity = await verifyTestResults(dir, { root });
+
+  if (integrity.unstamped) {
+    if (await fileExists(testResultsPath(dir))) {
+      row.notRunClass = "non-anchor";
+      row.reason =
+        `unstamped results (${TEST_RESULTS_FILE} with no binding manifest): run \`loombridge tests run\` ` +
+        "so the results are bound to the editor, root and command that produced them";
+      return [row];
+    }
+    const declaration = await projectDeclaresTests(root);
+    if (!declaration.declared) return [];
+    row.notRunClass = "non-anchor";
+    row.reason =
+      `tests declared, no stamped results: run \`loombridge tests run\` (${declaration.how})`;
+    return [row];
+  }
+
+  if (!integrity.ok) {
+    row.notRunClass = "broken";
+    row.reason = "the stamped test results cannot be trusted";
+    row.broken = integrity.failures.join("; ");
+    return [row];
+  }
+
+  // G7: results minted under a DIFFERENT build than the one in flight are evidence about
+  // some other build. Both ids must be non-null for this to fire; a run with no build in
+  // flight, or results stamped before run-binding existed, is scoped by nothing and says so
+  // rather than being refused for a comparison that cannot be made.
+  const manifest = integrity.manifest!;
+  const currentRunId = (await readState(paths).catch(() => null))?.currentBuild?.runId ?? null;
+  if (manifest.runId !== null && currentRunId !== null && manifest.runId !== currentRunId) {
+    row.notRunClass = "broken";
+    row.reason = "results from a different build run";
+    row.broken =
+      `the stamped results carry runId ${manifest.runId}, but the build in flight is ${currentRunId}; ` +
+      "re-run `loombridge tests run` against this build";
+    return [row];
+  }
+
+  row.runnable = "offline";
+  // NOT an approval, and never printed as one. This is the qualification the plan prints in
+  // place of "approved <when> by <what>", so a reader cannot mistake a stamped suite for a
+  // human-approved anchor.
+  row.reason =
+    `stamped ${manifest.finishedAt} by ${manifest.resolvedEditorPath} (bound to the run, never human-approved)`;
+  return [row];
 }
 
 // ── feel snapshot ────────────────────────────────────────────────────────────

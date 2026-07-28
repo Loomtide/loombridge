@@ -482,8 +482,16 @@ test("a graded contract passes through the orchestrator EXACTLY as a legacy runV
     assert.equal(orchState?.phase, "verified-warn");
 
     const report = await readUnified(viaOrchestrator);
-    assert.equal(report.status, "pass", "one asset, executed, green");
-    assert.equal(report.exit, 0);
+    // DELIBERATE FLIP (G1). This asserted `pass` before the unanchored-pass rule landed. The
+    // fixture is a planned project with NO approved design target, so its contract section
+    // is green and UNANCHORED, a real deterministic result measured against nothing a human
+    // ever froze. `partial` is the honest word for that, and the exit is unchanged at 0:
+    // G1 narrows what may be CALLED a pass, it does not invent a failure. The parity this
+    // test is really about (the verdict bytes and the STATE transition are byte-identical to
+    // a legacy `runVerify`) is asserted above and is untouched.
+    assert.equal(report.status, "partial", "one asset, executed, green, but anchored to nothing (G1)");
+    assert.equal(report.exit, 0, "…and the exit tier is unchanged");
+    assert.deepEqual(report.unanchoredSections, ["contract"]);
     assert.equal(report.sections.contract?.status, "warn", "the section carries the ENGINE's own word");
     assert.deepEqual(report.notRun, []);
 

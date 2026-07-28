@@ -38,6 +38,23 @@ import {
 } from "../../../domain/state.js";
 import { isInside, projectWorkspace, sanitizeWorkspaceId } from "../../../domain/workspace-paths.js";
 import { resolveCliProjectPin } from "../../setup/cli-project-pin.js";
+import {
+  exitCodeIsUnexplained,
+  gradeTestResults,
+  isNUnitParseError,
+  parseNUnitResults,
+  summaryDisagreements,
+  deriveSummary,
+} from "../../tests/nunit-parse.js";
+import {
+  TEST_RESULTS_FILE,
+  TEST_RESULTS_MANIFEST,
+  sha256,
+  testResultsManifestPath,
+  testResultsPath,
+  testRunLogPath,
+  verifyTestResults,
+} from "../../tests/test-results-manifest.js";
 import { gradedGates } from "../run-gates.js";
 import { discoverVerificationAssets, type DiscoveredAsset } from "./discovery.js";
 import {
@@ -200,7 +217,7 @@ export async function runUnifiedVerify(opts: UnifiedVerifyOpts): Promise<number>
 
   const notRun: UnifiedNotRun[] = [];
   const sections: Partial<Record<UnifiedSectionName, UnifiedVerifySection>> = {};
-  const executed: { section: UnifiedSectionName; exit: number }[] = [];
+  const executed: { section: UnifiedSectionName; exit: number; anchored: boolean }[] = [];
 
   // Every row that will NOT execute, classified BEFORE anything runs so the reason is
   // discovery's own (`notRunClass`), never inferred from how a section behaved.
@@ -214,7 +231,9 @@ export async function runUnifiedVerify(opts: UnifiedVerifyOpts): Promise<number>
 
   const record = (name: UnifiedSectionName, section: UnifiedVerifySection): void => {
     sections[name] = section;
-    executed.push({ section: name, exit: section.exit });
+    // `anchored` travels with the tier into the outcome rule (G1): the two facts are decided
+    // in one place, by the section that knows whether a frozen anchor was compared.
+    executed.push({ section: name, exit: section.exit, anchored: section.anchored });
   };
 
   const contractAsset = runnable.find((a) => a.kind === "contract");
@@ -235,6 +254,11 @@ export async function runUnifiedVerify(opts: UnifiedVerifyOpts): Promise<number>
     // path that replays a demonstration against someone else's game.
     const projectPathCanonical = resolveCliProjectPin({ root });
     record("flow", await runSection("flow", () => flowSection(deps, root, traceAssets, projectPathCanonical)));
+  }
+
+  const testsAsset = runnable.find((a) => a.kind === "test-results");
+  if (testsAsset) {
+    record("tests", await runSection("tests", () => testsSection(opts, root, paths)));
   }
 
   const feelAsset = runnable.find((a) => a.kind === "feel-snapshot");
@@ -473,6 +497,118 @@ async function flowSection(
 }
 
 /**
+ * The stamped Unity test run, graded OFFLINE (T1/T6).
+ *
+ * There is no engine to delegate to and no editor to launch: `loombridge tests run` is the
+ * producer, this is the consumer, and everything here is a pure function of bytes already
+ * on disk. Which means this section is the one place in the orchestrator that owns a
+ * verdict, so it re-derives every binding rather than inheriting one from the plan:
+ *
+ *  - INTEGRITY IS RE-RUN HERE (not trusted from discovery). Discovery ran minutes-to-
+ *    milliseconds earlier and its answer is a plan, not evidence; the section grades the
+ *    bytes it read itself.
+ *  - THE SHA IS RE-VERIFIED AGAINST THE BYTES ACTUALLY GRADED (G12/F13). `verifyTestResults`
+ *    hashes what it read, and this section grades exactly that buffer; the explicit
+ *    re-check below states the binding rather than leaving it as an implementation detail
+ *    two refactors could separate.
+ *  - THE SUMMARY IS RE-DERIVED FROM THE WALK AND COMPARED TO THE MANIFEST'S (G12). The
+ *    producer stamped `deriveSummary(parsed)`; the grader recomputes the same function over
+ *    the same bytes, so any disagreement means the manifest was hand-edited.
+ *  - THE PRODUCER'S FACTS ARE READ, NOT ASSUMED (G4): `exitCode`, `compileErrors`,
+ *    `mutatedProject`, and the assembly set all feed `gradeTestResults`, which refuses on
+ *    each. `exitCodeIsUnexplained` is the exit-code rule, imported rather than re-stated:
+ *    Unity exits 2 on genuine test failures, so a blanket "non-zero is a harness fault"
+ *    would reclassify every real red as a harness problem and this gate could never report
+ *    an assertion defect at all.
+ *
+ * `anchored` is FALSE, always and permanently (R8). A suite has no human-approve step, so
+ * there is nothing frozen to compare against; G1 turns that into `partial` rather than
+ * `pass` for the run, which is the honest reading.
+ */
+async function testsSection(
+  opts: UnifiedVerifyOpts,
+  root: string,
+  paths: ReturnType<typeof loombridgePaths>,
+): Promise<UnifiedVerifySection> {
+  const dir = paths.tests;
+  const refuse = (note: string): UnifiedVerifySection => {
+    console.error(`${TAG} tests: ${note}`);
+    return { status: "harness-fault", exit: 2, anchored: false, note };
+  };
+
+  const integrity = await verifyTestResults(dir, { root });
+  if (integrity.unstamped) {
+    return refuse(`no ${TEST_RESULTS_MANIFEST} in ${path.relative(root, dir)}; run \`loombridge tests run\``);
+  }
+  if (!integrity.ok) return refuse(integrity.failures.join("; "));
+
+  const manifest = integrity.manifest!;
+  const bytes = integrity.resultsBytes;
+  if (bytes === undefined) {
+    return refuse(`${TEST_RESULTS_FILE} could not be read at grade time`);
+  }
+  // G12/F13, stated explicitly: the verdict below is about THESE bytes, and the manifest
+  // that supplies exitCode/compileErrors/assemblies is bound to them.
+  if (sha256(bytes) !== manifest.resultsSha256) {
+    return refuse(`${TEST_RESULTS_FILE} does not hash to the manifest's resultsSha256 at grade time`);
+  }
+
+  const parsed = parseNUnitResults(bytes.toString("utf-8"));
+  if (isNUnitParseError(parsed)) {
+    // The unreadable-PNG precedent: evidence that cannot be read is a refusal, never a skip
+    // and never a pass over "the cases I happened to see".
+    return refuse(`${TEST_RESULTS_FILE} is unreadable: ${parsed.error}`);
+  }
+
+  const grade = gradeTestResults({
+    run: parsed,
+    strict: opts.strict,
+    exitCode: manifest.exitCode,
+    compileErrors: manifest.compileErrors,
+    mutatedProject: manifest.mutatedProject,
+    manifestSummary: manifest.summary,
+    manifestAssemblies: manifest.assemblies,
+  });
+
+  const s = grade.summary;
+  const headline =
+    `${s.total} test(s): ${s.passed} passed, ${s.failed} failed, ` +
+    `${s.inconclusive} inconclusive, ${s.skipped} skipped`;
+  console.error(`${TAG} tests: ${headline} (stamped ${manifest.finishedAt}, runId ${manifest.runId ?? "none"})`);
+  for (const reason of grade.reasons) console.error(`${TAG} tests:   refusal: ${reason}`);
+  for (const note of grade.notes) console.error(`${TAG} tests:   note: ${note}`);
+  // A named, capped list of the disagreements the manifest carries, printed even when the
+  // grade already refused, so an operator can see WHICH cross-check fired.
+  const stampedVsGraded = summaryDisagreements(manifest.summary, deriveSummary(parsed));
+  if (stampedVsGraded.length > 0) {
+    console.error(`${TAG} tests:   manifest summary disagrees with the walk: ${stampedVsGraded.join("; ")}`);
+  }
+  if (exitCodeIsUnexplained(manifest.exitCode, grade.failures.filter((f) => f.label === undefined || f.label === "Error").length)) {
+    console.error(`${TAG} tests:   Unity exit ${manifest.exitCode} is not accounted for by the test-case walk`);
+  }
+
+  // T6: the per-failure detail behind the section's single word, capped so a suite-wide red
+  // cannot bury the report. `assets` is the shared row shape, one row per failing case.
+  const assets: UnifiedAssetOutcome[] = grade.failures.slice(0, 10).map((failure) => ({
+    kind: "test-results" as const,
+    id: failure.fullname,
+    status: failure.label ?? "Failed",
+    exit: grade.tier,
+    ...(failure.message ? { note: failure.message.split(/\r?\n/)[0]!.slice(0, 200) } : {}),
+  }));
+
+  return {
+    status: tierWord(grade.tier),
+    exit: grade.tier,
+    // PERMANENT (R8). Not "false because this run found no anchor": there is no anchor to
+    // find, and there is no verb that could create one.
+    anchored: false,
+    note: `${headline}; bound to the run, never human-approved`,
+    ...(assets.length > 0 ? { assets } : {}),
+  };
+}
+
+/**
  * The feel snapshot. `runVerifySnapshot` already implements the 0/1/2 contract (clean /
  * drift / integrity-or-capture-gap), so its exit is taken as-is: re-deriving a tier here
  * would put a second, drifting opinion next to the engine's.
@@ -590,17 +726,30 @@ export function summaryLines(report: UnifiedVerifyReport, live: boolean): string
     }
   }
   if (report.status === "partial") {
-    // Two very different partials share one word, so the line has to separate them: an
-    // operator's deliberate `--live` omission still exits 0, while an anchor the run could
-    // not measure (broken, unapproved, draft) keeps the harness tier even though every
-    // executed check was green.
-    lines.push(
-      report.exit === 0
-        ? `${TAG} PARTIAL: everything that ran passed, but the anchors above were not measured `
-          + "(skipped for lack of --live). This is not a full pass."
-        : `${TAG} PARTIAL: everything that ran passed, but the anchors above could not be measured `
-          + `at all, which is the harness tier (exit ${report.exit}). This is not a pass.`,
-    );
+    // Three very different partials share one word, so the line has to separate them: an
+    // operator's deliberate `--live` omission still exits 0; an anchor the run could not
+    // measure (broken, unapproved, draft) keeps the harness tier even though every executed
+    // check was green; and G1's case, where everything ran and passed but a section compared
+    // nothing a human ever froze, exits 0 and is still not a pass.
+    if (report.notRun.length > 0) {
+      lines.push(
+        report.exit === 0
+          ? `${TAG} PARTIAL: everything that ran passed, but the anchors above were not measured `
+            + "(skipped for lack of --live). This is not a full pass."
+          : `${TAG} PARTIAL: everything that ran passed, but the anchors above could not be measured `
+            + `at all, which is the harness tier (exit ${report.exit}). This is not a pass.`,
+      );
+    }
+    // G1: name the unanchored sections. "Everything passed" and "everything passed against
+    // nothing a human approved" must never read the same, and the machine-readable
+    // `unanchoredSections` is not enough on its own: the summary line is what an agent
+    // quotes.
+    if (report.unanchoredSections.length > 0) {
+      lines.push(
+        `${TAG} PARTIAL: no frozen human approval was compared in: ${report.unanchoredSections.join(", ")}. `
+          + "A green section measured against nothing a human froze is not a pass.",
+      );
+    }
   }
   return lines;
 }
@@ -636,9 +785,21 @@ async function reportCollision(
     [paths.genrePromotion, "is the genre promotion report"],
     [paths.verdict, "is the Tier-1 build verdict"],
     [unifiedScreensReportPath(paths.reports), "is the unified run's own screens report"],
+    // The stamped test-results trio. Named individually so the refusal says WHICH piece of
+    // evidence `--report` was about to destroy, and resolved from the same constants the
+    // producer writes through, so a rename moves both ends at once.
+    [testResultsPath(paths.tests), "is the stamped Unity test results"],
+    [testResultsManifestPath(paths.tests), "is the test-results binding manifest"],
+    [testRunLogPath(paths.tests), "is the Unity test run log"],
   ];
   for (const [artifact, what] of declared) {
     if (path.resolve(artifact) === target) return what;
+  }
+  // …and the whole directory as a backstop: `.loombridge/tests/` is committed EVIDENCE, so
+  // nothing under it is ever a report destination, named file or not.
+  const testsDir = path.resolve(paths.tests);
+  if (target === testsDir || target.startsWith(`${testsDir}${path.sep}`)) {
+    return "is inside the stamped test-results directory";
   }
   // The whole design directory: the frozen hero shot and its metadata live there, and
   // nothing under it is ever a report destination.
