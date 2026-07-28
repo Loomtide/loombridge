@@ -540,3 +540,41 @@ test("minigame baseline status: reports 'no baseline' when none approved (exit 0
     await fs.rm(root, { recursive: true, force: true });
   }
 });
+
+test("baseline approve WARNS when it stamps a cwd-derived project root (the guided flow prints no --root)", async () => {
+  // `minigame next` builds its commands from a WORKSPACE, which knows nothing about where
+  // the game repo is, so the printed `baseline approve` carries no --root and the ownership
+  // stamp silently becomes the shell's cwd. A wrong stamp surfaces much later as unified
+  // `verify` refusing the bundle as another project's, so say it at approval time instead.
+  const root = await tmp("s6e-cwdstamp-");
+  const ref = path.join(root, "baseline");
+  const lines: string[] = [];
+  const orig = console.error;
+  console.error = (...a: unknown[]) => { lines.push(a.map(String).join(" ")); };
+  try {
+    const contractPath = path.join(root, "c.json");
+    await writeJson(contractPath, makeContract(ref));
+    const caps = path.join(root, "caps");
+    await writeCleanPack(caps);
+
+    // No --root: the warning fires, and it names the directory it is about to stamp.
+    assert.equal(
+      await minigameRun(["baseline", "approve", "--contract", contractPath, "--captures", caps, "--ref", ref]),
+      0,
+    );
+    const warned = lines.filter((l) => /no --root given: stamping this baseline/.test(l));
+    assert.equal(warned.length, 1, lines.join("\n"));
+    assert.ok(warned[0]!.includes(process.cwd()), "the warning must name the root it is stamping");
+    const manifest = await loadBaselineManifest(ref);
+    assert.equal(manifest?.projectRoot, path.resolve(process.cwd()));
+
+    // With --root: no warning, and the stamp is the project that was named.
+    lines.length = 0;
+    assert.equal(await approve(root, contractPath, caps), 0);
+    assert.ok(!lines.some((l) => /no --root given/.test(l)), lines.join("\n"));
+    assert.equal((await loadBaselineManifest(ref))?.projectRoot, path.resolve(root));
+  } finally {
+    console.error = orig;
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});

@@ -3,7 +3,7 @@ name: verify-2d-game
 description: Run the Loombridge verification pipeline on a built 2D game — deterministic Tier-1 quality gates (asset/manifest, UI conformance, framing, playability, feel) plus an advisory VLM design review against the design mock. Use AFTER unity-2d-game + game-polish-2d have built and polished the game, to self-check it against a machine-checkable acceptance contract, drive a fix→re-run loop until green, and hand over build-verdict.json + a green `loombridge doneness` as proof.
 ---
 
-Use this skill to turn the human review pass — "the font is wrong, the player is clipped, it won at the wrong spot" — into reproducible self-checks the agent runs on itself. It is the third stage after `unity-2d-game` (build + feel) and `game-polish-2d` (presentation). The contract is `.loombridge/ACCEPTANCE.json`; the proof artifact is `.loombridge/reports/build-verdict.json` + a green `loombridge doneness`. The agent's primary tools are the **Loombridge CLI** (`loombridge verify --strict`, `loombridge doneness`) and the **speed capture-runner** for the visual capture chunk; manual per-gate captures fill in the remaining gates.
+Use this skill to turn the human review pass — "the font is wrong, the player is clipped, it won at the wrong spot" — into reproducible self-checks the agent runs on itself. It is the third stage after `unity-2d-game` (build + feel) and `game-polish-2d` (presentation). The contract is `.loombridge/ACCEPTANCE.json`; the proof artifact is `.loombridge/reports/build-verdict.json` + a green `loombridge doneness`. The agent's primary tools are the **Loombridge CLI** (`loombridge verify --root . --inputs .loombridge/verify/<state> --strict`, `loombridge doneness`) and the **speed capture-runner** for the visual capture chunk; manual per-gate captures fill in the remaining gates. (A bare `loombridge verify` is the unified front door: it discovers the project's verification assets and refuses, exit 2, when nothing was graded; the per-state `--inputs` form above is the contract-mode invocation this skill drives.)
 
 ## When to invoke
 
@@ -134,7 +134,7 @@ Then run an **independent adversarial ensemble — N ≥ 2 (recommend 3) fresh-c
 
 ### 5. Fix → re-run loop
 
-For each Tier-1 `failures[]` entry: reproduce (the gate already did) → fix the build → re-capture that gate's output → `loombridge verify --strict` → `loombridge doneness`. For an anchor/extras `warn` or an intentional deviation, either fix or **consciously update the acceptance contract** (document the decision). Loop until `loombridge doneness` exits 0. For the advisory `reviewFindings`: **every unioned perceptual `fail` must be resolved (fix → re-capture → re-run the ensemble → re-union) or explicitly justified in writing** — warns are triaged but don't block.
+For each Tier-1 `failures[]` entry: reproduce (the gate already did) → fix the build → re-capture that gate's output → `loombridge verify --root . --inputs .loombridge/verify/<state> --strict` → `loombridge doneness`. For an anchor/extras `warn` or an intentional deviation, either fix or **consciously update the acceptance contract** (document the decision). Loop until `loombridge doneness` exits 0. For the advisory `reviewFindings`: **every unioned perceptual `fail` must be resolved (fix → re-capture → re-run the ensemble → re-union) or explicitly justified in writing** — warns are triaged but don't block.
 
 ### 6. Asset handoff consistency check (when applicable)
 

@@ -74,6 +74,22 @@ export interface UnifiedNotRun {
   why: NotRunReason;
 }
 
+/**
+ * One executed ASSET inside a section. A section can cover several assets (a project
+ * with three approved traces has one `flow` section), and a roll-up that reported only
+ * the worst of them would hide WHICH trace broke. The section keeps its single status
+ * and tier; this array is the per-asset detail behind it.
+ */
+export interface UnifiedAssetOutcome {
+  kind: DiscoveredAssetKind;
+  id: string;
+  /** The per-asset engine's own status word, verbatim. */
+  status: string;
+  exit: number;
+  reportPath?: string;
+  reportSha256?: string | null;
+}
+
 export interface UnifiedVerifySection {
   /** The per-asset engine's own status word, verbatim (never re-spelled here). */
   status: string;
@@ -87,6 +103,8 @@ export interface UnifiedVerifySection {
    * summarized, so a later hand-edit of the per-asset report is detectable.
    */
   reportSha256?: string | null;
+  /** Every asset this section executed, when the section covers more than one. */
+  assets?: UnifiedAssetOutcome[];
 }
 
 export interface UnifiedVerifyReport {

@@ -603,6 +603,71 @@ function sliceVerifiedFlipDecision(args: {
   return { ok: true, plan };
 }
 
+/**
+ * The POSITIVE allowlist that routes an invocation to the unified orchestrator (A9).
+ *
+ * It is an allowlist, not a "no mode flag present" test, and that direction is the whole
+ * point: a NEGATIVE rule silently adopts every flag added later, so the next flag someone
+ * adds to `parseArgs` would join the orchestrator by omission and inherit a code path
+ * nobody wrote it for. With this set, a new flag routes to the legacy engine (today's
+ * behavior) until an author puts it here on purpose.
+ *
+ * `__tests__/unit/capabilities/verification/unified-verify-flags.test.ts` walks every flag
+ * `parseArgs` accepts and fails if one is classified in neither direction.
+ */
+export const ORCHESTRATOR_FLAGS: ReadonlySet<string> = new Set([
+  "--root",
+  "--strict",
+  "--live",
+  "--report",
+  "--id",
+  "--workspace",
+]);
+
+/** The subset of {@link ORCHESTRATOR_FLAGS} that consumes the following argv token. */
+const ORCHESTRATOR_VALUE_FLAGS: ReadonlySet<string> = new Set(["--root", "--report", "--id", "--workspace"]);
+
+/** The orchestrator-only flags: `parseArgs` (the legacy engine) does not know them. */
+const ORCHESTRATOR_ONLY_FLAGS: ReadonlySet<string> = new Set(["--live", "--report"]);
+
+interface OrchestratorArgs {
+  root: string;
+  strict: boolean;
+  live: boolean;
+  reportPath?: string;
+  workspaceId?: string;
+  workspace?: string;
+}
+
+/**
+ * Classify an argv as orchestrator territory, or not. Returns null when ANY token falls
+ * outside the allowlist, in which case the caller must fall through to the legacy paths
+ * unchanged (including their unknown-flag exit 2).
+ *
+ * A value-flag whose value is missing or flag-like also returns null: that is a malformed
+ * invocation, and `parseArgs` already owns exactly how those are reported.
+ */
+function classifyOrchestratorArgs(args: string[]): OrchestratorArgs | null {
+  const parsed: OrchestratorArgs = { root: process.cwd(), strict: false, live: false };
+  for (let i = 0; i < args.length; i += 1) {
+    const arg = args[i]!;
+    if (!ORCHESTRATOR_FLAGS.has(arg)) return null;
+    if (!ORCHESTRATOR_VALUE_FLAGS.has(arg)) {
+      if (arg === "--strict") parsed.strict = true;
+      else if (arg === "--live") parsed.live = true;
+      continue;
+    }
+    const value = args[i + 1];
+    if (value === undefined || value.startsWith("--")) return null;
+    i += 1;
+    if (arg === "--root") parsed.root = path.resolve(value);
+    else if (arg === "--report") parsed.reportPath = path.resolve(value);
+    else if (arg === "--id") parsed.workspaceId = value;
+    else parsed.workspace = path.resolve(value);
+  }
+  return parsed;
+}
+
 /** A `--help`/parse outcome. `usageError` exits 2; a bare `help` exits 0. */
 type ParseHelp = { help: true; usageError?: boolean };
 
@@ -1047,8 +1112,24 @@ function printUsage(): void {
     [
       "Usage: loombridge verify [options]",
       "",
-      "Run the Tier-1 gates against .loombridge/ACCEPTANCE.json, write the verdict,",
-      "and exit non-zero unless the build is acceptable (the build gate).",
+      "BARE `verify` (no mode flags) is the unified front door: it DISCOVERS the",
+      "project's verification assets (acceptance contract, approved trace baselines,",
+      "feel snapshot, screen contract), PRINTS THE PLAN FIRST (one row per asset, with",
+      "when and by what it was approved), then runs them into one report at",
+      ".loombridge/reports/verify.json. Nothing is written before the plan prints.",
+      "Offline assets run by default; assets that need a running editor are listed as",
+      "'needs --live' and never folded into a pass. A project with no assets prints the",
+      "record/replay/approve on-ramp and exits 2.",
+      "",
+      "  loombridge verify                     # offline assets, plan first",
+      "  loombridge verify --live              # also replay traces + grade feel drift",
+      "",
+      "Passing ANY other flag below selects a legacy mode instead, unchanged.",
+      "",
+      "Bare-run options (combinable only with each other):",
+      "  --live                Also run the assets that need a running Unity editor",
+      "                        (trace replay with pixel-drift gating, feel snapshot).",
+      "  --report <path>       Unified report path (default: .loombridge/reports/verify.json)",
       "",
       "Options:",
       "  --root <dir>          Project root (default: cwd)",
@@ -1162,7 +1243,12 @@ function printUsage(): void {
       "                        .png (--minigame mode).",
       "  -h, --help            Show this help",
       "",
+      "Exit (bare run): 0 pass, or a partial whose ONLY unmeasured assets were skipped",
+      "      for lack of --live; 1 a game defect (gate fail, drift, baseline regression);",
+      "      2 a harness fault, a broken asset, or nothing graded. A 2 is never a game",
+      "      verdict, and a run that checked nothing is never a pass.",
       "Exit: 1 on Tier-1 fail (or warn under --strict), else 0.",
+      "      A contract run that graded NOTHING (no gate consumed a capture) exits 2.",
       "      In --profile mode: 1 on fail (or 'incomplete' under --strict), else 0.",
       "      In --profile --capture-contract mode: incomplete capture evidence exits 2.",
       "      In --minigame mode: 0 pass, 1 fail, 2 incomplete (nothing graded).",
@@ -1172,6 +1258,51 @@ function printUsage(): void {
 
 /** CLI entry: parse the post-subcommand args and run. */
 export async function run(args: string[]): Promise<number> {
+  // THE UNIFIED FRONT DOOR (RFC UnifiedVerify, S1). An argv made of nothing but the
+  // allowlisted flags is the bare `verify` question ("does this build still do what a
+  // human approved?"), answered by the orchestrator: discover the assets, print the plan,
+  // then delegate to the engines below. Everything else routes to the legacy paths
+  // EXACTLY as before, so `--minigame`/`--snapshot`/`--profile`/`--slice`/`--stage`/
+  // `--inputs` and the unknown-flag exit 2 are untouched.
+  //
+  // Deliberate S1 divergence: the MCP `loombridge_verify` tool still calls `runVerify`
+  // directly (contract mode) and does NOT come through here. Routing it is an S2 item;
+  // what makes the divergence safe today is that the checked-nothing refusal lives in the
+  // ENGINE (`runVerify`), so the tool cannot report a vacuous green either way.
+  const orchestrated = classifyOrchestratorArgs(args);
+  if (orchestrated) {
+    // The same two guards every workspace-aware mode applies, for the same two reasons:
+    // an unusable id must be refused rather than silently sanitized into someone else's
+    // workspace, and a workspace INSIDE the project would write verification artifacts
+    // into the game repo.
+    if (orchestrated.workspaceId !== undefined && !WORKSPACE_ID_PATTERN.test(orchestrated.workspaceId)) {
+      console.error("[loombridge verify] --id must be lowercase kebab-case (letters, digits, hyphens; start with a letter).");
+      return 2;
+    }
+    if (orchestrated.workspace !== undefined && isInside(orchestrated.workspace, path.resolve(orchestrated.root))) {
+      console.error(
+        `[loombridge verify] workspace ${orchestrated.workspace} is inside the project ${path.resolve(orchestrated.root)}: ` +
+          "pass --workspace <dir> outside it (the default is ~/.loombridge/projects/<id>).",
+      );
+      return 2;
+    }
+    const { runUnifiedVerify } = await import("./unified/orchestrator.js");
+    try {
+      return await runUnifiedVerify(orchestrated);
+    } catch (error) {
+      // A throw out of the orchestrator itself is a harness fault, never a game verdict.
+      console.error(`[loombridge verify] fatal: ${error instanceof Error ? error.message : String(error)}`);
+      return 2;
+    }
+  }
+  const orchestratorOnly = args.filter((a) => ORCHESTRATOR_ONLY_FLAGS.has(a));
+  if (orchestratorOnly.length > 0) {
+    console.error(
+      `[loombridge verify] ${orchestratorOnly.join(" and ")} ${orchestratorOnly.length > 1 ? "belong" : "belongs"} to the bare unified run; ` +
+        `they cannot be combined with mode/engine flags. Allowed alongside them: ${[...ORCHESTRATOR_FLAGS].join(", ")}.`,
+    );
+    return 2;
+  }
   const parsed = parseArgs(args);
   if ("help" in parsed) {
     printUsage();

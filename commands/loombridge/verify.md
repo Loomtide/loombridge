@@ -9,6 +9,35 @@ Run the **enforced** Tier-1 gate spine against `.loombridge/ACCEPTANCE.json` and
 verdict. This is the moat: a build is **not done** until this is green. The guarantee is
 identical on Claude Code and Codex because it lives in the deterministic CLI, not here.
 
+## Bare `verify`: the unified front door
+
+`loombridge verify` with **no mode flags** answers the only question a user has: *does this
+build still do what a human approved?* It discovers the project's verification assets
+(acceptance contract, approved trace baselines, feel snapshot, screen contract), **prints the
+plan first**, then runs them into one report at `.loombridge/reports/verify.json` alongside
+the per-asset reports.
+
+```bash
+loombridge verify --root .          # offline assets only
+loombridge verify --root . --live   # also replay traces + grade feel drift
+```
+
+- **The plan prints before anything is written.** One row per asset: what it is, when and by
+  what its anchor was approved, and whether it will run. Read it before trusting the exit code.
+- **Offline by default.** Trace replay and feel-snapshot capture need a running editor, so
+  they are listed as `not run: needs --live` and are **never folded into a pass**.
+- **A row that cannot execute is named, never skipped.** An unapproved trace, an unstamped
+  legacy baseline, a draft screen contract, a baseline approved for a *different* project: each
+  is a visible row that cannot contribute a pass.
+- **No assets at all** prints the on-ramp (`trace record --observe` → `trace replay` →
+  `trace approve`, then `verify --live`) and exits `2`. Recording is a **human** step: the play
+  session *is* the approval moment. Do not claim it as an agent action.
+- **Exit codes:** `0` pass, or a partial whose only unmeasured assets were skipped for lack of
+  `--live` · `1` a game defect (gate fail, drift, baseline regression) · `2` a harness fault, a
+  broken asset, or nothing graded. A run that checked nothing is never a pass.
+
+Passing any other flag below selects a legacy mode instead, unchanged.
+
 ## Process
 
 1. **Run the gates against the primary state's captures.**
@@ -29,7 +58,15 @@ identical on Claude Code and Codex because it lives in the deterministic CLI, no
    > per invocation. `doneness` enforces capture *presence* for every state in the
    > capturePack, but multi-state quality *aggregation* is deferred. Omitting `--inputs`
    > defaults to the bare `.loombridge/verify/` root, which is **not** where the canonical flow
-   > writes per-state captures; every gate would degrade to `<gate>.input` WARN.
+   > writes per-state captures.
+   >
+   > **That case is now a REFUSAL, not a green.** If no gate consumed a captured input (every
+   > gate `warn`-on-missing-capture or `not_applicable`), the engine prints `REFUSED: nothing
+   > was graded`, writes the verdict for audit, leaves `STATE.md` **untouched**, and exits `2`.
+   > It applies to the bare run, every `--inputs` form, and the `loombridge_verify` MCP tool.
+   > A run that measured nothing is never a pass. A **partially** graded run is unchanged: at
+   > least one real capture makes a `warn` verdict a real result over a real subset (exit `0`,
+   > `1` under `--strict`, `STATE.md` flipped).
 
 2. **Report honestly from the verdict.** `cat .loombridge/reports/build-verdict.json`.
    - `status: "pass"` → green; state it plainly.
