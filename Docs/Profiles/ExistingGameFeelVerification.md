@@ -4,6 +4,16 @@ This flow is for games Loombridge did not build. The goal is to produce a determ
 report while preserving evidence boundaries: missing capture glue is `not-measured`,
 `attempted-blocked`, or `unsupported`, never a pass.
 
+Two graded paths share the same capture contract machinery:
+
+- **Archetype grading** (`verify --profile`, this document): compare the game against a
+  named feel profile. Grammar metrics gate; taste metrics are descriptive placement
+  (see [`PlatformerFeelProfiles.md`](PlatformerFeelProfiles.md)).
+- **Drift verification** (`loombridge feel snapshot` + `verify --snapshot`): freeze the
+  game's own human-approved measured behavior and verify kinematic drift against it, with
+  no archetype opinion involved. For a game that fits none of the shipped profiles, this
+  is the generic path: see [`TuningSnapshotVerification.md`](TuningSnapshotVerification.md).
+
 ## Artifact Workspace
 
 Use the same external verification workspace layout as mini-game verification:
@@ -144,8 +154,16 @@ trials but reports coyote/buffer as `attempted-blocked` until anchor-observation
 - `not-measured`: no recipe was run or no recipe exists.
 - `planned`: a reviewed recipe exists but has not run yet.
 
-Status stays deterministic: out-of-band measured metrics fail; missing evidence keeps the profile
-incomplete under strict mode. Harness blockers are not game bugs.
+Status stays deterministic, and gating follows the metric's class (report `schemaVersion: "2"`):
+an out-of-band **grammar** metric fails; an out-of-band **taste** metric is recorded as
+`out_of_band` (descriptive archetype placement, never a fail) unless the run opts in with
+`--enforce-taste`; a §0-rejected value fails regardless of class. Missing evidence keeps the
+profile incomplete under strict mode. Harness blockers are not game bugs.
+
+Note on the dated run records below: entries before 2026-07-27 predate the grammar/taste
+split and quote schemaVersion 1 verdicts, where any out-of-band measured metric (taste
+included) graded as `fail`. The measured values and evidence chains stand; only the
+gating semantics have since changed.
 
 Trajectory-backed generic captures opt into the same §0 re-derivation trust link as older profile
 captures: a metric with raw samples can report `verified`; a number without re-derivable samples
