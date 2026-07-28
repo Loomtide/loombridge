@@ -58,11 +58,11 @@ on disk.
 | Your situation | The door | What happens |
 |---|---|---|
 | **New game**, built by an agent | `loombridge plan` | Contract and hero shot are frozen before the first line of code; the agent builds slice by slice against a target it cannot redefine; `doneness` certifies with run-bound evidence. |
-| **Existing game**, about to let an agent in | `loombridge trace record --observe --id <name>` | You play once and approve once. From then on, `loombridge trace replay` re-drives your session against the editor and pixel-diffs it, and `loombridge feel snapshot` + `verify --snapshot` catch feel drift. |
+| **Existing game**, about to let an agent in | `loombridge trace record --observe --id <name>` | You play once and approve once. From then on, bare `loombridge verify` discovers every approved anchor, prints its plan first, and checks what it can (`--live` adds replay pixel-diffing and feel capture). A verify that measured nothing refuses, exit 2. |
 
 The split of labor is the point: **a human plays and approves exactly once; the agent gets
-the deterministic gates forever after.** One bare `verify` front door that discovers every
-anchor and runs them into a single report is in progress:
+the deterministic gates forever after.** The unified front door (S1) is shipped; selectors
+and mode-flag deprecations are staged next:
 [`Docs/Design/UnifiedVerify.md`](Docs/Design/UnifiedVerify.md). Full positioning:
 [`Docs/Design/Positioning.md`](Docs/Design/Positioning.md).
 

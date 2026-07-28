@@ -1,6 +1,6 @@
 # RFC: Unified Verify (one front door for verification)
 
-**Status:** PROPOSED.
+**Status:** PROPOSED for S2 to S4. **S1 has shipped** (see "S1 delivery notes" below).
 **Date:** 2026-07-28. Written after the first full live dogfood of every verification mode on
 consumer projects (KidsAdventure: trace record/replay + screen contract; KnightsQuest: tuning
 snapshot), which is where the fragmentation cost was measured first-hand.
@@ -89,8 +89,10 @@ anchor); if either ever grows a human-approved baseline, it enters through this 
 4. `--only flow|feel|screens|pixels|contract` selects subsets for CI granularity.
 
 **The empty-project behavior is the on-ramp, not usage soup.** `verify` with no assets prints
-the two-command path to the cheapest universal asset: `trace record --observe` (play it once),
-then approve. A recorded demonstration + baseline works for ANY game with input, needs no
+the path to the cheapest universal asset. As shipped in S1 that path is three commands, not two:
+`trace record --observe` (a human plays it once), `trace replay` (re-drive it and capture
+frames), `trace approve` (freeze those frames as the baseline), then `verify --live`. A
+recorded demonstration + baseline works for ANY game with input, needs no
 contract authoring, and gives real regression protection minutes after install. The on-ramp
 names its actors honestly: the recording session is a HUMAN playing the game (that play
 session IS the approval moment, the single human anchor everything hangs from), and the
@@ -157,6 +159,71 @@ Each stage lands with the standard bars: LITMUS-backed guards for the new discov
 planted broken asset must fail the plan), `npm run ci` green, live validation on at least one
 consumer project.
 
+### S1 delivery notes
+
+S1 shipped as described, plus four things this RFC did not originally specify:
+
+- **The checked-nothing refusal lives in the ENGINE, not the orchestrator.** `runVerify` derives
+  "nothing graded" from the assembled report's own gates, never from directory emptiness, which
+  closes the defect for the bare run, every `--inputs` form, and the `loombridge_verify` MCP tool
+  at once. Directory emptiness is never used as a proxy anywhere.
+- **A trace baseline manifest** (`baseline-manifest.json`, written by `trace approve`) binds
+  `traceId`, `traceSha256`, `approvedAt`, `sourceReportSha256`, and per-frame shas. It is what
+  lets the plan answer WHEN a pixel baseline was approved and FROM WHAT. Feel snapshots and
+  screen-contract baselines gained an owning-`projectRoot` stamp for the same reason. An
+  unstamped legacy anchor is a non-anchor row (never executed, never a pass), not tampering.
+- **Two sanctioned replay tiering corrections**, recorded here as harness-fault enforcement
+  rather than a change to gate semantics: replay `blocked` maps to exit 2 in both doors, and an
+  unreadable actual or baseline PNG is `visualStatus: "unreadable"` plus a harness marker (exit
+  2), never reported as pixel drift. A corrupt file is a capture gap, not a game defect.
+- **Bare `verify` routes on a POSITIVE allowlist** (`--root`, `--strict`, `--live`, `--report`,
+  `--id`, `--workspace`). Every other flag reaches the legacy paths exactly as before, and a
+  guard test fails if a newly added flag is classified in neither direction. One declared tier
+  change came with it: on BARE argv a malformed `ACCEPTANCE.json` is a broken contract ROW
+  (tier 2) instead of a fatal, because the contract is one asset among several and a project
+  with a good trace baseline should still get that trace checked. The engine path and the MCP
+  tool keep the fatal tier.
+
+- **The unified report is written to `.loombridge/reports/verify.json`** alongside the
+  per-asset reports, and the screens section writes a verify-owned
+  `.loombridge/reports/verify-screens.json` rather than the guided flow's workspace report.
+  `--report <path>` overrides the first, resolved relative to `--root`, and is REFUSED when it
+  would overwrite a project artifact or any file that is not a previous unified report.
+- **`doneness` consumes the report** (the seam S1 originally left reserved). When
+  `.loombridge/reports/verify.json` is present and its `exit` is non-zero, `doneness` adds a
+  refusal on both its paths (whole-game and slice roll-up); an absent report changes nothing,
+  and a malformed one refuses rather than being skipped. It is a REFUSE-ONLY input: a green
+  report never adds certification, so it is not a laundering path.
+- **A found game defect stays at exit 1**, however many anchors went unmeasured. The earlier
+  cut raised a `fail` to 2 whenever a row could not be measured, which broke the promise that
+  "2 is never a game verdict". Unmeasured anchors are reported as `notRun` rows and named in
+  the summary; they do not change the tier of a defect that was actually found.
+- **A screen contract runs only against an APPROVED layout baseline.** A contract and its
+  capture pack are both producible in one agent session, so with no frozen third artifact the
+  section would grade a document against captures of that same document and report `pass`. No
+  stamped baseline manifest, no execution.
+- **Sections declare `anchored`**, and the report carries `anchoredSections` /
+  `unanchoredSections`, so "green" and "green against nothing a human froze" are
+  distinguishable without reading prose. Report paths and shas are stamped ONLY when the run
+  actually (re)wrote the per-asset report, so a refused section cannot inherit the previous
+  run's evidence.
+
+Documented limitations of the S1 shape, recorded rather than papered over:
+
+- `runId` on the unified report is CONTEXTUAL, not an enforcement. It records which build was
+  in flight; freshness enforcement (runId match plus the `producedAt` ordering) remains
+  `doneness`'s job, and the stamp exists so the two documents can be cross-checked.
+- The bare-run flag guard scans the `arg === "--x"` parser idiom that `verify.ts` uses today. A
+  parser rewritten to a different idiom (a map, a `startsWith`, a library) would need the scan
+  rewritten with it; the guard carries a LITMUS so a defused scan fails loudly rather than
+  passing over an empty set.
+- `verify.json` carries no self-integrity stamp and cannot: anyone who can edit the project can
+  write one. That is precisely why `doneness` treats it as refuse-only input and never as a
+  source of green.
+
+Not in S1, and unchanged as roadmap items: `--only` selectors, mode-flag deprecation notices,
+and routing the `loombridge_verify` MCP tool through the orchestrator (all S2).
+
 ## Out of scope
 
 - Changing any gate's semantics, tolerance, or exit tiering.
@@ -174,10 +241,14 @@ consumer project.
 2. Where does the unified report live: `.loombridge/reports/verify.json` alongside the
    per-asset reports, or replacing them? Leaning alongside (per-asset reports are consumed by
    existing tooling).
-3. Does bare `verify` run LIVE assets (feel snapshot, screen capture) by default in a local
-   run, or require `--live` the way doctor does? Leaning `--live` opt-in, matching doctor's
-   precedent: the ratchet door's dominant runtime is CI, and live-by-default would make the
-   least specific, most-typed command the one most likely to hit the post-reload stall
+3. **RESOLVED (S1): `--live` opt-in.** Bare `verify` runs the offline assets and lists the
+   live-only ones as `not run: needs --live`; `--live` executes them. The reasoning that
+   decided it, unchanged: the ratchet door's dominant runtime is CI, and live-by-default would
+   make the least specific, most-typed command the one most likely to hit the post-reload stall
    family (the least recoverable failure mode we have). Printing the plan first does not
    mitigate that, because the plan prints and then runs anyway. The fresh-project
-   "verify looks useless" concern is already answered by the on-ramp text.
+   "verify looks useless" concern is already answered by the on-ramp text. The cost of the
+   opt-in is honesty about coverage, and S1 pays it explicitly: a run whose only unmeasured
+   assets were live-only reports `partial`, names every unmeasured anchor, and is the ONE
+   non-execution reason still allowed to exit 0 (it is an operator's deliberate choice). Every
+   other unmeasured anchor keeps the exit at its tier.

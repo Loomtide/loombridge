@@ -44,6 +44,7 @@ import { readGenrePromotionReport } from "../genre/promotion-report.js";
 import { inspectContractPresence, noContractRefusal } from "../../domain/contract-presence.js";
 import { assertValidAcceptanceContract } from "./validator.js";
 import { SFX_GATE_NAMES } from "./run-gates.js";
+import { unifiedVerifyReportPath } from "./unified/report.js";
 import {
   deriveEvidenceClassesFromUntrusted,
   EVIDENCE_CLASS_SET,
@@ -761,6 +762,62 @@ export function sfxGateRefusals(
  * Pure + exhaustively testable; refusals ADD (union), they never override.
  * Returns `[]` when the contract declares no required classes (backward compat).
  */
+/**
+ * THE UNIFIED-VERIFY SEAM, CONSUMED (H3).
+ *
+ * S1 shipped `.loombridge/reports/verify.json` as a roll-up that governed nothing: a
+ * unified run could exit 2 (a broken anchor, a trace baseline nobody stamped, a screens
+ * comparison that never happened) while the CONTRACT section inside it passed and
+ * flipped STATE to `verified-green`. An agent could then run `doneness`, get a 0, and
+ * quote it. The whole point of the front door is that the anchors it could not measure
+ * are part of the verdict, so the door's own refusal has to reach the certificate.
+ *
+ * Three rules keep this honest:
+ *
+ *  - ABSENT FILE, NO NEW BEHAVIOR. S1 is additive: a project that never ran the unified
+ *    door certifies exactly as it did before.
+ *  - REFUSE-ONLY. A non-zero `exit` ADDS a reason. A zero `exit` adds nothing, and can
+ *    never remove a reason any other gate produced, so a hand-written green
+ *    report (the file carries no self-integrity stamp, and cannot: see the
+ *    `UNIFIED_VERIFY_REPORT` doc) buys nothing but the absence of one extra refusal.
+ *  - MALFORMED IS A REFUSAL, NOT A SKIP. A present-but-unreadable report is the exact
+ *    shape a "delete the inconvenient fields" attack produces, and an unreadable
+ *    verdict has never been a pass anywhere else in this codebase.
+ *
+ * The path is resolved from the exported constant, never re-spelled here.
+ */
+export async function unifiedVerifyRefusals(paths: LoombridgePaths): Promise<string[]> {
+  const reportPath = unifiedVerifyReportPath(paths.reports);
+  const unreadable = [
+    `unreadable unified verify report at ${reportPath}: a present-but-unparseable \`loombridge verify\` ` +
+      "roll-up cannot be read as a pass; re-run `loombridge verify`",
+  ];
+
+  let raw: string;
+  try {
+    raw = await fs.readFile(reportPath, "utf-8");
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
+    return unreadable;
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return unreadable;
+  }
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return unreadable;
+  const report = parsed as { kind?: unknown; status?: unknown; exit?: unknown };
+  if (report.kind !== "unified-verify" || typeof report.exit !== "number") return unreadable;
+  if (report.exit === 0) return [];
+  const status = typeof report.status === "string" ? report.status : "(absent)";
+  return [
+    `unified verify refused (status \`${status}\`, exit ${report.exit}): re-run \`loombridge verify\` ` +
+      `and read ${reportPath}: an anchor it could not measure is not certified by a green contract gate`,
+  ];
+}
+
 export function evidenceClassRefusals(
   requiredEvidenceClasses: RequiredEvidenceClassesRead,
   verdict: VerdictLike | null,
@@ -1391,6 +1448,11 @@ export async function wholeGameDonenessReasons(
     if (!reasons.some((existing) => existing === r)) reasons.push(r);
   }
 
+  // The unified `verify` roll-up, when the project has one (H3). ADDS refusals only.
+  for (const r of await unifiedVerifyRefusals(paths)) {
+    if (!reasons.some((existing) => existing === r)) reasons.push(r);
+  }
+
   return { reasons, state, verdict, manifestCount: manifest.length, artDeferred: art.deferred, coverage };
 }
 
@@ -1418,6 +1480,8 @@ export interface SliceRollupEvaluation {
   coverage: GenreCoverageResolution;
   /** Coverage refusals (the `ungraded` case on this path). */
   coverageRefusals: string[];
+  /** Unified `verify` roll-up refusals (H3). Empty when the project has no verify.json. */
+  unifiedVerifyRefusals: string[];
   ok: boolean;
 }
 
@@ -1444,6 +1508,7 @@ export async function evaluateSliceDoneness(
       artDeferred: false,
       coverage: deriveGenreCoverage({ genre: plan.genre, promotion: null }),
       coverageRefusals: [],
+      unifiedVerifyRefusals: [],
       ok: false,
     };
   }
@@ -1531,7 +1596,13 @@ export async function evaluateSliceDoneness(
   }
   if (coverageRefusals.length) ok = false;
 
-  return { emptyRoadmap: false, slices, depRefusals, fidelityReasons, assetFidelityReasons, artRefusals: art.refusals, artDeferred: art.deferred, coverage, coverageRefusals, ok };
+  // The unified `verify` roll-up (H3) applies to BOTH doneness paths: a slice-planned
+  // project runs the same bare `verify` door, so an anchor the door could not measure
+  // must refuse here too. Absent verify.json → no new behavior.
+  const unifiedRefusals = await unifiedVerifyRefusals(paths);
+  if (unifiedRefusals.length) ok = false;
+
+  return { emptyRoadmap: false, slices, depRefusals, fidelityReasons, assetFidelityReasons, artRefusals: art.refusals, artDeferred: art.deferred, coverage, coverageRefusals, unifiedVerifyRefusals: unifiedRefusals, ok };
 }
 
 /** True only when the acceptance contract PARSES as a valid contract (bare `{}` is rejected). */
@@ -1690,6 +1761,11 @@ async function runSliceDoneness(plan: SlicePlan, paths: LoombridgePaths): Promis
   if (ev.coverageRefusals.length) {
     console.error("  - genre-coverage: REFUSE");
     for (const reason of ev.coverageRefusals) console.error(`      - ${reason}`);
+  }
+
+  if (ev.unifiedVerifyRefusals.length) {
+    console.error("  - unified-verify: REFUSE");
+    for (const reason of ev.unifiedVerifyRefusals) console.error(`      - ${reason}`);
   }
 
   if (ev.ok) {

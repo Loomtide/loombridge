@@ -290,7 +290,13 @@ export interface FirstDivergence {
   actual: string;
 }
 
-export type VisualCaptureStatus = "match" | "drift" | "no-baseline";
+/**
+ * `unreadable` is the HARNESS tier, deliberately distinct from `drift`: a PNG that
+ * cannot be decoded (truncated write, zero-byte capture, a corrupted baseline) says
+ * nothing about the game, and reporting it as drift is exactly the
+ * "harness fault presented as a game defect" failure this repo refuses.
+ */
+export type VisualCaptureStatus = "match" | "drift" | "no-baseline" | "unreadable";
 
 export interface CaptureResult {
   id: string;
@@ -338,6 +344,13 @@ export interface ReplayReport {
   firstDivergence?: FirstDivergence;
   /** True if any captured screenshot drifted from its approved baseline. */
   visualDrift?: boolean;
+  /**
+   * True if any capture's visual comparison could not be made because a PNG (actual
+   * or baseline) was unreadable: a CAPTURE GAP, not drift. Read by `replayExitCode`
+   * to tier the run at 2 (harness) instead of 1 (game). Optional and absent by
+   * default, so a report written before this field existed still parses.
+   */
+  visualHarnessFault?: boolean;
   segments: SegmentResult[];
   assertions: AssertionResult[];
   console: ConsoleResult;

@@ -29,6 +29,7 @@ import { run as minigameRun } from "../../../../capabilities/minigame/minigame.j
 import {
   BASELINE_MANIFEST,
   compareStateToBaseline,
+  loadBaselineManifest,
   type BaselineManifest,
   type BaselineStateInputs,
 } from "../../../../capabilities/minigame/minigame-baseline.js";
@@ -303,6 +304,37 @@ test("baseline approve: writes the bundle + manifest (per-state png/rects + mask
   }
 });
 
+test("baseline approve: stamps the owning PROJECT root, and a legacy unstamped bundle still compares", async () => {
+  // The bundle lives outside the game repo, so nothing about its location proves
+  // which project it grades. The stamp is what lets unified `verify` refuse project
+  // B's screens being compared against project A's approved layout.
+  const root = await tmp("s6e-stamp-");
+  const ref = path.join(root, "baseline");
+  try {
+    const contractPath = path.join(root, "c.json");
+    await writeJson(contractPath, makeContract(ref));
+    const caps = path.join(root, "caps");
+    await writeCleanPack(caps);
+    assert.equal(await approve(root, contractPath, caps), 0);
+
+    const manifestPath = path.join(ref, BASELINE_MANIFEST);
+    const manifest = JSON.parse(await fs.readFile(manifestPath, "utf-8")) as BaselineManifest;
+    assert.equal(manifest.projectRoot, path.resolve(root), "a new approval names the project it is for");
+
+    // Schema tolerance: a bundle frozen before the field existed must still load and
+    // compare exactly as before: an unstamped baseline is legacy, never tampering.
+    delete (manifest as { projectRoot?: string }).projectRoot;
+    await fs.writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf-8");
+    const legacy = await loadBaselineManifest(ref);
+    assert.ok(legacy, "a legacy manifest still loads");
+    assert.equal(legacy.projectRoot, undefined);
+    const { code } = await verify(root, contractPath, caps, path.join(root, "r.json"));
+    assert.equal(code, 0, "a legacy bundle still compares clean");
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
 test("verify --minigame: a clean re-compare PASSES (no regression)", async () => {
   const root = await tmp("s6e-clean-");
   const ref = path.join(root, "baseline");
@@ -503,6 +535,44 @@ test("minigame baseline status: reports 'no baseline' when none approved (exit 0
     const code = await minigameRun(["baseline", "status", "--contract", contractPath, "--root", root]);
     assert.equal(code, 0);
     assert.match(lines.join("\n"), /no approved baseline/);
+  } finally {
+    console.error = orig;
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test("baseline approve WARNS when it stamps a cwd-derived project root (the guided flow prints no --root)", async () => {
+  // `minigame next` builds its commands from a WORKSPACE, which knows nothing about where
+  // the game repo is, so the printed `baseline approve` carries no --root and the ownership
+  // stamp silently becomes the shell's cwd. A wrong stamp surfaces much later as unified
+  // `verify` refusing the bundle as another project's, so say it at approval time instead.
+  const root = await tmp("s6e-cwdstamp-");
+  const ref = path.join(root, "baseline");
+  const lines: string[] = [];
+  const orig = console.error;
+  console.error = (...a: unknown[]) => { lines.push(a.map(String).join(" ")); };
+  try {
+    const contractPath = path.join(root, "c.json");
+    await writeJson(contractPath, makeContract(ref));
+    const caps = path.join(root, "caps");
+    await writeCleanPack(caps);
+
+    // No --root: the warning fires, and it names the directory it is about to stamp.
+    assert.equal(
+      await minigameRun(["baseline", "approve", "--contract", contractPath, "--captures", caps, "--ref", ref]),
+      0,
+    );
+    const warned = lines.filter((l) => /no --root given: stamping this baseline/.test(l));
+    assert.equal(warned.length, 1, lines.join("\n"));
+    assert.ok(warned[0]!.includes(process.cwd()), "the warning must name the root it is stamping");
+    const manifest = await loadBaselineManifest(ref);
+    assert.equal(manifest?.projectRoot, path.resolve(process.cwd()));
+
+    // With --root: no warning, and the stamp is the project that was named.
+    lines.length = 0;
+    assert.equal(await approve(root, contractPath, caps), 0);
+    assert.ok(!lines.some((l) => /no --root given/.test(l)), lines.join("\n"));
+    assert.equal((await loadBaselineManifest(ref))?.projectRoot, path.resolve(root));
   } finally {
     console.error = orig;
     await fs.rm(root, { recursive: true, force: true });

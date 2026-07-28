@@ -245,7 +245,11 @@ export function nextActionFor(state: LoombridgeState): string {
     case "verified-failing":
       return "Read the latest verdict failures, fix each, then `loombridge build` → verify → doneness.";
     case "verified-warn":
-      return "Resolve the warnings (or accept them), re-run `loombridge verify --strict`, then `loombridge doneness`.";
+      // `--inputs` is named on purpose, for the same reason `build` prints it: a BARE
+      // `verify --strict` is now the unified front door (a broader question), while this
+      // loop is resuming the contract-mode run that produced the warns. `.loombridge/verify`
+      // is that engine's own default dir, so the behavior is unchanged.
+      return "Resolve the warnings (or accept them), re-run `loombridge verify --strict --inputs .loombridge/verify`, then `loombridge doneness`.";
     case "verified-green":
       return "Run `loombridge doneness` to certify — for a design-targeted build it requires a passing independent hero-shot review (plan §P0).";
     default:

@@ -298,7 +298,12 @@ export async function runBuild(args: BuildArgs): Promise<number> {
     "[loombridge build] next: agent constructs via Loombridge MCP, saves captures to .loombridge/verify/<state>/,",
   );
   console.error(
-    "[loombridge build]       then `loombridge verify --strict` and `loombridge doneness` to certify (§3a).",
+    // The printed command names --inputs ON PURPOSE. `.loombridge/verify` is the engine's
+    // own default inputs dir, so this is byte-identical to the pre-S1 bare form (including
+    // the nothing-graded refusal) while keeping the supervised loop on the CONTRACT-mode
+    // engine. A bare `verify --strict` now routes to the unified front door, which is a
+    // different (and broader) question than the one this loop is asking.
+    "[loombridge build]       then `loombridge verify --strict --inputs .loombridge/verify` and `loombridge doneness` to certify (§3a).",
   );
   return 0;
 }
@@ -408,7 +413,9 @@ function printUsage(): void {
       "",
       "Mint a §3a build run + gate preconditions. The agent then constructs through",
       "the Loombridge MCP, saves captures to .loombridge/verify/<state>/, runs",
-      "`loombridge verify --strict` and `loombridge doneness` to certify.",
+      "`loombridge verify --strict --inputs .loombridge/verify` and `loombridge doneness`",
+      "to certify (--inputs keeps the supervised loop on the contract-mode engine; it is",
+      "the engine's own default dir, so behavior is unchanged).",
       "",
       "Intent routing is the M2 agent-prose layer (commands/loombridge/build.md);",
       "this CLI does not interpret natural language (plan §3b).",

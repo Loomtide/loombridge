@@ -20,7 +20,7 @@ import { runDoneness } from "../../../../capabilities/verification/doneness.js";
 import { runPlan } from "../../../../capabilities/verification/plan.js";
 import { computeStatusModel, renderDetailedStatus } from "../../../../capabilities/verification/status-model.js";
 import { designStatus, setDesignTarget } from "../../../../capabilities/verification/design.js";
-import { loombridgePaths, readState, writeState } from "../../../../domain/state.js";
+import { fileExists, loombridgePaths, readState, writeState } from "../../../../domain/state.js";
 import { readSlicePlan } from "../../../../capabilities/verification/slices.js";
 import {
   buildLoombridgeStatusPayload,
@@ -243,8 +243,15 @@ test("verify does NOT refuse once a contract exists (guard is backward-compatibl
   try {
     await runPlan({ root, genre: "platformer-2d", engine: "unity", force: false, allowMissingDesignTarget: true });
     console.error = () => {};
-    // With a contract present but no captured inputs, verify proceeds to grade
-    // (it FAILs the gates) — the point is it does NOT short-circuit as a contract refusal.
+    // Stage ONE real capture so the run actually grades a gate. Without it the engine's
+    // nothing-graded refusal also exits 2, and this assertion could no longer tell a
+    // missing-contract refusal apart from an ungraded run. The two are different
+    // defects and this test is about the first.
+    const paths = loombridgePaths(root);
+    await fs.mkdir(paths.verifyInputs, { recursive: true });
+    await fs.writeFile(path.join(paths.verifyInputs, "console.json"), JSON.stringify({ logs: [] }), "utf-8");
+    // With a contract present, verify proceeds to grade. The point is it does NOT
+    // short-circuit as a contract refusal.
     const code = await runVerify(verifyArgs(root));
     console.error = original;
     assert.notEqual(code, 2, "a present contract must not be treated as missing");
@@ -490,6 +497,11 @@ test("runLoombridgeVerifyTool does NOT refuse once a contract exists (writes a r
   const root = await tmpRoot();
   try {
     await runPlan({ root, genre: "platformer-2d", engine: "unity", force: false, allowMissingDesignTarget: true });
+    // One real capture: the MCP tool shares the engine, so an ungraded run would also
+    // exit 2 and blur what this test pins (a present contract is not a refusal).
+    const paths = loombridgePaths(root);
+    await fs.mkdir(paths.verifyInputs, { recursive: true });
+    await fs.writeFile(path.join(paths.verifyInputs, "console.json"), JSON.stringify({ logs: [] }), "utf-8");
     const payload = await runLoombridgeVerifyTool(root);
     assert.notEqual(payload.exitCode, 2, "a present contract must not read as a missing-contract refusal");
     assert.equal(payload.refused, false);
@@ -629,8 +641,13 @@ test("runLoombridgeVerifyTool maps a malformed-but-present ACCEPTANCE.json to a 
     assert.equal(payload.verdictExists, false);
     assert.equal(payload.verdictStatus, null);
 
-    // The same file through the CLI path produces the matching tier + message.
-    const cli = await captureVerb(() => runVerifyCli(["--root", rootCli]));
+    // The same file through the CLI's CONTRACT-ENGINE path produces the matching tier +
+    // message. Pinned on an `--inputs` invocation because that is the argv that still
+    // routes to `runVerify`, which is the level this parity is really about: the MCP tool
+    // calls `runVerify` directly, and the two must not diverge on the same broken file.
+    const cli = await captureVerb(() =>
+      runVerifyCli(["--root", rootCli, "--inputs", loombridgePaths(rootCli).verifyInputs]),
+    );
     assert.equal(cli.code, payload.exitCode, "MCP and CLI must agree on the tier for the same broken contract");
     const cliFatal = cli.lines.find((l) => /\[loombridge verify\] fatal:/.test(l));
     assert.ok(cliFatal, cli.lines.join("\n"));
@@ -638,6 +655,32 @@ test("runLoombridgeVerifyTool maps a malformed-but-present ACCEPTANCE.json to a 
   } finally {
     await fs.rm(rootMcp, { recursive: true, force: true });
     await fs.rm(rootCli, { recursive: true, force: true });
+  }
+});
+
+test("BARE argv is orchestrator territory: a malformed ACCEPTANCE.json is a BROKEN asset row (tier 2), not a fatal", async () => {
+  // A DECLARED tier change (RFC UnifiedVerify amendment A2). `verify --root X` is now the
+  // unified front door, where the contract is ONE asset among several: a project with a
+  // good trace baseline must still get that trace checked, so one unreadable file is a
+  // broken ROW (harness tier 2), never a fatal that abandons the plan. The fatal tier is
+  // unchanged on the engine path (`--inputs`) and for the MCP tool, pinned above.
+  const root = await tmpRoot();
+  try {
+    const paths = loombridgePaths(root);
+    await fs.mkdir(paths.dir, { recursive: true });
+    await fs.writeFile(paths.acceptance, "{ this is not json", "utf-8");
+
+    const cli = await captureVerb(() => runVerifyCli(["--root", root]));
+    assert.equal(cli.code, 2, "a broken asset is the harness tier, never a game verdict");
+    const text = cli.lines.join("\n");
+    assert.match(text, /contract '.*': BROKEN, will not run: .*is malformed/);
+    assert.ok(
+      !/\[loombridge verify\] fatal:/.test(text),
+      `the plan must survive one malformed asset:\n${text}`,
+    );
+    assert.equal(await fileExists(paths.verdict), false, "a broken row is tiered WITHOUT running the engine");
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
   }
 });
 

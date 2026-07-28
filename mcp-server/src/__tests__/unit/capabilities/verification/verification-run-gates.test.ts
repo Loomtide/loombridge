@@ -14,7 +14,7 @@ import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
-import { runGates, isGateInStage, VERIFY_STAGES, type ReviewFindings } from "../../../../capabilities/verification/run-gates.js";
+import { gradedGates, runGates, isGateInStage, VERIFY_STAGES, type ReviewFindings } from "../../../../capabilities/verification/run-gates.js";
 import type { AcceptanceContract } from "../../../../capabilities/verification/types.js";
 import { createDraftAssetManifest, type AssetManifest } from "../../../../capabilities/assets/asset-manifest.js";
 import { REPO_ROOT as REPO_ROOT_SUPPORT } from "../../../_support/paths.js";
@@ -916,6 +916,166 @@ test("runGates --stage construct: a FAILING in-stage gate DOES fail the stage", 
     const staged = await runGates({ acceptance, inputsDir: dir, stage: "construct" });
     assert.equal(staged.status, "fail", "a broken in-stage gate must fail the stage");
     assert.equal(staged.gates["manifest"], "fail");
+  } finally {
+    await fs.rm(dir, { recursive: true, force: true });
+  }
+});
+
+// ── gradedGates: did this run actually CHECK anything? ───────────────────────
+
+test("gradedGates: only gates whose evaluator consumed a real capture count as graded", async () => {
+  const acceptance = await loadAcceptance();
+
+  // Empty inputs: every gate degrades to a capture-missing WARN, so NOTHING graded.
+  const empty = await mkTmpDir();
+  try {
+    const report = await runGates({ acceptance, inputsDir: empty });
+    assert.ok(Object.keys(report.gates).length > 0, "the report still lists every gate");
+    assert.equal(report.status, "warn", "a warn status alone cannot answer 'did anything grade?'");
+    assert.deepEqual(gradedGates(report), [], "a warn-because-missing gate is not a graded gate");
+  } finally {
+    await fs.rm(empty, { recursive: true, force: true });
+  }
+
+  // One real capture: exactly the gates that read it grade, and nothing else does.
+  const one = await mkTmpDir();
+  try {
+    await writeCaptures(one, { "console.json": conformantCaptures()["console.json"] });
+    const report = await runGates({ acceptance, inputsDir: one });
+    assert.deepEqual(gradedGates(report), ["console-clean"]);
+  } finally {
+    await fs.rm(one, { recursive: true, force: true });
+  }
+
+  // A full conformant pack grades many gates (the partial/full boundary is real).
+  const full = await mkTmpDir();
+  try {
+    await writeCaptures(full, conformantCaptures());
+    const graded = gradedGates(await runGates({ acceptance, inputsDir: full }));
+    assert.ok(graded.length > 1, `expected several graded gates, got ${JSON.stringify(graded)}`);
+    assert.ok(graded.includes("console-clean") && graded.includes("manifest"), JSON.stringify(graded));
+  } finally {
+    await fs.rm(full, { recursive: true, force: true });
+  }
+});
+
+test("gradedGates: the SFX arm grades NOTHING when the cue map was never staged", async () => {
+  // FX2. The SFX gates are opt-in, and when they are ON, an empty inputs dir blocks them
+  // via a DIFFERENT marker id than every other gate (`<gate>.cue-map`, not `<gate>.input`):
+  // they cannot know which cues are required, so they never even reach their capture.
+  // Without that id in the capture-absent list, four blocked gates would count as graded,
+  // the nothing-graded refusal would not fire, and an SFX-enabled project with zero
+  // captures would flip STATE to a quotable `verified-warn`.
+  const acceptance = await loadAcceptance();
+  const withSfx: AcceptanceContract = {
+    ...acceptance,
+    verification: {
+      ...(acceptance.verification ?? {}),
+      sfx: { enabled: true, inputToSfxLatencyMs: { target: 60, unit: "ms", band: { abs: 20 } } },
+    },
+  };
+  const empty = await mkTmpDir();
+  try {
+    const report = await runGates({ acceptance: withSfx, inputsDir: empty });
+
+    // Non-vacuity: the SFX gates really are in this report and really are blocked.
+    const sfxGates = Object.keys(report.gates).filter((g) => g.toLowerCase().includes("sfx"));
+    assert.ok(sfxGates.length >= 4, `the SFX arm did not run at all: ${JSON.stringify(Object.keys(report.gates))}`);
+    assert.ok(
+      report.checks.some((c) => c.id.endsWith(".cue-map") && c.actual === "(missing)"),
+      "the blocked-cue-map marker is what this test is guarding; it is absent",
+    );
+
+    assert.deepEqual(
+      gradedGates(report),
+      [],
+      "an SFX gate blocked on a missing cue map never consumed a capture; it is not graded evidence",
+    );
+  } finally {
+    await fs.rm(empty, { recursive: true, force: true });
+  }
+});
+
+test("gradedGates: the BARE staged asset manifest is not graded evidence; the WRAPPED capture is", async () => {
+  // FX12/H2. `verify` copies `.loombridge/ASSET_MANIFEST.json` into the inputs dir itself.
+  // That copy is the project's DECLARATION, with no `observedAssets` and therefore no
+  // observation of the build at all. A capture run writes the wrapped
+  // `{ manifest, observedAssets }` shape instead. Only the latter is evidence that this
+  // run measured the game.
+  const acceptance = await loadAcceptance();
+  const manifest = approvedGeneratedManifest();
+
+  const bare = await mkTmpDir();
+  try {
+    await writeCaptures(bare, { "asset-manifest.json": manifest as unknown as Record<string, unknown> });
+    const report = await runGates({ acceptance, inputsDir: bare });
+
+    // The gate still RAN and still has a verdict: a self-contradicting declaration is
+    // still a defect. What it must not be is the evidence that carried the run.
+    assert.ok(report.gates["asset-source-fidelity"] !== undefined, "the gate must still run");
+    assert.ok(
+      report.checks.some((c) => c.id === "asset-source-fidelity.staged-document"),
+      "the staged-document marker is missing; nothing distinguishes a declaration from a capture",
+    );
+    assert.deepEqual(gradedGates(report), [], "a staged project document is not a graded gate");
+    // S1 final-test HIGH-1: a VALID bare staged manifest must not FAIL the gate. The
+    // artDeferred flag is injected at the wrapper level, never into the manifest document,
+    // so schema validation sees the same clean manifest either way. A fail here would be a
+    // harness artifact reported as a tier-1 game defect (exit 1, verified-failing STATE)
+    // on a project with nothing wrong with it.
+    assert.notEqual(
+      report.gates["asset-source-fidelity"],
+      "fail",
+      "a valid staged declaration failed the gate: the harness manufactured a game defect",
+    );
+  } finally {
+    await fs.rm(bare, { recursive: true, force: true });
+  }
+
+  const wrapped = await mkTmpDir();
+  try {
+    await writeCaptures(wrapped, {
+      "asset-manifest.json": {
+        manifest,
+        observedAssets: manifest.assets.map((a) => ({
+          assetId: a.id,
+          source: a.source,
+          paths: a.resolvedPaths ?? [],
+          generatedSetId: a.sourceId,
+        })),
+      },
+    });
+    const report = await runGates({ acceptance, inputsDir: wrapped });
+    assert.ok(
+      !report.checks.some((c) => c.id === "asset-source-fidelity.staged-document"),
+      "a wrapped capture must NOT be marked as a staged document",
+    );
+    assert.deepEqual(
+      gradedGates(report),
+      ["asset-source-fidelity"],
+      "a captured observation of what the build used IS graded evidence",
+    );
+  } finally {
+    await fs.rm(wrapped, { recursive: true, force: true });
+  }
+});
+
+test("gradedGates: a not_applicable gate never counts, however it became not_applicable", async () => {
+  const acceptance = await loadAcceptance();
+  const dir = await mkTmpDir();
+  try {
+    await writeCaptures(dir, conformantCaptures());
+    // Out of stage: the excluded gates report not_applicable, so they drop out of the
+    // graded set even though their capture files are sitting right there.
+    const staged = await runGates({ acceptance, inputsDir: dir, stage: "construct" });
+    const graded = gradedGates(staged);
+    assert.ok(graded.length > 0, "the in-stage gates still grade");
+    for (const gate of graded) {
+      assert.notEqual(staged.gates[gate], "not_applicable", `${gate} must not be counted`);
+    }
+    // Slice selection is the other route to not_applicable, and behaves identically.
+    const sliced = await runGates({ acceptance, inputsDir: dir, selectGates: new Set(["console-clean"]) });
+    assert.deepEqual(gradedGates(sliced), ["console-clean"]);
   } finally {
     await fs.rm(dir, { recursive: true, force: true });
   }

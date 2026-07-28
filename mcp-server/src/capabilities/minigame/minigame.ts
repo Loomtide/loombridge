@@ -41,6 +41,15 @@ interface BaselineArgs {
   capturesDir?: string;
   ref?: string;
   at?: string;
+  /**
+   * Whether `--root` was passed explicitly. The approved bundle is STAMPED with the
+   * project root it grades, and the default is the shell's cwd, which is not a project
+   * identity at all: the contract, captures, and ref all live in an external workspace,
+   * so a dev who runs this from anywhere but the game repo stamps the wrong project and
+   * unified `verify` later refuses the bundle as belonging elsewhere. Recorded so the
+   * verb can say so at approval time instead of leaving it to be discovered later.
+   */
+  rootExplicit: boolean;
 }
 
 interface InitArgs {
@@ -72,13 +81,17 @@ function parseInitArgs(rest: string[]): InitArgs | { error: string } {
 
 function parseBaselineArgs(rest: string[]): BaselineArgs | { error: string } {
   let root = process.cwd();
+  let rootExplicit = false;
   let contractPath: string | undefined;
   let capturesDir: string | undefined;
   let ref: string | undefined;
   let at: string | undefined;
   for (let i = 0; i < rest.length; i += 1) {
     const arg = rest[i];
-    if (arg === "--root") root = path.resolve(rest[(i += 1)] ?? root);
+    if (arg === "--root") {
+      root = path.resolve(rest[(i += 1)] ?? root);
+      rootExplicit = true;
+    }
     else if (arg === "--contract") contractPath = path.resolve(rest[(i += 1)] ?? "");
     else if (arg === "--captures") capturesDir = path.resolve(rest[(i += 1)] ?? "");
     else if (arg === "--ref") ref = path.resolve(rest[(i += 1)] ?? "");
@@ -86,7 +99,7 @@ function parseBaselineArgs(rest: string[]): BaselineArgs | { error: string } {
     else return { error: `unknown argument "${arg}"` };
   }
   if (contractPath === undefined) return { error: "--contract <path> is required" };
-  return { root, contractPath, capturesDir, ref, at };
+  return { root, rootExplicit, contractPath, capturesDir, ref, at };
 }
 
 function parse(argv: string[]): Parsed {
@@ -126,6 +139,16 @@ async function loadContract(contractPath: string): Promise<MinigameContract> {
  * compare), refuse unless PASS, then snapshot the pack into the bundle.
  */
 async function runApprove(args: BaselineArgs): Promise<number> {
+  // The guided flow (`minigame next`) prints this command from a WORKSPACE, which knows
+  // nothing about where the game repo is, so it cannot fill in `--root`. Say plainly that
+  // the stamp is coming from the cwd rather than letting a wrong stamp surface much later
+  // as unified verify refusing the bundle as another project's.
+  if (!args.rootExplicit) {
+    console.error(
+      `[loombridge minigame] no --root given: stamping this baseline as owned by the current directory (${args.root}). ` +
+        "If that is not your Unity project root, re-run with --root <project> so `loombridge verify` can bind the baseline to it.",
+    );
+  }
   if (args.capturesDir === undefined) {
     console.error("[loombridge minigame] baseline approve requires --captures <dir>.");
     return 2;
@@ -174,6 +197,10 @@ async function runApprove(args: BaselineArgs): Promise<number> {
       refDir,
       capturedAt: args.at ?? nowIso(),
       approvedSummary: { pass: summary.pass, warn: summary.warn, fail: summary.fail, notApplicable: summary.notApplicable },
+      // Ownership stamp (A4): the PROJECT root this approval is for. `--root` (default
+      // cwd) is the only project identity this verb is given: the contract, captures,
+      // and ref all live in the external workspace, none of which names the game repo.
+      projectRoot: path.resolve(args.root),
     });
     console.error(
       `[loombridge minigame] baseline APPROVED for '${contract.id}' → ${path.relative(args.root, refDir)} ` +

@@ -20,6 +20,11 @@ import {
   type VerdictReviewFindings,
   type VerdictLike,
 } from "../../../../capabilities/verification/doneness.js";
+import {
+  unifiedVerifyReportPath,
+  writeUnifiedVerifyReport,
+  type UnifiedVerifyReport,
+} from "../../../../capabilities/verification/unified/report.js";
 import { deriveGenreCoverage } from "../../../../capabilities/genre/genre-coverage.js";
 import { knownGenreIds } from "../../../../capabilities/genre/genre-registry.js";
 import { runBuild } from "../../../../capabilities/verification/build.js";
@@ -1224,6 +1229,120 @@ test("REGRESSION: the SLICE path refuses a laundered coverage claim in the whole
   }
 });
 
+// ── H3: the unified `verify` roll-up reaches the certificate ─────────────────
+
+/** Run `doneness` with stderr captured, so a refusal can be checked BY ITS REASON. */
+async function captureDonenessOutput(root: string): Promise<{ code: number; text: string }> {
+  const lines: string[] = [];
+  const originalError = console.error;
+  console.error = (...parts: unknown[]) => { lines.push(parts.map(String).join(" ")); };
+  try {
+    return { code: await runDoneness({ root }), text: lines.join("\n") };
+  } finally {
+    console.error = originalError;
+  }
+}
+
+/**
+ * The report a real unified run writes for the H3 shape: a green contract section plus
+ * an approved-but-UNSTAMPED trace baseline, which is a non-anchor row, so the run is
+ * `partial` at the harness tier. Built through the SHIPPED writer and type, so a change
+ * to either moves this fixture with it.
+ */
+async function writeUnifiedReport(root: string, over: Partial<UnifiedVerifyReport>): Promise<void> {
+  const report: UnifiedVerifyReport = {
+    kind: "unified-verify",
+    schemaVersion: "1",
+    producedAt: "2026-07-28T00:00:00.000Z",
+    root,
+    runId: null,
+    live: false,
+    plan: [],
+    notRun: [
+      {
+        kind: "trace",
+        id: "happy-path",
+        reason: "unstamped baseline (re-approve to stamp what approved it)",
+        why: "non-anchor",
+      },
+    ],
+    sections: { contract: { status: "pass", exit: 0, anchored: false } },
+    anchoredSections: [],
+    unanchoredSections: ["contract"],
+    status: "partial",
+    exit: 2,
+    notes: [],
+    ...over,
+  };
+  await writeUnifiedVerifyReport(unifiedVerifyReportPath(loombridgePaths(root).reports), report);
+}
+
+test("H3: a unified verify that REFUSED blocks doneness, even though STATE says verified-green", async () => {
+  // The hole: `verify.json` governed nothing. A unified run could exit 2 because a trace
+  // baseline was never stamped, while the CONTRACT section inside the same run passed and
+  // flipped STATE to `verified-green`. `doneness` then exited 0 and an agent quoted it.
+  const root = await tmpRoot();
+  try {
+    await runPlan({ root, genre: "platformer-2d", engine: "unity", force: false, allowMissingDesignTarget: true });
+    const paths = loombridgePaths(root);
+    await injectArtMode(root, "deferred");
+    assert.equal(await runBuild({ root }), 0);
+    const { runId, producedAt } = await fulfilCurrentBuildCaptures(root);
+    await updateState(paths, { phase: "verified-green" });
+    await fs.writeFile(paths.verdict, JSON.stringify({ status: "pass", runId, producedAt }), "utf-8");
+
+    // CONTROL: with no unified report at all, this project certifies. S1 is additive, so a
+    // project that never ran the bare door is unaffected, and this is what makes the
+    // assertions below non-vacuous.
+    assert.equal(await runDoneness({ root }), 0, "the setup must certify before the roll-up is introduced");
+
+    // THE REFUSAL.
+    await writeUnifiedReport(root, {});
+    const refused = await captureDonenessOutput(root);
+    assert.equal(refused.code, 1, "an anchor the unified run could not measure is not certified by a green gate");
+    assert.match(refused.text, /unified verify refused \(status `partial`, exit 2\)/);
+    assert.match(refused.text, /re-run `loombridge verify`/);
+
+    // REFUSE-ONLY: a report that exits 0 adds nothing, and (being unstamped by construction)
+    // can never remove a refusal another gate produced. So a forged green buys exactly the
+    // absence of one extra reason, which is why it is not a laundering path.
+    await writeUnifiedReport(root, { status: "pass", exit: 0, notRun: [] });
+    assert.equal(await runDoneness({ root }), 0, "a green unified run leaves the existing gates in charge");
+
+    // MALFORMED IS A REFUSAL, NOT A SKIP: "delete the inconvenient fields" is the cheapest
+    // attack on a file like this.
+    await fs.writeFile(unifiedVerifyReportPath(paths.reports), "{ not json", "utf-8");
+    const malformed = await captureDonenessOutput(root);
+    assert.equal(malformed.code, 1);
+    assert.match(malformed.text, /unreadable unified verify report/);
+
+    // A well-formed JSON document that is not a unified report is equally unreadable here.
+    await fs.writeFile(unifiedVerifyReportPath(paths.reports), JSON.stringify({ exit: 0 }), "utf-8");
+    assert.equal((await captureDonenessOutput(root)).code, 1, "a document with no `kind` cannot vouch for a run");
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test("H3: the SLICE roll-up honours the unified refusal too (both doneness paths, not one)", async () => {
+  const root = await tmpRoot();
+  try {
+    const a = { ...doneSlice("a", "run-a"), state: "approved" as const };
+    a.proof = { ...a.proof!, approvedAt: "2026-05-28T02:00:00.000Z" };
+    await writeSliceProofFiles(root, a);
+    await writeSlicePlan(loombridgePaths(root), planOf([a]));
+    assert.equal(await runDoneness({ root }), 0, "the slice setup must certify first, or this proves nothing");
+
+    await writeUnifiedReport(root, {});
+    const refused = await captureDonenessOutput(root);
+    assert.equal(refused.code, 1, "a slice-planned project runs the same bare `verify` door");
+    assert.match(refused.text, /unified-verify: REFUSE/);
+    assert.match(refused.text, /unified verify refused/);
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
 test("slice doneness roll-up — all approved + done + dependency order exits 0", async () => {
   const root = await tmpRoot();
   try {
@@ -1476,7 +1595,10 @@ test("verify --stage construct is diagnostic — writes verify-<stage>.json, lea
     const state = await readState(paths);
     assert.equal(state?.phase, "built-unverified", "a staged run must NOT flip the phase");
     assert.equal(state?.currentBuild?.runId, "run-stage-test", "currentBuild preserved");
-    assert.ok(code === 0 || code === 1, "returns an exit code without throwing");
+    // With an EMPTY inputs dir no gate consumed a capture, so this staged run graded
+    // nothing, so the engine's nothing-graded refusal (exit 2) applies here too. A
+    // restricted stage already cannot certify; it must also not read as green.
+    assert.equal(code, 2, "a staged run that graded nothing refuses rather than exiting 0");
   } finally {
     await fs.rm(root, { recursive: true, force: true });
   }
