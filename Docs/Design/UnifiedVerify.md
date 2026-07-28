@@ -242,23 +242,35 @@ and routing the `loombridge_verify` MCP tool through the orchestrator (all S2).
   guarded against ignoring it.
 - **What the binding proves, exactly.** The provenance of THESE BYTES: produced by this tool,
   at this time, against this root, from this editor, under this command line. `runId` scopes
-  them to a build when one was in flight, and a manifest whose `runId` disagrees with the
-  build in flight is broken (tier 2). Staleness relative to source edits remains UNPROVEN:
+  them to a build when one was in flight, and when a build IS in flight the manifest must
+  carry that build's id: a different id, or no id at all, is broken (tier 2), because an
+  absent scope is a comparison that cannot be made rather than one that passed. With no build
+  in flight either is accepted, and the section reports the `runId` it read (`null` included)
+  so a reader can tell scoped evidence from unscoped. Staleness relative to source edits remains UNPROVEN:
   nothing here notices that a `.cs` file changed after the run. That is the same limitation
   already recorded for `runId` on this report, and it is documented rather than papered over.
 - **PERMANENTLY unanchored, and that costs the run its `pass`.** No human approves a test
   suite, so the section reports `anchored: false` forever and `approvedAt`/`approvedBy` are
   never set. Which forced the general rule below.
 - **`pass` now requires every executed section to be anchored.** An all-green run with any
-  unanchored executed section is `partial` at the same exit tier, and the summary names the
-  unanchored sections. This is GENERAL, not a special case for tests: a contract graded
-  without an approved design target also stops reading `pass`. The exit tiers are unchanged;
-  the rule narrows what may be CALLED a pass, it does not invent a failure. A green
-  deterministic result measured against nothing a human ever froze was the last place
-  "agents grade their own homework" could still print as a full pass.
+  unanchored executed section is `partial`, and the summary names the unanchored sections.
+  This is GENERAL, not a special case for tests: a contract graded without an approved design
+  target also stops reading `pass`. A green deterministic result measured against nothing a
+  human ever froze was the last place "agents grade their own homework" could still print as
+  a full pass.
+- **Exit 0 requires AT LEAST ONE anchored executed section.** Narrowing only the status word
+  left the exit, which is the part an agent actually reads, unchanged: a project whose single
+  asset was self-produced could still exit 0 having compared nothing frozen. So an all-green
+  run with ZERO anchored sections is `partial` at exit **2**, with the summary line *nothing
+  human-approved was compared; a self-produced green cannot exit 0*. It is the harness tier
+  because "there was nothing here that could certify anything" is a statement about the
+  evidence, not a defect in the game. A MIXED run is unaffected: one anchored green section
+  still exits 0, with the unanchored extras named. The moat ceiling for a forged stamped test
+  pair is therefore exit 2, not exit 0.
 - **Presence is DECLARED, so deleting the evidence cannot silence the gate.** With no stamped
   pair but a project that declares tests (`Packages/manifest.json` `testables` non-empty, or
-  an `Assets/**/*.asmdef` referencing `UnityEditor.TestRunner`), discovery emits a non-anchor
+  an `Assets/**/*.asmdef` referencing the Test Runner by NAME or by Unity's well-known GUID),
+  discovery emits a non-anchor
   row. A manifest with no XML is broken, not absent. Neither file and no declaration is no
   row at all: tests are opt-in.
 - **The grader re-derives everything it is handed.** The XML must still hash to the stamped
@@ -273,9 +285,13 @@ and routing the `loombridge_verify` MCP tool through the orchestrator (all S2).
   with real walked failures is an honest tier 1; an unexplained 1/3/134, or a 2 from a file
   containing no failing case, is tier 2.
 - **`tests grade` is DIAGNOSTIC and non-quotable.** It prints `DIAGNOSTIC: not a verification
-  verdict` on every path and exits 0 only for a stamped, verifying pair or under
-  `GITHUB_ACTIONS`, where the trust root is the runner rather than the operator's shell. CI
-  runs it over the GameCI artifacts so the CLI's mapping and CI's verdict cannot diverge.
+  verdict` on every path and exits 0 only for a stamped, verifying pair that sits at the
+  project its own manifest names (every sha survives a copy, so location is the last thing
+  left to check: a moved pair exits 2 with *results are not at the project they claim*), or
+  under `GITHUB_ACTIONS=true` (that exact value), where the trust root is the runner rather
+  than the operator's shell. That attestation is env-CLAIMED, not verified provenance, and
+  the output says so. CI runs the verb over the GameCI artifacts so the CLI's mapping and
+  CI's verdict cannot diverge, keeping the WORST tier across the graded files.
 - **The on-ramp is deliberately UNCHANGED.** It stays the trace record/replay/approve
   sequence. It is the one place that names a human actor (the play session IS the approval
   moment), and offering a self-serve, unanchored asset there would convert a human-anchor
@@ -307,5 +323,6 @@ and routing the `loombridge_verify` MCP tool through the orchestrator (all S2).
    "verify looks useless" concern is already answered by the on-ramp text. The cost of the
    opt-in is honesty about coverage, and S1 pays it explicitly: a run whose only unmeasured
    assets were live-only reports `partial`, names every unmeasured anchor, and is the ONE
-   non-execution reason still allowed to exit 0 (it is an operator's deliberate choice). Every
-   other unmeasured anchor keeps the exit at its tier.
+   non-execution reason still allowed to exit 0 (it is an operator's deliberate choice), given
+   that the run compared at least one anchored green section. Every other unmeasured anchor
+   keeps the exit at its tier.

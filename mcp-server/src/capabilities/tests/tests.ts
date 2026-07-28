@@ -43,6 +43,7 @@ import {
 import {
   TEST_RESULTS_FILE,
   TEST_RESULTS_MANIFEST,
+  projectRootForTestResultsDir,
   sha256,
   testResultsDir,
   testResultsManifestPath,
@@ -61,6 +62,21 @@ export const GRADE_DIAGNOSTIC_BANNER = "DIAGNOSTIC: not a verification verdict";
 /** Printed when a local `tests grade` would otherwise pass on an unstamped file (G2). */
 export const UNSTAMPED_REFUSAL =
   "unstamped input; run `loombridge tests run` to produce quotable results";
+
+/**
+ * Printed when a stamped pair verifies against itself but is not where its manifest says the
+ * project is (FXD). A copy preserves every sha, so location is the only thing left to check.
+ */
+export const MISPLACED_REFUSAL = "results are not at the project they claim";
+
+/**
+ * The EXACT value GitHub sets for `GITHUB_ACTIONS` (FXF).
+ *
+ * Compared with `===`, never for truthiness. `GITHUB_ACTIONS=0`, `=false`, or `=yes` are not
+ * things GitHub writes; they are things a local shell writes, and a truthy test would hand
+ * the runner's trust root to anyone who can export a variable.
+ */
+export const GITHUB_ACTIONS_VALUE = "true";
 
 /* -------------------------------------------------------------------------- */
 /* The spawner seam                                                           */
@@ -219,9 +235,22 @@ function usage(): void {
       "  --results <xml>     The NUnit3 result file to read (required)",
       "  --strict            Warning results count as failures",
       "",
-      "Exit: 0 everything executed and passed; 1 a real assertion failure;",
-      "2 refusal before spawning, spawn/timeout/license fault, unreadable or empty",
-      "results, a run that checked nothing, or (grade) a green on unstamped input.",
+      "Exit 0: every test case executed and passed.",
+      "Exit 1: a real assertion failure, or a Warning case under --strict.",
+      "Exit 2: a result that cannot be read as a verdict. Refusal before spawning",
+      "  (PlayMode, no ProjectVersion.txt, no Assets/, Temp/UnityLockfile, unresolvable",
+      "  editor, a value-less or non-numeric flag); a spawn, timeout or license fault;",
+      "  unreadable or missing results; a run that checked nothing (zero cases, or every",
+      "  case skipped); compile errors in the log; a MUTATED project; a cancelled run; a",
+      "  skipped or ignored SUITE (fixture or assembly); an inconclusive case; a case",
+      "  result outside NUnit's vocabulary (Passed, Failed, Warning, Inconclusive,",
+      "  Skipped); bucket accounting that disagrees with the walked total; a Unity exit",
+      "  code the test-case walk cannot account for.",
+      "",
+      "`grade` additionally exits 2 on a GREEN it cannot attribute to anyone but the",
+      "caller: unstamped input, or a stamped pair that is not at the project its manifest",
+      `claims. The one exception is the environment variable GITHUB_ACTIONS="${GITHUB_ACTIONS_VALUE}"`,
+      "(that exact value, nothing else), where the runner chose and produced the file.",
     ].join("\n"),
   );
 }
@@ -242,14 +271,34 @@ export function parseTestsArgs(args: string[]): ParsedArgs {
   let strict = false;
   let results: string | undefined;
 
-  for (let i = 1; i < args.length; i += 1) {
+  // FXM: a value flag with no value is a USAGE ERROR, never a silent default. `--root` with
+  // nothing after it used to keep cwd, and `--unity`/`--results` used to take "", so a
+  // mistyped command ran against a different project (or an empty path) while looking like it
+  // had been told exactly what to do. `--timeout-min` already refused; the rest now match it.
+  const valueFor = (flag: string, index: number): string | null => {
+    const value = args[index];
+    if (value === undefined) {
+      console.error(`${TAG} ${flag} requires a value.`);
+      return null;
+    }
+    return value;
+  };
+  let usageError = false;
+
+  for (let i = 1; i < args.length && !usageError; i += 1) {
     const arg = args[i];
-    if (arg === "--root") root = path.resolve(args[(i += 1)] ?? root);
-    else if (arg === "--unity") unity = args[(i += 1)] ?? "";
-    else if (arg === "--platform") platform = args[(i += 1)] ?? "";
-    else if (arg === "--timeout-min") timeoutMinRaw = args[(i += 1)] ?? "";
-    else if (arg === "--results") results = path.resolve(args[(i += 1)] ?? "");
-    else if (arg === "--graphics") graphics = true;
+    if (arg === "--root" || arg === "--unity" || arg === "--platform" || arg === "--timeout-min" || arg === "--results") {
+      const value = valueFor(arg, (i += 1));
+      if (value === null) {
+        usageError = true;
+        break;
+      }
+      if (arg === "--root") root = path.resolve(value);
+      else if (arg === "--unity") unity = value;
+      else if (arg === "--platform") platform = value;
+      else if (arg === "--timeout-min") timeoutMinRaw = value;
+      else results = path.resolve(value);
+    } else if (arg === "--graphics") graphics = true;
     else if (arg === "--strict") strict = true;
     else if (arg === "--help" || arg === "-h") return { help: true };
     else {
@@ -257,6 +306,8 @@ export function parseTestsArgs(args: string[]): ParsedArgs {
       return { help: true, usageError: true };
     }
   }
+
+  if (usageError) return { help: true, usageError: true };
 
   if (sub === "grade") {
     if (results === undefined) {
@@ -321,6 +372,19 @@ export interface TestsRunOpts {
   locatorSeams?: EditorLocatorSeams;
 }
 
+/**
+ * The spawner a run will actually use (FXJ).
+ *
+ * Extracted from `runTests` so a test can assert BY REFERENCE that the PRODUCTION default is
+ * the real `spawnUnityTests` and not some convenient stub. Every unit test injects a seam, so
+ * without this the one code path that ships (`opts.spawner` absent) is the only one nothing
+ * ever looks at: a stubbed default would leave the whole suite green while `tests run` never
+ * launched an editor again.
+ */
+export function resolveTestsSpawner(opts: TestsRunOpts): TestsSpawner {
+  return opts.spawner ?? spawnUnityTests;
+}
+
 async function readFileOrNull(file: string): Promise<Buffer | null> {
   try {
     return await fs.readFile(file);
@@ -364,7 +428,7 @@ function printGrade(grade: TestsGrade): void {
 
 export async function runTests(cli: RunArgs, opts: TestsRunOpts = {}): Promise<number> {
   const seams = opts.locatorSeams ?? defaultEditorLocatorSeams();
-  const spawner = opts.spawner ?? spawnUnityTests;
+  const spawner = resolveTestsSpawner(opts);
   const root = path.resolve(cli.root);
 
   // --- pre-spawn refusals. Every one of these creates NOTHING (T4/R13). ---
@@ -403,8 +467,15 @@ export async function runTests(cli: RunArgs, opts: TestsRunOpts = {}): Promise<n
   const logPath = testRunLogPath(dir);
   await fs.mkdir(dir, { recursive: true });
 
-  // Clear the previous run's evidence BEFORE spawning. A failed run must leave "no stamped
-  // results", not last week's stamped pair sitting where a grader will read it as fresh.
+  // Clear the previous run's evidence BEFORE spawning (FXB, stated precisely).
+  //
+  // The rule is about a run that SPAWNS: once an editor has been launched against this
+  // project, the previous pair is no longer the newest thing anyone tried, so a run that then
+  // fails must leave "no stamped results" rather than last week's pair sitting where a grader
+  // will read it as fresh. Everything above this line is a PRE-SPAWN refusal and deletes
+  // nothing at all: a plan-first refusal changes the project in no way, and the previous pair
+  // remains exactly as trustworthy as its own `finishedAt` says it is. The two behaviours are
+  // deliberate and different, and a test pins each.
   await fs.rm(resultsPath, { force: true });
   await fs.rm(testResultsManifestPath(dir), { force: true });
   await fs.rm(logPath, { force: true });
@@ -549,25 +620,46 @@ export async function gradeStoredResults(cli: GradeArgs, opts: TestsGradeOpts = 
   }
 
   // Is this file the stamped half of a verifying pair? Only then can a green be quoted.
+  //
+  // FXD: "verifying" now includes WHERE the pair sits. Every sha in the manifest survives a
+  // copy unchanged, so integrity alone says only "these bytes are the bytes that were
+  // stamped", never "and they belong to this project". The pair must therefore live at the
+  // declared slot of the very root its own manifest names; anything else is a stamped pair
+  // that has been moved, and the quotable wording is refused for it. `projectRootForTestResultsDir`
+  // inverts `testResultsDir`, so the two directions cannot drift.
   const dir = path.dirname(cli.results);
   const stampedResults = testResultsPath(dir);
   let stamped = false;
   let stampedNote = `no ${TEST_RESULTS_MANIFEST} beside ${cli.results}`;
+  let misplaced: string | null = null;
+  let integrityManifest: TestResultsManifest | undefined;
   if (path.resolve(stampedResults) === path.resolve(cli.results)) {
+    const impliedRoot = projectRootForTestResultsDir(dir);
     const integrity = await verifyTestResults(dir);
+    const claimedRoot = integrity.manifest?.projectRoot;
     if (integrity.unstamped) {
       stampedNote = `no ${TEST_RESULTS_MANIFEST} in ${dir}`;
     } else if (!integrity.ok) {
       stampedNote = `manifest present but not verifying: ${integrity.failures.join("; ")}`;
+    } else if (impliedRoot === null) {
+      misplaced =
+        `${MISPLACED_REFUSAL}: the manifest claims projectRoot ${claimedRoot}, but this pair does not sit ` +
+        `in that project's declared results directory (${testResultsDir(String(claimedRoot))})`;
+      stampedNote = misplaced;
+    } else if (path.resolve(impliedRoot) !== path.resolve(String(claimedRoot))) {
+      misplaced =
+        `${MISPLACED_REFUSAL}: the manifest claims projectRoot ${claimedRoot}, but this pair sits under ` +
+        `${impliedRoot}`;
+      stampedNote = misplaced;
     } else {
       stamped = true;
+      integrityManifest = integrity.manifest;
       stampedNote = `stamped by ${integrity.manifest?.resolvedEditorPath ?? "an unknown editor"} at ${
         integrity.manifest?.finishedAt ?? "an unknown time"
       }`;
     }
   }
 
-  const integrityManifest = stamped ? (await verifyTestResults(dir)).manifest : undefined;
   const grade = gradeTestResults({
     run: parsed,
     strict: cli.strict,
@@ -592,11 +684,26 @@ export async function gradeStoredResults(cli: GradeArgs, opts: TestsGradeOpts = 
     console.log(`${TAG} ${GRADE_DIAGNOSTIC_BANNER}`);
     return 0;
   }
-  if (env.GITHUB_ACTIONS) {
+  if (misplaced !== null) {
+    // Checked BEFORE the CI attestation on purpose. A stamped pair that has been moved is a
+    // positive signal of tampering, not merely an absence of provenance, and CI grades bare
+    // GameCI XMLs (the unstamped path), so nothing this workflow actually does is affected.
+    console.error(`${TAG} ${misplaced}`);
+    console.log(`${TAG} ${GRADE_DIAGNOSTIC_BANNER}`);
+    return 2;
+  }
+  if (env.GITHUB_ACTIONS === GITHUB_ACTIONS_VALUE) {
     // CI attestation: the trust root here is the runner, which chose the file, ran the
     // editor, and cannot be talked into re-labelling a local artifact. That is the ONLY
     // reason an unstamped green exits 0, and it is recorded in the plan (G2).
-    console.log(`${TAG} GITHUB_ACTIONS: the runner produced this file, so the green is attested by CI.`);
+    //
+    // FXF: the claim is what it is, and no more. Nothing here VERIFIES that this process is
+    // on a GitHub runner; an environment variable is a statement the environment makes, and
+    // the wording says so rather than implying provenance was checked.
+    console.log(
+      `${TAG} GITHUB_ACTIONS=${GITHUB_ACTIONS_VALUE}: treating the file as runner-produced ` +
+        "(env-claimed attestation, not verified provenance)",
+    );
     console.log(`${TAG} ${GRADE_DIAGNOSTIC_BANNER}`);
     return 0;
   }

@@ -388,6 +388,91 @@ test("an assembly stamped in the manifest but absent from the XML refuses (G4)",
   assert.match(extra.reasons.join(" "), /in the XML but not stamped: A\.dll/);
 });
 
+/* -------------------------------------------------------------------------- */
+/* FXA: a result word the mapping does not understand                         */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * THE F1 DOCUMENT, verbatim in shape.
+ *
+ * Two cases that no bucket in `deriveSummary` can hold: `result="Broken"` (a word NUnit never
+ * writes, carrying a real failure message) and `result="passed"` (the right word in the wrong
+ * case). Before FXA both were counted in `total` and graded by nothing at all, so this
+ * document read as `4 test(s): 2 passed, 0 failed` and graded TIER 0: a failing case erased
+ * by a typo, which is the cheapest false green in the whole gate.
+ */
+const UNKNOWN_RESULT_XML = wrapRun(
+  '<test-suite type="Assembly" id="1" name="A.dll" result="Passed">' +
+    '<test-case id="2" name="a" fullname="N.F.a" result="Passed" />' +
+    '<test-case id="3" name="b" fullname="N.F.b" result="Broken">' +
+    "<failure><message>NullReferenceException in the subject under test</message></failure>" +
+    "</test-case>" +
+    '<test-case id="4" name="c" fullname="N.F.c" result="passed" />' +
+    '<test-case id="5" name="d" fullname="N.F.d" result="Passed" />' +
+    "</test-suite>",
+  'id="2" result="Passed" total="4" passed="4" failed="0" inconclusive="0" skipped="0"',
+);
+
+test("FXA: a case result outside NUnit's vocabulary is tier 2, and the case and value are NAMED", () => {
+  const run = parseOk(UNKNOWN_RESULT_XML);
+  // Non-vacuity: the parser really did keep all four cases, so the refusal below is about the
+  // MAPPING and not about a document that failed to parse.
+  assert.equal(run.cases.length, 4);
+
+  const grade = gradeTestResults({ run, strict: false });
+  assert.equal(grade.tier, 2, `reasons: ${grade.reasons.join(" | ")}`);
+  const reasons = grade.reasons.join(" ");
+  assert.match(reasons, /outside NUnit's vocabulary/);
+  assert.match(reasons, /N\.F\.b result='Broken'/, "the refusal names the case AND the value it carried");
+  assert.match(reasons, /N\.F\.c result='passed'/, "the vocabulary is case-sensitive: 'passed' is not 'Passed'");
+});
+
+test("FXA: bucket accounting refuses a walked total the five buckets cannot account for", () => {
+  const run = parseOk(UNKNOWN_RESULT_XML);
+  const grade = gradeTestResults({ run, strict: false });
+  assert.match(
+    grade.reasons.join(" "),
+    /bucket accounting disagrees with the walk: 4 case\(s\) walked but 2 landed in a bucket/,
+    "the second, independent rule: total and the buckets must add up",
+  );
+
+  // …and it does NOT fire on an honest document, including the one shape where the buckets
+  // and `total` legitimately differ in NUnit's own counting: a Warning case.
+  const warning = parseOk(
+    wrapRun(
+      '<test-suite type="Assembly" id="1" name="A.dll" result="Warning">' +
+        '<test-case id="2" name="a" fullname="N.F.a" result="Warning" />' +
+        '<test-case id="3" name="b" fullname="N.F.b" result="Passed" />' +
+        "</test-suite>",
+      'id="2" result="Warning" total="2" passed="1" failed="0" inconclusive="0" skipped="0" warnings="1"',
+    ),
+  );
+  const warningGrade = gradeTestResults({ run: warning, strict: false });
+  assert.equal(warningGrade.tier, 0, `a Warning case must stay accountable: ${warningGrade.reasons.join(" | ")}`);
+  assert.ok(!warningGrade.reasons.join(" ").includes("bucket accounting"));
+});
+
+test("FXI: a <test-run> with NO result attribute and a clean walk is tier 2, never a pass", () => {
+  // The missing fixture. `run.result` is the empty string here, and the union rule (G3) must
+  // read that as "this document declares no run-level verdict" and refuse. An `if (run.result
+  // && ...)` guard would SKIP the comparison for exactly this input, which is CLAUDE.md's
+  // falsy-skip anti-pattern: the one document shape with no roll-up to disagree with would be
+  // the one shape that never gets checked.
+  const run = parseOk(
+    wrapRun(
+      '<test-suite type="Assembly" id="1" name="A.dll" result="Passed">' +
+        '<test-case id="2" name="a" fullname="N.F.a" result="Passed" />' +
+        "</test-suite>",
+      'id="2" total="1" passed="1" failed="0" inconclusive="0" skipped="0"',
+    ),
+  );
+  assert.equal(run.result, "", "the fixture really does carry no run-level result attribute");
+
+  const grade = gradeTestResults({ run, strict: false });
+  assert.equal(grade.tier, 2, `reasons: ${grade.reasons.join(" | ")}`);
+  assert.match(grade.reasons.join(" "), /test-run result is '\(absent\)'/);
+});
+
 test("a tier-2 run still LISTS its real failures; the reclassification hides nothing", () => {
   // Precedence check: tier 2 wins over tier 1 (a run that did not check what it claims is
   // not a game defect), but the defects it did find must remain visible in the output.

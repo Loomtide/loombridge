@@ -58,6 +58,7 @@ import {
 import { gradedGates } from "../run-gates.js";
 import { discoverVerificationAssets, type DiscoveredAsset } from "./discovery.js";
 import {
+  ZERO_ANCHORED_SUMMARY,
   fingerprintReport,
   notRunFor,
   reportPathFor,
@@ -603,6 +604,9 @@ async function testsSection(
     // PERMANENT (R8). Not "false because this run found no anchor": there is no anchor to
     // find, and there is no verb that could create one.
     anchored: false,
+    // FXC: the build scope travels into the unified report, `null` included, so a reader can tell
+    // build-scoped evidence from unscoped evidence without parsing this run's stderr.
+    runId: manifest.runId,
     note: `${headline}; bound to the run, never human-approved`,
     ...(assets.length > 0 ? { assets } : {}),
   };
@@ -706,7 +710,13 @@ export function summaryLines(report: UnifiedVerifyReport, live: boolean): string
     // M8: say out loud when an executed section compared no frozen anchor. "pass" and
     // "pass against nothing a human froze" must not print identically.
     const anchor = section.anchored ? "" : " [no frozen anchor compared]";
-    lines.push(`${TAG} ${name}: ${section.status} (${qualifier})${detail}${anchor}${where}`);
+    // FXQ: the same fact, carried by the STATUS WORD itself, for the green case. The bracketed
+    // marker above is easy to crop; the word is what gets quoted. This is a HUMAN-facing
+    // change only: `UnifiedVerifySection.status` in the unified report keeps the engine's own word
+    // verbatim (the machine-readable `anchored` field sits beside it), so no consumer has to
+    // learn a new status token.
+    const word = section.exit === 0 && !section.anchored ? `${section.status} (unanchored)` : section.status;
+    lines.push(`${TAG} ${name}: ${word} (${qualifier})${detail}${anchor}${where}`);
   }
   if (report.notRun.length > 0) {
     // Name EVERY unmeasured anchor (A6). A partial that exits 0 must still say out loud
@@ -749,6 +759,12 @@ export function summaryLines(report: UnifiedVerifyReport, live: boolean): string
         `${TAG} PARTIAL: no frozen human approval was compared in: ${report.unanchoredSections.join(", ")}. `
           + "A green section measured against nothing a human froze is not a pass.",
       );
+    }
+    // FXH: the strongest form of that, where NO executed section was anchored, is also the one
+    // that changes the exit. It gets its own line because the exit code is the part an agent
+    // acts on, and "why is this a 2" must be answerable from the summary alone.
+    if (report.anchoredSections.length === 0 && Object.keys(report.sections).length > 0) {
+      lines.push(`${TAG} REFUSED: ${ZERO_ANCHORED_SUMMARY} (exit ${report.exit}).`);
     }
   }
   return lines;

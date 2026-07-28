@@ -18,8 +18,10 @@
 .loombridge/replays/
 .loombridge/backups/
 
-# NOT ignored, on purpose: .loombridge/tests/ (the stamped Unity test results, their
-# binding manifest, and the run log). `loombridge tests run` produces them and
+# NOT ignored, on purpose: .loombridge/tests/ (the stamped Unity test results
+# .loombridge/tests/test-results.xml, their binding manifest
+# .loombridge/tests/test-results-manifest.json, and the run log
+# .loombridge/tests/test-run.log). `loombridge tests run` produces them and
 # `loombridge verify` grades them OFFLINE, so committing them is what lets a reviewer,
 # a CI job, or a later verify read the evidence without re-running a multi-minute
 # editor. Ignoring this directory would make the results local-only, and a gate whose

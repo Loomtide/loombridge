@@ -146,6 +146,16 @@ export interface UnifiedVerifySection {
    * kept separate from `status` so neither can be inferred from the other.
    */
   anchored: boolean;
+  /**
+   * FXC: the BUILD SCOPE of the evidence this section graded, when the evidence carries one.
+   *
+   * `string` when the graded artifact was stamped with a `STATE.currentBuild.runId`, `null`
+   * when it was stamped outside any build, and ABSENT for sections whose evidence has no such
+   * stamp at all. The three states are distinct on purpose: a reader of `verify.json` can
+   * tell a build-scoped section from an unscoped one without parsing stderr, and `null` is
+   * printed rather than omitted so "unscoped" cannot be mistaken for "not applicable".
+   */
+  runId?: string | null;
   /** Every asset this section executed, when the section covers more than one. */
   assets?: UnifiedAssetOutcome[];
 }
@@ -223,9 +233,21 @@ function notRunTier(why: NotRunReason): number {
  *   any executed tier 2                                  -> harness-fault,   2
  *   any executed tier 1 (no 2)                           -> fail,            1
  *   all 0, notRun empty, every section anchored          -> pass,            0
- *   all 0, notRun empty, any section UNANCHORED          -> partial,         0
- *   all 0, notRun all live-only                          -> partial,         0
- *   all 0, notRun has any other                          -> partial,         2
+ *   all 0, ZERO executed sections anchored               -> partial,         2
+ *   all 0, >= 1 anchored, notRun empty, some UNANCHORED  -> partial,         0
+ *   all 0, >= 1 anchored, notRun all live-only           -> partial,         0
+ *   all 0, >= 1 anchored, notRun has any other           -> partial,         2
+ *
+ * FXH, THE ZERO-ANCHORED EXIT RULE. Exit 0 additionally requires AT LEAST ONE anchored
+ * executed section. G1 already refused to CALL such a run a pass, but the exit stayed 0, and
+ * the exit is the only part of this an agent reads: a project with a single self-produced
+ * asset (a stamped test run, a contract with no approved design target) could still exit 0
+ * having compared nothing any human ever froze, which is precisely the self-graded green the
+ * product exists to refuse. So a run in which NOTHING anchored was compared exits 2, the
+ * harness tier, because "there was nothing here that could certify anything" is a statement
+ * about the evidence, not a defect in the game. A MIXED run is unaffected: one anchored green
+ * section still exits 0 with the unanchored extras named, because the run really did measure
+ * something a human approved.
  *
  * G1: `pass` REQUIRES EVERY EXECUTED SECTION TO BE ANCHORED, and the rule is general
  * rather than a special case for one kind. A contract graded with no approved design
@@ -263,11 +285,24 @@ export function resolveUnifiedOutcome(input: {
   // G1. Read as a positive requirement, never as "skip the check when the field is absent":
   // the field is required by the type, and a `false` is what a section that compared nothing
   // frozen is obliged to report.
-  const allAnchored = input.executed.every((e) => e.anchored);
+  const anchoredCount = input.executed.filter((e) => e.anchored).length;
+  const allAnchored = anchoredCount === input.executed.length;
   if (input.notRun.length === 0 && allAnchored) return { status: "pass", exit: 0 };
+  // FXH: counted, not merely "all or not all". Zero anchored executed sections means this run
+  // compared nothing human-approved, and a self-produced green cannot exit 0.
+  if (anchoredCount === 0) return { status: "partial", exit: 2 };
   const notRunExit = worstExitTier(input.notRun.map((n) => notRunTier(n.why)));
   return { status: "partial", exit: notRunExit };
 }
+
+/**
+ * The one-line reason a zero-anchored run cannot exit 0 (FXH).
+ *
+ * Exported so the summary line and the tests that pin it read the same string, rather than a
+ * sentence in the orchestrator and a regex in a test that drift apart.
+ */
+export const ZERO_ANCHORED_SUMMARY =
+  "nothing human-approved was compared; a self-produced green cannot exit 0";
 
 /**
  * sha256 of a per-asset report's bytes, or null when it cannot be read. Null is the

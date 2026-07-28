@@ -112,13 +112,17 @@ test("a stamped RED suite grades OFFLINE, tier 1, and the run reports `fail` at 
 
 // ── G1: a green suite is never a `pass` ──────────────────────────────────────
 
-test("G1: a FORGED all-green pair is at MOST `partial`, and the run never prints the word pass", async () => {
+test("G1/FXH: a FORGED all-green pair is `partial` at EXIT 2; a tests-only run can never be green", async () => {
   // The attack this closes. A green NUnit3 document is trivially authorable, and its
   // manifest can be stamped so every sha and every cross-check agrees, which is exactly
   // what the planter does here, using the production writer. Integrity is therefore NOT the
   // thing standing in the way, and that is the point: binding proves provenance of bytes,
-  // never that a human approved anything. The tests section is permanently `anchored:
-  // false`, so G1 caps the run at `partial` and the summary says why.
+  // never that a human approved anything.
+  //
+  // DELIBERATE FLIP (FXH). This asserted exit 0 under G1 alone, which left the forgery's
+  // ceiling at "a run that exits 0 but is called partial", and the exit is the part an agent
+  // reads. With zero anchored executed sections the run now exits 2, so the moat ceiling for
+  // a perfect tests-only forgery is a NON-ZERO exit.
   const root = await tmpDir("tests-section-forged-");
   const workspace = await tmpDir("tests-section-ws-");
   try {
@@ -132,24 +136,36 @@ test("G1: a FORGED all-green pair is at MOST `partial`, and the run never prints
     assert.deepEqual(report.unanchoredSections, ["tests"]);
     assert.deepEqual(report.anchoredSections, []);
     assert.equal(report.status, "partial", "a green measured against nothing a human froze is not a pass");
-    assert.equal(report.exit, 0, "…and the exit tier is unchanged: G1 narrows the word, not the tier");
-    assert.equal(result, 0);
+    assert.equal(report.exit, 2, "FXH: nothing human-approved was compared, so the run cannot exit 0");
+    assert.equal(result, 2);
 
     assert.notEqual(report.status as string, "pass");
     assert.ok(!text.includes("status=pass"), `the run must never print a pass:\n${text}`);
     assert.match(text, /no frozen anchor compared/, "the per-section marker says it");
     assert.match(text, /PARTIAL: no frozen human approval was compared in: tests/, "and so does the summary");
+    assert.match(
+      text,
+      /REFUSED: nothing human-approved was compared; a self-produced green cannot exit 0 \(exit 2\)/,
+      "FXH: the summary explains the exit, not only the word",
+    );
+    // FXQ: the section's own line carries the qualification in the STATUS WORD, which is the
+    // part that gets quoted, while the JSON keeps the engine's plain word for consumers.
+    assert.match(text, /tests: pass \(unanchored\)/);
+    assert.equal(report.sections.tests?.status, "pass", "the JSON status word is unchanged");
+    // FXC: the build scope of the graded evidence is readable from the report itself.
+    assert.equal(report.sections.tests?.runId, null);
   } finally {
     for (const d of [root, workspace]) await fs.rm(d, { recursive: true, force: true });
   }
 });
 
-test("doneness needs ZERO code change: it reads the report's `exit`, which G1 leaves alone", async () => {
-  // The whole reason G1 caps the WORD and not the TIER. `doneness` consumes the unified
-  // report as a REFUSE-ONLY input keyed on `exit`, so a run that dropped from `pass` to
-  // `partial` must not start refusing certification for a project that got strictly more
-  // verification than before. Asserted here rather than trusted: the two documents are read
-  // by different modules and only the field they share keeps them agreeing.
+test("doneness needs ZERO code change: it is keyed on the report's `exit`, and FXH only ADDS refusals", async () => {
+  // `doneness` consumes the unified report as a REFUSE-ONLY input keyed on `exit`: a non-zero
+  // exit ADDS a refusal reason and a zero exit adds nothing at all. FXH only ever turns a 0
+  // into a 2, which is the refuse-only direction, so no code in `doneness` changes and no
+  // project can be certified by this that could not be certified before. Asserted here rather
+  // than trusted: the two documents are read by different modules, and only the field they
+  // share keeps them agreeing.
   const root = await tmpDir("tests-section-doneness-");
   const workspace = await tmpDir("tests-section-ws-");
   try {
@@ -157,7 +173,7 @@ test("doneness needs ZERO code change: it reads the report's `exit`, which G1 le
     await captured(() => runVerifyCli(["--root", root, "--workspace", workspace]));
     const report = await readUnified(root);
     assert.equal(report.status, "partial", "the word narrowed…");
-    assert.equal(report.exit, 0, "…and the field doneness actually reads did not");
+    assert.equal(report.exit, 2, "…and the field doneness reads went NON-ZERO, which only adds a refusal");
   } finally {
     for (const d of [root, workspace]) await fs.rm(d, { recursive: true, force: true });
   }
@@ -199,7 +215,7 @@ test("a manifest with NO results XML is broken: tier 2, and the section never ru
   }
 });
 
-test("G7: results from a DIFFERENT build run are broken; the section never grades them", async () => {
+test("G7/FXC: results not scoped to the build in flight are broken; the section never grades them", async () => {
   const root = await plannedProject("tests-section-runid-");
   const workspace = await tmpDir("tests-section-ws-");
   try {
@@ -221,11 +237,21 @@ test("G7: results from a DIFFERENT build run are broken; the section never grade
 
     const { result, lines } = await captured(() => runVerifyCli(["--root", root, "--workspace", workspace]));
     assert.equal(result, 2, "evidence about another build is a harness fault, never a game verdict");
-    assert.match(lines.join("\n"), /results from a different build run/);
+    assert.match(lines.join("\n"), /results are not scoped to the build in flight/);
 
     const report = await readUnified(root);
     assert.equal(report.sections.tests, undefined, "a green suite from the wrong run must not grade");
     assert.equal(report.notRun.find((n) => n.kind === "test-results")?.why, "broken");
+
+    // FXC: an UNSCOPED manifest is refused the same way while a build is in flight. The old
+    // rule compared only when both ids were non-null, so `runId: null` passed by having
+    // nothing to compare, which made "stamped before this build" indistinguishable from
+    // "stamped for this build".
+    await plantTestResults(root, { xml: greenNUnitXml(), exitCode: 0, runId: null });
+    const unscoped = await captured(() => runVerifyCli(["--root", root, "--workspace", workspace]));
+    assert.equal(unscoped.result, 2, "an unscoped manifest is not evidence about the build in flight");
+    assert.match(unscoped.lines.join("\n"), /results are not scoped to the build in flight/);
+    assert.equal((await readUnified(root)).sections.tests, undefined);
   } finally {
     for (const d of [root, workspace]) await fs.rm(d, { recursive: true, force: true });
   }

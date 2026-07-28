@@ -198,6 +198,27 @@ const PROSE_SITES: [string, string][] = [
     path.join(REPO_ROOT, "Docs", "Design", "UnifiedVerify.md"),
     `${TEST_RESULTS_DIRNAME}/${TEST_RESULTS_MANIFEST}`,
   ],
+  // FXO. The run LOG was the one member of the trio no prose site pinned, so a rename of
+  // `TEST_RUN_LOG_FILE` would have left the RFC and the project template naming a file nothing
+  // writes. The template's `.gitignore` is the load-bearing one: its comment is the only place
+  // that tells a human WHY the directory is committed, and a stale filename there is how the
+  // exception gets "tidied up" by someone who cannot find the file it mentions.
+  [
+    path.join(REPO_ROOT, "Docs", "Design", "UnifiedVerify.md"),
+    `${TEST_RESULTS_DIRNAME}/${TEST_RUN_LOG_FILE}`,
+  ],
+  [
+    path.join(REPO_ROOT, "templates", "create-loombridge-game", ".gitignore"),
+    `${LOOMBRIDGE_DIRNAME}/${TEST_RESULTS_DIRNAME}/${TEST_RUN_LOG_FILE}`,
+  ],
+  [
+    path.join(REPO_ROOT, "templates", "create-loombridge-game", ".gitignore"),
+    `${LOOMBRIDGE_DIRNAME}/${TEST_RESULTS_DIRNAME}/${TEST_RESULTS_FILE}`,
+  ],
+  [
+    path.join(REPO_ROOT, "templates", "create-loombridge-game", ".gitignore"),
+    `${LOOMBRIDGE_DIRNAME}/${TEST_RESULTS_DIRNAME}/${TEST_RESULTS_MANIFEST}`,
+  ],
   [
     path.join(PKG_ROOT, "src", "surfaces", "cli.ts"),
     `${LOOMBRIDGE_DIRNAME}/${TEST_RESULTS_DIRNAME}/`,

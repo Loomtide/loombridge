@@ -312,7 +312,8 @@ async function discoverTraceAssets(root: string): Promise<DiscoveredAsset[]> {
  *
  * The five dispositions, in the order they are decided:
  *  - manifest + XML, verifying, `projectRoot` matching this root -> runnable OFFLINE;
- *  - manifest `runId` and the CURRENT STATE `runId` both set and different -> BROKEN (G7);
+ *  - a build IS in flight and the manifest is not scoped to it -> BROKEN (G7, tightened by
+ *    FXC: an UNSCOPED manifest is refused too, see below);
  *  - XML with no manifest -> NON-ANCHOR (a hand-dropped file never grades, H1);
  *  - manifest with no XML, a sha mismatch, or a foreign `projectRoot` -> BROKEN (G9);
  *  - neither file, but the project DECLARES tests -> NON-ANCHOR (G6: deleting the
@@ -359,17 +360,27 @@ async function discoverTestResultsAsset(root: string, paths: LoombridgePaths): P
     return [row];
   }
 
-  // G7: results minted under a DIFFERENT build than the one in flight are evidence about
-  // some other build. Both ids must be non-null for this to fire; a run with no build in
-  // flight, or results stamped before run-binding existed, is scoped by nothing and says so
-  // rather than being refused for a comparison that cannot be made.
+  // G7, TIGHTENED BY FXC: results minted under a different build, OR under no build at all,
+  // are not evidence about the build in flight.
+  //
+  // The earlier rule fired only when BOTH ids were non-null and differed, which left the
+  // cheapest evasion wide open: a manifest whose `runId` is simply `null` passed the check by
+  // having nothing to compare, so "stamped before this build started" and "stamped for this
+  // build" graded identically. That is the falsy-skip anti-pattern in CLAUDE.md wearing a
+  // different hat, and the fix is the same shape: when there IS a build in flight, the
+  // manifest must be scoped to THAT build, and an absent scope is a refusal rather than a
+  // skipped comparison.
+  //
+  // The other direction stays permissive on purpose: with NO build in flight there is nothing
+  // to scope against (a ratchet project that never runs `build` has no runId at all), so a
+  // manifest with or without a runId is accepted and the section prints which it was.
   const manifest = integrity.manifest!;
   const currentRunId = (await readState(paths).catch(() => null))?.currentBuild?.runId ?? null;
-  if (manifest.runId !== null && currentRunId !== null && manifest.runId !== currentRunId) {
+  if (currentRunId !== null && manifest.runId !== currentRunId) {
     row.notRunClass = "broken";
-    row.reason = "results from a different build run";
+    row.reason = "results are not scoped to the build in flight: re-run `loombridge tests run`";
     row.broken =
-      `the stamped results carry runId ${manifest.runId}, but the build in flight is ${currentRunId}; ` +
+      `the stamped results carry runId ${manifest.runId ?? "none"}, but the build in flight is ${currentRunId}; ` +
       "re-run `loombridge tests run` against this build";
     return [row];
   }

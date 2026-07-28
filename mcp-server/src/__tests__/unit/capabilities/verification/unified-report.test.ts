@@ -88,15 +88,18 @@ test("G1: an all-green run with an UNANCHORED executed section is PARTIAL, never
   // THE DELIBERATE FLIP. Before G1 this returned `pass`, and that word was the last place a
   // self-graded result could still print as a full pass: a contract graded with no approved
   // design target, or a stamped test run (which has no human-approve step and never will),
-  // is a real deterministic green measured against nothing a human ever froze. The EXIT is
-  // unchanged at 0: this narrows what may be CALLED a pass, it does not invent a failure.
+  // is a real deterministic green measured against nothing a human ever froze.
+  //
+  // FXH then changed the EXIT for the zero-anchored case (see the test below), so the two
+  // single-section rows here are `partial` at exit 2. A MIXED run keeps exit 0: it really did
+  // compare something a human approved, and the unanchored extra is named rather than fatal.
   assert.deepEqual(
     resolveUnifiedOutcome({ executed: [unanchoredSection("contract", 0)], notRun: [] }),
-    { status: "partial", exit: 0 },
+    { status: "partial", exit: 2 },
   );
   assert.deepEqual(
     resolveUnifiedOutcome({ executed: [unanchoredSection("tests", 0)], notRun: [] }),
-    { status: "partial", exit: 0 },
+    { status: "partial", exit: 2 },
     "the tests section is PERMANENTLY unanchored, so a green suite alone can never read as a pass",
   );
   // One anchored section does not cover for an unanchored one: the rule is EVERY section.
@@ -115,6 +118,64 @@ test("G1: an all-green run with an UNANCHORED executed section is PARTIAL, never
       notRun: [],
     }),
     { status: "pass", exit: 0 },
+  );
+});
+
+test("FXH: exit 0 requires AT LEAST ONE anchored executed section; zero anchored is exit 2", () => {
+  // THE VACUITY FIX. G1 narrowed the status WORD and left the exit at 0, and the exit is the
+  // only part of this an agent reads. A project whose single asset is self-produced (a stamped
+  // test run, a contract with no approved design target) could therefore still exit 0 having
+  // compared nothing any human ever froze. Every row below asserts the EXIT as well as the
+  // word, so an `allAnchored = true` defusal fails on both.
+  for (const executed of [
+    [unanchoredSection("tests", 0)],
+    [unanchoredSection("contract", 0)],
+    [unanchoredSection("contract", 0), unanchoredSection("tests", 0)],
+    [unanchoredSection("contract", 0), unanchoredSection("screens", 0), unanchoredSection("tests", 0)],
+  ]) {
+    assert.deepEqual(
+      resolveUnifiedOutcome({ executed, notRun: [] }),
+      { status: "partial", exit: 2 },
+      `zero anchored sections must never exit 0: ${executed.map((e) => e.section).join("+")}`,
+    );
+  }
+
+  // Even the operator's own `--live` omission cannot lift a zero-anchored run to 0: that
+  // allowance exists for a run that measured something approved and skipped the rest.
+  assert.deepEqual(
+    resolveUnifiedOutcome({ executed: [unanchoredSection("tests", 0)], notRun: [LIVE_SKIPPED] }),
+    { status: "partial", exit: 2 },
+  );
+
+  // THE MOAT CEILING for a tests-only forgery. Even a perfectly forged stamped pair that
+  // grades tier 0 buys `partial` at exit 2, never a green run.
+  assert.equal(resolveUnifiedOutcome({ executed: [unanchoredSection("tests", 0)], notRun: [] }).exit, 2);
+
+  // NON-VACUITY, in both directions: ONE anchored green section restores exit 0 (with the
+  // unanchored extras named), and an all-anchored run is still a pass.
+  assert.deepEqual(
+    resolveUnifiedOutcome({
+      executed: [anchoredSection("flow", 0), unanchoredSection("tests", 0)],
+      notRun: [],
+    }),
+    { status: "partial", exit: 0 },
+  );
+  assert.deepEqual(
+    resolveUnifiedOutcome({
+      executed: [anchoredSection("flow", 0), unanchoredSection("tests", 0)],
+      notRun: [LIVE_SKIPPED],
+    }),
+    { status: "partial", exit: 0 },
+  );
+  assert.deepEqual(
+    resolveUnifiedOutcome({ executed: [anchoredSection("flow", 0)], notRun: [] }),
+    { status: "pass", exit: 0 },
+  );
+
+  // A red is still a red: FXH only ever narrows the GREEN exit, it never re-tiers a defect.
+  assert.deepEqual(
+    resolveUnifiedOutcome({ executed: [unanchoredSection("tests", 1)], notRun: [] }),
+    { status: "fail", exit: 1 },
   );
 });
 

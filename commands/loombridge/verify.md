@@ -37,8 +37,10 @@ loombridge verify --root . --live   # also replay traces + grade feel drift
 - **Each section says whether it compared a frozen anchor.** The report carries
   `anchored` per section plus `anchoredSections`/`unanchoredSections`, so "green" and "green
   against nothing a human froze" never print identically. **`pass` requires every executed
-  section to be anchored**; an all-green run with any unanchored section reads `partial` at
-  the same exit tier, and the summary names the unanchored sections.
+  section to be anchored**; an all-green run with any unanchored section reads `partial`, and
+  the summary names the unanchored sections. **Exit `0` additionally requires at least one
+  anchored green section**: a run in which nothing anchored was compared exits `2`, because a
+  self-produced green cannot certify itself.
 - **Unity EditMode tests are graded OFFLINE from a stamped run.** The producer is a separate
   verb, `loombridge tests run`: it resolves the editor, runs batchmode headless, and writes
   `.loombridge/tests/test-results.xml` plus `.loombridge/tests/test-results-manifest.json`
@@ -51,10 +53,14 @@ loombridge verify --root . --live   # also replay traces + grade feel drift
 - **`doneness` reads this report when it exists.** A unified run that exited non-zero adds a
   refusal to `loombridge doneness`, so a green contract gate cannot certify a project whose
   other anchors went unmeasured. An absent report changes nothing.
-- **Exit codes:** `0` pass, or a partial whose only unmeasured assets were skipped for lack of
-  `--live` · `1` a game defect (gate fail, drift, baseline regression) · `2` a harness fault, a
-  broken asset, or nothing graded. A run that checked nothing is never a pass, and a `2` is
-  never a game verdict (a found defect stays at `1` however much else went unmeasured).
+- **Exit codes:** `0` a full pass, or a partial that compared **at least one anchored green
+  section** and whose only gaps were assets skipped for lack of `--live` or extra unanchored
+  sections · `1` a game defect (gate fail, drift, baseline regression) · `2` a harness fault, a
+  broken asset, nothing graded, **or an all-unanchored partial** (every executed section was
+  green but none of them compared anything a human froze: *nothing human-approved was
+  compared; a self-produced green cannot exit 0*). A run that checked nothing is never a pass,
+  and a `2` is never a game verdict (a found defect stays at `1` however much else went
+  unmeasured).
 
 Six flags stay on the unified run and combine only with each other: `--root`, `--strict`,
 `--live`, `--report`, `--id`, `--workspace`. Every other flag below is a mode or engine flag,
@@ -82,12 +88,16 @@ reads without re-running a multi-minute editor.
 - **Deleting the evidence does not silence the gate.** If the project declares tests
   (`Packages/manifest.json` `testables`, or an asmdef referencing `UnityEditor.TestRunner`)
   but has no stamped pair, the plan carries a non-anchor row saying so.
-- **Results from a different build run are broken** (`2`): when the manifest's `runId` and
-  the build in flight disagree, that evidence is about some other build.
+- **Results not scoped to the build in flight are broken** (`2`): when a build is in flight,
+  the manifest's `runId` must be *that* build's. A different id is evidence about some other
+  build; an absent id (`null`) is evidence scoped to no build at all, and both are refused
+  rather than compared against nothing. With no build in flight there is nothing to scope
+  against, so either is accepted and the section reports the `runId` it read.
 - **It is PERMANENTLY unanchored.** Nobody approves a test suite, so the section always
-  reports `anchored: false` and a run whose only green is the test section reads `partial`,
-  not `pass`. Binding proves the *provenance of these bytes*, `runId` scopes them to a build
-  when one exists, and staleness relative to source edits stays unproven.
+  reports `anchored: false`, and a run whose only green is the test section reads `partial`
+  and exits `2`: nothing human-approved was compared. Binding proves the *provenance of these
+  bytes*, `runId` scopes them to a build when one exists, and staleness relative to source
+  edits stays unproven.
 - **`loombridge tests grade --results <xml>` is DIAGNOSTIC**, not a verdict: it prints
   `DIAGNOSTIC: not a verification verdict` on every path and exits `0` only for a stamped,
   verifying pair or under CI attestation. Do not quote its output as a verification result.

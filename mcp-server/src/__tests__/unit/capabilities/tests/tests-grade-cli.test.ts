@@ -21,11 +21,14 @@ import path from "node:path";
 import test from "node:test";
 
 import {
+  GITHUB_ACTIONS_VALUE,
   GRADE_DIAGNOSTIC_BANNER,
+  MISPLACED_REFUSAL,
   UNSTAMPED_REFUSAL,
   run as runTestsVerb,
 } from "../../../../capabilities/tests/tests.js";
 import {
+  projectRootForTestResultsDir,
   sha256,
   testResultsDir,
   testResultsPath,
@@ -49,6 +52,18 @@ const RED_XML =
   '    <test-case id="2" name="a" fullname="N.F.a" result="Failed" label="Error">\n' +
   "      <failure><message>expected 3 but was 4</message></failure>\n" +
   "    </test-case>\n  </test-suite>\n</test-run>\n";
+
+/** FXA: `Broken` is not NUnit's vocabulary, and `passed` is the right word in the wrong case. */
+const UNKNOWN_RESULT_XML =
+  '<?xml version="1.0" encoding="utf-8"?>\n' +
+  '<test-run id="2" result="Passed" total="3" passed="3" failed="0" inconclusive="0" skipped="0">\n' +
+  '  <test-suite type="Assembly" id="1" name="Dev.Editor.Tests.dll" result="Passed">\n' +
+  '    <test-case id="2" name="a" fullname="N.F.a" result="Passed" />\n' +
+  '    <test-case id="3" name="b" fullname="N.F.b" result="Broken">\n' +
+  "      <failure><message>NullReferenceException in the subject under test</message></failure>\n" +
+  "    </test-case>\n" +
+  '    <test-case id="4" name="c" fullname="N.F.c" result="passed" />\n' +
+  "  </test-suite>\n</test-run>\n";
 
 const LOG = "Unity Editor version:    6000.3.20f1 (0123456789ab)\n";
 
@@ -155,9 +170,13 @@ test("an UNSTAMPED green exits 2 and says how to produce quotable results", asyn
 test("GITHUB_ACTIONS attests an unstamped green, and only GITHUB_ACTIONS does", async () => {
   const { root, results } = await plantBare();
   try {
-    const ci = await capture(["grade", "--results", results], { GITHUB_ACTIONS: "true" });
+    const ci = await capture(["grade", "--results", results], { GITHUB_ACTIONS: GITHUB_ACTIONS_VALUE });
     assert.equal(ci.code, 0, ci.all);
-    assert.match(ci.out, /the runner produced this file/);
+    // FXF: the wording is an ENV-CLAIMED attestation, not a claim that provenance was
+    // verified. Nothing here checks that this process is on a GitHub runner, and the line an
+    // operator reads must not imply that it did.
+    assert.match(ci.out, /GITHUB_ACTIONS=true: treating the file as runner-produced/);
+    assert.match(ci.out, /env-claimed attestation, not verified provenance/);
 
     // A lookalike variable must not buy the same trust.
     const impostor = await capture(["grade", "--results", results], { CI: "true", GITHUB_ACTION: "true" });
@@ -166,6 +185,129 @@ test("GITHUB_ACTIONS attests an unstamped green, and only GITHUB_ACTIONS does", 
   } finally {
     await fs.rm(root, { recursive: true, force: true });
   }
+});
+
+test("FXF: GITHUB_ACTIONS must be the EXACT string GitHub sets; any other value attests nothing", async () => {
+  // A truthiness test (`if (env.GITHUB_ACTIONS)`) hands the runner's trust root to anyone who
+  // can export a variable, and `GITHUB_ACTIONS=0` or `=false` are things a local shell writes
+  // while GitHub writes only "true". Each of these is a green file; none of them may exit 0.
+  const { root, results } = await plantBare();
+  try {
+    for (const value of ["1", "0", "false", "TRUE", "true ", "yes", ""]) {
+      const attempt = await capture(["grade", "--results", results], { GITHUB_ACTIONS: value });
+      assert.equal(attempt.code, 2, `GITHUB_ACTIONS=${JSON.stringify(value)} must not attest anything`);
+      assert.ok(attempt.err.includes(UNSTAMPED_REFUSAL));
+    }
+    // NON-VACUITY: the exact value still works, so the loop above is about the VALUE and not
+    // about a path that stopped attesting altogether.
+    assert.equal((await capture(["grade", "--results", results], { GITHUB_ACTIONS: GITHUB_ACTIONS_VALUE })).code, 0);
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+/* -------------------------------------------------------------------------- */
+/* FXD: a stamped pair only vouches for the project it sits in                */
+/* -------------------------------------------------------------------------- */
+
+test("FXD: a stamped pair COPIED somewhere else is not quotable, and names the root it claims", async () => {
+  // Every sha in the manifest survives a copy unchanged, because a copy preserves bytes. So
+  // integrity alone proves "these are the bytes that were stamped" and never "and they belong
+  // to this project". Without the location binding, `tests grade` would print "this green is
+  // quotable" for a pair lifted out of a green checkout and dropped anywhere at all.
+  const { root, results } = await plantStamped();
+  const elsewhere = await fs.mkdtemp(path.join(os.tmpdir(), "loombridge-grade-moved-"));
+  try {
+    // Sanity: in its own project it IS quotable, so the refusal below is caused by the move.
+    assert.equal((await capture(["grade", "--results", results])).code, 0);
+
+    const dir = testResultsDir(root);
+    const moved = path.join(elsewhere, "tests");
+    await fs.mkdir(moved, { recursive: true });
+    for (const name of await fs.readdir(dir)) {
+      await fs.copyFile(path.join(dir, name), path.join(moved, name));
+    }
+
+    const { code, out, err } = await capture(["grade", "--results", testResultsPath(moved)]);
+    assert.equal(code, 2, out);
+    assert.ok(err.includes(MISPLACED_REFUSAL), err);
+    assert.ok(out.includes(root), "the refusal prints the root the manifest CLAIMS");
+    assert.ok(!out.includes("this green is quotable"), "a moved pair must never be called quotable");
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+    await fs.rm(elsewhere, { recursive: true, force: true });
+  }
+});
+
+test("FXD: a pair at the right SHAPE of path but the wrong project is refused too", async () => {
+  // The sharper version: the copy lands at `<other>/.loombridge/tests/`, so the directory has
+  // the declared shape and only the project differs. The manifest's own `projectRoot` is what
+  // gives it away, held against the root the location implies.
+  const { root } = await plantStamped();
+  const other = await fs.mkdtemp(path.join(os.tmpdir(), "loombridge-grade-other-"));
+  try {
+    const from = testResultsDir(root);
+    const to = testResultsDir(other);
+    await fs.mkdir(to, { recursive: true });
+    for (const name of await fs.readdir(from)) await fs.copyFile(path.join(from, name), path.join(to, name));
+
+    const { code, out, err } = await capture(["grade", "--results", testResultsPath(to)]);
+    assert.equal(code, 2, out);
+    assert.ok(err.includes(MISPLACED_REFUSAL), err);
+    assert.ok(out.includes(root), "the claimed root is printed");
+    assert.ok(out.includes(other), "…beside the root the pair actually sits under");
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+    await fs.rm(other, { recursive: true, force: true });
+  }
+});
+
+test("FXD: the results dir inverts to its project root, and refuses to invent one", () => {
+  // The inverse of `testResultsDir`, re-derived forwards and compared, so the two directions
+  // cannot drift. A directory that is not the declared slot yields null rather than a guess.
+  const root = path.resolve("/proj/game");
+  assert.equal(projectRootForTestResultsDir(testResultsDir(root)), root);
+  assert.equal(projectRootForTestResultsDir("/proj/game/tests"), null, "no .loombridge parent");
+  assert.equal(projectRootForTestResultsDir("/proj/game/.loombridge/reports"), null, "the wrong slot");
+  assert.equal(projectRootForTestResultsDir("/proj/game/.loombridge"), null);
+});
+
+test("FXA: a case result outside NUnit's vocabulary refuses through `tests grade`", async () => {
+  const { root, results } = await plantBare(UNKNOWN_RESULT_XML);
+  try {
+    // Even under the CI attestation, which is the most permissive path this verb has.
+    const { code, out } = await capture(["grade", "--results", results], {
+      GITHUB_ACTIONS: GITHUB_ACTIONS_VALUE,
+    });
+    assert.equal(code, 2, out);
+    assert.match(out, /outside NUnit's vocabulary/);
+    assert.match(out, /N\.F\.b result='Broken'/);
+    assert.match(out, /bucket accounting disagrees with the walk/);
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test("FXL: the help text names the exit-2 list and the GITHUB_ACTIONS exception exactly as implemented", async () => {
+  const { out } = await capture(["--help"]);
+  // Exit 1 includes the --strict Warning case…
+  assert.match(out, /Exit 1: a real assertion failure, or a Warning case under --strict/);
+  // …and the exit-2 list names every refusal a caller can actually hit, including the two FXA
+  // rules, so the documented contract and the mapping cannot drift apart silently.
+  for (const phrase of [
+    "skipped or ignored SUITE",
+    "inconclusive case",
+    "outside NUnit's vocabulary",
+    "bucket accounting",
+    "MUTATED project",
+    "cancelled run",
+  ]) {
+    assert.ok(out.includes(phrase), `the help never mentions "${phrase}"`);
+  }
+  // The CI exception is described with the EXACT value the code compares against.
+  assert.ok(out.includes(`GITHUB_ACTIONS="${GITHUB_ACTIONS_VALUE}"`), out);
+  assert.match(out, /that exact value, nothing else/);
+  assert.match(out, /not at the project its manifest\s+claims/);
 });
 
 test("a red exits by the mapping whether stamped or not, and CI cannot launder it", async () => {

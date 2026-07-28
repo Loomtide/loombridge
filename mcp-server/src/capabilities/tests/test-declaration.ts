@@ -14,15 +14,32 @@
  *  1. `Packages/manifest.json` has a non-empty `testables` array. This is how a project
  *     opts a UPM package's test assemblies into its own Test Runner, and it is the signal
  *     `unity-dev-project` uses.
- *  2. Any `Assets/**\/*.asmdef` whose `references` include `UnityEditor.TestRunner`. That
- *     reference is what makes an assembly a test assembly; an asmdef without it cannot host
- *     NUnit tests at all.
+ *  2. Any `Assets/**\/*.asmdef` whose `references` include the Test Runner assemblies, in
+ *     EITHER form Unity writes them (a name or a `GUID:` reference). That reference is what
+ *     makes an assembly a test assembly; an asmdef without it cannot host NUnit tests at all.
  *
  * The scan is DETERMINISTIC (every directory listing is sorted) and stops at the first hit,
  * so the common case costs a handful of `readdir` calls. It reads only files it was told
  * about by the directory walk: nothing is inferred from a filename pattern, and a malformed
  * JSON file is skipped rather than thrown, because "one asmdef is unreadable" must not
  * abort discovery of every other asset.
+ *
+ * EVASION HARDENING (FXE). Every one of these is a real file Unity accepts and an earlier cut
+ * of this scan silently missed, which would have turned "the project declares tests" into
+ * "no row at all" and let a deleted results pair go unnoticed:
+ *   - the `GUID:` reference form, which is what Unity writes when the asmdef is edited in the
+ *     Inspector rather than by hand;
+ *   - a leading UTF-8 BOM, which `JSON.parse` rejects outright (the whole file then read as
+ *     "unparseable", i.e. as no declaration);
+ *   - an uppercase or mixed-case `.ASMDEF` extension, which Unity's own importer accepts on a
+ *     case-insensitive filesystem;
+ *   - trailing or leading whitespace inside a reference string.
+ *
+ * `Packages/`-EMBEDDED TEST ASMDEFS ARE OUT OF SCOPE, deliberately. A test assembly inside an
+ * embedded or referenced package does not compile as a test at all unless the consuming
+ * project lists that package in `Packages/manifest.json` `testables`, which is signal 1. So
+ * the embedded case is already covered by the cheaper check, and walking `Packages/` (which
+ * can contain a full package cache) would cost far more for no additional coverage.
  */
 
 import fs from "node:fs/promises";
@@ -31,15 +48,50 @@ import path from "node:path";
 /** The assembly reference that makes a Unity assembly a test assembly. */
 const TEST_RUNNER_REFERENCE = "UnityEditor.TestRunner";
 
+/**
+ * Every reference spelling that means "this assembly can host NUnit tests" (FXE).
+ *
+ * The two NAMES are the hand-authored form. The two `GUID:` values are Unity's own, taken
+ * from the `com.unity.test-framework` package's asmdef `.meta` files; the Inspector writes
+ * that form, so a project whose asmdef was created by clicking rather than typing carries
+ * GUIDs and nothing else. They are hard-coded because they are Unity's constants, not this
+ * repo's, and there is no file in this repository to re-derive them from; a wrong GUID costs
+ * a missed row (a false negative, never a false green), which is why hard-coding is
+ * acceptable here and a matching heuristic would not be.
+ *
+ *   27619889b8ba8c24980f49ee34dbb44a  UnityEditor.TestRunner
+ *   0acc523941302664db1f4e527237feb3  UnityEngine.TestRunner
+ */
+const TEST_RUNNER_REFERENCES: readonly string[] = [
+  TEST_RUNNER_REFERENCE,
+  "UnityEngine.TestRunner",
+  "GUID:27619889b8ba8c24980f49ee34dbb44a",
+  "GUID:0acc523941302664db1f4e527237feb3",
+];
+
+/** `.asmdef`, matched case-insensitively: Unity's importer accepts `.ASMDEF` too (FXE). */
+const ASMDEF_EXTENSION = ".asmdef";
+
 export interface TestDeclaration {
   declared: boolean;
   /** WHICH signal declared it, as a sentence the plan row can print. Set iff `declared`. */
   how?: string;
 }
 
+/**
+ * Strip a leading UTF-8 BOM (FXE).
+ *
+ * Unity, Visual Studio and Rider all happily write one, and `JSON.parse` throws on it. Read
+ * without this, a BOM'd asmdef is indistinguishable from a corrupt one, so the scan silently
+ * concludes "no test assembly here" for a file that plainly declares one.
+ */
+function stripBom(text: string): string {
+  return text.charCodeAt(0) === 0xfeff ? text.slice(1) : text;
+}
+
 async function readJsonOrNull(file: string): Promise<unknown> {
   try {
-    return JSON.parse(await fs.readFile(file, "utf-8"));
+    return JSON.parse(stripBom(await fs.readFile(file, "utf-8")));
   } catch {
     return null;
   }
@@ -55,20 +107,26 @@ async function declaredByTestables(root: string): Promise<string | null> {
 }
 
 /**
- * Does this asmdef reference the Test Runner?
+ * Does this asmdef reference the Test Runner? (exported for the evasion tests)
  *
  * `references` entries are either assembly NAMES ("UnityEditor.TestRunner") or GUID refs
- * ("GUID:27619889b8ba8c24980f49ee34dbb44a", the Test Runner's well-known guid). Only the
- * name form is matched here, deliberately: matching a guid would mean hard-coding a value
- * from Unity's own package that nothing in this repo can re-derive or keep honest. The name
- * form is what every scaffolded asmdef in this repo and in Unity's own templates uses, and
- * a false NEGATIVE here costs a missing row, never a false green.
+ * ("GUID:27619889b8ba8c24980f49ee34dbb44a"). BOTH forms are matched (FXE): the GUID form is
+ * what Unity writes when the asmdef is edited in the Inspector, and a scan that only knew the
+ * name form would report "this project declares no tests" for a perfectly ordinary project.
+ * Entries are TRIMMED before comparison, because a trailing space in a hand-edited file is
+ * not a different assembly.
+ *
+ * The comparison is exact (after trimming) rather than a substring match: a loose match would
+ * fire on an unrelated assembly whose name happens to contain the token, and a guard that
+ * cries wolf gets relaxed until it protects nothing.
  */
-function asmdefReferencesTestRunner(doc: unknown): boolean {
+export function asmdefReferencesTestRunner(doc: unknown): boolean {
   if (typeof doc !== "object" || doc === null) return false;
   const references = (doc as { references?: unknown }).references;
   if (!Array.isArray(references)) return false;
-  return references.some((entry) => typeof entry === "string" && entry === TEST_RUNNER_REFERENCE);
+  return references.some(
+    (entry) => typeof entry === "string" && TEST_RUNNER_REFERENCES.includes(entry.trim()),
+  );
 }
 
 /**
@@ -94,7 +152,7 @@ async function declaredByAsmdef(root: string): Promise<string | null> {
     for (const entry of entries) {
       if (entry.isDirectory()) {
         subdirs.push(path.join(dir, entry.name));
-      } else if (entry.isFile() && entry.name.endsWith(".asmdef")) {
+      } else if (entry.isFile() && entry.name.toLowerCase().endsWith(ASMDEF_EXTENSION)) {
         const file = path.join(dir, entry.name);
         if (asmdefReferencesTestRunner(await readJsonOrNull(file))) {
           return `${path.relative(root, file).split(path.sep).join("/")} references ${TEST_RUNNER_REFERENCE}`;

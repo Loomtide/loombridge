@@ -19,11 +19,13 @@
  */
 
 import assert from "node:assert/strict";
+import { existsSync } from "node:fs";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
+import { PKG_ROOT } from "../../../_support/paths.js";
 import { loombridgeCli } from "../../../../surfaces/cli.js";
 import {
   defaultEditorLocatorSeams,
@@ -44,7 +46,9 @@ import {
   countCompileErrors,
   defaultSpawnStdio,
   parseLogEditorVersion,
+  resolveTestsSpawner,
   run as runTestsVerb,
+  spawnUnityTests,
   type TestsSpawnRequest,
   type TestsSpawnResult,
   type TestsSpawner,
@@ -69,6 +73,24 @@ const RED_XML =
   '    <test-case id="3" name="b" fullname="N.F.b" result="Failed" label="Error">\n' +
   "      <failure><message>expected 3 but was 4</message></failure>\n" +
   "    </test-case>\n  </test-suite>\n</test-run>\n";
+
+/**
+ * FXA: a document whose cases carry result words the mapping does not understand.
+ *
+ * `Broken` is not in NUnit's vocabulary and `passed` is the right word in the wrong case, so
+ * before FXA both landed in NO bucket: the run read as "2 passed, 0 failed" and graded tier 0
+ * with a real NullReferenceException sitting inside it.
+ */
+const UNKNOWN_RESULT_XML =
+  '<?xml version="1.0" encoding="utf-8"?>\n' +
+  '<test-run id="2" result="Passed" total="3" passed="3" failed="0" inconclusive="0" skipped="0">\n' +
+  '  <test-suite type="Assembly" id="1" name="Dev.Editor.Tests.dll" result="Passed">\n' +
+  '    <test-case id="2" name="a" fullname="N.F.a" result="Passed" />\n' +
+  '    <test-case id="3" name="b" fullname="N.F.b" result="Broken">\n' +
+  "      <failure><message>NullReferenceException in the subject under test</message></failure>\n" +
+  "    </test-case>\n" +
+  '    <test-case id="4" name="c" fullname="N.F.c" result="passed" />\n' +
+  "  </test-suite>\n</test-run>\n";
 
 const LOG = `Unity Editor version:    ${VERSION} (0123456789ab)\nRefreshing native plugins\nAll tests finished.\n`;
 
@@ -226,6 +248,41 @@ test("REFUSES --platform PlayMode with a clear not-yet message", async () => {
     assert.match(err, /PlayMode/);
     assert.match(err, /EditMode only/);
     assert.equal(calls.length, 0);
+  } finally {
+    await fs.rm(project.root, { recursive: true, force: true });
+  }
+});
+
+test("FXM: a VALUE-LESS value flag is a usage refusal, never a silent default", async () => {
+  // `--root` with nothing after it used to keep cwd, and `--unity`/`--results` used to take
+  // the empty string. A mistyped command then ran against a DIFFERENT project (or an empty
+  // path) while looking exactly like it had been told what to do. `--timeout-min` already
+  // refused; the rest now match it, and the flag that was omitted is named.
+  const project = await plantProject();
+  try {
+    for (const [flag, args] of [
+      ["--root", ["run", "--root"]],
+      ["--unity", ["run", "--root", project.root, "--unity"]],
+      ["--platform", ["run", "--root", project.root, "--platform"]],
+      ["--timeout-min", ["run", "--root", project.root, "--timeout-min"]],
+      ["--results", ["grade", "--results"]],
+    ] as const) {
+      const { spawner, calls } = recordingSpawner(() => assert.fail("must not spawn"));
+      const { code, err } = await capture([...args], { spawner });
+      assert.equal(code, 2, `${flag} with no value must be a usage refusal`);
+      assert.match(err, new RegExp(`\\${flag} requires a value`));
+      assert.equal(calls.length, 0);
+    }
+
+    // NON-VACUITY: the same flags WITH values still parse and still reach the spawner.
+    const ok = writingSpawner(GREEN_XML, 0);
+    assert.equal(
+      (await capture(["run", "--root", project.root, "--unity", EDITOR, "--platform", "EditMode"], {
+        spawner: ok.spawner,
+      })).code,
+      0,
+    );
+    assert.equal(ok.calls.length, 1);
   } finally {
     await fs.rm(project.root, { recursive: true, force: true });
   }
@@ -562,6 +619,172 @@ test("a failed run CLEARS the previous run's stamped pair; stale evidence never 
   } finally {
     await fs.rm(project.root, { recursive: true, force: true });
   }
+});
+
+test("FXB: a PRE-SPAWN refusal leaves the previous stamped pair byte-identical", async () => {
+  // The counterpart to the test above, and the reason the comment at the deletion site had to
+  // be made precise. A run that SPAWNS and then fails must clear the old pair (stale evidence
+  // must never be read as fresh). A run that refuses BEFORE spawning has changed nothing about
+  // the project, so it must not destroy evidence either: "an editor is already open" is a
+  // reason to try again later, not a reason to lose last night's results.
+  const project = await plantProject();
+  const green = writingSpawner(GREEN_XML, 0);
+  try {
+    assert.equal((await capture(["run", "--root", project.root, "--unity", EDITOR], { spawner: green.spawner })).code, 0);
+    const before = {
+      xml: await fs.readFile(testResultsPath(project.dir)),
+      manifest: await fs.readFile(testResultsManifestPath(project.dir)),
+      log: await fs.readFile(testRunLogPath(project.dir)),
+    };
+
+    await fs.mkdir(path.join(project.root, "Temp"), { recursive: true });
+    await fs.writeFile(path.join(project.root, "Temp", "UnityLockfile"), "", "utf-8");
+    const { spawner, calls } = recordingSpawner(() => assert.fail("must not spawn"));
+    const { code, err } = await capture(["run", "--root", project.root, "--unity", EDITOR], { spawner });
+    assert.equal(code, 2);
+    assert.match(err, /UnityLockfile/);
+    assert.equal(calls.length, 0, "the refusal really did happen before any spawn");
+
+    assert.deepEqual(await fs.readFile(testResultsPath(project.dir)), before.xml);
+    assert.deepEqual(await fs.readFile(testResultsManifestPath(project.dir)), before.manifest);
+    assert.deepEqual(await fs.readFile(testRunLogPath(project.dir)), before.log);
+  } finally {
+    await fs.rm(project.root, { recursive: true, force: true });
+  }
+});
+
+test("FXA: a case result outside NUnit's vocabulary refuses through `tests run` (exit 2)", async () => {
+  const project = await plantProject();
+  const { spawner } = writingSpawner(UNKNOWN_RESULT_XML, 0);
+  try {
+    const { code, out } = await capture(["run", "--root", project.root, "--unity", EDITOR], { spawner });
+    assert.equal(code, 2, out);
+    assert.match(out, /outside NUnit's vocabulary/);
+    assert.match(out, /N\.F\.b result='Broken'/);
+    assert.match(out, /N\.F\.c result='passed'/);
+    assert.match(out, /bucket accounting disagrees with the walk/);
+    assert.match(out, /tier 2/);
+  } finally {
+    await fs.rm(project.root, { recursive: true, force: true });
+  }
+});
+
+/* -------------------------------------------------------------------------- */
+/* FXJ: the REAL spawner, against a fake executable                           */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The built module the wrapper imports.
+ *
+ * Resolved from `PKG_ROOT` (never by counting `..` from this file: CLAUDE.md), and its
+ * existence is asserted before use, so a moved or renamed module is a loud failure instead of
+ * a test that quietly stops exercising anything. Same derivation as `CLI_DIST`.
+ */
+const TESTS_MODULE_DIST = path.join(PKG_ROOT, "dist", "capabilities", "tests", "tests.js");
+
+const STDOUT_MARKER = "FAKE_UNITY_WROTE_TO_STDOUT";
+const STDERR_MARKER = "FAKE_UNITY_WROTE_TO_STDERR";
+const LOG_MARKER = "FAKE_UNITY_WROTE_TO_LOGFILE";
+
+test("FXJ: the REAL spawner runs a child, keeps fd 1 away from it, and the log gets the output", async () => {
+  // Every other test in this file injects a spawner, which means the ONE code path that ships
+  // is the one nothing exercises. This runs `spawnUnityTests` itself against a tiny fake
+  // "editor" (a node script), through a WRAPPER process whose stdout and stderr this test
+  // captures on a pipe. If the spawner ever used `stdio: "inherit"`, the fake's bytes would
+  // travel up through the wrapper's streams into that pipe, and the two marker assertions
+  // below are what notice. Nothing here starts a Unity process.
+  assert.ok(existsSync(TESTS_MODULE_DIST), `the built module moved: ${TESTS_MODULE_DIST}`);
+
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "loombridge-real-spawn-"));
+  try {
+    const fakeUnity = path.join(dir, "fake-unity.mjs");
+    await fs.writeFile(
+      fakeUnity,
+      [
+        'import { appendFileSync } from "node:fs";',
+        'const logPath = process.argv[process.argv.indexOf("-logFile") + 1];',
+        `process.stdout.write(${JSON.stringify(`${STDOUT_MARKER}\n`)});`,
+        `process.stderr.write(${JSON.stringify(`${STDERR_MARKER}\n`)});`,
+        `appendFileSync(logPath, ${JSON.stringify(`Unity Editor version: ${VERSION}\n${LOG_MARKER}\n`)});`,
+        "process.exit(0);",
+      ].join("\n"),
+      "utf-8",
+    );
+
+    const logPath = path.join(dir, "run.log");
+    const resultPath = path.join(dir, "result.json");
+    const wrapper = path.join(dir, "wrapper.mjs");
+    await fs.writeFile(
+      wrapper,
+      [
+        'import { writeFileSync } from "node:fs";',
+        'import { pathToFileURL } from "node:url";',
+        "const [modulePath, fakeExe, logPath, outPath, cwd] = process.argv.slice(2);",
+        "const { spawnUnityTests } = await import(pathToFileURL(modulePath).href);",
+        "const result = await spawnUnityTests({",
+        "  editorPath: process.execPath,",
+        '  args: [fakeExe, "-batchmode", "-logFile", logPath],',
+        "  cwd,",
+        "  timeoutMs: 60000,",
+        "  logPath,",
+        "});",
+        "writeFileSync(outPath, JSON.stringify(result));",
+      ].join("\n"),
+      "utf-8",
+    );
+
+    const { spawn } = await import("node:child_process");
+    const captured = await new Promise<{ code: number | null; out: string; err: string }>((resolve, reject) => {
+      const child = spawn(
+        process.execPath,
+        [wrapper, TESTS_MODULE_DIST, fakeUnity, logPath, resultPath, dir],
+        // PIPED, never inherited: this test runs under `node --test`, where fd 1 is the
+        // runner's V8 result channel (shared/child-stdio.ts).
+        { cwd: dir, stdio: ["ignore", "pipe", "pipe"] },
+      );
+      let out = "";
+      let err = "";
+      child.stdout.on("data", (chunk) => {
+        out += String(chunk);
+      });
+      child.stderr.on("data", (chunk) => {
+        err += String(chunk);
+      });
+      child.on("error", reject);
+      child.on("close", (code) => resolve({ code, out, err }));
+    });
+
+    assert.equal(captured.code, 0, `wrapper failed:\n${captured.out}\n${captured.err}`);
+
+    // 1. THE RESULT SHAPE, from the real spawner.
+    const result = JSON.parse(await fs.readFile(resultPath, "utf-8")) as TestsSpawnResult;
+    assert.deepEqual(result, { ok: true, exitCode: 0, signal: null, timedOut: false });
+
+    // 2. THE FD-1 RULE. Nothing the child wrote reached the parent's stdout or stderr.
+    assert.ok(!captured.out.includes(STDOUT_MARKER), `child stdout reached the parent: ${captured.out}`);
+    assert.ok(!captured.err.includes(STDOUT_MARKER), `child stdout reached the parent's stderr: ${captured.err}`);
+    assert.ok(!captured.err.includes(STDERR_MARKER), `child stderr reached the parent: ${captured.err}`);
+    assert.equal(captured.out, "", "the wrapper itself prints nothing, so any stdout at all came from the child");
+
+    // 3. THE LOG FILE received the child's output, which is where Unity actually writes.
+    const log = await fs.readFile(logPath, "utf-8");
+    assert.match(log, new RegExp(LOG_MARKER));
+    assert.equal(parseLogEditorVersion(log), VERSION, "the real log path feeds the real banner parser");
+  } finally {
+    await fs.rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("FXJ: the PRODUCTION default spawner is `spawnUnityTests`, by reference", () => {
+  // Every test above injects a seam. Without this assertion, swapping the default for a stub
+  // would leave the entire suite green while `tests run` never launched an editor again: the
+  // one line that is only reached in production is the one line nothing else covers.
+  assert.equal(resolveTestsSpawner({}), spawnUnityTests);
+  assert.equal(resolveTestsSpawner({ locatorSeams: locatorSeams() }), spawnUnityTests);
+
+  // …and an injected spawner still wins, or the seam itself would be dead.
+  const injected: TestsSpawner = async () => ({ ok: true, exitCode: 0, signal: null, timedOut: false });
+  assert.equal(resolveTestsSpawner({ spawner: injected }), injected);
 });
 
 /* -------------------------------------------------------------------------- */

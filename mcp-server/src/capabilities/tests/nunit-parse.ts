@@ -473,6 +473,25 @@ export function exitCodeIsUnexplained(exitCode: number, realFailureCount: number
   return true;
 }
 
+/**
+ * NUnit3's EXACT vocabulary for a `<test-case result>` (FXA).
+ *
+ * Case-sensitive and closed on purpose. Every bucket in `deriveSummary` matches one of these
+ * five strings, so a value outside the set (a typo, a lowercase `passed`, a future NUnit
+ * word, a hand-edited `Broken`) falls into NO bucket: it inflates `total` while contributing
+ * to nothing, and the run reads as "cases that are neither passed nor failed", which is the
+ * quietest possible way to make a failing case disappear. The mapping refuses instead of
+ * guessing what an unrecognized word was supposed to mean.
+ */
+export const RECOGNIZED_CASE_RESULTS = ["Passed", "Failed", "Warning", "Inconclusive", "Skipped"] as const;
+
+const RECOGNIZED_CASE_RESULT_SET: ReadonlySet<string> = new Set<string>(RECOGNIZED_CASE_RESULTS);
+
+/** Is this `<test-case result>` one of the five words NUnit actually writes? */
+export function isRecognizedCaseResult(result: string): boolean {
+  return RECOGNIZED_CASE_RESULT_SET.has(result);
+}
+
 /** A Failed case that is a real assertion defect (no label, or label "Error"). */
 function isRealFailure(testCase: NUnitCase): boolean {
   if (testCase.result !== "Failed") return false;
@@ -523,6 +542,30 @@ export function gradeTestResults(input: TestsGradeInput): TestsGrade {
   const reasons: string[] = [];
   const notes: string[] = [];
   const refusals: string[] = [];
+
+  // --- FXA: is every case's result a word this mapping actually understands? ---
+  // These two rules live HERE, in `gradeTestResults`, rather than at one call site, so every
+  // consumer (`tests run`, `tests grade`, the unified tests section) inherits them from the
+  // same function. A rule enforced by one door is a rule the other doors do not have.
+  const unknownResultCases = run.cases.filter((c) => !isRecognizedCaseResult(c.result));
+  if (unknownResultCases.length > 0) {
+    refusals.push(
+      `${unknownResultCases.length} case(s) carry a result outside NUnit's vocabulary ` +
+        `(${RECOGNIZED_CASE_RESULTS.join(", ")}): ` +
+        nameList(unknownResultCases.map((c) => `${c.fullname} result='${c.result}'`)),
+    );
+  }
+  // BUCKET ACCOUNTING. `total` is the number of `<test-case>` elements walked; the five
+  // buckets below are the only places a case can land. If they do not add up, some case was
+  // counted in the total and graded by nothing, which is exactly how a failing case hides.
+  const bucketed = summary.passed + summary.failed + summary.inconclusive + summary.skipped + warningCases.length;
+  if (bucketed !== summary.total) {
+    refusals.push(
+      `bucket accounting disagrees with the walk: ${summary.total} case(s) walked but ` +
+        `${bucketed} landed in a bucket (passed ${summary.passed}, failed ${summary.failed}, ` +
+        `inconclusive ${summary.inconclusive}, skipped ${summary.skipped}, warning ${warningCases.length})`,
+    );
+  }
 
   // --- trust: did this run check what it claims to have checked? ---
   if (run.result === "Cancelled") {

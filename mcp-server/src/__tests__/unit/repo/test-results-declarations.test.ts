@@ -24,7 +24,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 
-import { REPO_ROOT } from "../../_support/paths.js";
+import { PKG_ROOT, REPO_ROOT } from "../../_support/paths.js";
 import { LOOMBRIDGE_DIRNAME, TEST_RESULTS_DIRNAME } from "../../../domain/state.js";
 
 const TEMPLATE_GITIGNORE = path.join(REPO_ROOT, "templates", "create-loombridge-game", ".gitignore");
@@ -120,6 +120,38 @@ export const CI_RESULTS_GLOB = "unity-test-results/${{ matrix.label }}/*.xml";
 const GRADE_STEP_NAME = "Grade Unity test results";
 
 /**
+ * FXP: the `node ...` target the grade step invokes, DERIVED from the package's own `bin`
+ * rather than re-spelled here.
+ *
+ * The exact "declared path nothing walks" shape this repo keeps paying for: the workflow says
+ * `node mcp-server/dist/surfaces/cli.js`, and nothing in a green TypeScript suite notices when
+ * the built entrypoint moves. One derivation, from `package.json`, so a moved `bin` fails this
+ * guard instead of failing a CI job three weeks later.
+ */
+export function ciCliInvocationTarget(): string {
+  const pkg = JSON.parse(readFileSync(path.join(PKG_ROOT, "package.json"), "utf-8")) as {
+    bin?: Record<string, string>;
+  };
+  const entry = pkg.bin?.loombridge;
+  if (typeof entry !== "string" || entry.length === 0) {
+    throw new Error("mcp-server/package.json declares no `bin.loombridge`; the workflow has nothing to call");
+  }
+  // The workflow runs from the repo root, so the path it types is the package dir + the bin.
+  return `${path.basename(PKG_ROOT)}/${entry}`;
+}
+
+/**
+ * FXG: the lines that make the grade loop keep the WORST tier across the graded XMLs.
+ *
+ * `node ... || status=$?` alone keeps the LAST non-zero one, so a harness fault (2) followed
+ * by a plain red (1) reports 1: a game verdict standing in for "that part of the run could not
+ * be trusted", which is the exact inversion CLAUDE.md forbids. These fragments are what the
+ * worst-of arithmetic is made of, and the LITMUS below plants the last-wins form to prove the
+ * guard fires on it.
+ */
+const WORST_STATUS_FRAGMENTS = ["rc=0", "|| rc=$?", '[ "$rc" -eq 2 ]', '[ "$status" -eq 0 ]', "status=$rc"];
+
+/**
  * Everything wrong with the workflow's grading wiring, as named sentences. Empty means the
  * step is present, self-contained, walks the artifacts glob, and runs unconditionally.
  */
@@ -151,6 +183,20 @@ export function workflowGradeStepProblems(yaml: string): string[] {
   }
   if (!/tests grade --results/.test(block)) {
     problems.push("the grade step does not invoke `tests grade --results`: it is not the CLI's mapping");
+  }
+  // FXP: it must call the entrypoint the package actually declares, not a path that was
+  // correct when it was typed.
+  const target = ciCliInvocationTarget();
+  if (!block.includes(`node ${target}`)) {
+    problems.push(`the grade step does not run \`node ${target}\`: the declared bin and the workflow have drifted`);
+  }
+  // FXG: the loop keeps the WORST tier, never the last non-zero one.
+  const missingWorst = WORST_STATUS_FRAGMENTS.filter((fragment) => !block.includes(fragment));
+  if (missingWorst.length > 0) {
+    problems.push(
+      "the grade loop does not keep the WORST tier across the graded XMLs (2 beats 1 beats 0); " +
+        `missing: ${missingWorst.join(", ")}`,
+    );
   }
   // SELF-CONTAINED (G10): the runner has no Node toolchain and no built CLI by default, so
   // the step is inert without both. A workflow that "has the step" but never builds the
@@ -215,5 +261,36 @@ test("LITMUS: the workflow guard really fires on a planted removal", () => {
   assert.ok(
     workflowGradeStepProblems(noBuild).some((p) => p.includes("never builds the CLI")),
     "a step that calls an unbuilt CLI must fail the guard",
+  );
+
+  // 5. FXP: the node target quietly re-pointed at a path the package does not declare. This
+  //    is the declared-path failure one layer down: the step exists, is unconditional, walks
+  //    the right glob, and calls a file that was never built.
+  const movedBin = yaml.replace(`node ${ciCliInvocationTarget()}`, "node mcp-server/dist/cli.js");
+  assert.ok(
+    workflowGradeStepProblems(movedBin).some((p) => p.includes("declared bin and the workflow have drifted")),
+    "a node target that does not match package.json bin must fail the guard",
+  );
+
+  // 6. FXG: the loop reverted to last-non-zero-wins, which reports a game verdict (1) for a
+  //    run whose first XML was a harness fault (2).
+  const lastWins = yaml
+    .replace(/\n\s+rc=0\n/, "\n")
+    .replace("|| rc=$?", "|| status=$?")
+    .replace(/\n\s+if \[ "\$rc" -ne 0 \][\s\S]*?\n\s+fi\n/, "\n");
+  assert.ok(
+    workflowGradeStepProblems(lastWins).some((p) => p.includes("WORST tier")),
+    `a last-non-zero-wins loop must fail the guard; got: ${JSON.stringify(workflowGradeStepProblems(lastWins))}`,
+  );
+});
+
+test("FXP: the CI invocation target is derived from the package's own bin, and it exists in the tree", () => {
+  const target = ciCliInvocationTarget();
+  // The derivation is real: the file it names is the one `npm run build` produces, and the
+  // path is relative to the REPO root because that is where the workflow runs.
+  assert.equal(target, `${path.basename(PKG_ROOT)}/${"dist/surfaces/cli.js"}`);
+  assert.ok(
+    readFileSync(EDITMODE_WORKFLOW, "utf-8").includes(`node ${target}`),
+    "the workflow must call the derived target",
   );
 });

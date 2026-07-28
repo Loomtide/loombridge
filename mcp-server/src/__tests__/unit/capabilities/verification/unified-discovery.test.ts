@@ -580,7 +580,7 @@ test("LITMUS: an EDITED results XML and a FOREIGN projectRoot are both broken ro
   }
 });
 
-test("G7: results stamped under a DIFFERENT build runId are broken; a null on either side is not", async () => {
+test("G7/FXC: with a build in flight the manifest must carry THAT runId; a different id or none is broken", async () => {
   const root = await tmpDir("unified-tests-runid-");
   const workspace = await tmpDir("unified-ws-");
   try {
@@ -591,7 +591,7 @@ test("G7: results stamped under a DIFFERENT build runId are broken; a null on ei
     const stale = rowFor((await discoverVerificationAssets({ root, workspace })).assets, "test-results");
     assert.equal(stale.runnable, "no");
     assert.equal(stale.notRunClass, "broken");
-    assert.equal(stale.reason, "results from a different build run");
+    assert.equal(stale.reason, "results are not scoped to the build in flight: re-run `loombridge tests run`");
     assert.ok(String(stale.broken).includes("run-A") && String(stale.broken).includes("run-B"), stale.broken);
 
     // The SAME run is fine, which is what proves the check is about the ids and not about
@@ -602,9 +602,20 @@ test("G7: results stamped under a DIFFERENT build runId are broken; a null on ei
       "offline",
     );
 
-    // A null on the manifest side scopes the results to no build; that is a documented
-    // limitation, not a refusal, and refusing it would red out every pre-build run.
+    // DELIBERATE FLIP (FXC). This used to run OFFLINE: the old rule required both ids to be
+    // non-null before it compared anything, so a manifest with `runId: null` passed by having
+    // nothing to compare. That is the falsy-skip anti-pattern, and it was the cheapest way to
+    // present pre-build results as evidence about the build in flight. An absent scope is now
+    // a refusal, because a comparison that cannot be made is not a comparison that passed.
     await plantTestResults(root, { runId: null });
+    const unscoped = rowFor((await discoverVerificationAssets({ root, workspace })).assets, "test-results");
+    assert.equal(unscoped.runnable, "no");
+    assert.equal(unscoped.notRunClass, "broken");
+    assert.ok(String(unscoped.broken).includes("none"), unscoped.broken);
+
+    // …and with NO build in flight there is nothing to scope against, so an unscoped manifest
+    // is accepted again. Refusing here would red out every ratchet project that never builds.
+    await updateState(paths, { currentBuild: null });
     assert.equal(
       rowFor((await discoverVerificationAssets({ root, workspace })).assets, "test-results").runnable,
       "offline",
@@ -684,6 +695,95 @@ test("G6: an asmdef that does NOT reference the Test Runner declares nothing (th
     );
   } finally {
     for (const d of [root, workspace]) await fs.rm(d, { recursive: true, force: true });
+  }
+});
+
+/* -------------------------------------------------------------------------- */
+/* FXE / FXK: the declaration scan, and its boundaries                        */
+/* -------------------------------------------------------------------------- */
+
+test("FXE: every asmdef EVASION the review found still declares tests", async () => {
+  // Each of these is a file Unity accepts and an earlier cut of the scan silently missed. A
+  // miss here is not a cosmetic bug: it turns "this project declares tests" into NO ROW, so
+  // `rm -rf .loombridge/tests/` would once again make the whole gate vanish.
+  const cases: [string, string, unknown][] = [
+    // Unity writes the GUID form whenever the asmdef is edited in the Inspector.
+    ["editor guid", "Guid.Editor.Tests.asmdef", { name: "T", references: ["GUID:27619889b8ba8c24980f49ee34dbb44a"] }],
+    ["engine guid", "Guid.Engine.Tests.asmdef", { name: "T", references: ["GUID:0acc523941302664db1f4e527237feb3"] }],
+    ["engine name", "Name.Engine.Tests.asmdef", { name: "T", references: ["UnityEngine.TestRunner"] }],
+    // A hand-edited file with a stray space is the same assembly.
+    ["trailing space", "Space.Tests.asmdef", { name: "T", references: [" UnityEditor.TestRunner "] }],
+  ];
+
+  for (const [label, filename, doc] of cases) {
+    const root = await tmpDir("unified-tests-evasion-");
+    const workspace = await tmpDir("unified-ws-");
+    try {
+      const dir = path.join(root, "Assets", "Tests", "Editor");
+      await fs.mkdir(dir, { recursive: true });
+      await fs.writeFile(path.join(dir, filename), JSON.stringify(doc), "utf-8");
+
+      const row = rowFor((await discoverVerificationAssets({ root, workspace })).assets, "test-results");
+      assert.equal(row.notRunClass, "non-anchor", `${label}: the scan missed a real test assembly`);
+      assert.match(String(row.reason), /tests declared, no stamped results/);
+    } finally {
+      for (const d of [root, workspace]) await fs.rm(d, { recursive: true, force: true });
+    }
+  }
+});
+
+test("FXE: a UTF-8 BOM and an uppercase .ASMDEF extension do not hide a test assembly", async () => {
+  for (const [label, filename, prefix] of [
+    ["bom", "Bom.Tests.asmdef", "﻿"],
+    ["uppercase extension", "Upper.Tests.ASMDEF", ""],
+    ["both", "Both.Tests.AsmDef", "﻿"],
+  ] as const) {
+    const root = await tmpDir("unified-tests-bom-");
+    const workspace = await tmpDir("unified-ws-");
+    try {
+      const dir = path.join(root, "Assets", "Tests", "Editor");
+      await fs.mkdir(dir, { recursive: true });
+      await fs.writeFile(
+        path.join(dir, filename),
+        prefix + JSON.stringify({ name: "T", references: ["UnityEditor.TestRunner"] }),
+        "utf-8",
+      );
+      const row = rowFor((await discoverVerificationAssets({ root, workspace })).assets, "test-results");
+      assert.equal(row.notRunClass, "non-anchor", `${label}: a BOM or a case difference is not a missing declaration`);
+    } finally {
+      for (const d of [root, workspace]) await fs.rm(d, { recursive: true, force: true });
+    }
+  }
+});
+
+test("FXK: `testables: []` declares NOTHING; a populated one declares tests", async () => {
+  // The boundary the review named. `Array.isArray(testables)` alone would treat an EMPTY
+  // array as a declaration, which sounds harmless and is not: every Unity project scaffolded
+  // from a template that writes `"testables": []` would grow a permanent, unfixable
+  // non-anchor row, and a gate that is always red for everyone gets switched off.
+  for (const [label, testables, expectRow] of [
+    ["empty", [] as string[], false],
+    ["absent", undefined, false],
+    ["populated", ["com.loomtide.loombridge"], true],
+  ] as const) {
+    const root = await tmpDir(`unified-tests-testables-${label}-`);
+    const workspace = await tmpDir("unified-ws-");
+    try {
+      await fs.mkdir(path.join(root, "Packages"), { recursive: true });
+      await fs.writeFile(
+        path.join(root, "Packages", "manifest.json"),
+        JSON.stringify(testables === undefined ? { dependencies: {} } : { dependencies: {}, testables }, null, 2),
+        "utf-8",
+      );
+
+      const rows = (await discoverVerificationAssets({ root, workspace })).assets.filter(
+        (a) => a.kind === "test-results",
+      );
+      assert.equal(rows.length, expectRow ? 1 : 0, `testables ${label} produced ${rows.length} row(s)`);
+      if (expectRow) assert.match(String(rows[0]!.reason), /declares 1 testable/);
+    } finally {
+      for (const d of [root, workspace]) await fs.rm(d, { recursive: true, force: true });
+    }
   }
 });
 

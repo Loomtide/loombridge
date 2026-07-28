@@ -30,7 +30,7 @@ import { createHash } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 
-import { TEST_RESULTS_DIRNAME, loombridgePaths } from "../../domain/state.js";
+import { LOOMBRIDGE_DIRNAME, TEST_RESULTS_DIRNAME, loombridgePaths } from "../../domain/state.js";
 import type { TestsSummary } from "./nunit-parse.js";
 
 /**
@@ -71,6 +71,28 @@ export function testResultsManifestPath(dir: string): string {
 
 export function testRunLogPath(dir: string): string {
   return path.join(dir, TEST_RUN_LOG_FILE);
+}
+
+/**
+ * The project root a results DIRECTORY implies, or `null` when the directory is not the
+ * declared slot (FXD).
+ *
+ * The INVERSE of `testResultsDir`, and derived by inverting it rather than by counting `..`
+ * segments (CLAUDE.md: a `..` count silently encodes how deep a file sits). It exists so a
+ * caller handed a bare path (`tests grade --results <xml>`) can ask "which project would this
+ * pair belong to, if it belongs to one at all", and then hold the manifest's own
+ * `projectRoot` against that answer. Without it, a stamped pair copied into any directory on
+ * disk verifies happily against itself: every sha still matches, because a copy preserves
+ * bytes, and the only thing that changed is the one fact nothing was checking.
+ */
+export function projectRootForTestResultsDir(dir: string): string | null {
+  const resolved = path.resolve(dir);
+  if (path.basename(resolved) !== TEST_RESULTS_DIRNAME) return null;
+  const loombridgeDir = path.dirname(resolved);
+  if (path.basename(loombridgeDir) !== LOOMBRIDGE_DIRNAME) return null;
+  const root = path.dirname(loombridgeDir);
+  // Re-derive forwards and compare, so the two directions can never drift apart.
+  return testResultsDir(root) === resolved ? root : null;
 }
 
 export interface TestResultsManifest {
