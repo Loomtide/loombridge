@@ -130,8 +130,11 @@ export async function run(args: string[]): Promise<number> {
   } catch (error) {
     const hint = unityConnectionHint(error);
     if (hint) {
+      // An unreachable editor is a HARNESS fault, never a game verdict: exit 2, the same
+      // tier a blocked replay reports. (S1 final test flagged this verb as the one trace
+      // door still mapping the condition to 1.)
       console.error(hint.join("\n"));
-      return 1;
+      return 2;
     }
     console.error(`[loombridge trace] fatal: ${message(error)}`);
     return 1;
@@ -188,8 +191,11 @@ async function runRecord(args: TraceArgs): Promise<number> {
   // rather than stranding the editor in Play Mode.
   const waitForStop = withSigintCancel(baseStop);
 
+  // State intent, not a completed action: the connection has not been attempted yet, and
+  // announcing "resetting" before it exists reads as a step that never happened when the
+  // editor is unreachable (S1 final test, LOW-3).
   console.error(
-    `[loombridge trace] recording "${args.id}" — resetting ${args.scene ?? "the current scene"} to a clean Play-Mode start…`,
+    `[loombridge trace] recording "${args.id}": connecting to Unity, then resetting ${args.scene ?? "the current scene"} to a clean Play-Mode start…`,
   );
   const { trace, droppedNoTarget } = await observeRecordLive(meta, {
     waitForStop,
@@ -968,7 +974,8 @@ function printUsage(): void {
       "",
       "Exit: 0 pass · 1 game defect: fail/error (or drift with --strict-visual)",
       "      2 harness fault: blocked (undrivable), an unreadable capture/baseline PNG,",
-      "        or a usage error. A harness fault is never reported as a game defect.",
+      "        an unreachable editor, or a usage error. A harness fault is never",
+      "        reported as a game defect.",
     ].join("\n"),
   );
 }

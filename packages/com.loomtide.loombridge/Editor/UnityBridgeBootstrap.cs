@@ -34,7 +34,7 @@ namespace UnityBridge
             {
                 Debug.Log("[Loombridge] Bootstrap initializing");
                 Debug.Log(
-                    "[Loombridge] Transport compatibility target: Unity 6000.3 LTS (primary), 2022.3 LTS (compatibility)");
+                    "[Loombridge] Transport compatibility target: Unity 6000.x LTS (primary), 2022.3 LTS (compatibility)");
 
                 _server = new BridgeServer();
                 _executor = new OpExecutor();
