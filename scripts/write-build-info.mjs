@@ -8,7 +8,7 @@
 // build time. Best-effort: a failure here must never fail the build.
 
 import { execSync } from "node:child_process";
-import { writeFileSync, mkdirSync } from "node:fs";
+import { chmodSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import path from "node:path";
 
 function sh(cmd) {
@@ -45,4 +45,21 @@ try {
   console.error(`[write-build-info] dist/build-info.json -> ${info.commit}, built ${info.builtAt}`);
 } catch (e) {
   console.error(`[write-build-info] skipped (${e instanceof Error ? e.message : String(e)})`);
+}
+
+// npm sets the executable bit on bin targets at LINK/INSTALL time only; `rm -rf dist && tsc`
+// recreates the files without it, so an `npm link`ed `loombridge` dies with "permission
+// denied" after every rebuild. Restore the bit on every declared bin target each build.
+// Best-effort like the stamp: a chmod failure must never fail the build.
+try {
+  const pkg = JSON.parse(readFileSync(path.resolve(process.cwd(), "package.json"), "utf-8"));
+  for (const rel of Object.values(pkg.bin ?? {})) {
+    try {
+      chmodSync(path.resolve(process.cwd(), rel), 0o755);
+    } catch {
+      // target may not exist in a partial build; the entrypoint guard owns that failure mode
+    }
+  }
+} catch (e) {
+  console.error(`[write-build-info] bin chmod skipped (${e instanceof Error ? e.message : String(e)})`);
 }
