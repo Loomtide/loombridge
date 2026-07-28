@@ -89,3 +89,41 @@ test("wait-for-visible: an absent object still refuses as not-found", async () =
   assert.equal(res.ok, false);
   assert.match((res as { detail?: string }).detail ?? "", /not-found/);
 });
+
+test("wait-for-visible: a bare invisible gesture CATCHER (transparent, sprite-less, raycastable, on-screen) is anchor-ready", async () => {
+  // Live case: KidsChef's MixZone stir surface. Its visible cues (bowl, whisk) are
+  // SIBLINGS, so descendantVisible is honestly false; the catcher itself is what the
+  // recorded gesture actuated on, and it is ready to receive input.
+  const res = await driver({
+    isVisible: false,
+    visibilityReason: "graphic-transparent",
+    descendantVisible: false,
+    raycastTarget: true,
+    isOffScreen: false,
+  }).dispatch(WAIT);
+  assert.equal(res.ok, true);
+});
+
+test("wait-for-visible LITMUS: the catcher rule refuses each missing precondition", async () => {
+  const catcher = {
+    isVisible: false,
+    visibilityReason: "graphic-transparent",
+    descendantVisible: false,
+    raycastTarget: true,
+    isOffScreen: false,
+  };
+  // Not raycastable: cannot receive the gesture.
+  assert.equal((await driver({ ...catcher, raycastTarget: false }).dispatch(WAIT)).ok, false);
+  // Off-screen: not in front of the player.
+  assert.equal((await driver({ ...catcher, isOffScreen: true }).dispatch(WAIT)).ok, false);
+  // Has a sprite: real art fading out, not a catcher.
+  assert.equal((await driver({ ...catcher, spriteName: "bowl" }).dispatch(WAIT)).ok, false);
+  // Disabled graphic: does not raycast, can never be ready.
+  assert.equal(
+    (await driver({ ...catcher, visibilityReason: "graphic-disabled" }).dispatch(WAIT)).ok,
+    false,
+  );
+  // Old bridge (no descendantVisible field at all): nothing is relaxed.
+  const legacy = { isVisible: false, visibilityReason: "graphic-transparent", raycastTarget: true, isOffScreen: false };
+  assert.equal((await driver(legacy).dispatch(WAIT)).ok, false);
+});

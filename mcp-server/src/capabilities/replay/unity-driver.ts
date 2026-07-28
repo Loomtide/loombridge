@@ -698,6 +698,27 @@ export class UnityDriver implements ReplayDriver {
     ) {
       return { isVisible: true };
     }
+    // The bare invisible gesture catcher: an alpha-0, SPRITE-LESS Image whose whole job
+    // is to receive drags/taps (live case: KidsChef's MixZone stir surface; its visible
+    // cues, bowl and whisk, are SIBLINGS, so descendantVisible is honestly false). Such
+    // an element was never going to be "visible"; the recorded gesture actuated on it,
+    // and the honest anchor question is "is the catcher ready to receive input": active
+    // (else reason is `inactive`), unhidden by canvas/CanvasGroup (else those reasons),
+    // ON-screen, and raycastable. Transparent-only: a DISABLED graphic does not raycast,
+    // so it can never be "ready". An element WITH a sprite is real art fading out, not a
+    // catcher; it stays a refusal. Phase-readiness is the state gates' job, not this
+    // anchor's. `descendantVisible === false` also pins the bridge to one that emits the
+    // field: on an older bridge nothing is relaxed.
+    if (
+      obj.isVisible !== true &&
+      reason === "graphic-transparent" &&
+      obj.descendantVisible === false &&
+      obj.raycastTarget === true &&
+      obj.isOffScreen !== true &&
+      obj.spriteName == null
+    ) {
+      return { isVisible: true };
+    }
     return { isVisible: obj.isVisible === true, reason };
   }
 
