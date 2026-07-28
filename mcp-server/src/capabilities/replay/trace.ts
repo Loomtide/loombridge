@@ -59,7 +59,7 @@ interface TraceArgs {
   /** Make a visual drift from baseline a failure (exit 1), not just a warning. */
   strictVisual: boolean;
   // ── record --observe ──
-  /** Scene to reset to + record from (record only; required). */
+  /** Scene to reset to + record from (record only; optional: absent resolves the editor's current scene). */
   scene?: string;
   /** Recording mode flag — v1 records by observing a human session. */
   observe?: boolean;
@@ -829,7 +829,8 @@ function printUsage(): void {
       "  --no-html         Skip the HTML report.",
       "  --strict-visual   Make a visual drift from baseline a failure.",
       "  --observe         record: record by observing a human session (required).",
-      "  --scene <path>    record: scene to reset to and record from (required).",
+      "  --scene <path>    record: scene to reset to and record from (optional: when omitted,",
+      "                    the recorder resolves the editor's CURRENT scene, refusing if unsaved).",
       "  --duration <sec>  record: auto-stop after N seconds instead of waiting for Enter.",
       "  --outcomes <file> record: JSON OutcomeSpec[] to pin as end-state assertions.",
       "  --state-signal <path>:<Component>:<property>",
