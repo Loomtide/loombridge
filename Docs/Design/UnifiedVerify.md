@@ -121,6 +121,12 @@ never instruct the agent to perform a step it structurally cannot.
 Simplicity comes from auto-discovery and one report, NEVER from weakening gates:
 
 - Refuse-on-absent everywhere: a broken or partial asset refuses (2); nothing silently skips.
+- **A verify that checked nothing must never exit 0.** The motivating defect, observed live
+  on a fresh project during the positioning review: today a planned-but-empty project gets
+  a bare `verify` that exits 0 with every gate at `warn` and flips STATE to
+  `verified-warn`, which an agent can quote as "verify passed" (only `doneness` refuses).
+  S1's orchestrator replaces that with the on-ramp text and a non-zero exit when the plan
+  resolves to zero runnable assets.
 - The plan is printed before any live interaction; discovery is deterministic and auditable.
 - Deterministic decides; model judgment (VLM, playtest bots, fun metrics) stays advisory and
   never enters the exit code. This constraint is stated at the pitch level so the future

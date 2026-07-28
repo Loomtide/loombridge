@@ -106,3 +106,7 @@ top-level mode; that collapse is the simplification program for the whole verify
   an optional, read-only convenience.
 - **No model-judged deterministic verdicts.** See the constraints at the top; this one is
   load-bearing enough to state twice.
+- **Not a game factory.** Loombridge carries no opinion about what a good game is; it is
+  the machinery for stating yours once and enforcing it forever. Opinionated content lives
+  at the edge as skills and pack data, never in the core
+  ([Docs/Design/Positioning.md](Docs/Design/Positioning.md)).

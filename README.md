@@ -8,7 +8,7 @@
 [![Node](https://img.shields.io/badge/node-%3E%3D18-339933?logo=nodedotjs&logoColor=white)](#support-matrix)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
 
-[Quickstart](#quickstart) · [Verification](#the-verification-flow) · [Skills & commands](#what-your-agent-gets-skills-and-commands) · [Tools](#tool-surface) · [Architecture](ARCHITECTURE.md) · [Threat model](Docs/ThreatModel.md)
+[Two doors](#two-doors-in) · [Quickstart](#quickstart) · [Verification](#the-verification-flow) · [Skills & commands](#what-your-agent-gets-skills-and-commands) · [Tools](#tool-surface) · [Architecture](ARCHITECTURE.md) · [Threat model](Docs/ThreatModel.md)
 
 An AI agent can already build a Unity game. What it cannot do is tell you honestly whether
 the result is any good, because the same model that wrote the code writes the report card.
@@ -53,6 +53,33 @@ There is no path to a green `doneness` that a build can talk its way into. Green
 `producedAt` on or after the build's `startedAt`, and every cited capture artifact present
 on disk.
 
+## Two doors in
+
+| Your situation | The door | What happens |
+|---|---|---|
+| **New game**, built by an agent | `loombridge plan` | Contract and hero shot are frozen before the first line of code; the agent builds slice by slice against a target it cannot redefine; `doneness` certifies with run-bound evidence. |
+| **Existing game**, about to let an agent in | `loombridge trace record --observe --id <name>` | You play once and approve once. From then on, `loombridge trace replay` re-drives your session against the editor and pixel-diffs it, and `loombridge feel snapshot` + `verify --snapshot` catch feel drift. |
+
+The split of labor is the point: **a human plays and approves exactly once; the agent gets
+the deterministic gates forever after.** One bare `verify` front door that discovers every
+anchor and runs them into a single report is in progress:
+[`Docs/Design/UnifiedVerify.md`](Docs/Design/UnifiedVerify.md). Full positioning:
+[`Docs/Design/Positioning.md`](Docs/Design/Positioning.md).
+
+Both doors assume the [Quickstart](#quickstart) below (bridge installed, `doctor` healthy,
+and for the recording door a live editor with the scene open).
+
+<details>
+<summary>Advanced entry points</summary>
+
+| I want to... | Start with | Needs |
+|---|---|---|
+| Feel-grade a 2D platformer I already have | `loombridge verify --profile precision\|classic\|momentum` | Just the project; no contract, no mutation. Diagnostic grading, never part of a deterministic verdict ([guide](Docs/Profiles/VerifyFirstEntry.md)) |
+| Lock my game's feel and catch tuning drift in CI | `loombridge feel snapshot` then `verify --snapshot` | A reviewed capture contract; a human approves the baseline once ([guide](Docs/Profiles/TuningSnapshotVerification.md)) |
+| Release-verify a 2D mini-game in CI | `loombridge verify --minigame` | A recorded trace + capture pack, frozen `0/1/2` exit contract ([quickstart](Docs/Profiles/MiniGameVerifyQuickstart.md) · [CI guide](Docs/Profiles/MiniGameVerifyCI.md)) |
+| Adopt an already-built project into the contract | `loombridge adopt` | The project + its design docs (proposes a contract, never green on its own) |
+</details>
+
 ## What's in the box
 
 | Capability | Status |
@@ -93,6 +120,7 @@ loombridge doctor --project /path/to/UnityProject --live
 with `loombridge install-agent --project <p>`.
 
 Full setup, transport notes, and the fresh-machine bootstrap: [`Docs/Install.md`](Docs/Install.md).
+Once `doctor` prints `healthy`, head back to [your door](#two-doors-in).
 
 <details>
 <summary>Install from source instead</summary>
@@ -107,26 +135,6 @@ bash ../scripts/loombridge-pack-bridge.sh # pack the bridge tarball install-brid
 ```
 </details>
 
-## Two doors in
-
-| Your situation | The door | What happens |
-|---|---|---|
-| **New game**, built by an agent | `loombridge plan` | Contract and hero shot are frozen before the first line of code; the agent builds slice by slice against a target it cannot redefine; `doneness` certifies with run-bound evidence. |
-| **Existing game**, about to let an agent in | `loombridge trace record --observe` | You play once and approve once. From then on, `loombridge verify` checks every agent change against what you approved: replay, pixel drift, feel drift. |
-
-The split of labor is the point: **a human plays and approves exactly once; the agent gets
-`verify` forever after.** Full positioning: [`Docs/Design/Positioning.md`](Docs/Design/Positioning.md).
-
-<details>
-<summary>Advanced entry points</summary>
-
-| I want to... | Start with | Needs |
-|---|---|---|
-| Feel-grade a 2D platformer I already have | `loombridge verify --profile precision\|classic\|momentum` | Just the project; no contract, no mutation ([guide](Docs/Profiles/VerifyFirstEntry.md)) |
-| Lock my game's feel and catch tuning drift in CI | `loombridge feel snapshot` then `verify --snapshot` | A reviewed capture contract; a human approves the baseline once ([guide](Docs/Profiles/TuningSnapshotVerification.md)) |
-| Release-verify a 2D mini-game in CI | `loombridge verify --minigame` | A recorded trace + capture pack, frozen `0/1/2` exit contract ([quickstart](Docs/Profiles/MiniGameVerifyQuickstart.md) · [CI guide](Docs/Profiles/MiniGameVerifyCI.md)) |
-| Adopt an already-built project into the contract | `loombridge adopt` | The project + its design docs (proposes a contract, never green on its own) |
-</details>
 
 ## The verification flow
 

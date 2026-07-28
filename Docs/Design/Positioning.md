@@ -57,30 +57,38 @@ Corollaries the repo already enforces and this doc makes official:
 The public story presents exactly three groups. Everything else still works but leaves the
 headline docs.
 
-1. **Setup:** `install-bridge`, `doctor`, `update`, `mcp`. Wire in, health-check, connect
-   an agent.
-2. **Verify:** one front door, `verify`, that discovers a project's verification assets and
-   runs them into one report ([UnifiedVerify.md](UnifiedVerify.md) is the program of record
-   for this collapse); the anchor makers (`trace`, `feel snapshot`, `target`); and
-   `doneness`, the strict certificate for supervised builds.
+1. **Setup:** `install-bridge`, `install-agent`, `doctor`, `update`, `mcp`. Wire in,
+   health-check, connect an agent.
+2. **Verify:** the anchor makers (`trace`, `feel snapshot`, `target`), the gates today
+   (`trace replay`, `verify`, `verify --snapshot`), and `doneness`, the strict certificate
+   for supervised builds. The end state is ONE front door, a bare `verify` that discovers a
+   project's verification assets and runs them into one report; that orchestrator is IN
+   PROGRESS, not shipped, and [UnifiedVerify.md](UnifiedVerify.md) is its program of
+   record. Until it lands, docs name the working verbs and never present the front door in
+   the present tense.
 3. **Build loop:** `plan`, `build`, `status`. The opinionated workflow for new games, built
    on the same judge, presented as one workflow among possible ones rather than as the
    product.
 
-Demoted from the headline story (still shipped, documented on reference pages): `minigame`
-(becomes the screen-contract asset inside `verify`), `tuning-report`, `mobile-audit`,
-`capture`, `assets`, `adopt`, `ask` (already deprecated). Demotion is a docs decision, not
-a breaking change; verbs keep working and deprecations follow the alias-plus-stderr-notice
-precedent.
+Demoted from the headline story: `minigame` (becomes the screen-contract asset inside
+`verify`), `tuning-report`, `mobile-audit`, `capture`, `assets`, `adopt`, `ask` (already
+deprecated), and the `verify --profile` mode (diagnostic feel grading, never gating, per
+[UnifiedVerify.md](UnifiedVerify.md)). Demotion is a docs decision, not a breaking change:
+every verb keeps working, deprecations follow the alias-plus-stderr-notice precedent, and
+each demoted verb documents itself via `loombridge <verb> --help`. Dedicated reference
+pages for the demoted verbs are follow-up docs work, not yet written; until they exist,
+`--help` is the reference.
 
 ## The two doors (how the story is told)
 
 - **New game:** `plan` is the door. The contract and Design Target are defined before the
   first line of code; the agent builds slice by slice against a target it cannot redefine;
   `doneness` certifies with run-bound evidence. The steering wheel.
-- **Existing game:** `verify` is the door. Play once, approve once, and from then on any
-  agent change is checked against what was approved: replay, pixel diff, feel drift. The
-  ratchet. `adopt` is the optional conversion path from this door into the build loop.
+- **Existing game:** the record-once ratchet is the door. Play once, approve once, and from
+  then on any agent change is checked against what was approved: `trace replay` for flow
+  and pixel drift, `verify --snapshot` for feel drift, with the unified bare `verify` as
+  the door's end state once [UnifiedVerify.md](UnifiedVerify.md) ships. `adopt` is the
+  optional conversion path from this door into the build loop.
 
 Showcase mapping for demos and videos: a verification-first walkthrough on an existing game
 (the ratchet door), and a build-loop walkthrough on a new game (the steering-wheel door).
