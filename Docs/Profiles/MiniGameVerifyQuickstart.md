@@ -51,8 +51,16 @@ What each verb does:
   loombridge trace record --observe --flat \
     --id my-game-happy-path \
     --scene Assets/Scenes/MyGame.unity \
-    --root ~/.loombridge/projects/my-game
+    --root ~/.loombridge/projects/my-game \
+    --auto-state-signal
   ```
+
+  `--auto-state-signal` makes the observer detect each scene's state signal live and gate
+  every recorded gesture on it, so capture later waits for the game to be CONSUMABLE, not
+  merely for a target to be visible (a gesture racing an activation animation stalls the
+  whole flow otherwise). The guided flows (`minigame run` / `check` / `next`) add this
+  automatically whenever the contract declares no explicit `stateSignal`; a declared
+  `stateSignal` takes precedence.
 
   Re-running `scan` with `--trace` (pointed at the workspace where you recorded) will order the proposed
   states from this demonstration:
