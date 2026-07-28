@@ -80,6 +80,22 @@ Interpreting a taste mismatch: it is an archetype disagreement, not a defect. Th
 honest next steps are either re-run against the nearer archetype the placement block
 names, or pass `--enforce-taste` when the build explicitly targets this archetype.
 
+## Tuning-Snapshot Drift Mode
+
+Once a human has approved how the game actually plays
+(`loombridge feel snapshot capture` then `feel snapshot approve`), grade drift against
+the game's own frozen baseline instead of an archetype:
+
+```bash
+loombridge verify --snapshot --id my-game            # live capture, frozen contract
+loombridge verify --snapshot --id my-game --measurements <feel.json>   # offline
+```
+
+Exit `0` clean, `1` drift (or a §0-rejected current value), `2` for a missing/tampered
+snapshot, a capture-contract mismatch, or a capture gap. Full lifecycle, tolerance
+defaults, and the exit table:
+[`Docs/Profiles/TuningSnapshotVerification.md`](../../Docs/Profiles/TuningSnapshotVerification.md).
+
 To create an existing-game capture contract from explicit drive facts:
 
 ```bash

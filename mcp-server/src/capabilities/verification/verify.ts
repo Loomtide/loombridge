@@ -206,6 +206,12 @@ export interface VerifyArgs {
    * Default false: taste out-of-band is descriptive placement.
    */
   enforceTaste?: boolean;
+  /**
+   * `--snapshot`: the standalone tuning-drift mode. Grades the current measured
+   * behavior against the approved feel snapshot (`loombridge feel snapshot`).
+   * Mutually exclusive with `--profile`/`--minigame`/contract flags.
+   */
+  snapshot?: boolean;
 }
 
 /** A restricted stage is a diagnostic checkpoint, not a certifiable full run. */
@@ -598,6 +604,7 @@ function parseArgs(args: string[]): VerifyArgs | ParseHelp {
   let contractPath: string | undefined;
   let capturesDir: string | undefined;
   let enforceTaste = false;
+  let snapshot = false;
 
   for (let i = 0; i < args.length; i += 1) {
     const arg = args[i];
@@ -611,6 +618,7 @@ function parseArgs(args: string[]): VerifyArgs | ParseHelp {
     else if (arg === "--quiet-next") quietNext = true;
     else if (arg === "--profile") profile = args[(i += 1)] ?? "";
     else if (arg === "--enforce-taste") enforceTaste = true;
+    else if (arg === "--snapshot") snapshot = true;
     else if (arg === "--id") feelWorkspaceId = args[(i += 1)] ?? "";
     else if (arg === "--workspace") feelWorkspace = path.resolve(args[(i += 1)] ?? "");
     else if (arg === "--measurements") measurementsPath = path.resolve(args[(i += 1)] ?? "");
@@ -679,6 +687,11 @@ function parseArgs(args: string[]): VerifyArgs | ParseHelp {
   // feel profile, not the acceptance contract / slice plan. Setup-capture extends
   // that mode with explicit drive facts, but contract-scoped build-gate flags are
   // still refused rather than silently ignored.
+  if (snapshot && profile !== undefined) {
+    console.error("[loombridge verify] pass either --profile or --snapshot, not both (they grade against different baselines).");
+    return { help: true, usageError: true };
+  }
+
   if (profile !== undefined) {
     const offenders: string[] = [];
     if (slice !== undefined) offenders.push("--slice");
@@ -772,6 +785,78 @@ function parseArgs(args: string[]): VerifyArgs | ParseHelp {
       console.error("[loombridge verify] --capture-only requires --capture-contract.");
       return { help: true, usageError: true };
     }
+  } else if (snapshot) {
+    // `--snapshot` is the standalone tuning-drift mode: it grades the current
+    // measured behavior against the approved feel snapshot, not the acceptance
+    // contract, a profile, or the mini-game pack. Refuse the other modes' flags
+    // rather than silently ignoring them.
+    const offenders: string[] = [];
+    if (slice !== undefined) offenders.push("--slice");
+    if (stage !== undefined) offenders.push("--stage");
+    if (inputsDir !== undefined) offenders.push("--inputs");
+    if (acceptancePath !== undefined) offenders.push("--acceptance");
+    if (vlmPath !== undefined) offenders.push("--vlm");
+    if (layoutPath !== undefined) offenders.push("--layout");
+    if (enforceTaste) offenders.push("--enforce-taste");
+    if (
+      setupCapture ||
+      setupPlayerPath !== undefined ||
+      setupScene !== undefined ||
+      setupGame !== undefined ||
+      setupJumpButtonPath !== undefined ||
+      setupJoystickPath !== undefined ||
+      setupMoveRightKey !== undefined ||
+      setupJumpKey !== undefined ||
+      setupCoyoteProbePath !== undefined ||
+      setupJumpBufferProbePath !== undefined ||
+      setupActivatePaths.length > 0 ||
+      setupNoAutoActivate ||
+      setupApply ||
+      setupForce ||
+      setupDiscover ||
+      setupAnimatorControllerPath !== undefined ||
+      setupAnimatorBool !== undefined ||
+      setupAnimatorHost !== undefined ||
+      measurementsOutputPath !== undefined ||
+      captureArtifactsDir !== undefined ||
+      captureOnly
+    ) {
+      offenders.push("profile setup/capture flags");
+    }
+    if (offenders.length > 0) {
+      console.error(
+        `[loombridge verify] --snapshot mode ignores other modes' flags; remove: ${offenders.join(", ")}. ` +
+          "Allowed: --root, --id, --workspace, --capture-contract, --measurements, --project, --source-root, --strict, --output.",
+      );
+      return { help: true, usageError: true };
+    }
+    if (captureContractPath !== undefined && measurementsPath !== undefined) {
+      console.error("[loombridge verify] pass either --capture-contract or --measurements, not both.");
+      return { help: true, usageError: true };
+    }
+    if (feelWorkspaceId !== undefined && !WORKSPACE_ID_PATTERN.test(feelWorkspaceId)) {
+      console.error("[loombridge verify] --id must be lowercase kebab-case (letters, digits, hyphens; start with a letter).");
+      return { help: true, usageError: true };
+    }
+    if (feelWorkspace !== undefined) {
+      resolvedFeelWorkspace = feelWorkspace;
+    } else {
+      const feelId = feelWorkspaceId ?? sanitizeWorkspaceId(path.basename(root));
+      if (!feelId) {
+        console.error(
+          `[loombridge verify] could not derive a workspace id from '${path.basename(root)}'; pass --id <kebab>.`,
+        );
+        return { help: true, usageError: true };
+      }
+      resolvedFeelWorkspace = projectWorkspace(feelId);
+    }
+    if (isInside(resolvedFeelWorkspace, path.resolve(root))) {
+      console.error(
+        `[loombridge verify] feel workspace ${resolvedFeelWorkspace} is inside the project ${path.resolve(root)}: ` +
+          "pass --workspace <dir> outside it (the default is ~/.loombridge/projects/<id>).",
+      );
+      return { help: true, usageError: true };
+    }
   } else if (
     setupCapture ||
     setupPlayerPath !== undefined ||
@@ -819,6 +904,7 @@ function parseArgs(args: string[]): VerifyArgs | ParseHelp {
   if (minigame) {
     const offenders: string[] = [];
     if (profile !== undefined) offenders.push("--profile");
+    if (snapshot) offenders.push("--snapshot");
     if (slice !== undefined) offenders.push("--slice");
     if (stage !== undefined) offenders.push("--stage");
     if (inputsDir !== undefined) offenders.push("--inputs");
@@ -904,6 +990,7 @@ function parseArgs(args: string[]): VerifyArgs | ParseHelp {
     contractPath,
     capturesDir,
     enforceTaste,
+    snapshot,
   };
 }
 
@@ -955,6 +1042,13 @@ function printUsage(): void {
       "                        like runSpeed/jumpApex) as failures. Default: taste out-of-band",
       "                        is descriptive placement; grammar metrics (coyote time, jump",
       "                        buffer, gravity asymmetry, jump-cut) always gate.",
+      "  --snapshot            TUNING-DRIFT mode: grade the current measured behavior against",
+      "                        the approved feel snapshot (`loombridge feel snapshot`). Default:",
+      "                        live-capture with the snapshot's own frozen contract (binding",
+      "                        verified). --capture-contract overrides (hash-checked; mismatch",
+      "                        refuses, exit 2). --measurements grades offline (binding",
+      "                        unverified; exit 1 under --strict). Exit: 0 clean, 1 drift or a",
+      "                        rejected value, 2 integrity/binding/capture gap.",
       "  --setup-capture      Profile mode: propose/write a generic existing-game capture",
       "                        contract instead of grading. Requires --player. Default:",
       "                        <workspace>/feel/capture-contract.json.",
@@ -1054,6 +1148,28 @@ export async function run(args: string[]): Promise<number> {
       const message = error instanceof Error ? error.message : String(error);
       console.error(`[loombridge verify] fatal: ${message}`);
       return 1;
+    }
+  }
+  // Tuning-drift snapshot mode branches BEFORE runVerify for the same reason:
+  // it is standalone and grades against the approved feel snapshot, never the
+  // acceptance contract. Fatal exceptions are harness-tier (2), never a pass.
+  if (parsed.snapshot) {
+    const { runVerifySnapshot } = await import("../feel/snapshot-verify.js");
+    try {
+      return await runVerifySnapshot({
+        root: parsed.root,
+        workspace: parsed.feelWorkspace!,
+        captureContractPath: parsed.captureContractPath,
+        measurementsPath: parsed.measurementsPath,
+        project: parsed.project,
+        sourceRoot: parsed.sourceRoot,
+        strict: parsed.strict,
+        outputPath: parsed.outputExplicit ? parsed.outputPath : undefined,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(`[loombridge verify] fatal: ${message}`);
+      return 2;
     }
   }
   // Verify-first profile mode (S5b) branches BEFORE runVerify so the
