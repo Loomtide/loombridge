@@ -91,8 +91,11 @@ test("a stamped RED suite grades OFFLINE, tier 1, and the run reports `fail` at 
 
     assert.equal(result, 1, "a failing suite is a GAME DEFECT (tier 1), never the harness tier");
     assert.match(text, /test-results 'editmode': will run \(offline\)/, "the plan says it grades offline");
-    assert.match(text, /6 test\(s\): 4 passed, 1 failed/, "the section prints the counts it derived");
-    assert.match(text, /RefusesUnknownInstanceId/, "…and names the failing case");
+    // Counts and names are the REAL trimmed fixture's (a genuine failing case from the
+    // live 6000.3.20f1 run), not authored values: the fixture swap made this test's red a
+    // red Unity actually produced.
+    assert.match(text, /5 test\(s\): 3 passed, 1 failed/, "the section prints the counts it derived");
+    assert.match(text, /SetProperty_ObjectReference_AssetPathStringAssignsAsset/, "…and names the failing case");
 
     const report = await readUnified(root);
     assert.equal(report.sections.tests?.exit, 1);
@@ -102,9 +105,9 @@ test("a stamped RED suite grades OFFLINE, tier 1, and the run reports `fail` at 
     // T6: the per-failure detail is carried, not just the worst tier.
     assert.deepEqual(
       report.sections.tests?.assets?.map((a) => a.id),
-      ["Loombridge.EntityIdCompatTests.RefusesUnknownInstanceId"],
+      ["UnityBridge.Tests.ComponentHandlerTests.SetProperty_ObjectReference_AssetPathStringAssignsAsset"],
     );
-    assert.match(String(report.sections.tests?.assets?.[0]?.note), /Expected: null/);
+    assert.match(String(report.sections.tests?.assets?.[0]?.note), /Expected string length 10 but was 54/);
   } finally {
     for (const d of [root, workspace]) await fs.rm(d, { recursive: true, force: true });
   }
@@ -341,7 +344,19 @@ test("G12/F13: an XML edited AFTER stamping never reaches the grader", async () 
   try {
     const dir = await plantTestResults(root);
     const before = await captured(() => runVerifyCli(["--root", root, "--workspace", workspace]));
-    assert.equal(before.result, 1, "a real red before the edit, so the LITMUS has something to break");
+    // THE LITMUS, stated as the signal under test rather than as an exit code.
+    // What has to be true before the edit is that the grader REACHED the bytes and said
+    // nothing about a sha; that is the only thing the `after` half can then break. Pinning
+    // this to `exit === 1` tied the litmus to the tier mapping, and the swap to a trimmed
+    // REAL fixture moved that tier for a reason with nothing to do with tampering (the
+    // ignored-fixture roll-up). A litmus that moves with an unrelated rule is a litmus that
+    // gets "fixed" by deleting it.
+    assert.doesNotMatch(before.lines.join("\n"), /sha256 mismatch/, "nothing has been tampered with yet");
+    assert.notEqual(
+      (await readUnified(root)).sections.tests,
+      undefined,
+      "the section must RUN before the edit, so the LITMUS has something to break",
+    );
 
     // "The failing case is gone now." The bytes no longer hash to what was stamped.
     await fs.writeFile(testResultsPath(dir), greenNUnitXml(), "utf-8");

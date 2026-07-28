@@ -103,9 +103,15 @@ reads without re-running a multi-minute editor.
   verifying pair or under CI attestation. Do not quote its output as a verification result.
 - **Exit mapping** (both the producer and the section): `0` everything executed and passed ·
   `1` a real assertion failure · `2` a run that could not be trusted (compile errors, a
-  mutated project, a cancelled run, an ignored fixture or assembly, zero cases, an
-  all-skipped run, an unreadable XML, or an exit code the test-case walk cannot account for).
-  A harness fault is never reported as a game defect.
+  mutated project, a cancelled run, an ignored fixture or assembly that executed nothing,
+  zero cases, an all-skipped run, an unreadable XML, or an exit code the test-case walk
+  cannot account for). A fixture that ran cases but carries a propagated `Ignored` label
+  from `[Ignore]`d children is not an opt-out; its skipped cases are the named subset. A
+  harness fault is never reported as a game defect, and a real failure is never reported
+  as a harness fault.
+- **`tests run` is not read-only against the project.** Unity generates files during a
+  batchmode run (`.meta` files for folders the tests create, `Library/` on a cold import).
+  Run it against your working checkout knowingly, or against a copy in CI-like contexts.
 
 ## Process
 

@@ -217,6 +217,16 @@ export interface NUnitSuite {
   /** "Runnable" | "Ignored" | "Explicit" | "NotRunnable". */
   runstate?: string;
   message?: string;
+  /**
+   * The suite's own executed-count roll-up (passed + failed + inconclusive), when the
+   * document declares the attributes. NUnit propagates a child's Ignored label onto a
+   * PARENT fixture (`result="Skipped" label="Ignored"`) even when that fixture ran almost
+   * every case, so the opt-out rule (G13) must not read result/runstate alone: a suite is
+   * an opt-out only when it EXECUTED NOTHING. Observed live on the repo's own suite: a
+   * `runstate="Runnable"` fixture with 51 of 53 cases passed still carried
+   * `result="Skipped" label="Ignored"` from its two `[Ignore]`d children.
+   */
+  executed?: number;
 }
 
 /** The `<test-run>` roll-up, when the document declares one. Advisory: the walk decides. */
@@ -252,6 +262,21 @@ function intAttr(attrs: Record<string, string>, key: string): number {
 function optAttr(attrs: Record<string, string>, key: string): string | undefined {
   const raw = attrs[key];
   return raw === undefined || raw.length === 0 ? undefined : raw;
+}
+
+/**
+ * The suite's own executed-count roll-up: passed + failed + inconclusive, when declared.
+ * Returns undefined when NONE of the three attributes is present (an undeclared roll-up is
+ * not the same fact as an executed count of zero, and the opt-out rule treats the two
+ * differently: absent stays conservative).
+ */
+function suiteExecutedCount(attrs: Record<string, string>): number | undefined {
+  const parts = ["passed", "failed", "inconclusive"].map((k) => attrs[k]);
+  if (parts.every((v) => v === undefined || v.length === 0)) return undefined;
+  return parts.reduce((sum, v) => {
+    const n = Number(v ?? "0");
+    return sum + (Number.isFinite(n) && n >= 0 ? n : 0);
+  }, 0);
 }
 
 /** A node currently open on the element stack that can own a `<failure>`/`<reason>` message. */
@@ -311,6 +336,7 @@ export function parseNUnitResults(xml: string): NUnitRun | NUnitParseError {
           label: optAttr(event.attrs, "label"),
           site: optAttr(event.attrs, "site"),
           runstate: optAttr(event.attrs, "runstate"),
+          executed: suiteExecutedCount(event.attrs),
         };
         if (event.selfClosing) suites.push(node);
         else openNodes.push({ kind: "suite", node });
@@ -529,7 +555,19 @@ export function gradeTestResults(input: TestsGradeInput): TestsGrade {
   const skippedCases = run.cases.filter((c) => c.result === "Skipped");
   const warningCases = run.cases.filter((c) => c.result === "Warning");
   const suiteFailures = run.suites.filter((s) => s.result === "Failed");
-  const skippedSuites = run.suites.filter((s) => s.result === "Skipped" || s.runstate === "Ignored");
+  // G13, corrected by the live final test: a suite is an OPT-OUT only when it EXECUTED
+  // NOTHING. NUnit propagates a child's Ignored label onto a parent fixture
+  // (result="Skipped" label="Ignored") even when that fixture is runstate="Runnable" and
+  // ran nearly every case; reading result/runstate alone graded the repo's own suite
+  // (51 of 53 cases passed, 2 [Ignore]d) as a tier-2 harness fault, which inverted
+  // "a harness fault is never a game defect" in the other direction and would have pinned
+  // the gate permanently red for a benign reason. A suite with declared executed counts
+  // greater than zero contributed real verdicts; its skipped children are already the
+  // named case-level subset. A suite that declares NO counts keeps the conservative
+  // reading (opt-out), which is the refuse-on-absent direction.
+  const skippedSuites = run.suites.filter(
+    (s) => (s.result === "Skipped" || s.runstate === "Ignored") && (s.executed ?? 0) === 0,
+  );
 
   const failures: TestsFailureDetail[] = [...realFailures, ...invalidFailures].map((c) => ({
     fullname: c.fullname,

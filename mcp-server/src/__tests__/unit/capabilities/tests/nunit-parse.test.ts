@@ -52,47 +52,84 @@ function wrapRun(inner: string, runAttrs = 'id="2" result="Passed" total="1" pas
 test("the realistic EditMode fixture parses into the exact case set it declares", () => {
   const run = parseOk(fs.readFileSync(FIXTURE, "utf-8"));
 
-  assert.equal(run.result, "Failed");
-  assert.equal(run.cases.length, 6, "every test-case must survive the walk");
-  assert.deepEqual(deriveSummary(run), { total: 6, passed: 4, failed: 1, inconclusive: 0, skipped: 1 });
+  // These numbers are the TRIMMED REAL run (see the fixture header), not authored ones.
+  // Unity writes "Failed(Child)" here, never the bare "Failed" the authored fixture claimed.
+  assert.equal(run.result, "Failed(Child)");
+  assert.equal(run.cases.length, 5, "every test-case must survive the walk");
+  assert.deepEqual(deriveSummary(run), { total: 5, passed: 3, failed: 1, inconclusive: 0, skipped: 1 });
 
-  // The roll-up the document declares agrees with the walk. When a REAL trimmed fixture
-  // replaces this one, this pair is what tells you whether the swap changed the shape.
+  // The roll-up the document declares agrees with the walk: recomputed for the trimmed
+  // subset, so the union rule (G3) has something true to agree with.
   assert.deepEqual(run.runAttrSummary, {
-    total: 6,
-    passed: 4,
+    total: 5,
+    passed: 3,
     failed: 1,
     inconclusive: 0,
     skipped: 1,
     warnings: 0,
   });
 
-  assert.deepEqual(run.assemblies, ["Loombridge.Editor.Tests.dll", "Loombridge.Runtime.Tests.dll"]);
+  assert.deepEqual(run.assemblies, [
+    "com.loomtide.loombridge.tests.dll",
+    "com.loomtide.loombridge.tests.inputspike.dll",
+  ]);
 
   const failed = run.cases.filter((c) => c.result === "Failed");
   assert.equal(failed.length, 1);
-  assert.equal(failed[0].fullname, "Loombridge.EntityIdCompatTests.RefusesUnknownInstanceId");
-  assert.equal(failed[0].label, "Error");
-  assert.match(failed[0].message ?? "", /stale handle after the domain reload/);
-  // CDATA is literal: the angle brackets inside it are content, not markup.
-  assert.match(failed[0].message ?? "", /<Scene:\/Root\/Player\[0\]>/);
+  assert.equal(failed[0].fullname, "UnityBridge.Tests.ComponentHandlerTests.SetProperty_ObjectReference_AssetPathStringAssignsAsset");
+  // REAL SHAPE: Unity leaves `label` OFF a plain assertion failure. The authored fixture
+  // asserted label="Error", which made `isRealFailure`'s undefined-label branch the one
+  // path the fixture never exercised.
+  assert.equal(failed[0].label, undefined);
+  assert.match(failed[0].message ?? "", /Expected string length 10 but was 54/);
+  // The CDATA message is multi-line and survives as such.
+  assert.match(failed[0].message ?? "", /\n {2}Expected: "DummyAsset"\n/);
+
+  // The `<failure>` message is the ONLY thing read as a verdict. The real case carries an
+  // `<output>` CDATA sibling and a `<stack-trace>` CDATA, and neither may bleed into it:
+  // absorbing `<output>` would let arbitrary test console noise become the failure text.
+  assert.doesNotMatch(failed[0].message ?? "", /ShowWork/);
+  assert.doesNotMatch(failed[0].message ?? "", /ComponentHandlerTests\.cs/);
 });
 
 test("a literal '>' inside an attribute value does not truncate the walk", () => {
-  // The fixture's `<property name="Description" value="ordering holds when index > 0 ..." />`
-  // is legal XML that a /<[^>]*>/ tokenizer splits in the wrong place, swallowing every
-  // element after it. If that ever regresses, the case count above drops silently, so this
-  // test names the mechanism directly.
-  const run = parseOk(fs.readFileSync(FIXTURE, "utf-8"));
-  const after = run.cases.map((c) => c.name);
-  assert.ok(
-    after.includes("RefusesUnknownInstanceId") && after.includes("ParsesIndexedSibling"),
-    `cases after the '>' attribute were dropped: ${after.join(", ")}`,
+  // SYNTHETIC ON PURPOSE. Real Unity output contains no attribute value with a literal '>'
+  // (the 509-case run this fixture was trimmed from has zero), so pinning this hazard to the
+  // fixture would mean inventing Unity output to test a parser bug. The hazard is real for a
+  // hand-rolled scanner regardless: `/<[^>]*>/` splits in the wrong place here and swallows
+  // every element after it, dropping cases silently. So it is tested against a document that
+  // is honest about being made up.
+  const run = parseOk(
+    wrapRun(
+      '<test-suite type="Assembly" id="1" name="A.dll" result="Failed">' +
+        '<test-case id="2" name="first" fullname="N.F.first" result="Passed">' +
+        '<properties><property name="Description" value="ordering holds when index > 0 for siblings" /></properties>' +
+        "</test-case>" +
+        '<test-case id="3" name="afterTheAngleBracket" fullname="N.F.afterTheAngleBracket" result="Failed">' +
+        "<failure><message>still here</message></failure>" +
+        "</test-case>" +
+        "</test-suite>",
+      'id="2" result="Failed" total="2" passed="1" failed="1" inconclusive="0" skipped="0"',
+    ),
   );
+  const after = run.cases.map((c) => c.name);
+  assert.deepEqual(after, ["first", "afterTheAngleBracket"], `cases after the '>' attribute were dropped: ${after.join(", ")}`);
+  assert.equal(run.cases[1].message, "still here");
 });
 
 test("entity-encoded text is decoded once, and only once", () => {
-  const run = parseOk(fs.readFileSync(FIXTURE, "utf-8"));
+  // SYNTHETIC for the same reason as above: the real run uses CDATA exclusively and contains
+  // zero entity references, so the fixture cannot carry this hazard without being fabricated.
+  const run = parseOk(
+    wrapRun(
+      '<test-suite type="Assembly" id="1" name="A.dll" result="Passed">' +
+        '<test-case id="2" name="skippedOne" fullname="N.F.skippedOne" result="Skipped" label="Ignored">' +
+        "<reason><message>EntityId APIs require &gt;= 6000.5 &amp; a Hub install &lt;= 6000.9</message></reason>" +
+        "</test-case>" +
+        "</test-suite>",
+      'id="2" result="Passed" total="1" passed="0" failed="0" inconclusive="0" skipped="1"',
+    ),
+  );
   const skipped = run.cases.find((c) => c.result === "Skipped");
   assert.equal(skipped?.message, "EntityId APIs require >= 6000.5 & a Hub install <= 6000.9");
 
@@ -100,6 +137,24 @@ test("entity-encoded text is decoded once, and only once", () => {
   assert.equal(decodeXmlEntities("&amp;lt;"), "&lt;");
   assert.equal(decodeXmlEntities("&#65;&#x42;"), "AB");
   assert.equal(decodeXmlEntities("&unknownentity;"), "&unknownentity;");
+});
+
+test("the REAL fixture's skipped case carries its CDATA reason, on the case and on its parent", () => {
+  // What the real document actually does with an [Ignore]d case, kept as a pinned fact
+  // because it is the shape the whole tier mapping turns on (see the fixture header, item 4).
+  const run = parseOk(fs.readFileSync(FIXTURE, "utf-8"));
+
+  const skipped = run.cases.find((c) => c.result === "Skipped");
+  assert.equal(skipped?.label, "Ignored");
+  assert.match(skipped?.message ?? "", /URP .* is not installed in this project/);
+
+  // The PARENT fixture is marked Skipped/Ignored by NUnit purely because a child was
+  // ignored, while staying `runstate="Runnable"` and counting the case that really ran.
+  const parent = run.suites.find((s) => s.name === "AssetHandlerTests");
+  assert.equal(parent?.result, "Skipped");
+  assert.equal(parent?.label, "Ignored");
+  assert.equal(parent?.runstate, "Runnable", "the fixture did NOT opt out of running");
+  assert.equal(parent?.message, "One or more child tests were ignored");
 });
 
 test("a truncated document is an error, never a partial green", () => {
