@@ -409,19 +409,21 @@ async function resolveReplaySpeed(
   paths: ReplayLayout,
   id: string,
   explicit: number | undefined,
-): Promise<{ speed: number } | { refusal: string }> {
+): Promise<{ speed: number; mismatchWith?: number }> {
   const baselineDir = path.join(paths.replayBaselines, id);
   const manifest = await loadTraceBaselineManifest(baselineDir);
   const stamped =
     manifest !== null && !isTraceBaselineManifestError(manifest) ? (manifest.replaySpeed ?? 1) : undefined;
   if (explicit !== undefined && stamped !== undefined && explicit !== stamped) {
-    return {
-      refusal:
-        `the baseline for "${id}" was approved at ${stamped}x pacing, but --speed ${explicit} was ` +
-        `passed. Frames captured at different pacings sit at different animation phases, so the ` +
-        `pixel comparison would read phase skew as drift. Replay without --speed (uses ${stamped}x), ` +
-        `or re-approve the baseline at the new pacing.`,
-    };
+    // An explicit pacing that contradicts the stamped baseline still RUNS (the replay is
+    // how a report at the new pacing comes to exist, and refusing here would make
+    // re-pacing impossible without hand-deleting the baseline), but the pixel gate for
+    // this run is a harness fault, announced up front and again by applyVisualDiff.
+    console.error(
+      `[loombridge trace] pacing differs from the baseline (approved ${stamped}x, running ${explicit}x): ` +
+        `the pixel gate is NOT graded this run; approve from this report to re-anchor at ${explicit}x.`,
+    );
+    return { speed: explicit, mismatchWith: stamped };
   }
   return { speed: explicit ?? stamped ?? 1 };
 }
@@ -443,10 +445,6 @@ async function replayOneTrace(
   }
 
   const resolved = await resolveReplaySpeed(paths, id, opts.speed);
-  if ("refusal" in resolved) {
-    // A pacing contradiction is a harness refusal, not a replay verdict: nothing ran.
-    throw new Error(resolved.refusal);
-  }
   const speed = resolved.speed;
   if (speed > 1) {
     scaleTraceSettles(trace, speed);
@@ -891,7 +889,7 @@ export async function applyVisualDiff(
     if (stampedSpeed !== runSpeed) {
       baselineFault =
         `the baseline was approved at ${stampedSpeed}x pacing but this run replayed at ` +
-        `${runSpeed}x; re-run at ${stampedSpeed}x or re-approve at the new pacing`;
+        `${runSpeed}x; re-run at ${stampedSpeed}x, or approve from this run's report to re-anchor at ${runSpeed}x`;
     }
   }
   if (baselineFault !== null) {
