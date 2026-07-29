@@ -194,6 +194,13 @@ re-approved would destroy the anchor it was meant to keep. Every non-default tol
 printed with the size of the hole it opens, and a drift-only failure tells you the exact
 command to consent to it.
 
+When only one REGION animates under its own clock, `trace mask --id <id> --set
+<captureId?>:<x>,<y>,<w>x<h>@<reason>` excludes it and leaves the rest of the frame graded
+at full strictness. The rects are blanked in both images, capped at 10% of any one frame on
+both sides, and each one carries the reason a human typed. The tool suggests a mask only
+after two runs whose drift differs in the same region: an identical drift twice is a
+deterministic change, and it says so instead of offering to hide it.
+
 ### Feel is measured, not vibed
 
 The bridge samples position, velocity, and animator state from the running game on real

@@ -435,11 +435,11 @@ protects nothing.
   case, and a permanently red gate protects nothing. Exact `0` is valid (it demands pixel
   exactness); the comparison stays `fraction > tolerance`, so a value exactly equal to the
   tolerance passes.
-- **MASKS ARE THE REAL FIX, and are not implemented.** A tolerance is a hole of a stated size
-  anywhere in the frame; per-capture regions would let an animating area be excluded while the
-  rest stays exact. Until then the tolerance is the honest stopgap, and every surface that
-  prints one prints the consent sentence: *at N%, anything covering up to ~sqrt(N)% of frame
-  width by ~sqrt(N)% of height can change undetected*.
+- **MASKS ARE THE LOCALIZED FIX, and they shipped (the pixel-masks wave, below).** A tolerance
+  is a hole of a stated size anywhere in the frame; a mask is a named region that is never
+  graded again. Both are disclosed together, and every surface that prints a tolerance still
+  prints its consent sentence: *at N%, anything covering up to ~sqrt(N)% of frame width by
+  ~sqrt(N)% of height can change undetected*.
 - **The baseline is re-verified AT GRADE TIME.** `applyVisualDiff` runs `verifyTraceBaseline`
   itself rather than trusting discovery's earlier plan (and the `trace` verb has no discovery
   step at all). A manifest that is malformed, over-cap, or no longer matches its frames is a
@@ -455,10 +455,70 @@ protects nothing.
   every match, and produces no `DiscoveredAsset`. Which `--id` an operator passes changes what
   is measured, so only the operator may choose it.
 
+### Pixel-mask delivery notes (the phase-alignment wave)
+
+Shipped after a live session twice-quantified the failure a tolerance structurally cannot
+absorb: 1x pixel drift growing MONOTONICALLY from 2% to 8% from step 17 on (a cumulative
+wall-clock phase desync of an ambient animation layer), and 17% at 2x pacing. The 2%
+tolerance cap deliberately cannot absorb unbounded growth, so the region has to leave the
+comparison or the gate stays permanently red.
+
+- **The mask is part of the ANCHOR.** `baseline-manifest.json` gained `maskRects`
+  (`{ captureId?, x, y, w, h, reason }`) plus the `frameWidth`/`frameHeight` the rects were
+  measured against, stamped by a new verb, `trace mask`, that mirrors `trace tolerance`
+  exactly: it refuses without an approved baseline, touches no PNG and no sha, re-stamps
+  `approvedAt`, and appends to the same approval ledger. An absent `maskRects` means no
+  masks, which is the strictest value the field can hold, so `schemaVersion` stays `"1"`.
+- **BLANKING, not exclusion from the denominator.** `comparePerceptual` paints the rects
+  opaque black in BOTH images before the diff (the operation lifted out of
+  `minigame-baseline.ts`, now shared), so a masked region cannot differ, while
+  `diffFraction` keeps dividing by the FULL frame. Re-scaling the denominator instead would
+  silently widen every tolerance a human already consented to: 1.5% of what was left is a
+  bigger hole than the 1.5% of the frame they approved. `maskedFraction` is recorded per
+  capture and per run so the blindness is stated rather than inferred.
+- **The cap is 0.10 PER FRAME, enforced on both sides by one predicate.** `maskRefusal` is
+  called by the stamp verb and by `loadTraceBaselineManifest`, so a hand-edited full-frame
+  mask makes the row BROKEN in the unified door rather than making the gate vacuous. It is
+  per frame, not per list: a trace-wide rect and a capture-scoped one are measured together
+  for the capture they both cover. Overlaps count once (exact union area), so a duplicate is
+  not charged twice. It REFUSES when `frameWidth`/`frameHeight` are absent: with no
+  denominator the cap cannot be computed, and an unmeasurable mask is not an approved one.
+- **Every rect carries a mandatory `@reason`, and `--set` restates the WHOLE list.** A
+  `--add` that appended would make each stamp a local edit to a set nobody was re-reading,
+  which is how a mask grows to cover the frame one reasonable-looking rect at a time. The
+  ledger records `previousMaskRects` and an append-only `maskedFractionHistory`, and the
+  stamp prints the transition (*masked 0% to 4%*).
+- **`approve` preserves masks and REFUSES the re-freeze when they no longer fit.** Dropping
+  them would un-blind a region a human excused (and the next replay would suggest masking it
+  again); keeping them would re-interpret a human decision against frames they never saw.
+  Neither is a choice a tool may make silently, so it refuses and names `trace mask`. A dims
+  mismatch at GRADE time is the same shape: a manifest-level `baselineFault` on the pacing
+  precedent, captures left ungraded, never a per-capture `unreadable`.
+- **A mask is never suggested from ONE run (the two-run discriminator).** Each drifted
+  capture records `driftDiffSha` (sha256 of the drift bitmap) and `driftBounds`. The
+  suggestion fires only when a previous report exists, both runs drifted in overlapping
+  regions, and the shas DIFFER. Identical shas print *the drift is IDENTICAL across two
+  runs: that is a deterministic change, not ambient noise; investigate before masking* --
+  the line that stops the feature from erasing the regressions it was built next to. A
+  first run asks for a second. Rects come from connected components clustered to at most 3
+  boxes, each tight (drifted pixels / covered area >= 0.5) and under the cap; anything else
+  prints *drift is diffuse; masks cannot cover it honestly*. Nothing is ever auto-applied,
+  and the suggested reason is a placeholder the human must replace.
+- **One combined consent sentence.** `anchorTermsSentence` prints masks and tolerance
+  together (*N mask(s) hide X% of every frame outright; the rest grades at Z%, ...*) at both
+  stamp verbs, on the plan's own `anchor terms:` line, in the replay summary and in the HTML
+  report header, which also draws the rects on the thumbnails. Two allowances described in
+  two places are two allowances nobody adds up.
+- **The honest limit is recorded.** Masks fix LOCALIZED nondeterminism only. Full-frame or
+  diffuse nondeterminism (particle storms, full-screen shaders) stays red, and game-time
+  (`timeScale`) alignment remains the recorded future path for it.
+
 ## Out of scope
 
-- Per-capture drift MASKS/regions (the real fix for a game that animates under its own clock;
-  the capped, human-approved per-trace tolerance is the honest stopgap shipped instead).
+- Game-time (`timeScale`) alignment of replay pacing, the recorded future path for
+  full-frame or diffuse nondeterminism that masks cannot honestly cover.
+- Mask EDITING UI, and per-capture mask *authoring* beyond the `captureId:` prefix on a
+  `--set` rect.
 - Changing any gate's semantics or exit tiering. (The ratchet wave added ONE tolerance, and
   the delivery note above states why: it is per-trace, human-approved on the anchor, capped,
   and it can only ever be as strict as the old fixed default when nobody stamps one.)

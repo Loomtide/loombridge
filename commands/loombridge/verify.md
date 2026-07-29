@@ -44,8 +44,27 @@ loombridge verify --root . --only screens # ONE section (CI granularity); never 
   one; `tolerance` never touches a frame or a sha. The cap is `0.02`, enforced at stamp time
   *and* at read time, so a hand-edited manifest is a **broken** row, not a wider gate. Any
   non-default tolerance prints on the plan line with its consent sentence (*at 2%, anything
-  covering up to ~14% of frame width by ~14% of height can change undetected*). Per-capture
-  masks are the real fix and are not implemented yet.
+  covering up to ~14% of frame width by ~14% of height can change undetected*).
+- **Localized nondeterminism is MASKED, only by a human, only up to 10% of a frame.** When
+  one region animates under its own clock (an ambient layer whose phase drifts against
+  wall-clock), `loombridge trace mask --id <id> --set <captureId?>:<x>,<y>,<w>x<h>@<reason>`
+  stamps the excluded rects onto the approved baseline; the rest of the frame keeps grading
+  at full strictness. The rects are **blanked in both images**, so a masked region cannot
+  differ while the diff fraction still divides by the whole frame: a stamped tolerance means
+  exactly what it meant. Every rect needs a `@reason`, `--set` restates the **whole list**
+  each stamp (so a mask set cannot grow one unnoticed rect at a time), `--clear` empties it,
+  `--list` touches nothing. The `0.10` cap is enforced at stamp time *and* at read time by
+  one predicate, so a hand-edited full-frame mask is a **broken** row, not a green gate.
+  `approve` preserves masks and **refuses** the re-freeze when they no longer fit the new
+  frames. Masks and tolerance are disclosed together on the plan's `anchor terms:` line.
+- **A mask is never suggested from one run.** A drift-only failure prints a mask suggestion
+  only when a PREVIOUS report exists, both runs drifted in the same region, and the drift
+  **bitmaps differ**. An identical drift twice reads *the drift is IDENTICAL across two runs:
+  that is a deterministic change, not ambient noise; investigate before masking*; a diffuse
+  drift reads *drift is diffuse; masks cannot cover it honestly*; a first run asks for a
+  second. Nothing is ever applied for you, and the suggested `@reason` is a placeholder you
+  must replace. Full-frame or diffuse nondeterminism stays red: game-time (`timeScale`)
+  alignment is the recorded future path for it.
 - **A drift names itself.** A trace whose actuation passed but whose pixels moved reads
   `flow: pixel-drift regression (exit 1): actuation passed, N capture(s) over tolerance, max
   X.X%`, never `pass (exit 1)`, and a drift-only failure prints the exact `trace tolerance`

@@ -39,11 +39,14 @@ import {
 } from "../../../domain/state.js";
 import { isInside, projectWorkspace, sanitizeWorkspaceId } from "../../../domain/workspace-paths.js";
 import {
+  DEFAULT_DRIFT_FRACTION,
+  anchorTermsSentence,
   driftPercentText,
   driftRegressionLine,
   driftSuggestionLines,
-  toleranceConsentSentence,
+  maskSuggestionLines,
   type DriftFacts,
+  type MaskSuggestion,
 } from "../../replay/visual-diff.js";
 import { resolveCliProjectPin } from "../../setup/cli-project-pin.js";
 import {
@@ -138,6 +141,14 @@ export interface UnifiedSectionDeps {
        * whether a harness fault deserves advice to widen a gate.
        */
       suggestTolerance: boolean;
+      /**
+       * Q3: the mask verdict for this run, derived ONCE in `applyVisualDiff` from this
+       * report and the previous one on disk. Optional here and only here, because
+       * "nothing drifted" genuinely has no verdict to carry; the gating of whether it may
+       * be PRINTED is `suggestTolerance` above, the same predicate the trace verb uses,
+       * so a harness fault can never be answered with "mask it".
+       */
+      maskSuggestion?: MaskSuggestion;
     } & DriftFacts
   >;
   runFeel(args: { root: string; workspace: string; strict: boolean }): Promise<number>;
@@ -156,7 +167,7 @@ async function realDeps(): Promise<UnifiedSectionDeps> {
     },
     async runFlowTrace(layout, id, opts) {
       const { replayTraceForVerify, shouldSuggestTolerance } = await import("../../replay/trace.js");
-      const { artifact, exitTier, drift } = await replayTraceForVerify(layout, id, opts);
+      const { artifact, exitTier, drift, maskSuggestion } = await replayTraceForVerify(layout, id, opts);
       // The suggestion is gated on the ARTIFACT, by the SAME predicate the trace verb
       // uses, so neither door can offer "widen the tolerance" for a harness fault.
       return {
@@ -164,6 +175,7 @@ async function realDeps(): Promise<UnifiedSectionDeps> {
         exitTier,
         ...drift,
         suggestTolerance: shouldSuggestTolerance(artifact),
+        ...(maskSuggestion ? { maskSuggestion } : {}),
       };
     },
     async runFeel(args) {
@@ -541,7 +553,7 @@ async function flowSection(
   for (const asset of traces) {
     const before = await fingerprintReport(asset.paths.report);
     try {
-      const { status, exitTier, suggestTolerance, ...drift } = await deps.runFlowTrace(
+      const { status, exitTier, suggestTolerance, maskSuggestion, ...drift } = await deps.runFlowTrace(
         layout,
         asset.id,
         { strictVisual: true, projectPathCanonical },
@@ -552,6 +564,14 @@ async function flowSection(
       if (suggestTolerance) {
         for (const line of driftSuggestionLines({ ...drift, traceId: asset.id })) {
           console.error(`${TAG} flow: ${line}`);
+        }
+        // …and the mask half of the same exit, under the same gate and in the same words:
+        // masks for concentrated drift, tolerance for diffuse, and the refusals (a
+        // deterministic change, a diffuse drift, a single run) printed rather than hidden.
+        if (maskSuggestion) {
+          for (const line of maskSuggestionLines(maskSuggestion, asset.id)) {
+            console.error(`${TAG} flow: ${line}`);
+          }
         }
       }
       outcomes.push({
@@ -753,6 +773,12 @@ export function planLines(
   ];
   for (const asset of assets) {
     lines.push(`${TAG}   ${asset.kind} '${asset.id}': ${disposition(asset, live, only)}; ${provenance(asset)}`);
+    // Q7: THE ANCHOR'S TERMS GET THEIR OWN LINE. Appending them to the row above produced
+    // a run-on that buried the one fact a reader most needs before anything runs: how
+    // much of this comparison is already conceded. Silent when there is nothing conceded
+    // (no masks, default tolerance), so a strict anchor still reads as one line.
+    const terms = anchorTerms(asset);
+    if (terms) lines.push(`${TAG}     anchor terms: ${terms}`);
   }
   if (assets.length === 0) lines.push(`${TAG}   (no verification assets)`);
   for (const note of notes) lines.push(`${TAG}   note: ${note}`);
@@ -787,20 +813,35 @@ function disposition(asset: DiscoveredAsset, live: boolean, only: readonly Unifi
  */
 function provenance(asset: DiscoveredAsset): string {
   if (asset.approvedAt) {
-    return (
-      `approved ${asset.approvedAt}${asset.approvedBy ? ` (${asset.approvedBy})` : ""}` +
-      // R1/A2, THE AUDIT SURFACE. A stamped tolerance is printed BEFORE anything runs,
-      // with the consent sentence spelling out how big the hole is, because a tolerance
-      // nobody sees is indistinguishable from a gate nobody has. The default is silent:
-      // it is the strictest value the field can hold, so it says nothing new.
-      (asset.driftTolerance !== undefined
-        ? `, drift tolerance ${driftPercentText(asset.driftTolerance)}%: ` +
-          `${toleranceConsentSentence(asset.driftTolerance)}`
-        : "")
-    );
+    return `approved ${asset.approvedAt}${asset.approvedBy ? ` (${asset.approvedBy})` : ""}`;
   }
   if (asset.runnable !== "no" && asset.reason) return `no frozen anchor (${asset.reason})`;
   return "no frozen anchor";
+}
+
+/**
+ * R1/A2 + Q7, THE AUDIT SURFACE. What this anchor already concedes, printed BEFORE
+ * anything runs: a stamped tolerance with the consent sentence spelling out how big the
+ * hole is, and any masks with how much of the frame they blank outright. A tolerance or a
+ * mask nobody sees is indistinguishable from a gate nobody has.
+ *
+ * The sentence itself comes from `anchorTermsSentence`, the SAME function the two stamp
+ * verbs and the HTML header print, so the plan cannot describe this anchor's terms in
+ * words the stamp never used. The default (no masks, default tolerance) is silent: it is
+ * the strictest thing the fields can hold, so it says nothing new.
+ *
+ * The masked fraction reaches this line as a NUMBER discovery already computed from the
+ * rects, so the rects themselves never have to be re-measured here against dimensions the
+ * plan does not have.
+ */
+function anchorTerms(asset: DiscoveredAsset): string | null {
+  if (!asset.approvedAt) return null;
+  return anchorTermsSentence({
+    maskCount: asset.maskCount ?? 0,
+    maskedFraction: asset.maskedFraction ?? 0,
+    scopedCount: asset.maskScopedCount ?? 0,
+    tolerance: asset.driftTolerance ?? DEFAULT_DRIFT_FRACTION,
+  });
 }
 
 /**
@@ -949,7 +990,13 @@ function assetDetail(asset: UnifiedAssetOutcome): string {
     return (
       `${asset.id}=pixel drift ${driftPercentText(asset.drift.maxDiffFraction)}% ` +
       `(${asset.drift.driftCaptures} capture(s) over tolerance ` +
-      `${driftPercentText(asset.drift.toleranceUsed)}%)`
+      `${driftPercentText(asset.drift.toleranceUsed)}%` +
+      // Q7: the number is qualified ONLY when masks exist, so an unmasked section reads
+      // exactly as it always did and a masked one never claims more coverage than it had.
+      ((asset.drift.maskedFraction ?? 0) > 0
+        ? `, ${driftPercentText(asset.drift.maskedFraction!)}% of the frame masked`
+        : "") +
+      ")"
     );
   }
   return `${asset.id}=${asset.status}`;

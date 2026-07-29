@@ -12,6 +12,8 @@
  * (slice A3) maps them 1:1.
  */
 
+import type { MaskRect, MaskSuggestion, RectGeometry } from "./visual-diff.js";
+
 /** Entity locator identifying a GameObject (mirrors the bridge locator shape). */
 export interface Locator {
   scene?: string;
@@ -314,6 +316,21 @@ export interface CaptureResult {
    * "matched only because a human approved 2%" without going to the manifest.
    */
   toleranceUsed?: number;
+  /**
+   * The fraction of this frame BLANKED by approved masks before the comparison, in
+   * [0,1]. Recorded even when it is 0 for a masked trace's other captures, because the
+   * honest reading of a green capture is "green over 96% of the frame", and that
+   * qualifier has to survive into the report rather than living only in the terminal.
+   */
+  maskedFraction?: number;
+  /**
+   * Q3: sha256 of the per-pixel drift bitmap, present only when this capture drifted.
+   * The two-run discriminator's evidence: the SAME sha next run means the same pixels
+   * moved the same way, which is a deterministic change and not something to mask.
+   */
+  driftDiffSha?: string;
+  /** Bounding box of the drifted pixels, present only when this capture drifted. */
+  driftBounds?: RectGeometry;
 }
 
 export interface SegmentResult {
@@ -364,6 +381,21 @@ export interface ReplayReport {
    * Absent when no baseline existed to grade against.
    */
   toleranceUsed?: number;
+  /**
+   * P5: the approved masks this run graded with, and the largest fraction of any one
+   * frame they blanked. Carried on the RUN as well as per capture so the report answers
+   * "what was excluded?" without opening the baseline manifest, which is the file a
+   * reader auditing the run is least likely to have. Absent when nothing was masked.
+   */
+  maskRects?: MaskRect[];
+  maskedFraction?: number;
+  /**
+   * Q3: what the tool may honestly say about masking this run's drift, derived from THIS
+   * run and the PREVIOUS report on disk. Recorded rather than only printed so the two
+   * doors read one derivation, and so a report carries the reason a suggestion did or did
+   * not appear.
+   */
+  maskSuggestion?: MaskSuggestion;
   /**
    * The pacing this run replayed at (1 = the demonstration's own pacing). Stamped on
    * every run; a baseline approved from this report inherits it, and a later replay at
