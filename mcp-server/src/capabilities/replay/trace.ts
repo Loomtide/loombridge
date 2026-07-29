@@ -907,10 +907,11 @@ export async function applyVisualDiff(
       if (!capture.artifact) continue;
       const baselinePath = path.join(baselineDir, `${capture.id}.png`);
       if (baselineFault !== null) {
-        // The anchor as a whole is untrusted, so no capture under it can be graded,
-        // including one whose own PNG happens to be readable.
-        capture.visualStatus = "unreadable";
-        anyUnreadable = true;
+        // The anchor as a whole is untrusted, so no capture under it is GRADED. The
+        // fault lives on the ARTIFACT (visualHarnessFault below), not on the captures:
+        // these PNGs decode fine, and stamping them "unreadable" would make approve
+        // refuse the very report that re-anchors at a new pacing (found live: the
+        // pacing-mismatch escape hatch was refused by the capture-gap rule it tripped).
         continue;
       }
       let baselineExists = true;
@@ -951,7 +952,7 @@ export async function applyVisualDiff(
     }
   }
   if (anyDrift) artifact.visualDrift = true;
-  if (anyUnreadable) artifact.visualHarnessFault = true;
+  if (anyUnreadable || baselineFault !== null) artifact.visualHarnessFault = true;
   if (anyCompared) artifact.toleranceUsed = tolerance;
 }
 
