@@ -415,7 +415,12 @@ namespace UnityBridge.Runtime
 
             var go = new GameObject("[Loombridge] InputObserverRuntimePump");
             go.hideFlags = HideFlags.HideAndDontSave;
-            DontDestroyOnLoad(go);
+            // DontDestroyOnLoad is play-mode-only and throws InvalidOperationException from an
+            // editor context. Production observation always runs in play mode; the guard exists
+            // so EditMode tests can drive the pump directly (HideAndDontSave already keeps the
+            // object alive outside play mode).
+            if (Application.isPlaying)
+                DontDestroyOnLoad(go);
             _instance = go.AddComponent<InputObserverRuntimePump>();
         }
 
