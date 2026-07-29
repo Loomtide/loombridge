@@ -23,7 +23,8 @@ import path from "node:path";
 
 import { designStatus } from "../capabilities/verification/design.js";
 import { isProjectDone, runDoneness } from "../capabilities/verification/doneness.js";
-import { runVerify } from "../capabilities/verification/verify.js";
+import { runUnifiedVerify } from "../capabilities/verification/unified/orchestrator.js";
+import { unifiedVerifyReportPath } from "../capabilities/verification/unified/report.js";
 import { ensureScaffold, loombridgePaths, readState } from "../domain/state.js";
 import { inspectContractPresence } from "../domain/contract-presence.js";
 import {
@@ -227,12 +228,16 @@ export async function runLoombridgeProjectInit(root: string): Promise<Loombridge
 export const LOOMBRIDGE_VERIFY_TOOL = {
   name: LOOMBRIDGE_VERIFY_TOOL_NAME,
   description:
-    "Run BEFORE claiming a build is done, or to self-check a game against its acceptance contract: the Tier-1 " +
-    "DETERMINISTIC verify gate against `.loombridge/ACCEPTANCE.json`. Grades the captured evidence and writes the " +
-    "build verdict. If NO contract exists it REFUSES (a hand-created `.loombridge/captures/` is NOT a verification) " +
-    "and points you at `loombridge plan` — it can never green a project that was never planned. The refusal or a red " +
-    "verdict is ALWAYS the headline; a harness fault (capture/editor gap) surfaces in its own tier, never as a fake " +
-    "pass. Returns the exit code, the VERBATIM gate output, and the verdict report file path (not the blob).",
+    "Run BEFORE claiming a build is done, or to self-check a game: the DETERMINISTIC unified verify door, the same " +
+    "one `loombridge verify` runs. It DISCOVERS this project's verification assets (acceptance contract, approved " +
+    "trace baselines, feel snapshot, screen contract, stamped Unity EditMode results), prints the plan, and grades " +
+    "the OFFLINE ones into `.loombridge/reports/verify.json`. It never launches an editor, so live-only assets are " +
+    "listed as `needs --live` rows and are NEVER folded into a pass (run `loombridge verify --live` yourself for " +
+    "those). A project with NO assets REFUSES and points at `loombridge plan` (a hand-created " +
+    "`.loombridge/captures/` is NOT a verification); a broken or unapproved anchor refuses in its own harness tier, " +
+    "never as a fake pass. A green here is NOT `done`: `status` is `partial` whenever coverage was incomplete or a " +
+    "section compared nothing a human froze (see `unanchoredSections`), and only `loombridge doneness` certifies. " +
+    "Returns the exit code, the VERBATIM output, the unified status/tier, and the report file paths (not the blobs).",
   inputSchema: {
     type: "object",
     properties: {
@@ -384,13 +389,13 @@ function pickHeadline(output: string[], fallback: string): string {
  * STRUCTURED red payload with the fatal line in the verbatim output, never an
  * unstructured generic tool error.
  */
-async function runVerbWithFatalTier(verb: string, fn: () => Promise<number>): Promise<number> {
+async function runVerbWithFatalTier(verb: string, fn: () => Promise<number>, tier = 1): Promise<number> {
   try {
     return await fn();
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.error(`[loombridge ${verb}] fatal: ${message}`);
-    return 1;
+    return tier;
   }
 }
 
@@ -398,54 +403,95 @@ export interface LoombridgeVerifyToolPayload {
   root: string;
   /** The verb's enforcement exit code (0 pass/warn · 1 fail · 2 refusal/harness-fault). This is the authoritative verdict. */
   exitCode: number;
-  /** True when verify short-circuited as a contract refusal (exit 2 + a REFUSED line). */
+  /**
+   * The run did not come back clean: the unified report's `exit` is non-zero (S2c/F4).
+   *
+   * DERIVED FROM THE REPORT, never from a stderr regex. Matching `/REFUSED/` in the output
+   * meant the payload's own summary field could be flipped by rewording a log line, and it
+   * could not see a refusal that printed nothing. When no report exists at all (the on-ramp
+   * refuses before writing one, and a fatal never gets that far) this falls back to the
+   * process tier, which is the only fact there is.
+   *
+   * `refused: true` covers BOTH the harness tier and a found game defect; the tier that
+   * separates them is `unifiedExit` (and `exitCode`), which is why both are on the payload.
+   */
   refused: boolean;
   /** The refusal or verdict line, verbatim from the gate. */
   headline: string;
   /** The full gate output, verbatim (stderr + stdout lines) — no summarization. */
   output: string[];
   /**
-   * Tier-1 verdict `status` read from disk, or null when no verdict was written.
+   * Tier-1 verdict `status`, or null when the CONTRACT section did not execute or wrote
+   * nothing this run (S2c/F5).
    *
-   * `refused: true` does NOT imply this is null. The nothing-graded refusal WRITES its
-   * verdict (its `warn` gates name every missing capture, which is what makes the run
-   * auditable) and then exits 2 without flipping STATE, so the honest reading of that
-   * payload is `exitCode: 2` + `refused: true` + `verdictStatus: "warn"`. The
-   * missing-contract refusal is the case that writes nothing and leaves this null.
-   * The authoritative verdict is `exitCode`; this field is the verdict file's own word
-   * about the gates it did assemble, never a substitute for the tier.
+   * SOURCED FROM THE RUN, not from whatever `build-verdict.json` happens to contain: the
+   * unified report stamps `sections.contract.reportSha256` only when THIS run (re)wrote the
+   * verdict, so a project whose contract section was skipped (or refused before writing)
+   * reports `null` here instead of quoting a verdict some earlier run left behind.
    */
   verdictStatus: string | null;
   /** Verdict report path relative to `root`. */
   verdictPath: string;
+  /** Whether THIS run produced the Tier-1 verdict named by `verdictPath` (same rule as `verdictStatus`). */
   verdictExists: boolean;
+  /** The unified run's own word (`pass`/`partial`/`fail`/`harness-fault`/`nothing-checked`), or null when no report was written. */
+  unifiedStatus: string | null;
+  /** The unified run's tier, or null when no report was written (the on-ramp, or a fatal). */
+  unifiedExit: number | null;
+  /**
+   * Executed sections that compared NOTHING a human froze. Empty is meaningful; `null` means
+   * no report exists. This is the field that stops a green tool payload reading as a full
+   * pass when the only thing graded was self-produced.
+   */
+  unanchoredSections: string[] | null;
+  /** The unified report path relative to `root` (written even when the run refused, unless nothing ran at all). */
+  reportPath: string;
 }
 
-/** `loombridge verify` as an MCP tool — the SAME `runVerify` the CLI calls, output surfaced verbatim. */
+/**
+ * `loombridge verify` as an MCP tool: the SAME unified front door the bare CLI runs (S2c).
+ *
+ * S1 left this tool calling `runVerify` (contract mode) directly, which meant the agent-facing
+ * door and the human-facing door answered different questions on the same project: the tool
+ * could report a green contract while an unapproved trace baseline, a drifted feel snapshot or
+ * a red stamped test run sat unmeasured beside it. Routing it here is the S2 item that closes
+ * that divergence.
+ *
+ * Two constraints shape the call:
+ *
+ *  - OFFLINE, ALWAYS. `live: false` is not a default here, it is the contract: an MCP tool call
+ *    must never launch a trace replay or a feel capture against whatever editor happens to be
+ *    listening. Live assets are listed as `needs --live` rows and never folded into a pass.
+ *  - DEFAULT PATHS, UNSCOPED. No `--only`, no `--report`: the tool writes the same
+ *    verify.json the bare CLI writes, so `doneness` reads one document however it was
+ *    produced. F3 is what makes that safe: an offline partial is not a certificate.
+ */
 export async function runLoombridgeVerifyTool(root: string): Promise<LoombridgeVerifyToolPayload> {
   const paths = loombridgePaths(root);
+  const reportPath = unifiedVerifyReportPath(paths.reports);
   const { result: exitCode, output } = await withCapturedConsole(() =>
-    runVerbWithFatalTier("verify", () =>
-      runVerify({
-        root,
-        inputsDir: paths.verifyInputs,
-        acceptancePath: paths.acceptance,
-        outputPath: paths.verdict,
-        strict: false,
-      }),
-    ),
+    // F6: a throw out of the orchestrator path is the HARNESS tier, matching the CLI router
+    // (`run()` maps the same throw to 2). A fatal that reported 1 would be a harness fault
+    // wearing a game defect's clothes, which is the one thing the tiers must never do.
+    runVerbWithFatalTier("verify", () => runUnifiedVerify({ root, strict: false, live: false }), 2),
   );
+
+  const unified = await readUnifiedReport(reportPath);
+  // F5: the contract verdict is quoted only when THIS run produced it. `reportSha256` is
+  // stamped by the orchestrator exactly when the section (re)wrote the file (M5), so it is
+  // the binding that answers "is this verdict about this run?".
+  const contract = unified?.sections?.contract;
+  const producedVerdict = typeof contract?.reportSha256 === "string" && contract.reportSha256.length > 0;
   let verdictStatus: string | null = null;
-  let verdictExists = false;
-  try {
-    const raw = JSON.parse(await fs.readFile(paths.verdict, "utf-8")) as { status?: unknown };
-    verdictExists = true;
-    verdictStatus = typeof raw.status === "string" ? raw.status : null;
-  } catch {
-    /* no verdict on disk (the missing-contract refusal writes none; the nothing-graded
-       refusal DOES write one, so a refusal is not by itself a reason to expect nothing) */
+  if (producedVerdict) {
+    try {
+      const raw = JSON.parse(await fs.readFile(paths.verdict, "utf-8")) as { status?: unknown };
+      verdictStatus = typeof raw.status === "string" ? raw.status : null;
+    } catch {
+      /* the section says it wrote one and it cannot be read: leave null rather than guess */
+    }
   }
-  const refused = exitCode === 2 && output.some((l) => /REFUSED/.test(l));
+  const refused = unified ? unified.exit !== 0 : exitCode !== 0;
   return {
     root,
     exitCode,
@@ -454,8 +500,33 @@ export async function runLoombridgeVerifyTool(root: string): Promise<LoombridgeV
     output,
     verdictStatus,
     verdictPath: path.relative(root, paths.verdict),
-    verdictExists,
+    verdictExists: producedVerdict,
+    unifiedStatus: unified?.status ?? null,
+    unifiedExit: unified?.exit ?? null,
+    unanchoredSections: unified?.unanchoredSections ?? null,
+    reportPath: path.relative(root, reportPath),
   };
+}
+
+/** The unified report as this surface reads it: present and well-formed, or null. */
+async function readUnifiedReport(reportPath: string): Promise<{
+  status: string;
+  exit: number;
+  unanchoredSections: string[];
+  sections?: { contract?: { reportSha256?: unknown } };
+} | null> {
+  try {
+    const raw = JSON.parse(await fs.readFile(reportPath, "utf-8")) as Record<string, unknown>;
+    if (raw.kind !== "unified-verify" || typeof raw.exit !== "number" || typeof raw.status !== "string") return null;
+    return {
+      status: raw.status,
+      exit: raw.exit,
+      unanchoredSections: Array.isArray(raw.unanchoredSections) ? raw.unanchoredSections.map(String) : [],
+      sections: (raw.sections ?? undefined) as { contract?: { reportSha256?: unknown } } | undefined,
+    };
+  } catch {
+    return null;
+  }
 }
 
 export interface LoombridgeDonenessToolPayload {

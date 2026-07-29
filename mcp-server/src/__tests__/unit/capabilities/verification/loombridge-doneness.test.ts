@@ -1266,6 +1266,9 @@ async function writeUnifiedReport(root: string, over: Partial<UnifiedVerifyRepor
         why: "non-anchor",
       },
     ],
+    // S2a/F12: both fields are required on the shipped type, so the fixture states them.
+    only: null,
+    deselected: [],
     sections: { contract: { status: "pass", exit: 0, anchored: false } },
     anchoredSections: [],
     unanchoredSections: ["contract"],
@@ -1303,10 +1306,10 @@ test("H3: a unified verify that REFUSED blocks doneness, even though STATE says 
     assert.match(refused.text, /unified verify refused \(status `partial`, exit 2\)/);
     assert.match(refused.text, /re-run `loombridge verify`/);
 
-    // REFUSE-ONLY: a report that exits 0 adds nothing, and (being unstamped by construction)
+    // REFUSE-ONLY: a FULL GREEN report adds nothing, and (being unstamped by construction)
     // can never remove a refusal another gate produced. So a forged green buys exactly the
     // absence of one extra reason, which is why it is not a laundering path.
-    await writeUnifiedReport(root, { status: "pass", exit: 0, notRun: [] });
+    await writeUnifiedReport(root, { status: "pass", exit: 0, notRun: [], unanchoredSections: [] });
     assert.equal(await runDoneness({ root }), 0, "a green unified run leaves the existing gates in charge");
 
     // MALFORMED IS A REFUSAL, NOT A SKIP: "delete the inconvenient fields" is the cheapest
@@ -1319,6 +1322,72 @@ test("H3: a unified verify that REFUSED blocks doneness, even though STATE says 
     // A well-formed JSON document that is not a unified report is equally unreadable here.
     await fs.writeFile(unifiedVerifyReportPath(paths.reports), JSON.stringify({ exit: 0 }), "utf-8");
     assert.equal((await captureDonenessOutput(root)).code, 1, "a document with no `kind` cannot vouch for a run");
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test("F3: an exit-0 PARTIAL is not a certificate either, and the refusal names what was partial", async () => {
+  // THE ROOT FIX (S2/F3). `exit === 0` was the whole test, and `partial` exits 0 in three
+  // ordinary situations, each of which is a run that did NOT ask the question this
+  // certificate answers. That is what made the overwrite family work: run the full door, get
+  // a refusal, then run a narrower door and leave a 0-exit report standing where the refusal
+  // used to be. All three shapes are pinned here, plus the scoped belt-and-braces case.
+  const root = await tmpRoot();
+  try {
+    await runPlan({ root, genre: "platformer-2d", engine: "unity", force: false, allowMissingDesignTarget: true });
+    const paths = loombridgePaths(root);
+    await injectArtMode(root, "deferred");
+    assert.equal(await runBuild({ root }), 0);
+    const { runId, producedAt } = await fulfilCurrentBuildCaptures(root);
+    await updateState(paths, { phase: "verified-green" });
+    await fs.writeFile(paths.verdict, JSON.stringify({ status: "pass", runId, producedAt }), "utf-8");
+
+    // CONTROL: the FULL green certifies, so every refusal below is caused by the field it names.
+    await writeUnifiedReport(root, { status: "pass", exit: 0, notRun: [], unanchoredSections: [] });
+    assert.equal(await runDoneness({ root }), 0, "the setup must certify, or this proves nothing");
+
+    // 1. Anchors skipped for lack of --live: exit 0, and NOT a certificate.
+    await writeUnifiedReport(root, {
+      status: "partial",
+      exit: 0,
+      unanchoredSections: [],
+      notRun: [{ kind: "trace", id: "happy-path", reason: "needs --live", why: "live-only-skipped" }],
+    });
+    const live = await captureDonenessOutput(root);
+    assert.equal(live.code, 1, "an offline run after a live drift must not certify");
+    assert.match(live.text, /unified verify is `partial`, not `pass`/);
+    assert.match(live.text, /skipped for lack of --live/);
+    assert.match(live.text, /trace 'happy-path'/, "the refusal names WHICH anchor went unmeasured");
+
+    // 2. An executed section that compared no frozen human approval: exit 0, still not done.
+    await writeUnifiedReport(root, { status: "partial", exit: 0, notRun: [], unanchoredSections: ["contract"] });
+    const unanchored = await captureDonenessOutput(root);
+    assert.equal(unanchored.code, 1);
+    assert.match(unanchored.text, /compared no frozen human approval: contract/);
+
+    // 3. A SCOPED report (F1 belt and braces). A scoped run writes verify-scoped.json and can
+    //    never land here, so this is unreachable by the shipped code, and it refuses rather
+    //    than assuming that stays true.
+    await writeUnifiedReport(root, { status: "pass", exit: 0, notRun: [], unanchoredSections: [], only: ["tests"] });
+    const scoped = await captureDonenessOutput(root);
+    assert.equal(scoped.code, 1, "a scoped run is never a certificate, whatever it says about itself");
+    assert.match(scoped.text, /is SCOPED \(--only tests\)/);
+
+    // …and a malformed `only` is refused rather than shrugged at.
+    await writeUnifiedReport(root, { status: "pass", exit: 0, notRun: [], unanchoredSections: [], only: "tests" as unknown as null });
+    assert.equal((await captureDonenessOutput(root)).code, 1, "an unreadable scoping cannot certify");
+
+    // A report with no status word at all is UNREADABLE, not a value to shrug at: "delete the
+    // inconvenient field" must not be cheaper than fixing the run.
+    await fs.writeFile(
+      unifiedVerifyReportPath(paths.reports),
+      JSON.stringify({ kind: "unified-verify", exit: 0 }),
+      "utf-8",
+    );
+    const statusless = await captureDonenessOutput(root);
+    assert.equal(statusless.code, 1);
+    assert.match(statusless.text, /unreadable unified verify report/);
   } finally {
     await fs.rm(root, { recursive: true, force: true });
   }

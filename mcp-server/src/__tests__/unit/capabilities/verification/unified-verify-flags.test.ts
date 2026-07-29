@@ -104,16 +104,19 @@ function unclassified(source: string): string[] {
 }
 
 /**
- * THE SIX BARE-RUN FLAGS, pinned as a literal.
+ * THE SEVEN BARE-RUN FLAGS, pinned as a literal.
  *
  * Deliberately NOT derived from `ORCHESTRATOR_FLAGS`: the router-driven test below uses
  * this as its expectation, so a hijacked router (or a widened set) fails rather than
  * being followed. Growing the bare run is a routing decision and must show up as a diff
  * on this line.
+ *
+ * S2a added `--only` (the seventh), which is why every count below moved by one on purpose.
  */
 const BARE_RUN_FLAGS: ReadonlySet<string> = new Set([
   "--id",
   "--live",
+  "--only",
   "--report",
   "--root",
   "--strict",
@@ -121,7 +124,7 @@ const BARE_RUN_FLAGS: ReadonlySet<string> = new Set([
 ]);
 
 /** The bare-run flags that consume the following token. Pinned, for the same reason. */
-const BARE_RUN_VALUE_FLAGS: ReadonlySet<string> = new Set(["--root", "--report", "--id", "--workspace"]);
+const BARE_RUN_VALUE_FLAGS: ReadonlySet<string> = new Set(["--root", "--report", "--only", "--id", "--workspace"]);
 
 /** The well-formed argv for a bare-run flag: with its value when it takes one. */
 function bareRunArgv(flag: string): string[] {
@@ -157,14 +160,22 @@ test("every flag verify accepts is classified orchestrator-allowed or legacy, on
   }
 });
 
-test("THE ROUTER routes every accepted flag to its classified side (not just the set)", () => {
-  const source = readFileSync(VERIFY_SRC, "utf-8");
-  const flags = [...new Set([...acceptedFlags(source), ...BARE_RUN_FLAGS])].sort();
-
+/**
+ * THE WALK. Drive `classify` with one real argv per flag and report every flag that reached
+ * the wrong engine.
+ *
+ * `classify` is a PARAMETER so the LITMUS below can feed the same walk a router whose set is
+ * missing a flag. A LITMUS that re-implemented the walk would prove nothing about the walk
+ * that ships.
+ */
+export function misroutedFlags(
+  flags: readonly string[],
+  classify: (argv: string[]) => unknown,
+): string[] {
   const misrouted: string[] = [];
   for (const flag of flags) {
     if (BARE_RUN_FLAGS.has(flag)) {
-      if (classifyOrchestratorArgs(bareRunArgv(flag)) === null) {
+      if (classify(bareRunArgv(flag)) === null) {
         misrouted.push(`${flag}: routed to legacy, expected orchestrator`);
       }
       continue;
@@ -173,13 +184,20 @@ test("THE ROUTER routes every accepted flag to its classified side (not just the
     // sees, and they must reach `parseArgs` (which prints usage) rather than the
     // orchestrator. No exception is carved for them.
     for (const argv of legacyArgvs(flag)) {
-      if (classifyOrchestratorArgs(argv) !== null) {
+      if (classify(argv) !== null) {
         misrouted.push(`${flag}: argv ${JSON.stringify(argv)} routed to orchestrator, expected legacy`);
       }
     }
   }
+  return misrouted;
+}
+
+test("THE ROUTER routes every accepted flag to its classified side (not just the set)", () => {
+  const source = readFileSync(VERIFY_SRC, "utf-8");
+  const flags = [...new Set([...acceptedFlags(source), ...BARE_RUN_FLAGS])].sort();
+
   assert.deepEqual(
-    misrouted,
+    misroutedFlags(flags, classifyOrchestratorArgs),
     [],
     "the ROUTER disagrees with the bare-run classification; a flag reaching the wrong engine is the "
       + "failure this guard exists for",
@@ -188,7 +206,7 @@ test("THE ROUTER routes every accepted flag to its classified side (not just the
   // Non-vacuity: the walk really covered the whole parser plus the orchestrator-only
   // flags, and it really exercised both outcomes.
   assert.ok(flags.length > 30, `the walk saw only ${flags.length} flags; it is not reading the parser`);
-  assert.equal(flags.filter((f) => BARE_RUN_FLAGS.has(f)).length, 6, "all six bare-run flags were driven");
+  assert.equal(flags.filter((f) => BARE_RUN_FLAGS.has(f)).length, 7, "all seven bare-run flags were driven");
   assert.ok(
     flags.some((f) => !BARE_RUN_FLAGS.has(f) && classifyOrchestratorArgs([f]) === null),
     "the walk must include flags that really do route legacy",
@@ -203,18 +221,75 @@ test("THE ROUTER routes every accepted flag to its classified side (not just the
   assert.equal(classifyOrchestratorArgs(["--root", "/p", "--live", "--slice", "s1"]), null);
 });
 
-test("the orchestrator allowlist is exactly the six bare-run flags, and the router reads THIS set", () => {
+test("the orchestrator allowlist is exactly the seven bare-run flags, and the router reads THIS set", () => {
   // Pinned as a value, not a count: growing this set is a routing decision, and it must
   // show up as a diff on this line rather than as a number quietly ticking up.
   assert.deepEqual([...ORCHESTRATOR_FLAGS].sort(), [...BARE_RUN_FLAGS].sort());
   assert.deepEqual(
     [...BARE_RUN_FLAGS].sort(),
-    ["--id", "--live", "--report", "--root", "--strict", "--workspace"],
+    ["--id", "--live", "--only", "--report", "--root", "--strict", "--workspace"],
   );
   assert.deepEqual([...ORCHESTRATOR_VALUE_FLAGS].sort(), [...BARE_RUN_VALUE_FLAGS].sort());
-  // `--live` and `--report` are orchestrator-only: `parseArgs` never handles them (the
-  // router's own branch is the only place they appear in the argv loop).
-  for (const flag of ["--live", "--report"]) assert.ok(ORCHESTRATOR_FLAGS.has(flag));
+  // `--live`, `--report` and `--only` are orchestrator-only: `parseArgs` never handles them
+  // (the router's own branch is the only place they appear in the argv loop).
+  for (const flag of ["--live", "--report", "--only"]) assert.ok(ORCHESTRATOR_FLAGS.has(flag));
+});
+
+test("--only is a VALUE flag on the router, and a mode flag anywhere takes the whole argv legacy", () => {
+  // S2a/F8, driven through the REAL router. Three facts, because `--only` is the first flag
+  // this door added since S1 and each one is a way it could be wired wrong:
+  //  - it routes to the orchestrator with a value…
+  assert.notEqual(classifyOrchestratorArgs(["--root", "/p", "--only", "tests"]), null);
+  //  - …and the value is NOT validated here: a bad selector must reach the orchestrator's
+  //    pre-write refusal (F13), not be reported as "this argv belongs to a mode".
+  assert.notEqual(classifyOrchestratorArgs(["--only", "not-a-section"]), null);
+  //  - a value-less `--only` is malformed argv, so the router declines it (and `run` prints
+  //    the selector refusal rather than the combined-with-mode message).
+  assert.equal(classifyOrchestratorArgs(["--only"]), null);
+  //  - and one mode flag anywhere takes the whole invocation legacy, `--only` included.
+  assert.equal(classifyOrchestratorArgs(["--only", "tests", "--slice", "s1"]), null);
+});
+
+/**
+ * A stand-in router built from an ARBITRARY allowlist, mirroring the shipped one's shape
+ * (allowlist test, then the value-flag rule). It exists so the LITMUS below can ask what the
+ * walk does when a flag is missing from the router's set, which is the exact defect S2a could
+ * have shipped: `--only` in the docs and the help text, absent from `ORCHESTRATOR_FLAGS`, and
+ * therefore falling through to `parseArgs`'s unknown-argument exit 2 with a confusing message.
+ */
+function routerWithSet(allow: ReadonlySet<string>, valueFlags: ReadonlySet<string>) {
+  return (argv: string[]): unknown => {
+    for (let i = 0; i < argv.length; i += 1) {
+      const arg = argv[i]!;
+      if (!allow.has(arg)) return null;
+      if (!valueFlags.has(arg)) continue;
+      const value = argv[i + 1];
+      if (value === undefined || value.startsWith("--")) return null;
+      i += 1;
+    }
+    return {};
+  };
+}
+
+test("LITMUS: dropping --only from the ROUTER set really does fail the router walk", () => {
+  // Non-vacuity for the walk that guards S2a's one routing change. The same walk, the same
+  // flag list, one flag missing from the router's allowlist.
+  const without = (flag: string): ReadonlySet<string> =>
+    new Set([...ORCHESTRATOR_FLAGS].filter((f) => f !== flag));
+  const hijacked = routerWithSet(without("--only"), ORCHESTRATOR_VALUE_FLAGS);
+
+  assert.deepEqual(
+    misroutedFlags([...BARE_RUN_FLAGS], hijacked),
+    ["--only: routed to legacy, expected orchestrator"],
+    "the walk must catch a bare-run flag the router does not know",
+  );
+
+  // …and the same walk over a router that DOES know it is silent, so the failure above is
+  // caused by the omission and nothing else.
+  assert.deepEqual(
+    misroutedFlags([...BARE_RUN_FLAGS], routerWithSet(ORCHESTRATOR_FLAGS, ORCHESTRATOR_VALUE_FLAGS)),
+    [],
+  );
 });
 
 test("LITMUS: a planted, unclassified flag really does fail the walk", () => {

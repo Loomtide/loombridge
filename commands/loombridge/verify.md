@@ -18,8 +18,9 @@ plan first**, then runs them into one report at `.loombridge/reports/verify.json
 the per-asset reports.
 
 ```bash
-loombridge verify --root .          # offline assets only
-loombridge verify --root . --live   # also replay traces + grade feel drift
+loombridge verify --root .              # offline assets only
+loombridge verify --root . --live       # also replay traces + grade feel drift
+loombridge verify --root . --only tests # ONE section (CI granularity); never a certificate
 ```
 
 - **The plan prints before anything is written.** One row per asset: what it is, when and by
@@ -50,9 +51,26 @@ loombridge verify --root . --live   # also replay traces + grade feel drift
   is **refused** (exit `2`, nothing written, nothing run) when it escapes the root, would
   overwrite a project artifact, or targets any file that is not a previous unified report. The screens section writes to a verify-owned
   `.loombridge/reports/verify-screens.json`, never the guided flow's workspace report.
-- **`doneness` reads this report when it exists.** A unified run that exited non-zero adds a
-  refusal to `loombridge doneness`, so a green contract gate cannot certify a project whose
-  other anchors went unmeasured. An absent report changes nothing.
+- **`--only <sections>`** runs a SUBSET: a comma-separated selection of
+  `contract`, `flow`, `feel`, `screens`, `tests`. Read the four rules before using it in CI:
+  - **A broken or unapproved asset still refuses, whatever you selected.** Only a *healthy*
+    asset outside the selection is deselected; tampering is never scoped away.
+  - **Deselected rows are listed and excluded from the verdict.** You scoped the run, so the
+    rows you scoped out cost nothing, and they are printed, so nobody has to guess.
+  - **A scoped run is never a `pass`.** Its status ceiling is `partial`, it writes
+    `.loombridge/reports/verify-scoped.json` (never the full `verify.json`), and
+    `loombridge doneness` refuses to certify from it.
+  - **Unknown or empty selections refuse (exit `2`) before anything is written**, and a
+    selection matching no discovered asset is a nothing-checked run (exit `2`), named as such.
+- **`doneness` reads the full report when it exists.** A unified run that exited non-zero, OR
+  whose status is anything but `pass` (a `--live` gap, an unanchored section, a scoping), adds
+  a refusal to `loombridge doneness`. Only a FULL green certifies: an exit-0 `partial` is a run
+  that measured less than this project can prove. An absent report changes nothing.
+- **`--snapshot` and `--minigame` are DEPRECATED ALIASES.** Behavior is byte-identical and
+  each now prints one stderr notice pointing at the unified door (`--only feel` and
+  `--only screens`); removal comes in a future major. The notice is suppressed under
+  `--quiet-next` (the guided flows pass it). `--profile` is NOT deprecated: it is a permanent
+  diagnostic that never gates.
 - **Exit codes:** `0` a full pass, or a partial that compared **at least one anchored green
   section** and whose only gaps were assets skipped for lack of `--live` or extra unanchored
   sections · `1` a game defect (gate fail, drift, baseline regression) · `2` a harness fault, a
@@ -62,9 +80,9 @@ loombridge verify --root . --live   # also replay traces + grade feel drift
   and a `2` is never a game verdict (a found defect stays at `1` however much else went
   unmeasured).
 
-Six flags stay on the unified run and combine only with each other: `--root`, `--strict`,
-`--live`, `--report`, `--id`, `--workspace`. Every other flag below is a mode or engine flag,
-and passing any one of them selects that legacy mode instead, unchanged.
+Seven flags stay on the unified run and combine only with each other: `--root`, `--strict`,
+`--live`, `--report`, `--only`, `--id`, `--workspace`. Every other flag below is a mode or
+engine flag, and passing any one of them selects that legacy mode instead, unchanged.
 
 ## The Unity EditMode test gate (producer / consumer)
 

@@ -29,8 +29,10 @@ import {
   traceBaselineManifestPath,
 } from "../../../capabilities/replay/trace-baseline-manifest.js";
 import {
+  UNIFIED_SCOPED_REPORT,
   UNIFIED_SCREENS_REPORT,
   UNIFIED_VERIFY_REPORT,
+  unifiedScopedReportPath,
   unifiedScreensReportPath,
   unifiedVerifyReportPath,
 } from "../../../capabilities/verification/unified/report.js";
@@ -98,16 +100,35 @@ test("baseline-manifest.json has ONE spelling per owner, and the readers resolve
 });
 
 test("the unified report filenames are spelled once each, in the module that exports them", () => {
-  assert.deepEqual(
-    filesHardCodingName(UNIFIED_VERIFY_REPORT, ALL),
-    ["capabilities/verification/unified/report.ts"],
-  );
-  assert.deepEqual(
-    filesHardCodingName(UNIFIED_SCREENS_REPORT, ALL),
-    ["capabilities/verification/unified/report.ts"],
-  );
+  // Three names now: the full run's report, the verify-owned screens report, and (S2a/F1)
+  // the SCOPED run's report. One owner each; every other module resolves them from the
+  // constant, so a rename moves both ends at once or fails to compile.
+  for (const name of [UNIFIED_VERIFY_REPORT, UNIFIED_SCREENS_REPORT, UNIFIED_SCOPED_REPORT]) {
+    assert.deepEqual(
+      filesHardCodingName(name, ALL),
+      ["capabilities/verification/unified/report.ts"],
+      `"${name}" must have exactly ONE spelling; every other module imports the constant`,
+    );
+  }
   assert.equal(unifiedVerifyReportPath("/r"), path.join("/r", UNIFIED_VERIFY_REPORT));
   assert.equal(unifiedScreensReportPath("/r"), path.join("/r", UNIFIED_SCREENS_REPORT));
+  assert.equal(unifiedScopedReportPath("/r"), path.join("/r", UNIFIED_SCOPED_REPORT));
+  // The three are distinct files: a scoped run that resolved to the full report's path would
+  // defeat F1 while every constant-vs-constant check still passed.
+  assert.equal(new Set([UNIFIED_VERIFY_REPORT, UNIFIED_SCREENS_REPORT, UNIFIED_SCOPED_REPORT]).size, 3);
+});
+
+test("LITMUS: the one-spelling scan really fires on a second copy of the SCOPED report name", () => {
+  // The newest declared name gets its own planted-duplicate proof: an empty result set is
+  // exactly what a defused scan returns, so prove this one sees a re-spelling.
+  const planted = path.join(SRC, "capabilities/verification/unified/__planted_scoped__.ts");
+  const read = (p: string): string =>
+    p === planted ? `const target = "${UNIFIED_SCOPED_REPORT}";\nexport default target;\n` : readFileSync(p, "utf-8");
+  assert.ok(
+    filesHardCodingName(UNIFIED_SCOPED_REPORT, [...ALL, planted], read)
+      .includes("capabilities/verification/unified/__planted_scoped__.ts"),
+    "the scan missed a planted duplicate of the scoped report filename",
+  );
 });
 
 test("the test-results filenames are spelled once each, in the module that exports them", () => {
@@ -183,6 +204,16 @@ const PROSE_SITES: [string, string][] = [
   // The verify-owned screens report is named in the two docs that describe the bare run.
   [path.join(REPO_ROOT, "commands", "loombridge", "verify.md"), `.loombridge/reports/${UNIFIED_SCREENS_REPORT}`],
   [path.join(REPO_ROOT, "Docs", "Design", "UnifiedVerify.md"), `.loombridge/reports/${UNIFIED_SCREENS_REPORT}`],
+  // S2a/F1. The SCOPED report is where a `--only` run lands, and the three documents below
+  // are where an operator learns that (the help text they run, the command prose an agent
+  // opens, the RFC a human reads). A rename that moved the constant alone would leave all
+  // three routing to a file nothing writes, which is this repo's oldest failure shape.
+  [
+    path.join(PKG_ROOT, "src", "capabilities", "verification", "verify.ts"),
+    `.loombridge/reports/${UNIFIED_SCOPED_REPORT}`,
+  ],
+  [path.join(REPO_ROOT, "commands", "loombridge", "verify.md"), `.loombridge/reports/${UNIFIED_SCOPED_REPORT}`],
+  [path.join(REPO_ROOT, "Docs", "Design", "UnifiedVerify.md"), `.loombridge/reports/${UNIFIED_SCOPED_REPORT}`],
   // G11. The test-results trio is the newest declared path, and the prose that ROUTES an
   // agent to it is the half a constant rename cannot reach. `verify.md` is what an agent
   // opens to learn the gate exists; the CLI help and the RFC are where a human looks.

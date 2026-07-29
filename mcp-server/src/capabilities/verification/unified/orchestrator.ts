@@ -30,6 +30,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 
 import {
+  fileExists,
   loombridgePaths,
   nowIso,
   readState,
@@ -58,18 +59,23 @@ import {
 import { gradedGates } from "../run-gates.js";
 import { discoverVerificationAssets, type DiscoveredAsset } from "./discovery.js";
 import {
+  SCOPED_SUMMARY,
+  SECTION_FOR_KIND,
   ZERO_ANCHORED_SUMMARY,
   fingerprintReport,
   notRunFor,
+  parseOnlySelection,
   reportPathFor,
   reportWasWritten,
   resolveUnifiedOutcome,
+  unifiedScopedReportPath,
   unifiedScreensReportPath,
   unifiedVerifyReportPath,
   worstExitTier,
   writeUnifiedVerifyReport,
   type ReportFingerprint,
   type UnifiedAssetOutcome,
+  type UnifiedDeselected,
   type UnifiedNotRun,
   type UnifiedSectionName,
   type UnifiedVerifyReport,
@@ -143,6 +149,15 @@ export interface UnifiedVerifyOpts {
   live: boolean;
   /** `--report <path>`: override the unified report location. */
   reportPath?: string;
+  /**
+   * `--only <sections>`: the RAW selector value, validated here (S2a/F13).
+   *
+   * Raw rather than pre-parsed, because the refusal for a bad selector has to happen at the
+   * same pre-discovery, pre-write position `--report` is refused at: a run that discovered
+   * assets, printed a plan, and only then complained about a typo would already have told an
+   * operator what "will run" for an invocation that never could.
+   */
+  only?: string;
   /** `--id <kebab>`: the workspace id for the out-of-project assets (feel, screens). */
   workspaceId?: string;
   /** `--workspace <dir>`: the resolved workspace, when the caller derived one. */
@@ -162,7 +177,26 @@ export async function runUnifiedVerify(opts: UnifiedVerifyOpts): Promise<number>
   const root = path.resolve(opts.root);
   const paths = loombridgePaths(root);
   const deps: UnifiedSectionDeps = { ...(await realDeps()), ...opts.deps };
-  const reportPath = opts.reportPath ?? unifiedVerifyReportPath(paths.reports);
+
+  // `--only` IS VALIDATED FIRST (F13), before the report path is even resolved: the
+  // selection decides WHICH default report this run may write, and a malformed selector
+  // must leave the project byte-identical, exactly like a refused `--report`.
+  let only: UnifiedSectionName[] | null = null;
+  if (opts.only !== undefined) {
+    const parsed = parseOnlySelection(opts.only);
+    if (!parsed.ok) {
+      console.error(`${TAG} REFUSED: ${parsed.error}`);
+      console.error(`${TAG} nothing was written and nothing ran.`);
+      return 2;
+    }
+    only = parsed.sections;
+  }
+  // F1: a SCOPED run never writes verify.json. Two files for two questions; see
+  // `UNIFIED_SCOPED_REPORT`.
+  const defaultReportPath = only
+    ? unifiedScopedReportPath(paths.reports)
+    : unifiedVerifyReportPath(paths.reports);
+  const reportPath = opts.reportPath ?? defaultReportPath;
 
   // `--report` IS A WRITE, so it is validated before anything else happens (M4). A
   // path that collides with a project artifact would have the run silently overwrite
@@ -177,16 +211,16 @@ export async function runUnifiedVerify(opts: UnifiedVerifyOpts): Promise<number>
     console.error(`${TAG} REFUSED: --report ${reportPath} resolves outside the project root ${root}`);
     console.error(
       `${TAG} nothing was written and nothing ran. Point --report inside the project, or omit it to use ` +
-        `${path.relative(root, unifiedVerifyReportPath(paths.reports))}.`,
+        `${path.relative(root, defaultReportPath)}.`,
     );
     return 2;
   }
-  const collision = await reportCollision(paths, reportPath);
+  const collision = await reportCollision(paths, reportPath, only !== null);
   if (collision) {
     console.error(`${TAG} REFUSED: --report ${path.relative(root, reportPath)} ${collision}`);
     console.error(
       `${TAG} nothing was written and nothing ran. Point --report at a new path, or omit it to use ` +
-        `${path.relative(root, unifiedVerifyReportPath(paths.reports))}.`,
+        `${path.relative(root, defaultReportPath)}.`,
     );
     return 2;
   }
@@ -207,25 +241,36 @@ export async function runUnifiedVerify(opts: UnifiedVerifyOpts): Promise<number>
 
   // THE PLAN, before any write. `discoverVerificationAssets` only reads, so at this
   // point the project on disk is byte-identical to what the operator started with.
-  for (const line of planLines(root, assets, notes, opts.live)) console.error(line);
+  for (const line of planLines(root, assets, notes, opts.live, only)) console.error(line);
 
   if (assets.length === 0) {
     // The on-ramp. Nothing is written, not even `.loombridge/`: a fresh project that
     // asked a question and got an answer must not acquire state as a side effect.
-    for (const line of onRampLines(root)) console.error(line);
+    const acceptanceAbsent = !(await fileExists(paths.acceptance));
+    for (const line of onRampLines(root, { acceptanceAbsent })) console.error(line);
     return 2;
   }
 
   const notRun: UnifiedNotRun[] = [];
+  const deselected: UnifiedDeselected[] = [];
   const sections: Partial<Record<UnifiedSectionName, UnifiedVerifySection>> = {};
   const executed: { section: UnifiedSectionName; exit: number; anchored: boolean }[] = [];
 
   // Every row that will NOT execute, classified BEFORE anything runs so the reason is
   // discovery's own (`notRunClass`), never inferred from how a section behaved.
+  //
+  // ORDER IS THE MOAT (F2). The `runnable === "no"` test comes FIRST and takes no notice of
+  // the selection: a broken, unapproved or draft row lands in `notRun` and keeps its tier
+  // whether or not the operator scoped its section out. Deselection may only ever remove a
+  // HEALTHY row, so `--only tests` on a project with a tampered feel snapshot is still a
+  // tier-2 run. Tampering is never scoped away, and the scoping cannot be used to make an
+  // unmeasurable anchor disappear from the calculus.
   const runnable: DiscoveredAsset[] = [];
   for (const asset of assets) {
     if (asset.runnable === "no") notRun.push(notRunFor(asset));
-    else if (asset.runnable === "live" && !opts.live) {
+    else if (only && !only.includes(SECTION_FOR_KIND[asset.kind])) {
+      deselected.push({ kind: asset.kind, id: asset.id, section: SECTION_FOR_KIND[asset.kind] });
+    } else if (asset.runnable === "live" && !opts.live) {
       notRun.push({ kind: asset.kind, id: asset.id, reason: "needs --live", why: "live-only-skipped" });
     } else runnable.push(asset);
   }
@@ -269,7 +314,7 @@ export async function runUnifiedVerify(opts: UnifiedVerifyOpts): Promise<number>
     record("feel", await runSection("feel", () => feelSection(deps, opts, root, workspace!, feelAsset)));
   }
 
-  const outcome = resolveUnifiedOutcome({ executed, notRun });
+  const outcome = resolveUnifiedOutcome({ executed, notRun, scoped: only !== null });
   const sectionNames = Object.keys(sections) as UnifiedSectionName[];
   const report: UnifiedVerifyReport = {
     kind: "unified-verify",
@@ -282,6 +327,8 @@ export async function runUnifiedVerify(opts: UnifiedVerifyOpts): Promise<number>
     live: opts.live,
     plan: assets,
     notRun,
+    only,
+    deselected,
     sections,
     anchoredSections: sectionNames.filter((n) => sections[n]!.anchored),
     unanchoredSections: sectionNames.filter((n) => !sections[n]!.anchored),
@@ -646,21 +693,33 @@ export function planLines(
   assets: readonly DiscoveredAsset[],
   notes: readonly string[],
   live: boolean,
+  only: readonly UnifiedSectionName[] | null = null,
 ): string[] {
+  const scope = only ? `; scoped to --only ${only.join(",")}` : "";
   const lines = [
-    `${TAG} plan for ${root} (${live ? "offline + live" : "offline only; pass --live for live assets"}):`,
+    `${TAG} plan for ${root} (${live ? "offline + live" : "offline only; pass --live for live assets"}${scope}):`,
   ];
   for (const asset of assets) {
-    lines.push(`${TAG}   ${asset.kind} '${asset.id}': ${disposition(asset, live)}; ${provenance(asset)}`);
+    lines.push(`${TAG}   ${asset.kind} '${asset.id}': ${disposition(asset, live, only)}; ${provenance(asset)}`);
   }
   if (assets.length === 0) lines.push(`${TAG}   (no verification assets)`);
   for (const note of notes) lines.push(`${TAG}   note: ${note}`);
   return lines;
 }
 
-function disposition(asset: DiscoveredAsset, live: boolean): string {
+/**
+ * What the plan says will happen to one row.
+ *
+ * The BROKEN and not-runnable branches come FIRST, before the selection is consulted, for
+ * the same reason the classification loop does (F2): a broken row is refused whatever the
+ * operator selected, and the plan must say so rather than reporting it as merely scoped out.
+ */
+function disposition(asset: DiscoveredAsset, live: boolean, only: readonly UnifiedSectionName[] | null): string {
   if (asset.broken) return `BROKEN, will not run: ${asset.broken}`;
   if (asset.runnable === "no") return `will not run: ${asset.reason ?? "not runnable"}`;
+  if (only && !only.includes(SECTION_FOR_KIND[asset.kind])) {
+    return `deselected (--only ${only.join(",")}): not run, and not counted`;
+  }
   if (asset.runnable === "live") return live ? "will run (live)" : "not run: needs --live";
   return "will run (offline)";
 }
@@ -686,8 +745,8 @@ function provenance(asset: DiscoveredAsset): string {
  * moment. An agent reading this must not be told to perform a step it structurally
  * cannot perform.
  */
-export function onRampLines(root: string): string[] {
-  return [
+export function onRampLines(root: string, opts: { acceptanceAbsent: boolean } = { acceptanceAbsent: false }): string[] {
+  const lines = [
     `${TAG} REFUSED: no verification assets found under ${root}, so nothing was checked.`,
     `${TAG} a run that checked nothing is not a pass (exit 2). No report was written.`,
     `${TAG} the cheapest universal anchor is a recorded demonstration, so ask your human to play the game once:`,
@@ -696,6 +755,18 @@ export function onRampLines(root: string): string[] {
     `${TAG}   3. loombridge trace approve --id <name>            (freeze those frames as the baseline)`,
     `${TAG} then run: loombridge verify --live`,
   ];
+  // F7, THE OTHER DOOR. The on-ramp above is door two (an existing game: approve an anchor,
+  // then re-measure it forever). An agent that reaches this text while BUILDING a new game
+  // has arrived at the wrong door entirely, and the tell is on disk: no ACCEPTANCE.json.
+  // Naming `loombridge plan` here is what stops the answer to "there is nothing to verify"
+  // being read as "record a demonstration of the game you have not built yet".
+  if (opts.acceptanceAbsent) {
+    lines.push(
+      `${TAG} building a NEW game? loombridge plan is the other door: it scaffolds .loombridge/ and`,
+      `${TAG}   authors the acceptance contract this verb grades (there is no ACCEPTANCE.json here).`,
+    );
+  }
+  return lines;
 }
 
 /** The per-section result lines plus the roll-up of everything that was NOT measured. */
@@ -726,9 +797,30 @@ export function summaryLines(report: UnifiedVerifyReport, live: boolean): string
         report.notRun.map((n) => `${n.kind} '${n.id}' (${n.reason})`).join("; "),
     );
   }
+  if (report.only) {
+    // The scoping is stated on EVERY scoped run, green or red, and separately from the
+    // deselected rows: an operator (or a CI log reader) must be able to tell a subset run
+    // from a full one without reconstructing it from what did not print.
+    lines.push(`${TAG} ${SCOPED_SUMMARY} [--only ${report.only.join(",")}]`);
+    if (report.deselected.length > 0) {
+      lines.push(
+        `${TAG} DESELECTED (--only, excluded from the verdict): ` +
+          report.deselected.map((d) => `${d.kind} '${d.id}' (${d.section})`).join("; "),
+      );
+    }
+  }
   if (report.status === "nothing-checked") {
     const liveOnly = report.notRun.filter((n) => n.why === "live-only-skipped");
     lines.push(`${TAG} REFUSED: zero assets executed, so nothing was checked (exit 2).`);
+    if (report.only) {
+      // The row-less selection, named (S2a). A selector that matched no discovered asset is
+      // still a run that checked nothing, and the operator's typo (or a project that never
+      // grew that asset) is the actionable half of the answer.
+      lines.push(
+        `${TAG} the selection --only ${report.only.join(",")} matched no runnable asset ` +
+          `(discovered kinds: ${report.plan.map((a) => a.kind).join(", ") || "none"}).`,
+      );
+    }
     if (liveOnly.length > 0 && !live) {
       lines.push(
         `${TAG} every discovered asset needs a running editor. Re-run with: loombridge verify --live`,
@@ -790,8 +882,17 @@ export function summaryLines(report: UnifiedVerifyReport, live: boolean): string
 async function reportCollision(
   paths: ReturnType<typeof loombridgePaths>,
   target: string,
+  scoped: boolean,
 ): Promise<string | null> {
   const declared: [string, string][] = [
+    // F1, BOTH DIRECTIONS. The full report and the scoped report answer different questions,
+    // and `--report` is the one way an operator could point one run at the other's file. A
+    // scoped run may never write verify.json (the document `doneness` reads); a full run
+    // may never write verify-scoped.json. Neither is caught by the "previous unified
+    // report" allowance below, because both files carry `kind: "unified-verify"`.
+    scoped
+      ? [unifiedVerifyReportPath(paths.reports), "is the FULL run's unified report; a scoped run (--only) never writes it"]
+      : [unifiedScopedReportPath(paths.reports), "is the scoped (--only) run's own report; a full run never writes it"],
     [paths.acceptance, "is the acceptance contract"],
     [paths.slices, "is the slice roadmap"],
     [paths.state, "is the project STATE"],

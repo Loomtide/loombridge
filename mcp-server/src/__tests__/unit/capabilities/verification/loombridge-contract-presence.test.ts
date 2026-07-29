@@ -454,20 +454,31 @@ test("each workflow verb tool description LEADS with the moment-of-need trigger"
 
 // ── loombridge_verify wrapper: verbatim, refusal-is-the-headline, no fake pass ───
 
-test("runLoombridgeVerifyTool REFUSES (exit 2) with a verbatim headline when no contract exists", async () => {
+test("runLoombridgeVerifyTool REFUSES (exit 2) with a verbatim headline when there is nothing to verify", async () => {
+  // UPDATED FOR S2c + F7. The tool now runs the UNIFIED door, so a project with no
+  // verification assets at all gets the on-ramp refusal rather than the contract engine's
+  // missing-contract refusal. F7 is what keeps this test's point intact: the on-ramp names
+  // `loombridge plan` (door one) when there is no ACCEPTANCE.json, so an agent that arrives
+  // here while BUILDING is still routed to the verb that fixes it.
   const root = await tmpRoot();
   try {
     await fakeCaptures(root);
     const payload = await runLoombridgeVerifyTool(root);
-    assert.equal(payload.exitCode, 2, "missing contract must exit 2 (refusal)");
+    assert.equal(payload.exitCode, 2, "nothing to check must exit 2 (refusal)");
     assert.equal(payload.refused, true);
     assert.match(payload.headline, /REFUSED/);
-    assert.match(payload.headline, /loombridge plan/);
-    // The full gate output is surfaced verbatim — nothing hides the refusal.
-    assert.ok(payload.output.some((l) => /NOT a verification/.test(l)), payload.output.join("\n"));
-    // A refused verify writes NO verdict (never a fake pass).
+    const text = payload.output.join("\n");
+    // F7: the door-one pointer, printed because there is no acceptance contract on disk.
+    assert.match(text, /loombridge plan is the other door/);
+    assert.match(text, /no ACCEPTANCE\.json/);
+    // …and the door-two on-ramp is still the primary answer for an EXISTING game.
+    assert.match(text, /loombridge trace record --observe/);
+    // A refused run writes NO verdict and NO unified report (never a fake pass).
     assert.equal(payload.verdictExists, false);
     assert.equal(payload.verdictStatus, null);
+    assert.equal(payload.unifiedStatus, null, "the on-ramp refuses BEFORE writing a report");
+    assert.equal(payload.unifiedExit, null);
+    assert.equal(payload.unanchoredSections, null);
     await assert.rejects(fs.stat(loombridgePaths(root).verdict));
   } finally {
     await fs.rm(root, { recursive: true, force: true });
@@ -475,13 +486,16 @@ test("runLoombridgeVerifyTool REFUSES (exit 2) with a verbatim headline when no 
 });
 
 test("runLoombridgeVerifyTool surfaces the CLI output byte-for-byte (no summarization)", async () => {
+  // UPDATED FOR S2c. The parity target moved with the tool: it used to call `runVerify`
+  // directly, so the comparison was against the engine; it now runs the same unified door as
+  // bare `loombridge verify --root .`, so THAT is what it must match line for line. The
+  // property under test is unchanged: the wrapper summarizes nothing.
   const rootA = await tmpRoot();
   const rootB = await tmpRoot();
   try {
     await fakeCaptures(rootA);
     await fakeCaptures(rootB);
-    // Direct CLI code path (captured the way the CLI prints) vs the MCP wrapper.
-    const direct = await captureVerb(() => runVerify(verifyArgs(rootA)));
+    const direct = await captureVerb(() => runVerifyCli(["--root", rootA]));
     const wrapped = await runLoombridgeVerifyTool(rootB);
     // Normalize the only difference (the temp root path) so we compare the message text.
     const norm = (l: string) => l.replace(rootA, "ROOT").replace(rootB, "ROOT");
@@ -493,21 +507,34 @@ test("runLoombridgeVerifyTool surfaces the CLI output byte-for-byte (no summariz
   }
 });
 
-test("runLoombridgeVerifyTool does NOT refuse once a contract exists (writes a real verdict)", async () => {
+test("runLoombridgeVerifyTool with a contract grades it through the unified door, and says what it did NOT anchor", async () => {
+  // UPDATED FOR S2c + F5. The old pin ("a present contract is not a refusal, exitCode != 2")
+  // no longer holds and SHOULD not: this fixture's only asset is a contract with no approved
+  // design target, so the unified door's FXH rule makes it `partial` at exit 2: nothing
+  // human-approved was compared. The thing this test protects is that a present contract is
+  // GRADED (a verdict this run produced, surfaced from the run's own binding), and that the
+  // payload says out loud why that is not a pass.
   const root = await tmpRoot();
   try {
     await runPlan({ root, genre: "platformer-2d", engine: "unity", force: false, allowMissingDesignTarget: true });
-    // One real capture: the MCP tool shares the engine, so an ungraded run would also
-    // exit 2 and blur what this test pins (a present contract is not a refusal).
+    // One real capture, so the contract section really grades rather than refusing as
+    // nothing-graded (which would blur what this test pins).
     const paths = loombridgePaths(root);
     await fs.mkdir(paths.verifyInputs, { recursive: true });
     await fs.writeFile(path.join(paths.verifyInputs, "console.json"), JSON.stringify({ logs: [] }), "utf-8");
     const payload = await runLoombridgeVerifyTool(root);
-    assert.notEqual(payload.exitCode, 2, "a present contract must not read as a missing-contract refusal");
-    assert.equal(payload.refused, false);
-    // A present contract writes a verdict (a refusal writes none).
+
+    assert.ok(payload.output.some((l) => /contract '.*': will run \(offline\)/.test(l)), payload.output.join("\n"));
+    // F5: the verdict is quoted because THIS run wrote it (the section's report binding).
     assert.equal(payload.verdictExists, true);
-    assert.ok(payload.verdictStatus, "verdict status must be surfaced from disk");
+    assert.ok(payload.verdictStatus, "the verdict status must be surfaced from the run that produced it");
+    // The unified fields are the honest headline: green gates, no frozen anchor compared.
+    assert.equal(payload.unifiedStatus, "partial");
+    assert.equal(payload.unifiedExit, 2);
+    assert.deepEqual(payload.unanchoredSections, ["contract"]);
+    assert.equal(payload.exitCode, 2);
+    assert.equal(payload.refused, true, "F4: `refused` is the report's non-zero exit, not a stderr regex");
+    assert.equal(payload.reportPath, path.relative(root, path.join(paths.reports, "verify.json")));
   } finally {
     await fs.rm(root, { recursive: true, force: true });
   }
@@ -622,36 +649,43 @@ test("concurrent console output is NOT captured into a running verify's output a
 
 // ── (MED-2) a thrown verb maps to the CLI's fatal tier, never a generic error ──
 
-test("runLoombridgeVerifyTool maps a malformed-but-present ACCEPTANCE.json to a structured RED (fatal tier), matching the CLI", async () => {
+test("runLoombridgeVerifyTool maps a malformed-but-present ACCEPTANCE.json to a BROKEN row (tier 2), matching the bare CLI door", async () => {
+  // UPDATED FOR S2c + F6 (a DELIBERATE tier change on the MCP path). The tool used to call
+  // `runVerify` directly, where a malformed contract throws and the wrapper mapped it to the
+  // CLI engine's fatal tier (1). It now runs the unified door, where the contract is ONE
+  // asset among several: an unreadable one is a BROKEN row at the harness tier, so a project
+  // with a good trace baseline still gets that trace checked. The parity target moves with
+  // it, from the `--inputs` engine argv to bare `--root`, and the tier moves from 1 to 2.
+  //
+  // The invariant that did NOT change: a harness fault is never a game defect, and a fatal
+  // out of the orchestrator maps to 2 in the tool exactly as it does in the CLI router.
   const rootMcp = await tmpRoot();
   const rootCli = await tmpRoot();
   try {
-    // Present but unparseable contract: runVerify throws from the contract read.
     for (const root of [rootMcp, rootCli]) {
       const paths = loombridgePaths(root);
       await fs.mkdir(paths.dir, { recursive: true });
       await fs.writeFile(paths.acceptance, "{ this is not json", "utf-8");
     }
 
-    // MCP wrapper: STRUCTURED red — exit 1, fatal headline, no verdict, not a refusal.
     const payload = await runLoombridgeVerifyTool(rootMcp);
-    assert.equal(payload.exitCode, 1, "a thrown verb is the fail tier (CLI parity), not a generic error");
-    assert.equal(payload.refused, false, "a fatal is a RED, not the missing-contract refusal");
-    assert.match(payload.headline, /\[loombridge verify\] fatal:/);
+    assert.equal(payload.exitCode, 2, "a broken asset is the harness tier, never a game verdict");
+    assert.equal(payload.refused, true, "F4: the report's own non-zero exit is the refusal");
+    assert.match(payload.output.join("\n"), /contract '.*': BROKEN, will not run: .*is malformed/);
+    assert.ok(
+      !payload.output.some((l) => /\[loombridge verify\] fatal:/.test(l)),
+      "the plan must survive one malformed asset rather than aborting as a fatal",
+    );
+    // Nothing executed, so nothing was graded and no verdict may be quoted.
     assert.equal(payload.verdictExists, false);
     assert.equal(payload.verdictStatus, null);
+    assert.equal(payload.unifiedStatus, "nothing-checked");
+    assert.equal(payload.unifiedExit, 2);
 
-    // The same file through the CLI's CONTRACT-ENGINE path produces the matching tier +
-    // message. Pinned on an `--inputs` invocation because that is the argv that still
-    // routes to `runVerify`, which is the level this parity is really about: the MCP tool
-    // calls `runVerify` directly, and the two must not diverge on the same broken file.
-    const cli = await captureVerb(() =>
-      runVerifyCli(["--root", rootCli, "--inputs", loombridgePaths(rootCli).verifyInputs]),
-    );
+    // The same file through the bare CLI door: same tier, same story.
+    const cli = await captureVerb(() => runVerifyCli(["--root", rootCli]));
     assert.equal(cli.code, payload.exitCode, "MCP and CLI must agree on the tier for the same broken contract");
-    const cliFatal = cli.lines.find((l) => /\[loombridge verify\] fatal:/.test(l));
-    assert.ok(cliFatal, cli.lines.join("\n"));
-    assert.equal(payload.headline.replace(rootMcp, "ROOT"), cliFatal.replace(rootCli, "ROOT"));
+    assert.match(cli.lines.join("\n"), /contract '.*': BROKEN, will not run: .*is malformed/);
   } finally {
     await fs.rm(rootMcp, { recursive: true, force: true });
     await fs.rm(rootCli, { recursive: true, force: true });

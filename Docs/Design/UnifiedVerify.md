@@ -1,6 +1,7 @@
 # RFC: Unified Verify (one front door for verification)
 
-**Status:** PROPOSED for S2 to S4. **S1 has shipped** (see "S1 delivery notes" below).
+**Status:** **S1 and S2 have shipped** (see the delivery notes below); S3 to S4 remain
+PROPOSED.
 **Date:** 2026-07-28. Written after the first full live dogfood of every verification mode on
 consumer projects (KidsAdventure: trace record/replay + screen contract; KnightsQuest: tuning
 snapshot), which is where the fragmentation cost was measured first-hand.
@@ -88,7 +89,12 @@ anchor); if either ever grows a human-approved baseline, it enters through this 
 3. **Run every asset** into ONE report (per-asset sections, shared row shape), exit by worst
    tier. A discovered-but-broken asset (tampered manifest, missing baseline file) is exit 2,
    never skipped.
-4. `--only flow|feel|screens|pixels|contract` selects subsets for CI granularity.
+4. `--only contract|flow|feel|screens|tests` selects subsets for CI granularity. (The
+   vocabulary is the REPORT's own section names, spelled once in `UNIFIED_SECTION_NAMES`.
+   `pixels` folded into `flow` when the trace section landed in S1 (actuation and pixel
+   drift are one replay, not two selectable checks), and `tests` joined with the fifth asset
+   kind. A selector naming a section the report cannot express would be a selector nothing
+   could grade.)
 
 **The empty-project behavior is the on-ramp, not usage soup.** `verify` with no assets prints
 the path to the cheapest universal asset. As shipped in S1 that path is three commands, not two:
@@ -150,9 +156,9 @@ LAST, once the internal providers have proven the row shape twice.
 - **S1 (additive, no breaking changes):** unified report type + bare-`verify` orchestrator
   that discovers assets and delegates to the existing mode implementations. Empty-project
   on-ramp text. Plan-first output.
-- **S2:** `--only` selectors; mode flags become deprecated aliases (stderr notice, the
-  `design` -> `target` precedent); `--profile` explicitly marked diagnostic and removed from
-  bare-verify's plan.
+- **S2 (SHIPPED):** `--only` selectors; mode flags become deprecated aliases (stderr notice,
+  the `design` -> `target` precedent); `--profile` explicitly marked diagnostic and removed
+  from bare-verify's plan; the `loombridge_verify` MCP tool routes through the orchestrator.
 - **S3:** screen-contract rename in docs/report vocabulary (verbs stay aliased); README
   repositions around the one-command story.
 - **S4 (later):** provider SDK, once a second external consumer exists.
@@ -223,8 +229,74 @@ Documented limitations of the S1 shape, recorded rather than papered over:
   write one. That is precisely why `doneness` treats it as refuse-only input and never as a
   source of green.
 
-Not in S1, and unchanged as roadmap items: `--only` selectors, mode-flag deprecation notices,
-and routing the `loombridge_verify` MCP tool through the orchestrator (all S2).
+Not in S1: `--only` selectors, mode-flag deprecation notices, and routing the
+`loombridge_verify` MCP tool through the orchestrator. All three shipped in S2; the notes
+below record how each landed.
+
+### S2 delivery notes
+
+S2 shipped the three items above, and the shape of each was decided by one question: what
+would this let a run CLAIM that it did not measure?
+
+- **`--only <sections>` is a SCOPED run, and scoping is a property of the report.** The
+  vocabulary is the report's own section names (`contract`, `flow`, `feel`, `screens`,
+  `tests`); the report carries `only: string[] | null` (REQUIRED, so "full run" is written
+  down rather than inferred from an absent field) plus a `deselected` array of the healthy
+  rows the selection excluded.
+- **A BROKEN or unapproved asset refuses regardless of the selection.** Deselection may only
+  ever remove a row whose `runnable` is not `no`; every broken / non-anchor / draft row stays
+  in `notRun` with its tier. Otherwise `--only tests` would be a one-flag way to make a
+  tampered feel snapshot stop counting, which is the precise opposite of what this product
+  sells.
+- **A scoped run's status ceiling is `partial`, and it never writes the full report.** It
+  writes `.loombridge/reports/verify-scoped.json`; `verify.json` keeps meaning "the last time
+  this project answered the whole question". `--report` pointing one at the other's path is
+  refused in both directions, because both files carry `kind: "unified-verify"` and would
+  otherwise pass the previous-report allowance.
+- **Selector validation happens at the pre-discovery, pre-write position**, next to
+  `--report`'s: an unknown name, an empty selection, and a value-less `--only` each refuse
+  (exit 2) with the valid names, leaving any previous report untouched. A selection that
+  matches no discovered asset is a `nothing-checked` run (exit 2) with the row-less reason
+  named, never a green.
+- **Two scoped exits are correct and deliberate**, and they differ only in what was found: a
+  RED `--only tests` exits **1** (the executed tier short-circuits: a real assertion failure
+  is a game defect whatever else was scoped out), while a GREEN `--only tests` exits **2**
+  (FXH: the tests section is permanently unanchored, so nothing human-approved was compared).
+  A green subset is not a smaller pass; it is a run that certified nothing.
+- **`doneness` now requires a FULL green, not merely `exit: 0`** (the root fix, and it applies
+  to both doors). `status !== "pass"` refuses with the reason naming what was partial: anchors
+  skipped for lack of `--live`, sections that compared no frozen approval, or a scoping. This
+  closes the whole overwrite family in one rule instead of special-casing each door: an
+  offline run after a live drift, a scoped run after a full refusal, and the MCP tool's own
+  offline write are all non-certificates by construction. Belt and braces: a `verify.json`
+  whose `only` is non-null is refused outright, though a scoped run cannot write there.
+- **The deprecated aliases print one stderr line each.** `--snapshot` and `--minigame` keep
+  byte-identical behavior (stdout is unchanged with and without the notice) and point at
+  `--only feel` / `--only screens`. `--profile` gets NO notice: it is a permanent diagnostic,
+  not an alias. The notices are SUPPRESSED under `--quiet-next`, the guided flow's existing
+  marker, so the guided mini-game run does not tell a human to abandon the flow they are
+  standing in.
+- **The `loombridge_verify` MCP tool routes through the orchestrator** (the S1 divergence,
+  closed). It runs OFFLINE always and unscoped with default paths, so the agent-facing door
+  and the human-facing door answer the same question and write the same document. The payload
+  keeps every existing field and adds `unifiedStatus`, `unifiedExit`, `unanchoredSections`,
+  and `reportPath`. Three rules make those fields honest: `refused` derives from the REPORT's
+  exit rather than a stderr regex (a summary field that could be flipped by rewording a log
+  line was never a summary); `verdictStatus`/`verdictExists` come from the contract section
+  having a report binding stamped THIS run, so a skipped or refused section cannot quote a
+  verdict an earlier run left behind; and a throw out of the orchestrator maps to tier 2,
+  matching the CLI router. One declared tier change came with it: on the MCP path a malformed
+  `ACCEPTANCE.json` is now a broken ROW (2) rather than a fatal (1), the same change the bare
+  CLI argv took in S1.
+- **The zero-asset on-ramp names the OTHER door.** When there is no `ACCEPTANCE.json`, the
+  refusal adds a `loombridge plan` pointer: an agent that reaches "nothing to verify" while
+  BUILDING a new game has arrived at door two by mistake, and telling it to record a
+  demonstration of a game that does not exist yet is the wrong instruction.
+
+RECORDED AS S3 SURFACE WORK (deliberately not in S2): the nine printed next-step sites across
+the guided flows still name mode flags rather than the unified door. Rewriting them is a
+vocabulary change that belongs with the S3 screen-contract rename, and doing it here would
+have meant editing nine strings with no verdict-level guard behind them.
 
 ### Test-results delivery notes (the fifth asset kind)
 

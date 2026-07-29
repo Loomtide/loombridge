@@ -776,13 +776,30 @@ export function sfxGateRefusals(
  *
  *  - ABSENT FILE, NO NEW BEHAVIOR. S1 is additive: a project that never ran the unified
  *    door certifies exactly as it did before.
- *  - REFUSE-ONLY. A non-zero `exit` ADDS a reason. A zero `exit` adds nothing, and can
+ *  - REFUSE-ONLY. A non-zero `exit` ADDS a reason. A clean report adds nothing, and can
  *    never remove a reason any other gate produced, so a hand-written green
  *    report (the file carries no self-integrity stamp, and cannot: see the
  *    `UNIFIED_VERIFY_REPORT` doc) buys nothing but the absence of one extra refusal.
  *  - MALFORMED IS A REFUSAL, NOT A SKIP. A present-but-unreadable report is the exact
  *    shape a "delete the inconvenient fields" attack produces, and an unreadable
  *    verdict has never been a pass anywhere else in this codebase.
+ *
+ * S2/F3: ONLY A FULL GREEN IS ACCEPTED. `exit === 0` is not sufficient, because `partial`
+ * exits 0 in three ordinary situations: anchors skipped for lack of `--live`, executed
+ * sections that compared nothing a human froze, and (S2a) a `--only` run. Each of those is
+ * a run that did NOT ask the question this certificate answers, and accepting them is what
+ * made the whole overwrite family work: run the full door, get a refusal, then run a
+ * narrower door (offline after a live drift, `--only` after a full refusal, the MCP tool's
+ * own offline run) and leave a 0-exit report standing where the refusal used to be. Refusing
+ * on `status !== "pass"` closes all three at once, with the reason naming which one fired,
+ * instead of special-casing each door.
+ *
+ * F1 belt and braces: a verify.json whose `only` is a non-null array is refused outright.
+ * A scoped run writes verify-scoped.json and can never land here, so this is unreachable
+ * by the shipped code, and it refuses rather than assuming that stays true. An ABSENT `only`
+ * is read as "full run" rather than refused: a pre-S2 report has no such field, and omitting
+ * it buys an attacker nothing, since a scoped run's status is never `pass` (F2) and the
+ * status rule above already refuses it.
  *
  * The path is resolved from the exported constant, never re-spelled here.
  */
@@ -808,14 +825,67 @@ export async function unifiedVerifyRefusals(paths: LoombridgePaths): Promise<str
     return unreadable;
   }
   if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return unreadable;
-  const report = parsed as { kind?: unknown; status?: unknown; exit?: unknown };
+  const report = parsed as {
+    kind?: unknown;
+    status?: unknown;
+    exit?: unknown;
+    only?: unknown;
+    notRun?: unknown;
+    unanchoredSections?: unknown;
+  };
   if (report.kind !== "unified-verify" || typeof report.exit !== "number") return unreadable;
-  if (report.exit === 0) return [];
-  const status = typeof report.status === "string" ? report.status : "(absent)";
-  return [
-    `unified verify refused (status \`${status}\`, exit ${report.exit}): re-run \`loombridge verify\` ` +
-      `and read ${reportPath}: an anchor it could not measure is not certified by a green contract gate`,
-  ];
+  // The status word is now load-bearing, so an absent or non-string one is unreadable
+  // rather than a value to shrug at: "delete the inconvenient field" must not be cheaper
+  // than fixing the run.
+  if (typeof report.status !== "string") return unreadable;
+
+  const reasons: string[] = [];
+  if (report.only !== undefined && report.only !== null) {
+    reasons.push(
+      Array.isArray(report.only)
+        ? `unified verify report at ${reportPath} is SCOPED (--only ${report.only.map(String).join(",")}): a scoped run ` +
+          "measures a subset and is never a certificate; re-run bare `loombridge verify`"
+        : `unified verify report at ${reportPath} carries a malformed \`only\` field; a report whose scoping cannot be ` +
+          "read cannot certify anything; re-run bare `loombridge verify`",
+    );
+  }
+  if (report.exit !== 0) {
+    reasons.push(
+      `unified verify refused (status \`${report.status}\`, exit ${report.exit}): re-run \`loombridge verify\` ` +
+        `and read ${reportPath}: an anchor it could not measure is not certified by a green contract gate`,
+    );
+  } else if (report.status !== "pass") {
+    reasons.push(
+      `unified verify is \`${report.status}\`, not \`pass\` (exit 0): ${unifiedPartialCause(report)}. ` +
+        `A partial measured less than this project can prove, so it is not a certificate; re-run ` +
+        `\`loombridge verify\` (add --live if the gaps need an editor) and read ${reportPath}`,
+    );
+  }
+  return reasons;
+}
+
+/**
+ * WHAT was partial, named from the report's own fields (F3).
+ *
+ * Read from the machine-readable rows, never from prose: the refusal has to tell an operator
+ * which of the three exit-0 partials fired, because the fix differs (`--live`, approve an
+ * anchor, or re-run without `--only`).
+ */
+function unifiedPartialCause(report: { notRun?: unknown; unanchoredSections?: unknown; only?: unknown }): string {
+  const causes: string[] = [];
+  if (Array.isArray(report.only) && report.only.length > 0) causes.push(`scoped to --only ${report.only.map(String).join(",")}`);
+  const notRun = Array.isArray(report.notRun) ? (report.notRun as { why?: unknown; kind?: unknown; id?: unknown }[]) : [];
+  const skipped = notRun.filter((n) => n.why === "live-only-skipped");
+  if (skipped.length > 0) {
+    causes.push(`${skipped.length} anchor(s) skipped for lack of --live (${skipped.map((n) => `${String(n.kind)} '${String(n.id)}'`).join(", ")})`);
+  }
+  const otherNotRun = notRun.filter((n) => n.why !== "live-only-skipped");
+  if (otherNotRun.length > 0) {
+    causes.push(`${otherNotRun.length} anchor(s) it could not measure (${otherNotRun.map((n) => `${String(n.kind)} '${String(n.id)}'`).join(", ")})`);
+  }
+  const unanchored = Array.isArray(report.unanchoredSections) ? report.unanchoredSections.map(String) : [];
+  if (unanchored.length > 0) causes.push(`section(s) that compared no frozen human approval: ${unanchored.join(", ")}`);
+  return causes.length > 0 ? causes.join("; ") : "the report does not say which coverage was missing";
 }
 
 export function evidenceClassRefusals(
