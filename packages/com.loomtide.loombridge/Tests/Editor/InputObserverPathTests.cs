@@ -133,35 +133,41 @@ namespace UnityBridge.Tests
                 "BeginObserver",
                 BindingFlags.Public | BindingFlags.Static,
                 null,
-                new[] { typeof(string), typeof(string), typeof(string) },
+                new[] { typeof(string), typeof(string), typeof(string), typeof(bool) },
                 null);
-            Assert.NotNull(begin, "BeginObserver(string,string,string) not found — signal arity not wired.");
+            Assert.NotNull(begin, "BeginObserver(string,string,string,bool) not found: signal arity not wired.");
 
             MethodInfo end = _pump.GetMethod("EndObserver", BindingFlags.Public | BindingFlags.Static);
             MethodInfo getStateSignal = _pump.GetMethod("GetRecordedStateSignal", BindingFlags.Public | BindingFlags.Static);
             MethodInfo getPaths = _pump.GetMethod("GetRecordedPaths", BindingFlags.Public | BindingFlags.Static);
             MethodInfo getKinds = _pump.GetMethod("GetRecordedKinds", BindingFlags.Public | BindingFlags.Static);
             MethodInfo getTimes = _pump.GetMethod("GetRecordedTimesMs", BindingFlags.Public | BindingFlags.Static);
+            // Record(from, to, kind, tMs, travelPx, relNx, relNy, travelRefHeight): the generic-gesture
+            // primitives ride along on every recorded gesture (sentinels for a plain tap).
             MethodInfo record = _pump.GetMethod(
                 "Record",
                 BindingFlags.NonPublic | BindingFlags.Static,
                 null,
-                new[] { typeof(GameObject), typeof(GameObject), typeof(string), typeof(float) },
+                new[]
+                {
+                    typeof(GameObject), typeof(GameObject), typeof(string), typeof(float),
+                    typeof(float), typeof(float), typeof(float), typeof(float),
+                },
                 null);
             Assert.NotNull(getStateSignal, "GetRecordedStateSignal() not found — getter name must match the Editor reflection string.");
-            Assert.NotNull(record, "Record(GameObject,GameObject,string,float) not found.");
+            Assert.NotNull(record, "Record(GameObject,GameObject,string,float,float,float,float,float) not found.");
 
             try
             {
                 // Begin WITHOUT a declared signal — sampling off, every entry must be null.
-                begin.Invoke(null, new object[] { null, null, null });
+                begin.Invoke(null, new object[] { null, null, null, false });
 
                 _root = new GameObject("StateSignalRoot");
                 GameObject a = Child(_root, "A");
                 GameObject b = Child(_root, "B");
 
-                record.Invoke(null, new object[] { a, (GameObject)null, "ui", 10f });
-                record.Invoke(null, new object[] { b, a, "ui", 20f });
+                record.Invoke(null, new object[] { a, (GameObject)null, "ui", 10f, 0f, -1f, -1f, 0f });
+                record.Invoke(null, new object[] { b, a, "ui", 20f, 0f, -1f, -1f, 0f });
 
                 var paths = (string[])getPaths.Invoke(null, null);
                 var kinds = (string[])getKinds.Invoke(null, null);
@@ -183,6 +189,77 @@ namespace UnityBridge.Tests
             // EndObserver must clear the new buffer alongside the rest.
             var afterEnd = (string[])getStateSignal.Invoke(null, null);
             Assert.AreEqual(0, afterEnd.Length, "EndObserver must clear the stateSignal buffer");
+        }
+
+        /// <summary>
+        /// The Game-view focus BACKSTOP contract. A tap that arrives while the Game view is
+        /// unfocused is swallowed by the editor: the game never processes it, yet this observer
+        /// still sees the legacy-Input edge and its raycast still resolves a target, so recording
+        /// it mints a phantom step replay cannot reproduce. The runtime observer cannot ask
+        /// UnityEditor itself, so the Editor handler installs a focus probe by REFLECTION.
+        ///
+        /// This pins the two halves that a rename would silently break (the Editor looks both up
+        /// by string) and the fail-OPEN default: an absent or throwing probe must count as FOCUSED,
+        /// so an unknown focus state never swallows the human's real gestures. The actual drop
+        /// happens in Update on a real mouse edge, which cannot run headless: the driver's live
+        /// re-test covers that half.
+        /// </summary>
+        [Test]
+        public void GameViewFocusProbe_IsReflectable_AndDefaultsToFocused()
+        {
+            MethodInfo setProbe = _pump.GetMethod(
+                "SetGameViewFocusProbe",
+                BindingFlags.Public | BindingFlags.Static,
+                null,
+                new[] { typeof(Func<bool>) },
+                null);
+            Assert.NotNull(setProbe,
+                "SetGameViewFocusProbe(Func<bool>) not found: must match the Editor StaticMethod lookup in InputObserverBridge.");
+
+            MethodInfo getDroppedUnfocused = _pump.GetMethod(
+                "GetDroppedUnfocused", BindingFlags.Public | BindingFlags.Static, null, Type.EmptyTypes, null);
+            Assert.NotNull(getDroppedUnfocused,
+                "GetDroppedUnfocused() not found: must match the Editor StaticMethod lookup in InputObserverBridge.");
+
+            MethodInfo probeFocused = _pump.GetMethod(
+                "ProbeGameViewFocused", BindingFlags.NonPublic | BindingFlags.Static, null, Type.EmptyTypes, null);
+            Assert.NotNull(probeFocused, "ProbeGameViewFocused() not found on the observer.");
+
+            MethodInfo end = _pump.GetMethod("EndObserver", BindingFlags.Public | BindingFlags.Static, null, Type.EmptyTypes, null);
+            Assert.NotNull(end, "EndObserver() not found.");
+
+            bool Probe() => (bool)probeFocused.Invoke(null, null);
+
+            try
+            {
+                // No probe installed (player build / older Editor path): unknown means FOCUSED,
+                // so recording behaves exactly as it did before the backstop existed.
+                setProbe.Invoke(null, new object[] { null });
+                Assert.IsTrue(Probe(), "an absent probe must read as FOCUSED (never swallow real gestures)");
+
+                // An unfocused Game view is reported as such: this is what makes the drop happen.
+                setProbe.Invoke(null, new object[] { (Func<bool>)(() => false) });
+                Assert.IsFalse(Probe(), "the installed probe's answer must be used");
+
+                setProbe.Invoke(null, new object[] { (Func<bool>)(() => true) });
+                Assert.IsTrue(Probe(), "a focused Game view records normally");
+
+                // A throwing probe must not break recording: fail OPEN, same as absent.
+                setProbe.Invoke(null, new object[] { (Func<bool>)(() => throw new InvalidOperationException("boom")) });
+                Assert.IsTrue(Probe(), "a throwing probe must fail OPEN (focused), never drop the human's gestures");
+
+                // The counter is session state: it starts (and ends) at zero.
+                setProbe.Invoke(null, new object[] { (Func<bool>)(() => false) });
+                end.Invoke(null, null);
+                Assert.AreEqual(0, (int)getDroppedUnfocused.Invoke(null, null),
+                    "EndObserver must reset the unfocused-drop counter");
+                Assert.IsTrue(Probe(), "EndObserver must clear the probe so it cannot outlive the session");
+            }
+            finally
+            {
+                setProbe.Invoke(null, new object[] { null });
+                end.Invoke(null, null);
+            }
         }
 
         [Test]
@@ -237,12 +314,17 @@ namespace UnityBridge.Tests
                 return (string[])m.Invoke(null, null);
             }
 
-            MethodInfo begin = _pump.GetMethod("BeginObserver", BindingFlags.Public | BindingFlags.Static, null, Type.EmptyTypes, null);
+            MethodInfo begin = _pump.GetMethod(
+                "BeginObserver",
+                BindingFlags.Public | BindingFlags.Static,
+                null,
+                new[] { typeof(string), typeof(string), typeof(string), typeof(bool) },
+                null);
             MethodInfo end = _pump.GetMethod("EndObserver", BindingFlags.Public | BindingFlags.Static, null, Type.EmptyTypes, null);
-            Assert.NotNull(begin, "BeginObserver() not found.");
+            Assert.NotNull(begin, "BeginObserver(string,string,string,bool) not found.");
             Assert.NotNull(end, "EndObserver() not found.");
 
-            begin.Invoke(null, null);
+            begin.Invoke(null, new object[] { null, null, null, false });
             try
             {
                 int n = InvokeStringGetter("GetRecordedPaths").Length;

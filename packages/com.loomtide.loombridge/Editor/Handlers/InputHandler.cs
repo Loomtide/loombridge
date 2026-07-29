@@ -121,6 +121,22 @@ namespace UnityBridge.Handlers
             // recording gates each scene on its own phase manager). Takes precedence over a declared signal.
             bool autoDetect = parameters?["autoDetectStateSignal"]?.Value<bool>() ?? false;
 
+            // FOCUS THE GAME VIEW BEFORE OBSERVING. Without focus the editor swallows the
+            // human's first taps while this observer still attributes them (its raycast
+            // resolves a target), so the trace records steps the game never processed and
+            // replay diverges on the very first segment. Main thread, inside the handler,
+            // before any gesture can arrive.
+            bool gameViewFocused = GameViewFocus.EnsureGameViewFocused();
+            if (gameViewFocused)
+                Debug.Log("[Loombridge] observe_start: focused the Game view so the first taps reach the game.");
+            else
+                Debug.LogWarning(
+                    "[Loombridge] observe_start: could not focus the Game view; early taps may be swallowed by the editor "
+                    + "and will be DROPPED (reported as droppedUnfocused), never recorded.");
+
+            // Install the focus probe the runtime observer consults at each press edge (it cannot
+            // reference UnityEditor itself). Set BEFORE Begin so the very first gesture is gated.
+            InputObserverBridge.SetGameViewFocusProbe(GameViewFocus.IsGameViewFocused);
             InputObserverBridge.Begin(signalPath, signalComponent, signalProperty, autoDetect);
             return new JObject { ["active"] = true, ["backend"] = "InputObserver" };
         }
@@ -237,6 +253,9 @@ namespace UnityBridge.Handlers
             JArray clicks = InputObserverBridge.CollectClicks();
             JArray keyEdges = InputObserverBridge.CollectKeyEdges();
             int droppedNoTarget = InputObserverBridge.CollectDroppedNoTarget();
+            // Gestures the editor swallowed because the Game view was unfocused: the game never
+            // processed them, so they are reported, never recorded (see the observe_start focus).
+            int droppedUnfocused = InputObserverBridge.CollectDroppedUnfocused();
             InputObserverBridge.End();
             return new JObject
             {
@@ -244,6 +263,7 @@ namespace UnityBridge.Handlers
                 ["keyEdges"] = keyEdges,
                 ["observed"] = observed,
                 ["droppedNoTarget"] = droppedNoTarget,
+                ["droppedUnfocused"] = droppedUnfocused,
             };
         }
 
@@ -268,6 +288,8 @@ namespace UnityBridge.Handlers
             private static MethodInfo _getReleaseNx;
             private static MethodInfo _getReleaseNy;
             private static MethodInfo _getDropped;
+            private static MethodInfo _getDroppedUnfocused;
+            private static MethodInfo _setFocusProbe;
             private static MethodInfo _getKeyNames;
             private static MethodInfo _getKeyEdges;
             private static MethodInfo _getKeyTimes;
@@ -410,6 +432,10 @@ namespace UnityBridge.Handlers
                 _getReleaseNx = StaticMethod("GetRecordedReleaseNx");
                 _getReleaseNy = StaticMethod("GetRecordedReleaseNy");
                 _getDropped = StaticMethod("GetDroppedNoTarget");
+                _getDroppedUnfocused = StaticMethod("GetDroppedUnfocused");
+                // Takes a Func<bool> the observer calls at each press edge (both types live in
+                // mscorlib/System.Core, so the delegate crosses the assembly boundary fine).
+                _setFocusProbe = StaticMethod("SetGameViewFocusProbe", new[] { typeof(Func<bool>) });
                 _getKeyNames = StaticMethod("GetRecordedKeyNames");
                 _getKeyEdges = StaticMethod("GetRecordedKeyEdges");
                 _getKeyTimes = StaticMethod("GetRecordedKeyTimesMs");
@@ -424,6 +450,20 @@ namespace UnityBridge.Handlers
             {
                 Resolve();
                 return Invoke(_getDropped) is int n ? n : 0;
+            }
+
+            /// <summary>How many gestures the observer dropped this session for arriving while the Game view was unfocused.</summary>
+            public static int CollectDroppedUnfocused()
+            {
+                Resolve();
+                return Invoke(_getDroppedUnfocused) is int n ? n : 0;
+            }
+
+            /// <summary>Install the Editor's Game-view focus predicate on the runtime observer (session-scoped; cleared by End).</summary>
+            public static void SetGameViewFocusProbe(Func<bool> probe)
+            {
+                Resolve();
+                Invoke(_setFocusProbe, new object[] { probe });
             }
 
             /// <summary>Package the recorded keyboard edges as [{ key, edge, tMs }, …].</summary>

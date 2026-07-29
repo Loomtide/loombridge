@@ -50,6 +50,12 @@ export interface ObserveRecordResult {
   trace: ReplayTrace;
   /** uGUI taps the observer dropped for hitting no interactive element (logged, never silent). */
   droppedNoTarget: number;
+  /**
+   * Taps the observer dropped because the Game view was unfocused when they arrived, so
+   * the editor swallowed them and the game never processed them (logged, never silent).
+   * 0 from a bridge that predates the field.
+   */
+  droppedUnfocused: number;
 }
 
 export interface ObserveRecordOptions {
@@ -123,7 +129,7 @@ export async function recordObservedTrace(
   // Phase 2 / D1-B: auto-detect each scene's signal live (per-scene gates without a declared signal).
   const session = await observeLive(send, startSignal, meta.autoDetectStateSignal === true); // input.observe_start
   await options.waitForStop(); // the human plays, then signals done
-  const { clicks, keyEdges, droppedNoTarget } = await session.stop(); // observe_stop (refuses observed:false)
+  const { clicks, keyEdges, droppedNoTarget, droppedUnfocused } = await session.stop(); // observe_stop (refuses observed:false)
   // Outcomes are read while Play Mode is STILL live — captureOutcomes must run
   // before endLiveSession stops Play (runtime values are gone after the reload).
   const outcomes = await captureOutcomes(send, options.outcomes ?? []);
@@ -133,7 +139,7 @@ export async function recordObservedTrace(
     keyEdges.length > 0
       ? observedEdgesToTrace(clicks, keyEdges, meta, outcomes)
       : observedClicksToTrace(clicks, meta, outcomes);
-  return { trace, droppedNoTarget };
+  return { trace, droppedNoTarget, droppedUnfocused };
 }
 
 /** Connect, record a human demonstration, and return the trace (caller persists it). */

@@ -9,6 +9,7 @@ import { deflateSync } from "node:zlib";
 import {
   applyVisualDiff,
   discoverTraces,
+  observeDropNotices,
   parseStateSignal,
   readEnter,
   replayExitCode,
@@ -30,6 +31,32 @@ test("parseStateSignal: a malformed value (no colons / too few parts / empty par
   for (const bad of ["phase", "/Canvas/GM:phase", ":ChefGameManager:phase", "/Canvas/GM::phase", "/Canvas/GM:Comp:phase:extra"]) {
     assert.equal(parseStateSignal(bad), null, `expected ${JSON.stringify(bad)} to be rejected`);
   }
+});
+
+// --- observe drop notices (the honest "we saw it, we did not record it" lines) ---------------
+
+test("observeDropNotices: reports taps swallowed while the Game view was unfocused", () => {
+  const lines = observeDropNotices({ droppedNoTarget: 0, droppedUnfocused: 2 });
+  assert.equal(lines.length, 1);
+  assert.equal(
+    lines[0],
+    "[loombridge trace] ignored 2 tap(s) while the Game view was unfocused (the game never received them).",
+  );
+});
+
+test("observeDropNotices: an older bridge (no droppedUnfocused) prints only the inert-tap line", () => {
+  // The field is absent from the observe_stop payload, so the CLI must not invent a
+  // focus notice (and must not print "undefined"): the inert line is the only output.
+  const lines = observeDropNotices({ droppedNoTarget: 3 });
+  assert.deepEqual(lines, [
+    "[loombridge trace] ignored 3 inert tap(s) (no interactive target — backdrop/empty space).",
+  ]);
+});
+
+test("observeDropNotices: both counts print both lines; zero counts print nothing", () => {
+  assert.equal(observeDropNotices({ droppedNoTarget: 1, droppedUnfocused: 1 }).length, 2);
+  assert.deepEqual(observeDropNotices({ droppedNoTarget: 0, droppedUnfocused: 0 }), []);
+  assert.deepEqual(observeDropNotices({ droppedNoTarget: 0 }), []);
 });
 
 test("trace record: a malformed --state-signal (no colons) is a usage error (exit 2)", async () => {

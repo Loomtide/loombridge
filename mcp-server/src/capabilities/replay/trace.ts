@@ -110,6 +110,39 @@ export function parseStateSignal(
   return { locator: { path }, component, property };
 }
 
+/**
+ * The honest notice lines for gestures the observer saw but did NOT record. Both counts
+ * are losses the human would otherwise have to guess at:
+ *
+ * - `droppedNoTarget`: the tap hit no interactive element (backdrop / decoration), so the
+ *   game had nothing to run.
+ * - `droppedUnfocused`: the Game view did not have input focus, so the EDITOR swallowed the
+ *   tap and the game never received it. Recording it would mint a phantom step that replay
+ *   (clean reset + focus-independent virtual input) cannot reproduce.
+ *
+ * A zero count prints nothing. A bridge older than the focus backstop reports no
+ * `droppedUnfocused` at all, which reads as 0, so its output is unchanged. Pure;
+ * exported for unit tests.
+ */
+export function observeDropNotices(counts: {
+  droppedNoTarget: number;
+  droppedUnfocused?: number;
+}): string[] {
+  const lines: string[] = [];
+  if (counts.droppedNoTarget > 0) {
+    lines.push(
+      `[loombridge trace] ignored ${counts.droppedNoTarget} inert tap(s) (no interactive target — backdrop/empty space).`,
+    );
+  }
+  const unfocused = counts.droppedUnfocused ?? 0;
+  if (unfocused > 0) {
+    lines.push(
+      `[loombridge trace] ignored ${unfocused} tap(s) while the Game view was unfocused (the game never received them).`,
+    );
+  }
+  return lines;
+}
+
 /** Resolve the replay layout from `--root` + the `--flat` flag. */
 function layoutFor(args: TraceArgs): ReplayLayout {
   return args.flat ? flatReplayLayout(args.root) : standardReplayLayout(args.root);
@@ -197,7 +230,7 @@ async function runRecord(args: TraceArgs): Promise<number> {
   console.error(
     `[loombridge trace] recording "${args.id}": connecting to Unity, then resetting ${args.scene ?? "the current scene"} to a clean Play-Mode start…`,
   );
-  const { trace, droppedNoTarget } = await observeRecordLive(meta, {
+  const { trace, droppedNoTarget, droppedUnfocused } = await observeRecordLive(meta, {
     waitForStop,
     outcomes,
     projectPathCanonical: resolveCliProjectPin({ root: args.root }),
@@ -209,12 +242,10 @@ async function runRecord(args: TraceArgs): Promise<number> {
 
   const steps = trace.segments.length;
   const outcomeCount = trace.assertions?.length ?? 0;
-  if (droppedNoTarget > 0) {
-    // Honest, not silent: inert taps (transparent backdrop / decoration) did nothing
-    // in the game, so they're not recorded — but say so, so the count isn't a mystery.
-    console.error(
-      `[loombridge trace] ignored ${droppedNoTarget} inert tap(s) (no interactive target — backdrop/empty space).`,
-    );
+  // Honest, not silent: gestures the observer saw but did not record (inert target, or a
+  // tap the editor swallowed while the Game view was unfocused) are reported, not a mystery.
+  for (const notice of observeDropNotices({ droppedNoTarget, droppedUnfocused })) {
+    console.error(notice);
   }
   console.error(
     `[loombridge trace] recorded "${args.id}": ${steps} step(s), ${outcomeCount} outcome(s) → ${path.relative(args.root, traceFile)}`,
