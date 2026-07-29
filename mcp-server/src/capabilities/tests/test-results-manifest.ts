@@ -30,6 +30,8 @@ import { createHash } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 
+import { deriveRepoIdentity } from "../../shared/repo-identity.js";
+
 import { LOOMBRIDGE_DIRNAME, TEST_RESULTS_DIRNAME, loombridgePaths } from "../../domain/state.js";
 import type { TestsSummary } from "./nunit-parse.js";
 
@@ -100,6 +102,17 @@ export interface TestResultsManifest {
   schemaVersion: "1";
   /** Absolute project root the run was launched against; re-checked at grade time. */
   projectRoot: string;
+  /**
+   * PORTABLE binding (optional; stamped when the project sits in a git working tree):
+   * the repository identity (origin URL, else a stated basename fallback) plus the
+   * project's path relative to the git toplevel. This is what lets a COMMITTED stamped
+   * trio grade on a CI runner whose checkout path differs from the machine that
+   * produced it, while a trio copied from a DIFFERENT repository still refuses.
+   * Absent on legacy manifests and on non-git projects: those bind by absolute path
+   * only, and re-running `loombridge tests run` re-stamps portably.
+   */
+  repoIdentity?: string;
+  projectPath?: string;
   /** `m_EditorVersion` from `ProjectSettings/ProjectVersion.txt` (what the project ASKS for). */
   projectDeclaredEditorVersion: string;
   /**
@@ -233,6 +246,18 @@ export async function loadTestResultsManifest(
   if (!isStringArray(parsed.command) || parsed.command.length === 0) {
     return { error: `${TEST_RESULTS_MANIFEST} 'command' is not a non-empty array of strings` };
   }
+  // The portable binding pair: optional (legacy and non-git manifests), but when present
+  // each must be a usable string, and they travel together (a repoIdentity with no
+  // projectPath would match any position inside the repo, which is a wider claim than
+  // the stamp ever made).
+  for (const field of ["repoIdentity", "projectPath"] as const) {
+    if (parsed[field] !== undefined && (typeof parsed[field] !== "string" || (parsed[field] as string).length === 0)) {
+      return { error: `${TEST_RESULTS_MANIFEST} '${field}' must be a non-empty string when present` };
+    }
+  }
+  if ((parsed.repoIdentity === undefined) !== (parsed.projectPath === undefined)) {
+    return { error: `${TEST_RESULTS_MANIFEST} 'repoIdentity' and 'projectPath' must be stamped together` };
+  }
   if (parsed.logSha256 !== null && typeof parsed.logSha256 !== "string") {
     return { error: `${TEST_RESULTS_MANIFEST} 'logSha256' must be a string or null` };
   }
@@ -275,6 +300,38 @@ export interface TestResultsIntegrityResult {
  *  - the log is verified ONLY when it still exists. It is large and disposable; its
  *    absence is not tampering, but its presence with the wrong bytes is.
  */
+/**
+ * Does the stamped binding say these results belong to `root`?
+ *
+ * Two ways to match, either sufficient:
+ *  1. ABSOLUTE: same resolved path (the pre-portable rule; always true on the machine
+ *     that produced the stamp).
+ *  2. PORTABLE: the manifest carries repoIdentity + projectPath, the current root
+ *     derives the same pair (same repository, same position inside it), whatever the
+ *     absolute checkout path is. A different repository cannot share an origin URL, and
+ *     a second project inside the same monorepo differs in projectPath.
+ * A manifest with NO portable stamp graded from a different absolute path refuses: the
+ * failure message names the re-stamp command rather than guessing.
+ */
+export function projectBindingMatches(
+  manifest: Pick<TestResultsManifest, "projectRoot" | "repoIdentity" | "projectPath">,
+  root: string,
+): boolean {
+  if (path.resolve(root) === path.resolve(manifest.projectRoot)) return true;
+  // BOTH portable fields must be present: an absent projectPath is a refusal, never a
+  // default (the falsy-field anti-pattern; the validator enforces the pairing on disk,
+  // and this predicate is exported, so the refusal lives here too, not one file away).
+  if (manifest.repoIdentity === undefined || manifest.projectPath === undefined) return false;
+  // A `basename:` identity is a directory-name guess: two unrelated local repos (or two
+  // directories with an empty `.git` marker) trivially share one, so it never matches
+  // portably. Provenance only; the failure message names the re-stamp path.
+  if (manifest.repoIdentity.startsWith("basename:")) return false;
+  const derived = deriveRepoIdentity(root);
+  if (derived === null) return false;
+  if (derived.repoIdentity.startsWith("basename:")) return false;
+  return derived.repoIdentity === manifest.repoIdentity && derived.projectPath === manifest.projectPath;
+}
+
 export async function verifyTestResults(
   dir: string,
   opts: { root?: string } = {},
@@ -297,10 +354,14 @@ export async function verifyTestResults(
     failures.push(`${TEST_RESULTS_FILE} sha256 mismatch: the results were edited after the run that stamped them`);
   }
 
-  if (opts.root !== undefined && path.resolve(opts.root) !== path.resolve(loaded.projectRoot)) {
+  if (opts.root !== undefined && !projectBindingMatches(loaded, opts.root)) {
+    const portable =
+      loaded.repoIdentity !== undefined
+        ? ` (stamped repo ${loaded.repoIdentity} at ${loaded.projectPath ?? "."})`
+        : " (no portable stamp: a manifest from before portable binding, or a non-git project; re-run `loombridge tests run` to re-stamp)";
     failures.push(
       `${TEST_RESULTS_MANIFEST} projectRoot is ${loaded.projectRoot}, but these results were graded against ` +
-        `${path.resolve(opts.root)}`,
+        `${path.resolve(opts.root)}${portable}`,
     );
   }
 

@@ -68,6 +68,13 @@ export interface PlantTestResultsOpts {
   omitManifest?: boolean;
   /** Stamp `projectRoot` as some other checkout, so the ownership binding has something to catch. */
   projectRootOverride?: string;
+  /**
+   * Stamp the PORTABLE binding pair (F4: the producer stamps these when the project sits
+   * in a git tree; door tests plant them to prove the portable rule is LIVE at each
+   * door, not just in the predicate's own unit tests).
+   */
+  repoIdentity?: string;
+  projectPath?: string;
 }
 
 /** Plant `.loombridge/tests/` for `root` exactly as `tests run` would. Returns that dir. */
@@ -91,6 +98,7 @@ export async function plantTestResults(root: string, opts: PlantTestResultsOpts 
       kind: "test-results",
       schemaVersion: "1",
       projectRoot: opts.projectRootOverride ?? path.resolve(root),
+      ...(opts.repoIdentity !== undefined ? { repoIdentity: opts.repoIdentity, projectPath: opts.projectPath ?? "." } : {}),
       projectDeclaredEditorVersion: "6000.3.20f1",
       logReportedEditorVersion: "6000.3.20f1",
       resolvedEditorPath: "/Applications/Unity/Hub/Editor/6000.3.20f1/Unity.app/Contents/MacOS/Unity",

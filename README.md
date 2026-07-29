@@ -120,6 +120,7 @@ loombridge doctor --project /path/to/UnityProject --live
 with `loombridge install-agent --project <p>`.
 
 Full setup, transport notes, and the fresh-machine bootstrap: [`Docs/Install.md`](Docs/Install.md).
+Unity Personal and license-less CI: [`Docs/Licensing-and-CI.md`](Docs/Licensing-and-CI.md).
 Once `doctor` prints `healthy`, head back to [your door](#two-doors-in).
 
 <details>

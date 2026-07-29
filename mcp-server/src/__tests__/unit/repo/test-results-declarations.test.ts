@@ -26,6 +26,11 @@ import test from "node:test";
 
 import { PKG_ROOT, REPO_ROOT } from "../../_support/paths.js";
 import { LOOMBRIDGE_DIRNAME, TEST_RESULTS_DIRNAME } from "../../../domain/state.js";
+import {
+  TEST_RESULTS_FILE,
+  TEST_RESULTS_MANIFEST,
+  TEST_RUN_LOG_FILE,
+} from "../../../capabilities/tests/test-results-manifest.js";
 
 const TEMPLATE_GITIGNORE = path.join(REPO_ROOT, "templates", "create-loombridge-game", ".gitignore");
 const EDITMODE_WORKFLOW = path.join(REPO_ROOT, ".github", "workflows", "unity-editmode.yml");
@@ -293,4 +298,27 @@ test("FXP: the CI invocation target is derived from the package's own bin, and i
     readFileSync(EDITMODE_WORKFLOW, "utf-8").includes(`node ${target}`),
     "the workflow must call the derived target",
   );
+});
+
+test("Docs/Licensing-and-CI.md: the machine-checkable claims hold", () => {
+  // The doc makes assertions a rename or workflow edit would silently falsify: the
+  // committed slot's name, the grade command it tells CI to run, and the license-gated
+  // workflow it describes. Walk them against the constants and the workflow text, the
+  // same discipline as the declared-path guard (a doc naming a file nothing writes is
+  // this repo's signature failure shape, in prose form).
+  const doc = readFileSync(path.join(REPO_ROOT, "Docs", "Licensing-and-CI.md"), "utf-8");
+  assert.ok(
+    doc.includes(`.loombridge/${TEST_RESULTS_DIRNAME}/`),
+    "the doc names the committed slot by the constant-derived spelling",
+  );
+  for (const file of [TEST_RESULTS_FILE, TEST_RESULTS_MANIFEST, TEST_RUN_LOG_FILE]) {
+    assert.ok(doc.includes(file), `the doc names ${file}`);
+  }
+  assert.ok(
+    doc.includes(`loombridge tests grade --results .loombridge/${TEST_RESULTS_DIRNAME}/${TEST_RESULTS_FILE}`),
+    "the CI snippet is the real command against the real path",
+  );
+  const workflow = readFileSync(path.join(REPO_ROOT, ".github", "workflows", "unity-editmode.yml"), "utf-8");
+  assert.ok(workflow.includes("tests grade --results"), "the tier-3 workflow really runs the grade step the doc describes");
+  assert.ok(workflow.includes("UNITY_LICENSE"), "…and really is license-gated as the doc claims");
 });

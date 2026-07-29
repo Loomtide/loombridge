@@ -117,7 +117,9 @@ loombridge tests run --root .        # PRODUCER: launches Unity headless, stamps
 loombridge verify --root .           # CONSUMER: grades the stored bytes offline
 ```
 
-`tests run` writes three files into a **committed** directory:
+`tests run` writes three files into a **committed** directory (this is what lets a CI
+runner with NO Unity license grade the run offline; the full licensing story, including
+the Unity Personal CI activation path, is [`Docs/Licensing-and-CI.md`](../../Docs/Licensing-and-CI.md)):
 `.loombridge/tests/test-results.xml` (the NUnit3 document Unity produced),
 `.loombridge/tests/test-results-manifest.json` (the binding manifest), and
 `.loombridge/tests/test-run.log`. Commit them: they are the evidence a reviewer or a CI job
