@@ -26,6 +26,7 @@ import { run as runVerifyCli, runVerify } from "../../../../capabilities/verific
 import { runUnifiedVerify } from "../../../../capabilities/verification/unified/orchestrator.js";
 import {
   UNIFIED_SCREENS_REPORT,
+  resolveUnifiedOutcome,
   unifiedVerifyReportPath,
   type UnifiedVerifyReport,
 } from "../../../../capabilities/verification/unified/report.js";
@@ -451,7 +452,11 @@ test("a graded contract passes through the orchestrator EXACTLY as a legacy runV
   const workspace = await tmpDir("unified-cli-ws-");
   try {
     const orch = await captured(() => runVerifyCli(["--root", viaOrchestrator, "--workspace", workspace]));
-    assert.equal(orch.result, 0, `expected a pass:\n${orch.lines.join("\n")}`);
+    // DELIBERATE FLIP (FXH). The fixture's only asset is a contract with NO approved design
+    // target, so the run compares nothing a human froze and exits 2. This test is about
+    // PARITY of the verdict bytes and the STATE transition (asserted below), not about the
+    // door's own exit; the engine's exit is asserted separately, and it is still 0.
+    assert.equal(orch.result, 2, `expected the zero-anchored refusal:\n${orch.lines.join("\n")}`);
 
     const legacyPaths = loombridgePaths(viaEngine);
     const legacy = await captured(() =>
@@ -482,8 +487,18 @@ test("a graded contract passes through the orchestrator EXACTLY as a legacy runV
     assert.equal(orchState?.phase, "verified-warn");
 
     const report = await readUnified(viaOrchestrator);
-    assert.equal(report.status, "pass", "one asset, executed, green");
-    assert.equal(report.exit, 0);
+    // DELIBERATE FLIP (G1, then FXH). This asserted `pass` before the unanchored-pass rule
+    // landed. The fixture is a planned project with NO approved design target, so its contract
+    // section is green and UNANCHORED, a real deterministic result measured against nothing a
+    // human ever froze. G1 made the word `partial`; FXH then made the EXIT 2, because a run
+    // with ZERO anchored executed sections compared nothing human-approved and a self-produced
+    // green cannot exit 0. The parity this test is really about (the verdict bytes and the
+    // STATE transition are byte-identical to a legacy `runVerify`) is asserted above and is
+    // untouched: the ENGINE still exits 0, only the DOOR's roll-up changed.
+    assert.equal(report.status, "partial", "one asset, executed, green, but anchored to nothing (G1)");
+    assert.equal(report.exit, 2, "FXH: nothing human-approved was compared, so the run cannot exit 0");
+    assert.deepEqual(report.anchoredSections, []);
+    assert.deepEqual(report.unanchoredSections, ["contract"]);
     assert.equal(report.sections.contract?.status, "warn", "the section carries the ENGINE's own word");
     assert.deepEqual(report.notRun, []);
 
@@ -594,24 +609,43 @@ test("an approved trace alone is NOTHING-CHECKED offline, and the hint names `ve
   }
 });
 
-test("PARTIAL: a green contract plus a live-only trace exits 0 and NAMES the unmeasured anchor", async () => {
+test("PARTIAL: a live-only skip still NAMES the unmeasured anchor, and needs an anchored green to exit 0", async () => {
+  // DELIBERATE FLIP (FXH). The `--live` allowance is unchanged: the operator's own omission is
+  // still the one non-execution that may keep the exit at 0. What changed is that it can only
+  // do so for a run that measured SOMETHING a human approved. This fixture's single executed
+  // section is an unanchored contract, so the run now exits 2, and the second half of this
+  // test plants an anchored green section to prove the `--live` allowance itself still works.
   const root = await plannedProject("unified-cli-partial-", { graded: true });
   const workspace = await tmpDir("unified-cli-ws-");
   try {
     await plantApprovedTrace(root, "happy-path");
 
     const { result, lines } = await captured(() => runVerifyCli(["--root", root, "--workspace", workspace]));
-    assert.equal(result, 0, "the operator's own --live omission is the ONE non-execution that may still exit 0");
+    assert.equal(result, 2, "zero anchored executed sections: the --live allowance has nothing to attach to");
     const text = lines.join("\n");
     assert.match(text, /NOT MEASURED \(never folded into pass\): trace 'happy-path'/);
     assert.match(text, /PARTIAL/);
+    assert.match(text, /REFUSED: nothing human-approved was compared/);
 
     const report = await readUnified(root);
     assert.equal(report.status, "partial");
-    assert.equal(report.exit, 0);
+    assert.equal(report.exit, 2);
     assert.equal(report.notRun.length, 1);
     assert.equal(report.notRun[0]!.why, "live-only-skipped");
-    assert.equal(report.sections.contract?.exit, 0);
+    assert.equal(report.sections.contract?.exit, 0, "the contract really did pass; it just anchors nothing");
+
+    // THE ALLOWANCE ITSELF, unchanged: with one ANCHORED green executed section, the same
+    // live-only skip keeps the run at exit 0 and still names the anchor it did not measure.
+    assert.deepEqual(
+      resolveUnifiedOutcome({
+        executed: [
+          { section: "screens", exit: 0, anchored: true },
+          { section: "contract", exit: 0, anchored: false },
+        ],
+        notRun: [{ kind: "trace", id: "happy-path", reason: "needs --live", why: "live-only-skipped" }],
+      }),
+      { status: "partial", exit: 0 },
+    );
   } finally {
     await fs.rm(root, { recursive: true, force: true });
     await fs.rm(workspace, { recursive: true, force: true });
@@ -1012,10 +1046,15 @@ test("--report is refused when it would overwrite a project artifact, before any
     assert.equal(await fileExists(paths.verdict), false, "no section executed");
 
     // …and a fresh path under the project is accepted, so the guard is not a blanket no.
+    // FXH: this fixture's only asset is an UNANCHORED contract, so the run's own exit is 2
+    // (nothing human-approved was compared). What this test is about is that the run was
+    // ALLOWED to proceed and wrote its report where it was told, which the two assertions
+    // below check directly rather than through the exit code.
     const ok = await captured(() =>
       runVerifyCli(["--root", root, "--workspace", workspace, "--report", "reports/mine.json"]),
     );
-    assert.equal(ok.result, 0, ok.lines.join("\n"));
+    assert.equal(ok.result, 2, ok.lines.join("\n"));
+    assert.ok(ok.lines.join("\n").includes("plan for "), "the run proceeded: this is not a --report refusal");
     const written = JSON.parse(await fs.readFile(path.join(root, "reports", "mine.json"), "utf-8")) as UnifiedVerifyReport;
     assert.equal(written.kind, "unified-verify");
 
@@ -1023,7 +1062,8 @@ test("--report is refused when it would overwrite a project artifact, before any
     const again = await captured(() =>
       runVerifyCli(["--root", root, "--workspace", workspace, "--report", "reports/mine.json"]),
     );
-    assert.equal(again.result, 0, again.lines.join("\n"));
+    assert.equal(again.result, 2, again.lines.join("\n"));
+    assert.ok(!again.lines.join("\n").includes("REFUSED: --report"), "its own previous report is a legal target");
 
     // S1 final-test LOW-1: a path that ESCAPES the root is refused outright, even a fresh
     // one. The docs promise --report resolves relative to --root; a verify run must never
@@ -1051,7 +1091,9 @@ test("--report resolves relative to --root, not the process cwd", async () => {
     const { result } = await captured(() =>
       runVerifyCli(["--report", "reports/rel.json", "--root", root, "--workspace", workspace]),
     );
-    assert.equal(result, 0);
+    // FXH: the fixture's only asset is an unanchored contract, so the run exits 2. This test
+    // is about WHERE the report landed, which the assertions below pin directly.
+    assert.equal(result, 2);
     assert.ok(await fileExists(path.join(root, "reports", "rel.json")), "the report lands under --root");
     assert.equal(
       await fileExists(path.join(process.cwd(), "reports", "rel.json")),

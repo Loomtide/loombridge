@@ -16,6 +16,22 @@ import path from "node:path";
 export const LOOMBRIDGE_DIRNAME = ".loombridge";
 
 /**
+ * The `.loombridge/` subdirectory holding the stamped Unity test-results pair (the NUnit3
+ * XML, its binding manifest, and the run log).
+ *
+ * It lives HERE, in domain, rather than in the capability that writes it, because the
+ * layering is one-directional (`capabilities -> domain`): `LoombridgePaths` cannot import
+ * `capabilities/tests/`, and a second spelling of the directory name in each layer is
+ * exactly the "declared path nothing walks" failure this repo keeps paying for. The
+ * capability imports this constant; the filenames under it stay with the capability that
+ * owns their format.
+ *
+ * Unlike `reports/`, this slot is meant to be COMMITTED: the stamped pair is evidence a
+ * reviewer can read without re-running a multi-minute editor.
+ */
+export const TEST_RESULTS_DIRNAME = "tests";
+
+/**
  * The PLACEHOLDER genre in a STATE bootstrapped before any `plan` ran — `loombridge target set`
  * can create STATE first, and at that point no genre has been chosen.
  *
@@ -115,6 +131,11 @@ export interface LoombridgePaths {
   design: string;
   /** `.loombridge/reports/` */
   reports: string;
+  /**
+   * `.loombridge/tests/`: the stamped Unity test-results slot (`loombridge tests run`
+   * writes it; the unified `verify` door grades it OFFLINE). COMMITTED, unlike `reports/`.
+   */
+  tests: string;
   /** `.loombridge/traces/` */
   traces: string;
   /** `.loombridge/replays/` — Replay Verification root (traces + reports + captures). */
@@ -145,6 +166,7 @@ export function loombridgePaths(root: string): LoombridgePaths {
     genrePromotion: path.join(dir, "GENRE_PROMOTION.json"),
     design: path.join(dir, "design"),
     reports: path.join(dir, "reports"),
+    tests: path.join(dir, TEST_RESULTS_DIRNAME),
     traces: path.join(dir, "traces"),
     replays: path.join(dir, "replays"),
     replayTraces: path.join(dir, "replays", "traces"),

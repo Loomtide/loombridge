@@ -24,7 +24,7 @@ export const ROUTING_DOC_RELPATH = "LOOMBRIDGE.md";
  * changes so that `install-bridge` re-runs update an out-of-date file in place and
  * `doctor` can flag a stale one.
  */
-export const ROUTING_DOC_VERSION = 2;
+export const ROUTING_DOC_VERSION = 3;
 
 /**
  * The single copy-paste line a user can add to their CLAUDE.md / AGENTS.md. We never
@@ -90,6 +90,7 @@ surface instead of hand-rolling raw editor pokes.
 |---|---|---|
 | Checking mobile perf / about to ship | the \`loombridge_mobile_audit\` MCP tool (or \`loombridge mobile-audit\` CLI) — advisory tri / texture / audio / shadow audit over the \`unity_editor_audit_mobile_assets\` bridge op | eyeballing editor CPU/GPU ms — editor perf ≠ device perf |
 | Deciding whether the game is *done* | the \`loombridge_verify\` then \`loombridge_doneness\` MCP tools (or \`loombridge verify\` / \`loombridge doneness\` CLI) against the \`.loombridge/\` contract — deterministic, contract-first | declaring "looks good" off a screenshot |
+| Running this project's Unity EditMode tests | \`loombridge tests run\`, which resolves the editor, runs batchmode headless, and STAMPS the results into \`.loombridge/tests/\` so \`loombridge verify\` grades them offline | running the editor's Test Runner by hand and reporting the result yourself |
 | A compile / domain-reload seems stuck or broken | \`unity_editor_get_project_diagnostics\` — compile errors across ALL assemblies (incl. test asmdefs), not just the last recompile | assuming the socket died |
 | Running an op that recompiles (package add/remove, script edit) | chain \`unity_editor_wait_for\` with \`{ compiling: false }\` before the next op | a fixed \`sleep\` |
 | Kicking off a long player / platform build | \`unity_editor_execute_menu_item\` with a raised \`timeoutMs\` — a real build far outlasts the default | letting the default timeout abort it |
@@ -113,6 +114,7 @@ surface instead of hand-rolling raw editor pokes.
 
 - \`loombridge status\` — what state the project is in, without mutating anything.
 - \`loombridge plan\` → \`loombridge build\` → \`loombridge verify\` → \`loombridge doneness\` — the pipeline.
+- \`loombridge tests run\` is the PRODUCER for the Unity EditMode gate. It stamps \`.loombridge/tests/\`; \`loombridge verify\` is the consumer and grades those bytes offline, so no verify run ever launches an editor to check tests.
 - \`loombridge doctor\` — health-check the bridge install; it prints the exact command to fix each row.
 - Full tool catalog: the \`unity_ops_list\` / \`unity_ops_describe\` MCP tools.${agentSurfaceLine}
 `;

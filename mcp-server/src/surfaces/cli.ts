@@ -76,6 +76,10 @@ function printUsage(): void {
       "               kinematic drift against it (a lockfile for game feel).",
       "  target     Manage the Design Target hero shot (status/set/approve); used by `plan`",
       "               (was `design`; the old name still works and warns).",
+      "  tests      Run the project's Unity EditMode tests headless and STAMP the results:",
+      "               `tests run` resolves the editor, runs batchmode, and writes",
+      "               .loombridge/tests/ (results + binding manifest + log) for `verify` to",
+      "               grade OFFLINE. `tests grade --results <xml>` is diagnostic only.",
       "  doneness   The strict certificate: exit 0 only on a fresh, run-bound, green verdict",
       "               whose cited evidence exists on disk. A self-graded done is refused.",
       "",
@@ -174,6 +178,13 @@ export async function loombridgeCli(argv: string[]): Promise<number> {
     }
     case "capture": {
       const { run } = await import("../capabilities/verification/capture.js");
+      return run(rest);
+    }
+    case "tests": {
+      // The Test Runner gate's PRODUCER. `tests run` is the only verb that launches a Unity
+      // editor to get test results; `verify` grades the stamped pair offline so a bare
+      // verify never takes the license seat or fights a domain reload.
+      const { run } = await import("../capabilities/tests/tests.js");
       return run(rest);
     }
     case "doneness": {

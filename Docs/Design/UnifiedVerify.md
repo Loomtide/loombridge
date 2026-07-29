@@ -65,12 +65,14 @@ plus the recipe to re-measure the live game against it:
 | feel snapshot | approved kinematics + capture contract | live capture + drift | `feel/` |
 | screen contract | declared screens/objects/flow + approved layout baseline | capture pack + gates | `minigame/` |
 | acceptance contract | contract + design target | Tier-1 gate suite | `verification/` |
+| test results | a stamped Unity EditMode run (bound, never approved) | nothing: graded OFFLINE from the stored bytes | `tests/` |
 
 This table is a CLOSED inventory: discovery walks exactly these kinds, and adding a kind is
-an RFC-level change, never a quiet case in a switch. One addition is reserved now: **test
-results** (Unity Test Runner EditMode/PlayMode output, bound to the run that produced it)
-lands as the FIRST new asset kind, which is how the roadmap's Test Runner gate arrives as a
-provider in this report instead of a sixth standalone mode. Deliberately NOT assets:
+an RFC-level change, never a quiet case in a switch. The reserved addition has now LANDED:
+**test results** is the FIRST new asset kind, which is how the roadmap's Test Runner gate
+arrives as a provider in this report instead of a sixth standalone mode. It is the one row
+whose anchor column reads differently on purpose, and the delivery notes below say why.
+Deliberately NOT assets:
 `sfx/` (its probe contract and latency checks are gate inputs inside other assets, not an
 anchor a human approves) and `scenario/` (a step runner, machinery rather than a frozen
 anchor); if either ever grows a human-approved baseline, it enters through this table.
@@ -224,6 +226,77 @@ Documented limitations of the S1 shape, recorded rather than papered over:
 Not in S1, and unchanged as roadmap items: `--only` selectors, mode-flag deprecation notices,
 and routing the `loombridge_verify` MCP tool through the orchestrator (all S2).
 
+### Test-results delivery notes (the fifth asset kind)
+
+- **Producer / consumer split. `verify` never spawns Unity.** `loombridge tests run` is the
+  PRODUCER: it resolves the editor the project declares, spawns batchmode
+  (`-runTests -testPlatform EditMode`), and stamps a binding manifest beside the NUnit3 XML.
+  The unified door is the CONSUMER and grades those stored bytes offline. Bare `verify`
+  therefore never launches a multi-minute editor, never takes the license seat, and never
+  fights a domain reload. Running tests over the bridge is an explicit non-goal for this
+  wave.
+- **The slot is COMMITTED.** The stamped run lives at `.loombridge/tests/test-results.xml`,
+  `.loombridge/tests/test-results-manifest.json`, and `.loombridge/tests/test-run.log`, and
+  unlike `.loombridge/reports/` it is meant to be checked in: the stamped pair is evidence a
+  reviewer can read without re-running an editor. The project template's `.gitignore` is
+  guarded against ignoring it.
+- **What the binding proves, exactly.** The provenance of THESE BYTES: produced by this tool,
+  at this time, against this root, from this editor, under this command line. `runId` scopes
+  them to a build when one was in flight, and when a build IS in flight the manifest must
+  carry that build's id: a different id, or no id at all, is broken (tier 2), because an
+  absent scope is a comparison that cannot be made rather than one that passed. With no build
+  in flight either is accepted, and the section reports the `runId` it read (`null` included)
+  so a reader can tell scoped evidence from unscoped. Staleness relative to source edits remains UNPROVEN:
+  nothing here notices that a `.cs` file changed after the run. That is the same limitation
+  already recorded for `runId` on this report, and it is documented rather than papered over.
+- **PERMANENTLY unanchored, and that costs the run its `pass`.** No human approves a test
+  suite, so the section reports `anchored: false` forever and `approvedAt`/`approvedBy` are
+  never set. Which forced the general rule below.
+- **`pass` now requires every executed section to be anchored.** An all-green run with any
+  unanchored executed section is `partial`, and the summary names the unanchored sections.
+  This is GENERAL, not a special case for tests: a contract graded without an approved design
+  target also stops reading `pass`. A green deterministic result measured against nothing a
+  human ever froze was the last place "agents grade their own homework" could still print as
+  a full pass.
+- **Exit 0 requires AT LEAST ONE anchored executed section.** Narrowing only the status word
+  left the exit, which is the part an agent actually reads, unchanged: a project whose single
+  asset was self-produced could still exit 0 having compared nothing frozen. So an all-green
+  run with ZERO anchored sections is `partial` at exit **2**, with the summary line *nothing
+  human-approved was compared; a self-produced green cannot exit 0*. It is the harness tier
+  because "there was nothing here that could certify anything" is a statement about the
+  evidence, not a defect in the game. A MIXED run is unaffected: one anchored green section
+  still exits 0, with the unanchored extras named. The moat ceiling for a forged stamped test
+  pair is therefore exit 2, not exit 0.
+- **Presence is DECLARED, so deleting the evidence cannot silence the gate.** With no stamped
+  pair but a project that declares tests (`Packages/manifest.json` `testables` non-empty, or
+  an `Assets/**/*.asmdef` referencing the Test Runner by NAME or by Unity's well-known GUID),
+  discovery emits a non-anchor
+  row. A manifest with no XML is broken, not absent. Neither file and no declaration is no
+  row at all: tests are opt-in.
+- **The grader re-derives everything it is handed.** The XML must still hash to the stamped
+  `resultsSha256` at grade time; the summary is re-derived from the test-case walk with the
+  same function the producer stamped with, and a disagreement is tier 2; the manifest's
+  assembly set must match the XML's; `compileErrors > 0`, `mutatedProject`, and an exit code
+  the walk cannot account for each refuse. Failure detection is the UNION of the test-case
+  walk and the suite/run roll-ups, and any disagreement between them is itself a refusal.
+- **The exit-code rule is "unexplained by the walk", not "non-zero".** Unity exits 2 on
+  genuine test failures. A blanket non-zero rule would reclassify every real red as a harness
+  fault, which would mean this gate could never report an assertion defect at all. Exit 2
+  with real walked failures is an honest tier 1; an unexplained 1/3/134, or a 2 from a file
+  containing no failing case, is tier 2.
+- **`tests grade` is DIAGNOSTIC and non-quotable.** It prints `DIAGNOSTIC: not a verification
+  verdict` on every path and exits 0 only for a stamped, verifying pair that sits at the
+  project its own manifest names (every sha survives a copy, so location is the last thing
+  left to check: a moved pair exits 2 with *results are not at the project they claim*), or
+  under `GITHUB_ACTIONS=true` (that exact value), where the trust root is the runner rather
+  than the operator's shell. That attestation is env-CLAIMED, not verified provenance, and
+  the output says so. CI runs the verb over the GameCI artifacts so the CLI's mapping and
+  CI's verdict cannot diverge, keeping the WORST tier across the graded files.
+- **The on-ramp is deliberately UNCHANGED.** It stays the trace record/replay/approve
+  sequence. It is the one place that names a human actor (the play session IS the approval
+  moment), and offering a self-serve, unanchored asset there would convert a human-anchor
+  on-ramp into a self-serve one.
+
 ## Out of scope
 
 - Changing any gate's semantics, tolerance, or exit tiering.
@@ -250,5 +323,6 @@ and routing the `loombridge_verify` MCP tool through the orchestrator (all S2).
    "verify looks useless" concern is already answered by the on-ramp text. The cost of the
    opt-in is honesty about coverage, and S1 pays it explicitly: a run whose only unmeasured
    assets were live-only reports `partial`, names every unmeasured anchor, and is the ONE
-   non-execution reason still allowed to exit 0 (it is an operator's deliberate choice). Every
-   other unmeasured anchor keeps the exit at its tier.
+   non-execution reason still allowed to exit 0 (it is an operator's deliberate choice), given
+   that the run compared at least one anchored green section. Every other unmeasured anchor
+   keeps the exit at its tier.

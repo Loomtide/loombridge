@@ -1,0 +1,143 @@
+<?xml version="1.0" encoding="utf-8" standalone="no"?>
+<!--
+  A REAL Unity EditMode NUnit3 result document, TRIMMED.
+
+  PROVENANCE: produced by `loombridge tests run --root unity-dev-project` on
+  2026-07-28 with Unity 6000.3.20f1 (509 cases, 501 passed, 6 failed, 2 skipped).
+  Every element, attribute, name and message below is verbatim from that run; only the
+  SELECTION is ours, and every roll-up count has been recomputed for the trimmed subset
+  so the document is internally consistent and the union rule (G3) has something true to
+  agree with. Nothing here is authored. Two absolute paths were shortened to /x/ so the
+  fixture does not carry one machine's home directory.
+
+  This replaces the authored fixture the TODO-SWAP comment asked to retire. The swap moved
+  four things, and each one is a shape the authored file got wrong:
+
+    1. The root suite is the PROJECT NAME ("loombridge-dev"), not "EditMode".
+    2. `<test-run result>` is "Failed(Child)", not "Failed".
+    3. An assembly suite carries its own `<failure><message>` roll-up
+       ("One or more child tests had errors") alongside a perfectly ordinary case walk.
+    4. THE ONE THAT MATTERS. When a fixture contains an `[Ignore]`d case, NUnit marks the
+       PARENT TestFixture `result="Skipped" label="Ignored"` with the reason "One or more
+       child tests were ignored", while leaving `runstate="Runnable"` and counting the
+       cases that really ran. AssetHandlerTests below is exactly that: 2 cases here (1
+       passed, 1 ignored), and in the full run 53 cases of which 51 passed. The fixture did
+       NOT opt out of anything. The authored file never modelled this, because it put the
+       ignored case under a fixture whose own result was "Failed", so the roll-up never
+       appeared and nothing in the suite ever saw it.
+
+  WHAT REAL OUTPUT DOES NOT CARRY. The authored fixture claimed two parser hazards that
+  Unity's Test Runner never actually emits: an attribute value containing a literal '>',
+  and entity-encoded (&amp;gt; &amp;amp; &amp;lt;) message text. The real 509-case document contains
+  ZERO of either; it uses CDATA exclusively (124 sections). Those hazards are still real
+  hazards for a hand-rolled scanner, so their coverage did not move into this file, where
+  it would be a lie about Unity: it moved into synthetic documents built inline in
+  nunit-parse.test.ts, which is honest about being synthetic.
+
+  Real awkwardness this file DOES carry, all of it verbatim:
+    - CDATA failure text with embedded newlines, quotes and a '-----------^' caret rule;
+    - a `<stack-trace>` CDATA holding a path with a ':line' suffix;
+    - an `<output>` CDATA sibling of `<failure>`, whose text must NOT be read as a verdict
+      message;
+    - `<reason><message>` on the ignored case AND on its parent fixture;
+    - two assembly suites, so the manifest's assembly binding has something to bind.
+
+  TRIMMED SUBSET ROLL-UP: 5 cases, 3 passed, 1 failed, 0 inconclusive, 1 skipped.
+-->
+<test-run id="2" testcasecount="5" result="Failed(Child)" total="5" passed="3" failed="1" inconclusive="0" skipped="1" asserts="0" engine-version="3.5.0.0" clr-version="4.0.30319.42000" start-time="2026-07-28 16:58:15Z" end-time="2026-07-28 16:58:22Z" duration="7.5491294">
+  <test-suite type="TestSuite" id="1000" name="loombridge-dev" fullname="loombridge-dev" runstate="Runnable" testcasecount="5" result="Failed" site="Child" start-time="2026-07-28 16:58:15Z" end-time="2026-07-28 16:58:22Z" duration="7.549129" total="5" passed="3" failed="1" inconclusive="0" skipped="1" asserts="0">
+    <test-suite type="Assembly" id="1541" name="com.loomtide.loombridge.tests.dll" fullname="/x/unity-dev-project/Library/ScriptAssemblies/com.loomtide.loombridge.tests.dll" runstate="Runnable" testcasecount="4" result="Failed" site="Child" start-time="2026-07-28 16:58:15Z" end-time="2026-07-28 16:58:22Z" duration="7.526083" total="4" passed="2" failed="1" inconclusive="0" skipped="1" asserts="0">
+      <properties>
+        <property name="_PID" value="92303" />
+        <property name="_APPDOMAIN" value="Unity Child Domain" />
+        <property name="platform" value="EditMode" />
+        <property name="EditorOnly" value="True" />
+      </properties>
+      <failure>
+        <message><![CDATA[One or more child tests had errors]]></message>
+      </failure>
+      <test-suite type="TestSuite" id="1542" name="UnityBridge" fullname="UnityBridge" runstate="Runnable" testcasecount="4" result="Failed" site="Child" start-time="2026-07-28 16:58:15Z" end-time="2026-07-28 16:58:22Z" duration="7.525945" total="4" passed="2" failed="1" inconclusive="0" skipped="1" asserts="0">
+        <properties />
+        <test-suite type="TestSuite" id="1543" name="Tests" fullname="UnityBridge.Tests" runstate="Runnable" testcasecount="4" result="Failed" site="Child" start-time="2026-07-28 16:58:15Z" end-time="2026-07-28 16:58:22Z" duration="7.525721" total="4" passed="2" failed="1" inconclusive="0" skipped="1" asserts="0">
+          <properties />
+          <test-suite type="TestFixture" id="1055" name="AssetHandlerTests" fullname="UnityBridge.Tests.AssetHandlerTests" classname="UnityBridge.Tests.AssetHandlerTests" runstate="Runnable" testcasecount="2" result="Skipped" label="Ignored" start-time="2026-07-28 16:58:15Z" end-time="2026-07-28 16:58:16Z" duration="1.051624" total="2" passed="1" failed="0" inconclusive="0" skipped="1" asserts="0">
+            <properties />
+            <reason>
+              <message><![CDATA[One or more child tests were ignored]]></message>
+            </reason>
+            <test-case id="1070" name="AssignSprite_MultipleUnslicedTexture_DiagnosesImportMode" fullname="UnityBridge.Tests.AssetHandlerTests.AssignSprite_MultipleUnslicedTexture_DiagnosesImportMode" methodname="AssignSprite_MultipleUnslicedTexture_DiagnosesImportMode" classname="UnityBridge.Tests.AssetHandlerTests" runstate="Runnable" seed="204103003" result="Passed" start-time="2026-07-28 16:58:15Z" end-time="2026-07-28 16:58:15Z" duration="0.057246" asserts="0">
+              <properties>
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1085" name="CreateMaterial_DecalFlags_DisableSpecularAndEnvironmentReflections" fullname="UnityBridge.Tests.AssetHandlerTests.CreateMaterial_DecalFlags_DisableSpecularAndEnvironmentReflections" methodname="CreateMaterial_DecalFlags_DisableSpecularAndEnvironmentReflections" classname="UnityBridge.Tests.AssetHandlerTests" runstate="Runnable" seed="919782073" result="Skipped" label="Ignored" start-time="2026-07-28 16:58:16Z" end-time="2026-07-28 16:58:16Z" duration="0.001791" asserts="0">
+              <properties>
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+              <reason>
+                <message><![CDATA[URP (Universal Render Pipeline/Lit) is not installed in this project; skipping URP decal-flag assertions.]]></message>
+              </reason>
+            </test-case>
+          </test-suite>
+          <test-suite type="TestFixture" id="1128" name="ComponentHandlerTests" fullname="UnityBridge.Tests.ComponentHandlerTests" classname="UnityBridge.Tests.ComponentHandlerTests" runstate="Runnable" testcasecount="2" result="Failed" site="Child" start-time="2026-07-28 16:58:16Z" end-time="2026-07-28 16:58:17Z" duration="0.940738" total="2" passed="1" failed="1" inconclusive="0" skipped="0" asserts="0">
+            <properties />
+            <test-case id="1129" name="Add_Rigidbody2D_ComponentExists" fullname="UnityBridge.Tests.ComponentHandlerTests.Add_Rigidbody2D_ComponentExists" methodname="Add_Rigidbody2D_ComponentExists" classname="UnityBridge.Tests.ComponentHandlerTests" runstate="Runnable" seed="1502329226" result="Passed" start-time="2026-07-28 16:58:16Z" end-time="2026-07-28 16:58:16Z" duration="0.002357" asserts="0">
+              <properties>
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+              <output><![CDATA[[ShowWork] +Rigidbody2D on /ComponentHandlerTestObject
+]]></output>
+            </test-case>
+            <test-case id="1133" name="SetProperty_ObjectReference_AssetPathStringAssignsAsset" fullname="UnityBridge.Tests.ComponentHandlerTests.SetProperty_ObjectReference_AssetPathStringAssignsAsset" methodname="SetProperty_ObjectReference_AssetPathStringAssignsAsset" classname="UnityBridge.Tests.ComponentHandlerTests" runstate="Runnable" seed="441093330" result="Failed" start-time="2026-07-28 16:58:17Z" end-time="2026-07-28 16:58:17Z" duration="0.115582" asserts="0">
+              <properties>
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+              <failure>
+                <message><![CDATA[  Expected string length 10 but was 54. Strings differ at index 0.
+  Expected: "DummyAsset"
+  But was:  "ComponentHandlerTests-67e4daf6c0164893a57491c192bc99d9"
+  -----------^
+]]></message>
+                <stack-trace><![CDATA[at UnityBridge.Tests.ComponentHandlerTests.SetProperty_ObjectReference_AssetPathStringAssignsAsset () [0x00089] in /x/packages/com.loomtide.loombridge/Tests/Editor/ComponentHandlerTests.cs:203
+]]></stack-trace>
+              </failure>
+              <output><![CDATA[No script asset for DummyObjectAsset. Check that the definition is in a file of the same name and that it compiles properly.
+[ShowWork] /ComponentHandlerTestObject ObjectReferenceTestComponent.assetRef = "Assets/Temp/ComponentHandlerTests-67e4daf6c0164893a57491c192bc99d9.asset"
+]]></output>
+            </test-case>
+          </test-suite>
+        </test-suite>
+      </test-suite>
+    </test-suite>
+    <test-suite type="Assembly" id="1546" name="com.loomtide.loombridge.tests.inputspike.dll" fullname="/x/unity-dev-project/Library/ScriptAssemblies/com.loomtide.loombridge.tests.inputspike.dll" runstate="Runnable" testcasecount="1" result="Passed" start-time="2026-07-28 16:58:22Z" end-time="2026-07-28 16:58:22Z" duration="0.018996" total="1" passed="1" failed="0" inconclusive="0" skipped="0" asserts="0">
+      <properties>
+        <property name="_PID" value="92303" />
+        <property name="_APPDOMAIN" value="Unity Child Domain" />
+        <property name="platform" value="EditMode" />
+        <property name="EditorOnly" value="True" />
+      </properties>
+      <test-suite type="TestSuite" id="1547" name="UnityBridge" fullname="UnityBridge" runstate="Runnable" testcasecount="1" result="Passed" start-time="2026-07-28 16:58:22Z" end-time="2026-07-28 16:58:22Z" duration="0.018914" total="1" passed="1" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-suite type="TestSuite" id="1548" name="Tests" fullname="UnityBridge.Tests" runstate="Runnable" testcasecount="1" result="Passed" start-time="2026-07-28 16:58:22Z" end-time="2026-07-28 16:58:22Z" duration="0.018866" total="1" passed="1" failed="0" inconclusive="0" skipped="0" asserts="0">
+          <properties />
+          <test-suite type="TestSuite" id="1549" name="InputSpike" fullname="UnityBridge.Tests.InputSpike" runstate="Runnable" testcasecount="1" result="Passed" start-time="2026-07-28 16:58:22Z" end-time="2026-07-28 16:58:22Z" duration="0.018801" total="1" passed="1" failed="0" inconclusive="0" skipped="0" asserts="0">
+            <properties />
+            <test-suite type="TestFixture" id="1544" name="SimulatedPointerSpikeTests" fullname="UnityBridge.Tests.InputSpike.SimulatedPointerSpikeTests" classname="UnityBridge.Tests.InputSpike.SimulatedPointerSpikeTests" runstate="Runnable" testcasecount="1" result="Passed" start-time="2026-07-28 16:58:22Z" end-time="2026-07-28 16:58:22Z" duration="0.018711" total="1" passed="1" failed="0" inconclusive="0" skipped="0" asserts="0">
+              <properties />
+              <test-case id="1545" name="SimulatedMousePress_DrivesPointerCurrentPressAndPosition" fullname="UnityBridge.Tests.InputSpike.SimulatedPointerSpikeTests.SimulatedMousePress_DrivesPointerCurrentPressAndPosition" methodname="SimulatedMousePress_DrivesPointerCurrentPressAndPosition" classname="UnityBridge.Tests.InputSpike.SimulatedPointerSpikeTests" runstate="Runnable" seed="1096121589" result="Passed" start-time="2026-07-28 16:58:22Z" end-time="2026-07-28 16:58:22Z" duration="0.018711" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+            </test-suite>
+          </test-suite>
+        </test-suite>
+      </test-suite>
+    </test-suite>
+  </test-suite>
+</test-run>

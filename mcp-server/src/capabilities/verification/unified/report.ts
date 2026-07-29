@@ -49,15 +49,20 @@ export function unifiedScreensReportPath(reportsDir: string): string {
   return path.join(reportsDir, UNIFIED_SCREENS_REPORT);
 }
 
-/** One section per asset family. `flow` covers trace replay (actuation + pixels). */
-export type UnifiedSectionName = "contract" | "flow" | "feel" | "screens";
+/**
+ * One section per asset family. `flow` covers trace replay (actuation + pixels); `tests`
+ * grades a stamped Unity EditMode run offline.
+ */
+export type UnifiedSectionName = "contract" | "flow" | "feel" | "screens" | "tests";
 
 /**
  * The run's overall word.
  *
- * - `pass`            everything discovered executed, and every execution passed.
+ * - `pass`            everything discovered executed, every execution passed, AND every
+ *                     executed section compared a frozen human-approved anchor (G1).
  * - `partial`         everything that executed passed, but something discovered did
- *                     NOT execute. Honest about coverage instead of rounding up.
+ *                     NOT execute, or something that executed was measured against no
+ *                     human approval. Honest about coverage instead of rounding up.
  * - `fail`            an executed check found a game defect.
  * - `harness-fault`   an executed check could not be trusted (capture gap, broken
  *                     asset). Never reported as a game defect.
@@ -141,6 +146,16 @@ export interface UnifiedVerifySection {
    * kept separate from `status` so neither can be inferred from the other.
    */
   anchored: boolean;
+  /**
+   * FXC: the BUILD SCOPE of the evidence this section graded, when the evidence carries one.
+   *
+   * `string` when the graded artifact was stamped with a `STATE.currentBuild.runId`, `null`
+   * when it was stamped outside any build, and ABSENT for sections whose evidence has no such
+   * stamp at all. The three states are distinct on purpose: a reader of `verify.json` can
+   * tell a build-scoped section from an unscoped one without parsing stderr, and `null` is
+   * printed rather than omitted so "unscoped" cannot be mistaken for "not applicable".
+   */
+  runId?: string | null;
   /** Every asset this section executed, when the section covers more than one. */
   assets?: UnifiedAssetOutcome[];
 }
@@ -214,12 +229,37 @@ function notRunTier(why: NotRunReason): number {
  *
  * Truth table (executed = sections that actually ran):
  *
- *   executed empty                            -> nothing-checked, 2
- *   any executed tier 2                       -> harness-fault,   2
- *   any executed tier 1 (no 2)                -> fail,            1
- *   all executed 0, notRun empty              -> pass,            0
- *   all executed 0, notRun all live-only      -> partial,         0
- *   all executed 0, notRun has any other      -> partial,         2
+ *   executed empty                                       -> nothing-checked, 2
+ *   any executed tier 2                                  -> harness-fault,   2
+ *   any executed tier 1 (no 2)                           -> fail,            1
+ *   all 0, notRun empty, every section anchored          -> pass,            0
+ *   all 0, ZERO executed sections anchored               -> partial,         2
+ *   all 0, >= 1 anchored, notRun empty, some UNANCHORED  -> partial,         0
+ *   all 0, >= 1 anchored, notRun all live-only           -> partial,         0
+ *   all 0, >= 1 anchored, notRun has any other           -> partial,         2
+ *
+ * FXH, THE ZERO-ANCHORED EXIT RULE. Exit 0 additionally requires AT LEAST ONE anchored
+ * executed section. G1 already refused to CALL such a run a pass, but the exit stayed 0, and
+ * the exit is the only part of this an agent reads: a project with a single self-produced
+ * asset (a stamped test run, a contract with no approved design target) could still exit 0
+ * having compared nothing any human ever froze, which is precisely the self-graded green the
+ * product exists to refuse. So a run in which NOTHING anchored was compared exits 2, the
+ * harness tier, because "there was nothing here that could certify anything" is a statement
+ * about the evidence, not a defect in the game. A MIXED run is unaffected: one anchored green
+ * section still exits 0 with the unanchored extras named, because the run really did measure
+ * something a human approved.
+ *
+ * G1: `pass` REQUIRES EVERY EXECUTED SECTION TO BE ANCHORED, and the rule is general
+ * rather than a special case for one kind. A contract graded with no approved design
+ * target, a stamped test run (which has no human-approve step at all, and never will),
+ * a screens section whose baseline comparison did not happen: each is a real, green,
+ * deterministic result measured against nothing a human ever froze, and the product's
+ * whole claim is that a "done" verdict is anchored to a human approval. Printing the same
+ * word for both readings is how "agents grade their own homework" comes back in through
+ * the roll-up. The EXIT is unchanged (a green all-green run with no unmeasured anchor
+ * still exits 0): this narrows what may be called a pass, it does not invent a failure.
+ * `anchored` is REQUIRED on every entry rather than optional-with-a-default, so a caller
+ * that forgets it fails to compile instead of silently claiming an anchor.
  *
  * A FOUND GAME DEFECT KEEPS EXIT 1, whatever else went unmeasured. The earlier cut
  * raised it to 2 whenever an anchor could not be measured, which quietly broke the
@@ -233,7 +273,7 @@ function notRunTier(why: NotRunReason): number {
  * allowed to keep the exit at 0.
  */
 export function resolveUnifiedOutcome(input: {
-  executed: readonly { section: UnifiedSectionName; exit: number }[];
+  executed: readonly { section: UnifiedSectionName; exit: number; anchored: boolean }[];
   notRun: readonly UnifiedNotRun[];
 }): { status: UnifiedVerifyStatus; exit: number } {
   if (input.executed.length === 0) return { status: "nothing-checked", exit: 2 };
@@ -241,10 +281,28 @@ export function resolveUnifiedOutcome(input: {
   const executedExit = worstExitTier(input.executed.map((e) => e.exit));
   if (executedExit === 2) return { status: "harness-fault", exit: 2 };
   if (executedExit === 1) return { status: "fail", exit: 1 };
-  if (input.notRun.length === 0) return { status: "pass", exit: 0 };
+
+  // G1. Read as a positive requirement, never as "skip the check when the field is absent":
+  // the field is required by the type, and a `false` is what a section that compared nothing
+  // frozen is obliged to report.
+  const anchoredCount = input.executed.filter((e) => e.anchored).length;
+  const allAnchored = anchoredCount === input.executed.length;
+  if (input.notRun.length === 0 && allAnchored) return { status: "pass", exit: 0 };
+  // FXH: counted, not merely "all or not all". Zero anchored executed sections means this run
+  // compared nothing human-approved, and a self-produced green cannot exit 0.
+  if (anchoredCount === 0) return { status: "partial", exit: 2 };
   const notRunExit = worstExitTier(input.notRun.map((n) => notRunTier(n.why)));
   return { status: "partial", exit: notRunExit };
 }
+
+/**
+ * The one-line reason a zero-anchored run cannot exit 0 (FXH).
+ *
+ * Exported so the summary line and the tests that pin it read the same string, rather than a
+ * sentence in the orchestrator and a regex in a test that drift apart.
+ */
+export const ZERO_ANCHORED_SUMMARY =
+  "nothing human-approved was compared; a self-produced green cannot exit 0";
 
 /**
  * sha256 of a per-asset report's bytes, or null when it cannot be read. Null is the
