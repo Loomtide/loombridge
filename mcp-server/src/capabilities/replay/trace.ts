@@ -35,7 +35,9 @@ import {
   TRACE_BASELINE_MANIFEST,
   isTraceBaselineManifestError,
   loadTraceBaselineManifest,
+  MIN_SCALED_SETTLE_MS,
   nextApprovalLedger,
+  replaySpeedRefusal,
   resolveDriftTolerance,
   sha256,
   traceBaselineManifestPath,
@@ -89,6 +91,8 @@ interface TraceArgs {
    * re-freeze drifted frames in the same breath.
    */
   driftTolerance?: number;
+  /** Replay pacing multiplier (replay only): divides recorded settles, floored. */
+  speed?: number;
   // ── record --observe ──
   /** Scene to reset to + record from (record only; optional: absent resolves the editor's current scene). */
   scene?: string;
@@ -205,6 +209,7 @@ async function runReplay(args: TraceArgs): Promise<number> {
     tracePath: args.tracePath,
     html: args.html,
     projectPathCanonical: resolveCliProjectPin({ root: args.root }),
+    speed: args.speed,
   });
   printSummary(args.root, args.id, artifact, reportJson, htmlPath, args.strictVisual);
   // In the mini-game workspace flow (--flat), print the EXACT next command to run.
@@ -371,10 +376,60 @@ function sleep(ms: number): Promise<void> {
 }
 
 /** Replay one trace and write its per-trace report + html. Shared by replay + replay-all. */
+/**
+ * Scale a trace's capture settles for a paced replay: each recorded human inter-action
+ * gap divides by `speed`, floored at {@link MIN_SCALED_SETTLE_MS} so the game still
+ * renders a stable frame before capture. Pure; exported for unit tests. Actions and
+ * wait-for-visible timeouts are NOT scaled: readiness gates are about the game, not the
+ * human's pacing.
+ */
+export function scaleTraceSettles<T extends { segments: { captures?: { settleMs?: number }[] }[] }>(
+  trace: T,
+  speed: number,
+): T {
+  if (speed <= 1) return trace;
+  for (const segment of trace.segments) {
+    for (const capture of segment.captures ?? []) {
+      if (typeof capture.settleMs === "number") {
+        capture.settleMs = Math.max(MIN_SCALED_SETTLE_MS, capture.settleMs / speed);
+      }
+    }
+  }
+  return trace;
+}
+
+/**
+ * The pacing a replay must run at: the EXPLICIT `--speed` when given, else the pacing the
+ * baseline was approved at (its frames were captured at that pacing, and comparing across
+ * pacings reads animation phase skew as drift), else 1. An explicit speed that CONTRADICTS
+ * a stamped baseline refuses before the editor is touched: the operator asked for a
+ * comparison the anchor cannot honestly make. Re-approve at the new pacing instead.
+ */
+async function resolveReplaySpeed(
+  paths: ReplayLayout,
+  id: string,
+  explicit: number | undefined,
+): Promise<{ speed: number } | { refusal: string }> {
+  const baselineDir = path.join(paths.replayBaselines, id);
+  const manifest = await loadTraceBaselineManifest(baselineDir);
+  const stamped =
+    manifest !== null && !isTraceBaselineManifestError(manifest) ? (manifest.replaySpeed ?? 1) : undefined;
+  if (explicit !== undefined && stamped !== undefined && explicit !== stamped) {
+    return {
+      refusal:
+        `the baseline for "${id}" was approved at ${stamped}x pacing, but --speed ${explicit} was ` +
+        `passed. Frames captured at different pacings sit at different animation phases, so the ` +
+        `pixel comparison would read phase skew as drift. Replay without --speed (uses ${stamped}x), ` +
+        `or re-approve the baseline at the new pacing.`,
+    };
+  }
+  return { speed: explicit ?? stamped ?? 1 };
+}
+
 async function replayOneTrace(
   paths: ReplayLayout,
   id: string,
-  opts: { tracePath?: string; html: boolean; projectPathCanonical?: string },
+  opts: { tracePath?: string; html: boolean; projectPathCanonical?: string; speed?: number },
 ): Promise<{ artifact: ReplayRunArtifact; reportJson: string; htmlPath?: string }> {
   await fs.mkdir(paths.replayTraces, { recursive: true });
   await fs.mkdir(paths.replayReports, { recursive: true });
@@ -387,11 +442,25 @@ async function replayOneTrace(
     );
   }
 
+  const resolved = await resolveReplaySpeed(paths, id, opts.speed);
+  if ("refusal" in resolved) {
+    // A pacing contradiction is a harness refusal, not a replay verdict: nothing ran.
+    throw new Error(resolved.refusal);
+  }
+  const speed = resolved.speed;
+  if (speed > 1) {
+    scaleTraceSettles(trace, speed);
+    console.error(`[loombridge trace] replaying at ${speed}x pacing (recorded settles scaled, floor ${MIN_SCALED_SETTLE_MS}ms).`);
+  }
+
   const captureDir = path.join(paths.replayReports, id, "actual");
   const artifact = await runLiveReplay(trace, {
     captureDir,
     projectPathCanonical: opts.projectPathCanonical,
   });
+  // The pacing is part of the evidence: a baseline approved from this report inherits it,
+  // and applyVisualDiff refuses a pacing mismatch instead of grading phase skew.
+  artifact.replaySpeed = speed;
   // Visual regression: compare each capture to its approved baseline (if any).
   await applyVisualDiff(paths, id, artifact);
 
@@ -630,6 +699,12 @@ async function runApprove(args: TraceArgs): Promise<number> {
     sourceReportSha256: sha256(raw),
     pngs,
     ...(previous?.driftTolerance !== undefined ? { driftTolerance: previous.driftTolerance } : {}),
+    // The pacing the promoted frames were captured at rides the report into the anchor:
+    // a later replay at any other pacing refuses the comparison instead of grading
+    // animation phase skew as drift.
+    ...((parsed as ReplayRunArtifact).replaySpeed !== undefined && (parsed as ReplayRunArtifact).replaySpeed !== 1
+      ? { replaySpeed: (parsed as ReplayRunArtifact).replaySpeed }
+      : {}),
     ...nextApprovalLedger(previous),
   };
   await writeTraceBaselineManifest(baselineDir, manifest);
@@ -808,6 +883,16 @@ export async function applyVisualDiff(
     baselineFault = integrity.failures.join("; ");
   } else {
     tolerance = resolveDriftTolerance(integrity.manifest!);
+    // Pacing mismatch is a HARNESS refusal, not drift: frames captured at different
+    // pacings sit at different animation phases, and grading them against each other
+    // reads phase skew as drift (or hides real drift behind it).
+    const stampedSpeed = integrity.manifest!.replaySpeed ?? 1;
+    const runSpeed = artifact.replaySpeed ?? 1;
+    if (stampedSpeed !== runSpeed) {
+      baselineFault =
+        `the baseline was approved at ${stampedSpeed}x pacing but this run replayed at ` +
+        `${runSpeed}x; re-run at ${stampedSpeed}x or re-approve at the new pacing`;
+    }
   }
   if (baselineFault !== null) {
     console.error(
@@ -1102,6 +1187,7 @@ function parseArgs(args: string[]): TraceArgs | { help: true; usageError?: boole
   let stateSignal: ObserveTraceMeta["stateSignal"] | undefined;
   let autoStateSignal = false;
   let driftTolerance: number | undefined;
+  let speed: number | undefined;
 
   /** Read a required string value for `flag`, rejecting a missing/flag-like value. */
   const value = (i: number, flag: string): string | undefined => {
@@ -1154,6 +1240,25 @@ function parseArgs(args: string[]): TraceArgs | { help: true; usageError?: boole
       stateSignal = parsed;
     } else if (arg === "--auto-state-signal") {
       autoStateSignal = true;
+    } else if (arg === "--speed") {
+      // Replay pacing only: record observes a HUMAN whose pacing IS the demonstration,
+      // approve/tolerance/report never drive the editor at all.
+      if (sub !== "replay") {
+        console.error(
+          `[loombridge trace] --speed is only valid on \`trace replay\` (got "${sub}"). ` +
+            "replay-all runs each trace at its baseline's stamped pacing.",
+        );
+        return { help: true, usageError: true };
+      }
+      const v = value((i += 1), "--speed");
+      if (v === undefined) return { help: true, usageError: true };
+      const n = Number(v);
+      const bad = replaySpeedRefusal(Number.isFinite(n) ? n : v);
+      if (bad !== null) {
+        console.error(`[loombridge trace] ${bad}`);
+        return { help: true, usageError: true };
+      }
+      speed = n;
     } else if (arg === "--set" || arg === "--drift-tolerance") {
       // A6, THE VERB GUARD. This flag belongs to `tolerance` and to nothing else. The
       // parse loop is SHARED across subcommands, so without this branch `--set` typed on
@@ -1240,6 +1345,7 @@ function parseArgs(args: string[]): TraceArgs | { help: true; usageError?: boole
     stateSignal,
     autoStateSignal,
     driftTolerance,
+    speed,
   };
 }
 
@@ -1286,7 +1392,11 @@ function printUsage(): void {
       "              --duration <sec>), and write .loombridge/replays/traces/<id>.trace.json.",
       "  replay      Drive .loombridge/replays/traces/<id>.trace.json against the running",
       "              editor and write .loombridge/replays/reports/<id>.report.{json,html},",
-      "              diffing each capture against its approved baseline.",
+      "              diffing each capture against its approved baseline. --speed <1..8>",
+      "              replays faster than the demonstration (recorded settles divided,",
+      "              floored at 250ms); the pacing is stamped into the report and, at",
+      "              approve, into the baseline, and a replay at a pacing other than the",
+      "              baseline's REFUSES the pixel comparison (phase skew is not drift).",
       "  replay-all  Replay EVERY trace under .loombridge/replays/traces/ and write a",
       "              roll-up .loombridge/replays/fleet.report.{json,html}. Exit by worst tier.",
       "  approve     Promote the latest run's captures to the approved baseline",
@@ -1305,6 +1415,8 @@ function printUsage(): void {
       "                    baseline/) with no nested .loombridge/ — the mini-game workspace layout.",
       "  --no-html         Skip the HTML report.",
       "  --strict-visual   Make a visual drift from baseline a failure.",
+      "  --speed <n>       replay only: pacing multiplier, 1 to 8 (default: the baseline's",
+      "                    stamped pacing, else 1).",
       `  --set <fraction>  tolerance ONLY: the approved pixel drift allowance, 0 to ${MAX_DRIFT_TOLERANCE}`,
       `                    (${driftPercentText(MAX_DRIFT_TOLERANCE)}% cap; default when never stamped is ` +
         `${driftPercentText(DEFAULT_DRIFT_FRACTION)}%). At N%, anything covering`,

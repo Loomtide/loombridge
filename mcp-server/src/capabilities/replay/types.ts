@@ -364,6 +364,12 @@ export interface ReplayReport {
    * Absent when no baseline existed to grade against.
    */
   toleranceUsed?: number;
+  /**
+   * The pacing this run replayed at (1 = the demonstration's own pacing). Stamped on
+   * every run; a baseline approved from this report inherits it, and a later replay at
+   * a different pacing refuses the pixel comparison rather than grading phase skew.
+   */
+  replaySpeed?: number;
   segments: SegmentResult[];
   assertions: AssertionResult[];
   console: ConsoleResult;

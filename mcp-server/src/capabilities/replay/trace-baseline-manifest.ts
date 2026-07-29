@@ -67,6 +67,15 @@ export interface TraceBaselineManifest {
    */
   driftTolerance?: number;
   /**
+   * The pacing the approved frames were captured at (1 = the demonstration's own
+   * pacing; up to {@link MAX_REPLAY_SPEED}). ABSENT means 1, so every pre-field
+   * manifest keeps meaning what it meant. A replay at any other pacing REFUSES the
+   * pixel comparison (harness tier): the frames would be captured at different
+   * animation phases, and phase skew is indistinguishable from drift in both
+   * directions.
+   */
+  replaySpeed?: number;
+  /**
    * F6 LEDGER. How many approval events this baseline has seen, and what the previous
    * one said. A tolerance that ratchets upward one re-stamp at a time is the quiet
    * failure mode of this whole feature; the ledger is what makes that visible on disk
@@ -194,6 +203,14 @@ export async function loadTraceBaselineManifest(
     const bad = toleranceRefusal(parsed[field], field);
     if (bad !== null) return { error: `${TRACE_BASELINE_MANIFEST} ${bad}` };
   }
+  // Same read-side discipline for the replay speed: the baseline's captures were taken at
+  // a specific pacing, and comparing them against a replay paced differently reads
+  // animation phase skew as pixel drift (or hides real drift behind it). A hand-edited or
+  // out-of-range speed is a typed ERROR, never a silent fall back to 1x.
+  {
+    const bad = replaySpeedRefusal(parsed.replaySpeed);
+    if (bad !== null) return { error: `${TRACE_BASELINE_MANIFEST} ${bad}` };
+  }
   if (parsed.approvalCount !== undefined) {
     const count = parsed.approvalCount;
     if (typeof count !== "number" || !Number.isInteger(count) || count < 1) {
@@ -222,6 +239,32 @@ export async function loadTraceBaselineManifest(
  * nobody validated, and the coercion is exactly how an out-of-range value would slip
  * past a `typeof` check somebody later "simplified". `undefined` is the only absence.
  */
+/**
+ * Replay pacing cap. `--speed` divides the recorded human inter-action gaps, so the
+ * replay runs faster than the demonstration; 8x of a sub-second settle already lands at
+ * the {@link MIN_SCALED_SETTLE_MS} floor, and anything beyond it only starves the game of
+ * frames between actions. The speed is part of the ANCHOR: baselines record the pacing
+ * their frames were captured at, and a replay at any other pacing refuses rather than
+ * comparing phase-skewed frames.
+ */
+export const MAX_REPLAY_SPEED = 8;
+
+/** The floor a scaled capture settle never goes under; the game still needs to render. */
+export const MIN_SCALED_SETTLE_MS = 250;
+
+/** Range/type refusal for a replay speed, shared by the flag parser and the manifest reader. */
+export function replaySpeedRefusal(value: unknown): string | null {
+  if (value === undefined) return null;
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return `'replaySpeed' must be a finite number (got ${JSON.stringify(value) ?? typeof value})`;
+  }
+  if (value < 1) return `'replaySpeed' must be at least 1 (got ${value}); a replay never runs slower than the demonstration`;
+  if (value > MAX_REPLAY_SPEED) {
+    return `'replaySpeed' is ${value}, above the ${MAX_REPLAY_SPEED}x cap: beyond it the scaled settles all sit at the floor and the game starves for frames`;
+  }
+  return null;
+}
+
 export function toleranceRefusal(value: unknown, field: string): string | null {
   if (value === undefined) return null;
   if (typeof value !== "number" || !Number.isFinite(value)) {
