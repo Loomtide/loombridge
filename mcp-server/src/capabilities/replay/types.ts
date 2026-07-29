@@ -308,6 +308,12 @@ export interface CaptureResult {
   diffFraction?: number;
   /** Visual regression verdict vs the baseline (set post-replay by the verb). */
   visualStatus?: VisualCaptureStatus;
+  /**
+   * A3: the tolerance that DECIDED `visualStatus` for this capture. Stamped only where a
+   * comparison actually happened, so a reader can tell "matched at the default" from
+   * "matched only because a human approved 2%" without going to the manifest.
+   */
+  toleranceUsed?: number;
 }
 
 export interface SegmentResult {
@@ -351,6 +357,13 @@ export interface ReplayReport {
    * default, so a report written before this field existed still parses.
    */
   visualHarnessFault?: boolean;
+  /**
+   * A3: the pixel tolerance this RUN graded at, resolved from the approved baseline
+   * manifest (absent field = the 0.5% default). Recorded per run as well as per capture
+   * so the report answers "what were the terms?" even for a run in which nothing drifted.
+   * Absent when no baseline existed to grade against.
+   */
+  toleranceUsed?: number;
   segments: SegmentResult[];
   assertions: AssertionResult[];
   console: ConsoleResult;

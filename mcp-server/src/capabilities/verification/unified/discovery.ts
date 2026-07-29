@@ -14,6 +14,12 @@
  *    that can grow silently is a plan an operator cannot audit.
  * 2. **An asset exists because an approve/init step WROTE it**, never because a
  *    heuristic sniffed for it. Every lookup below is a declared location.
+ *    ONE CARVE-OUT (A5): the workspace ROUTING SCAN reads other workspaces' ownership
+ *    stamps to answer "you are probably looking for `--id <other>`". It emits a plan
+ *    NOTE and nothing else. It never produces a `DiscoveredAsset`, never adopts a
+ *    workspace, and therefore can never contribute to (or subtract from) a verdict: a
+ *    heuristic may point at an asset, but only an operator's explicit `--id` may grade
+ *    one.
  * 3. **Absent provenance never skips into pass** (amendment A4). A recorded trace
  *    with no approved baseline, a baseline with no manifest, a workspace asset with
  *    no owning-project stamp: each is a `runnable: "no"` NON-ANCHOR row with a
@@ -35,11 +41,15 @@ import {
   standardReplayLayout,
   type LoombridgePaths,
 } from "../../../domain/state.js";
-import { sanitizeWorkspaceId, projectWorkspace } from "../../../domain/workspace-paths.js";
+import {
+  sanitizeWorkspaceId,
+  projectWorkspace,
+  workspacesRoot,
+} from "../../../domain/workspace-paths.js";
 import { discoverTraces } from "../../replay/trace.js";
 import { TRACE_BASELINE_MANIFEST, verifyTraceBaseline } from "../../replay/trace-baseline-manifest.js";
 import { feelPaths } from "../../feel/feel-workspace.js";
-import { verifySnapshotIntegrity } from "../../feel/snapshot-manifest.js";
+import { FEEL_SNAPSHOT_MANIFEST, verifySnapshotIntegrity } from "../../feel/snapshot-manifest.js";
 import { findContract } from "../../minigame/minigame-next.js";
 import { isDraftContract } from "../../minigame/minigame-draft.js";
 import { loadBaselineManifest, BASELINE_MANIFEST } from "../../minigame/minigame-baseline.js";
@@ -117,6 +127,13 @@ export interface DiscoveredAsset {
   approvedBy?: string;
   /** Present IFF the asset is broken (tampered, unreadable, wrong project). Tier 2. */
   broken?: string;
+  /**
+   * A3/R1: the human-approved pixel drift tolerance stamped on this asset's anchor, when
+   * one was stamped. TYPED, not prose, because the plan line prints it and a reader (or a
+   * test) must be able to ask "was this run graded loosely?" without parsing a sentence.
+   * Absent means the default, which is the strictest value the field can carry.
+   */
+  driftTolerance?: number;
   paths: DiscoveredAssetPaths;
 }
 
@@ -142,7 +159,22 @@ export interface DiscoveryOpts {
    * at all: without it the only reachable workspace is the one under the real `$HOME`.
    */
   workspace?: string;
+  /**
+   * The DECLARED workspaces root to scan for the routing note (A5). Injectable so the
+   * scan and its tests share ONE root: a test that pointed at a fixture directory while
+   * the shipped code read `$HOME` would be proving something about a code path nobody
+   * runs. Defaults to `workspacesRoot()`.
+   */
+  workspacesRoot?: string;
 }
+
+/**
+ * How many workspaces the routing scan will look at (A5). Bounded because this runs on
+ * every unified `verify`, and an unbounded walk of a directory a user controls is a
+ * plan that gets slower the longer someone uses the product. When the cap bites, the
+ * note SAYS SO rather than presenting a truncated list as the whole answer.
+ */
+export const WORKSPACE_SCAN_CAP = 50;
 
 /**
  * Gather every verification asset a project declares. Deterministic: every
@@ -167,8 +199,20 @@ export async function discoverVerificationAssets(opts: DiscoveryOpts): Promise<D
         "no workspace id can be derived from the folder name; pass --id <kebab> or --workspace <dir> to include them.",
     );
   } else {
-    assets.push(...(await discoverFeelSnapshotAsset(root, workspace)));
-    assets.push(...(await discoverScreenContractAsset(root, workspace)));
+    const workspaceAssets = [
+      ...(await discoverFeelSnapshotAsset(root, workspace)),
+      ...(await discoverScreenContractAsset(root, workspace)),
+    ];
+    assets.push(...workspaceAssets);
+    // R2: the refuse-only UX gap. The workspace id is derived from a FOLDER NAME, so a
+    // project whose workspace was created under a different id (a renamed folder, an
+    // explicit `--id` used once and forgotten) discovers nothing here and the plan says
+    // only that there is nothing to find. The scan below turns that silence into
+    // ROUTING: some workspace on this machine stamps THIS project root, and here is the
+    // id to pass. It runs only when the derived workspace produced no assets at all.
+    if (workspaceAssets.length === 0) {
+      notes.push(...(await workspaceRoutingNotes(root, workspace, opts.workspacesRoot)));
+    }
   }
 
   assets.sort(
@@ -285,6 +329,13 @@ async function discoverTraceAssets(root: string): Promise<DiscoveredAsset[]> {
     }
     row.runnable = "live";
     row.approvedAt = integrity.manifest!.approvedAt;
+    // The approved tolerance travels into the PLAN, not just into the grader. A silent
+    // tolerance is the failure mode this feature has to avoid: the plan line is where an
+    // operator sees, before anything runs, that this anchor grades at 2% rather than 0.5%.
+    // Absent field means the default, and the row stays silent about it.
+    if (integrity.manifest!.driftTolerance !== undefined) {
+      row.driftTolerance = integrity.manifest!.driftTolerance;
+    }
     // RECORDED, not audited (L13). The frame shas above were re-derived from disk, so
     // the FRAMES are audited; the source report is a provenance note copied from the
     // manifest, and the report it names may not even exist any more. The wording says
@@ -540,6 +591,95 @@ async function discoverScreenContractAsset(root: string, workspace: string): Pro
   row.approvedBy = `screen contract '${manifest.contractId}'`;
   row.runnable = "offline";
   return [row];
+}
+
+// ── workspace routing note (R2) ──────────────────────────────────────────────
+
+/**
+ * "Some OTHER workspace stamps this project root", as a NOTE and never as an asset (A5).
+ *
+ * The gap this closes is pure UX, and it was observed live: the workspace id is derived
+ * from the project's folder name, so a project verified after a rename (or one whose
+ * workspace was created once under an explicit `--id`) finds nothing, and the plan can
+ * only say that nothing was found. The operator is left guessing an id.
+ *
+ * What it must NOT do is adopt the match. Two checkouts can share a folder name, an
+ * ownership stamp is a claim made by the workspace about the project rather than the
+ * other way round, and silently grading assets the operator did not ask for would make
+ * the verdict depend on whatever else is on the machine. So this returns routing text:
+ * every match, sorted, with the explicit statement that the CHOICE of id changes the
+ * verdict, and an honest word when the scan cap cut the answer short.
+ *
+ * Cost is bounded on both axes: at most {@link WORKSPACE_SCAN_CAP} workspaces, at most
+ * two manifest reads each.
+ */
+async function workspaceRoutingNotes(
+  root: string,
+  usedWorkspace: string,
+  scanRootOverride: string | undefined,
+): Promise<string[]> {
+  const scanRoot = scanRootOverride ?? workspacesRoot();
+  let entries: string[];
+  try {
+    entries = (await fs.readdir(scanRoot, { withFileTypes: true }))
+      .filter((e) => e.isDirectory())
+      .map((e) => e.name)
+      .sort();
+  } catch {
+    return [];
+  }
+  const truncated = entries.length > WORKSPACE_SCAN_CAP;
+  const notes: string[] = [];
+  const matches: string[] = [];
+  for (const id of entries.slice(0, WORKSPACE_SCAN_CAP)) {
+    const dir = path.join(scanRoot, id);
+    // The workspace this run already looked in is not a routing answer: it produced no
+    // assets, which is why we are here.
+    if (path.resolve(dir) === path.resolve(usedWorkspace)) continue;
+    const stamps = await stampedProjectRoots(dir);
+    if (stamps.some((stamp) => path.resolve(stamp) === root)) matches.push(id);
+  }
+  if (matches.length > 0) {
+    notes.push(
+      `${matches.map((id) => `workspace '${id}'`).join(", ")} ` +
+        `${matches.length === 1 ? "stamps" : "stamp"} this project root but ` +
+        `${matches.length === 1 ? "was" : "were"} not used: pass --id <id> (or --workspace <dir>) to include ` +
+        "its assets. Nothing is adopted automatically, and WHICH id you pass changes what is measured and " +
+        "therefore the verdict.",
+    );
+  }
+  if (truncated) {
+    notes.push(
+      `the workspace scan stopped at the first ${WORKSPACE_SCAN_CAP} of ${entries.length} directories under ` +
+        `${scanRoot}, so this routing list may be incomplete.`,
+    );
+  }
+  return notes;
+}
+
+/**
+ * The owning-project stamps a workspace declares, from AT MOST two declared files: the
+ * frozen feel snapshot's manifest and the screen-contract layout baseline's manifest.
+ * Read as raw JSON on purpose (never integrity-verified): this is routing, and a
+ * workspace whose assets are broken is exactly the one an operator most needs pointing
+ * at. Anything unreadable simply contributes no stamp.
+ */
+async function stampedProjectRoots(workspace: string): Promise<string[]> {
+  const files = [
+    path.join(feelPaths(workspace).snapshotCurrentDir, FEEL_SNAPSHOT_MANIFEST),
+    path.join(workspace, "baseline", BASELINE_MANIFEST),
+  ];
+  const stamps: string[] = [];
+  for (const file of files) {
+    try {
+      const parsed: unknown = JSON.parse(await fs.readFile(file, "utf-8"));
+      const stamp = (parsed as { projectRoot?: unknown } | null)?.projectRoot;
+      if (typeof stamp === "string" && stamp.length > 0) stamps.push(stamp);
+    } catch {
+      /* unreadable or absent: no stamp, never a throw out of discovery */
+    }
+  }
+  return stamps;
 }
 
 // ── helpers ──────────────────────────────────────────────────────────────────

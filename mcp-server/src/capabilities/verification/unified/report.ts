@@ -17,6 +17,7 @@ import { createHash } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 
+import type { DriftFacts } from "../../replay/visual-diff.js";
 import type { DiscoveredAsset, DiscoveredAssetKind, NotRunClass } from "./discovery.js";
 
 /**
@@ -203,6 +204,15 @@ export interface UnifiedAssetOutcome {
   reportSha256?: string | null;
   /** Why this asset carries no report of its own (M5: "no report produced this run"). */
   note?: string;
+  /**
+   * A3: the pixel-drift facts behind this asset's tier, in TYPED fields.
+   *
+   * Deliberately not folded into `note`: `note` answers M5's "why is there no report",
+   * and a second meaning smuggled into the same string would make both unparseable and
+   * would put the numbers one careless edit away from disappearing. Present only for
+   * trace assets that were actually compared against a baseline.
+   */
+  drift?: DriftFacts;
 }
 
 export interface UnifiedVerifySection {
@@ -254,6 +264,12 @@ export interface UnifiedVerifySection {
    * printed rather than omitted so "unscoped" cannot be mistaken for "not applicable".
    */
   runId?: string | null;
+  /**
+   * A3: the section-level pixel-drift facts (the worst asset's), typed for the same
+   * reason as {@link UnifiedAssetOutcome.drift}. The summary line renders the red
+   * wording from THIS, so "pass (exit 1)" can never be printed again for a drift.
+   */
+  drift?: DriftFacts;
   /** Every asset this section executed, when the section covers more than one. */
   assets?: UnifiedAssetOutcome[];
 }

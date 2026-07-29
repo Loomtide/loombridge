@@ -3,6 +3,7 @@
  *
  *   loombridge trace replay --id <id> [--root <dir>] [--trace <path>] [--no-html]
  *   loombridge trace report --id <id> [--root <dir>]
+ *   loombridge trace tolerance --id <id> --set <fraction>
  *
  * `replay` reads `.loombridge/replays/traces/<id>.trace.json`, drives it against the
  * running editor, and writes `.loombridge/replays/reports/<id>.report.{json,html}`
@@ -31,12 +32,28 @@ import {
 } from "./index.js";
 import { observeRecordLive } from "./observe-record-live.js";
 import {
+  TRACE_BASELINE_MANIFEST,
+  isTraceBaselineManifestError,
+  loadTraceBaselineManifest,
+  nextApprovalLedger,
+  resolveDriftTolerance,
   sha256,
   traceBaselineManifestPath,
+  toleranceRefusal,
+  verifyTraceBaseline,
   writeTraceBaselineManifest,
   type TraceBaselineManifest,
   type TraceBaselinePng,
 } from "./trace-baseline-manifest.js";
+import {
+  DEFAULT_DRIFT_FRACTION,
+  MAX_DRIFT_TOLERANCE,
+  driftPercentText,
+  driftRegressionLine,
+  driftSuggestionLines,
+  toleranceConsentSentence,
+  type DriftFacts,
+} from "./visual-diff.js";
 import { isScenePath } from "../minigame/profiles/types.js";
 import { runLiveReplay } from "./run-live.js";
 import { resolveCliProjectPin } from "../setup/cli-project-pin.js";
@@ -50,7 +67,7 @@ import { printNextStep } from "../minigame/minigame-next.js";
 import { readPng } from "../verification/analyze-frames.js";
 
 interface TraceArgs {
-  sub: "replay" | "report" | "approve" | "replay-all" | "record";
+  sub: "replay" | "report" | "approve" | "replay-all" | "record" | "tolerance";
   id: string;
   root: string;
   /** Override the trace input path (default `.loombridge/replays/traces/<id>.trace.json`). */
@@ -65,6 +82,13 @@ interface TraceArgs {
   html: boolean;
   /** Make a visual drift from baseline a failure (exit 1), not just a warning. */
   strictVisual: boolean;
+  /**
+   * `tolerance --set <fraction>`: the pixel allowance to stamp onto the EXISTING
+   * approved baseline. Parsed and range-checked in `parseArgs`, and REFUSED on every
+   * other subcommand (A6), so approve can never grow a tolerance argument and
+   * re-freeze drifted frames in the same breath.
+   */
+  driftTolerance?: number;
   // ── record --observe ──
   /** Scene to reset to + record from (record only; optional: absent resolves the editor's current scene). */
   scene?: string;
@@ -158,6 +182,7 @@ export async function run(args: string[]): Promise<number> {
     if (parsed.sub === "replay") return await runReplay(parsed);
     if (parsed.sub === "replay-all") return await runReplayAll(parsed);
     if (parsed.sub === "approve") return await runApprove(parsed);
+    if (parsed.sub === "tolerance") return await runTolerance(parsed);
     if (parsed.sub === "record") return await runRecord(parsed);
     return await runReport(parsed);
   } catch (error) {
@@ -181,7 +206,7 @@ async function runReplay(args: TraceArgs): Promise<number> {
     html: args.html,
     projectPathCanonical: resolveCliProjectPin({ root: args.root }),
   });
-  printSummary(args.root, args.id, artifact, reportJson, htmlPath);
+  printSummary(args.root, args.id, artifact, reportJson, htmlPath, args.strictVisual);
   // In the mini-game workspace flow (--flat), print the EXACT next command to run.
   if (args.flat) await printNextStep(args.root);
   return replayExitCode(artifact, args.strictVisual);
@@ -530,6 +555,45 @@ async function runApprove(args: TraceArgs): Promise<number> {
   }
 
   const baselineDir = path.join(paths.replayBaselines, args.id);
+
+  // The approved TOLERANCE survives a re-freeze (A1). Approve replaces frames, and the
+  // tolerance is a separate human decision about this trace's animation, so silently
+  // resetting it to the default here would mean every re-approve quietly re-tightened a
+  // gate the operator had consented to widen, and the next replay would fail with a
+  // suggestion to widen it again. An UNREADABLE previous manifest carries nothing
+  // forward and says so: a tolerance nobody can read is not a tolerance anybody approved.
+  const previousLoaded = await loadTraceBaselineManifest(baselineDir);
+  let previous: TraceBaselineManifest | null = null;
+  if (isTraceBaselineManifestError(previousLoaded)) {
+    console.error(
+      `[loombridge trace] note: the existing ${TRACE_BASELINE_MANIFEST} is unreadable ` +
+        `(${previousLoaded.error}); re-stamping from scratch at the default tolerance.`,
+    );
+  } else {
+    previous = previousLoaded;
+  }
+
+  // F13: NEVER PROMOTE A RUN WITH A CAPTURE GAP. `unreadable` is the harness tier (a PNG
+  // that could not be decoded says nothing about the game), and freezing that run's frames
+  // would mint an anchor from evidence the tool itself could not read. Refused as a whole
+  // rather than per-capture: promoting the readable subset would prune the rest and quietly
+  // shrink the baseline, which reads as "approved" while covering less than it did before.
+  const unreadable = parsed.segments
+    .flatMap((s) => s.captures)
+    .filter((c) => c.visualStatus === "unreadable")
+    .map((c) => c.id);
+  if (unreadable.length > 0) {
+    console.error(
+      `[loombridge trace] cannot approve "${args.id}": ${unreadable.length} capture(s) in the latest run ` +
+        `could not be decoded (${unreadable.join(", ")}). A capture gap is a harness fault, never an anchor.`,
+    );
+    console.error(
+      `[loombridge trace]   re-run \`loombridge trace replay --id ${args.id}\`; if the APPROVED BASELINE is the ` +
+        `unreadable half (the replay output names which), remove ${path.relative(args.root, baselineDir)} and approve again.`,
+    );
+    return 2;
+  }
+
   await fs.mkdir(baselineDir, { recursive: true });
   const pngs: TraceBaselinePng[] = [];
   for (const segment of parsed.segments) {
@@ -565,6 +629,8 @@ async function runApprove(args: TraceArgs): Promise<number> {
     approvedAt: new Date().toISOString(),
     sourceReportSha256: sha256(raw),
     pngs,
+    ...(previous?.driftTolerance !== undefined ? { driftTolerance: previous.driftTolerance } : {}),
+    ...nextApprovalLedger(previous),
   };
   await writeTraceBaselineManifest(baselineDir, manifest);
 
@@ -575,7 +641,82 @@ async function runApprove(args: TraceArgs): Promise<number> {
   console.error(
     `[loombridge trace] stamped ${path.relative(args.root, traceBaselineManifestPath(baselineDir))}: approvedAt ${manifest.approvedAt}, bound to trace ${traceSha256.slice(0, 12)}…`,
   );
+  // A tolerance carried through a re-freeze is stated out loud, with its consent
+  // sentence: an allowance a human approved once must not become invisible later.
+  if (manifest.driftTolerance !== undefined) {
+    console.error(
+      `[loombridge trace] drift tolerance ${driftPercentText(manifest.driftTolerance)}% preserved from the previous ` +
+        `approval: ${toleranceConsentSentence(manifest.driftTolerance)}.`,
+    );
+  }
   return pngs.length > 0 ? 0 : 1;
+}
+
+/**
+ * `trace tolerance --id <id> --set <fraction>`: stamp the human-approved pixel
+ * allowance onto an EXISTING approved baseline.
+ *
+ * A SEPARATE VERB FROM `approve`, and that split is the whole point (A1). The natural
+ * design, `approve --drift-tolerance`, hands an operator staring at a drift failure one
+ * command that both widens the gate AND re-freezes the drifted frames as the new truth.
+ * That is the anchor destroyed by the very act of trying to keep it. This verb touches
+ * no PNG and no sha: it edits the terms of the comparison, leaves the frames a human
+ * approved exactly where they are, and records the change in the F6 ledger.
+ *
+ * Tiers: 1 when there is no baseline manifest to stamp (approve frames first, an
+ * ordinary state error), 2 when a manifest exists but cannot be trusted (a broken
+ * anchor is the harness tier, and re-stamping it would launder it).
+ */
+async function runTolerance(args: TraceArgs): Promise<number> {
+  const paths = layoutFor(args);
+  const baselineDir = path.join(paths.replayBaselines, args.id);
+  const manifestRel = path.relative(args.root, traceBaselineManifestPath(baselineDir));
+
+  // Range-checked in parseArgs; the assertion states the invariant rather than
+  // re-deriving it, so the cap is enforced in exactly one place per side.
+  const tolerance = args.driftTolerance;
+  if (tolerance === undefined) {
+    console.error("[loombridge trace] tolerance requires --set <fraction> (e.g. --set 0.015).");
+    return 2;
+  }
+
+  const loaded = await loadTraceBaselineManifest(baselineDir);
+  if (loaded === null) {
+    console.error(
+      `[loombridge trace] no approved baseline for "${args.id}" (${manifestRel} is absent): approve frames first: ` +
+        `loombridge trace replay --id ${args.id} && loombridge trace approve --id ${args.id}`,
+    );
+    return 1;
+  }
+  if (isTraceBaselineManifestError(loaded)) {
+    console.error(
+      `[loombridge trace] cannot stamp a tolerance onto "${args.id}": ${loaded.error}. ` +
+        "A baseline that cannot be read is not an anchor; re-approve it.",
+    );
+    return 2;
+  }
+
+  const stamped: TraceBaselineManifest = {
+    ...loaded,
+    driftTolerance: tolerance,
+    approvedAt: new Date().toISOString(),
+    ...nextApprovalLedger(loaded),
+  };
+  await writeTraceBaselineManifest(baselineDir, stamped);
+
+  const previousText =
+    loaded.driftTolerance === undefined
+      ? `${driftPercentText(DEFAULT_DRIFT_FRACTION)}% (default)`
+      : `${driftPercentText(loaded.driftTolerance)}%`;
+  console.error(
+    `[loombridge trace] stamped ${manifestRel}: drift tolerance ${previousText} → ` +
+      `${driftPercentText(tolerance)}% (approval #${stamped.approvalCount}, ${stamped.pngs.length} frame(s) untouched).`,
+  );
+  console.error(`[loombridge trace] ${toleranceConsentSentence(tolerance)}.`);
+  console.error(
+    `[loombridge trace] re-run \`loombridge trace replay --id ${args.id}\` to grade against the new terms.`,
+  );
+  return 0;
 }
 
 /** Remove `*.png` in a baseline dir that this approval did not promote. Returns the count. */
@@ -615,12 +756,23 @@ export async function replayTraceForVerify(
   layout: ReplayLayout,
   id: string,
   opts: { strictVisual: boolean; projectPathCanonical?: string },
-): Promise<{ artifact: ReplayRunArtifact; reportJson: string; exitTier: number }> {
+): Promise<{
+  artifact: ReplayRunArtifact;
+  reportJson: string;
+  exitTier: number;
+  /** A3: the drift facts, so the unified section reports numbers instead of a bare tier. */
+  drift: DriftFacts;
+}> {
   const { artifact, reportJson } = await replayOneTrace(layout, id, {
     html: false,
     projectPathCanonical: opts.projectPathCanonical,
   });
-  return { artifact, reportJson, exitTier: replayExitCode(artifact, opts.strictVisual) };
+  return {
+    artifact,
+    reportJson,
+    exitTier: replayExitCode(artifact, opts.strictVisual),
+    drift: driftFacts(artifact),
+  };
 }
 
 /**
@@ -628,6 +780,18 @@ export async function replayTraceForVerify(
  *
  * Exported for tests: the tier a run earns depends on this function distinguishing
  * real drift from an undecodable file, and the only other way in is a live replay.
+ *
+ * THE ANCHOR IS RE-VERIFIED HERE, AT GRADE TIME (A4). Discovery's opinion about the
+ * baseline was formed before the replay ran and is a plan, not evidence; and the `trace`
+ * verb has no discovery step at all, so without this the terms of the comparison would be
+ * read from a file nothing checked. A manifest that is malformed, carries an out-of-cap
+ * tolerance, or no longer matches its own frames is a HARNESS FAULT (tier 2) for every
+ * capture. Never a fall back to the default tolerance, which would be the tool grading a
+ * run against terms it just proved it could not read.
+ *
+ * An ABSENT manifest is the legacy case, not a fault: those baselines predate stamping,
+ * they grade at the default (the strictest tolerance there is), and the unified door
+ * already refuses to treat them as anchors at all.
  */
 export async function applyVisualDiff(
   paths: ReplayLayout,
@@ -635,12 +799,37 @@ export async function applyVisualDiff(
   artifact: ReplayRunArtifact,
 ): Promise<void> {
   const baselineDir = path.join(paths.replayBaselines, id);
+  const integrity = await verifyTraceBaseline(baselineDir);
+  let tolerance = DEFAULT_DRIFT_FRACTION;
+  let baselineFault: string | null = null;
+  if (integrity.unstamped) {
+    // Legacy baseline (or none yet): default terms, no fault.
+  } else if (!integrity.ok) {
+    baselineFault = integrity.failures.join("; ");
+  } else {
+    tolerance = resolveDriftTolerance(integrity.manifest!);
+  }
+  if (baselineFault !== null) {
+    console.error(
+      `[loombridge trace] the approved baseline for "${id}" cannot be trusted at grade time ` +
+        `(harness fault, not a game defect): ${baselineFault}`,
+    );
+  }
+
   let anyDrift = false;
   let anyUnreadable = false;
+  let anyCompared = false;
   for (const segment of artifact.segments) {
     for (const capture of segment.captures) {
       if (!capture.artifact) continue;
       const baselinePath = path.join(baselineDir, `${capture.id}.png`);
+      if (baselineFault !== null) {
+        // The anchor as a whole is untrusted, so no capture under it can be graded,
+        // including one whose own PNG happens to be readable.
+        capture.visualStatus = "unreadable";
+        anyUnreadable = true;
+        continue;
+      }
       let baselineExists = true;
       try {
         await fs.access(baselinePath);
@@ -656,10 +845,13 @@ export async function applyVisualDiff(
           readPng(capture.artifact),
           readPng(baselinePath),
         ]);
-        const diff = comparePerceptual(actual, baseline);
+        const diff = comparePerceptual(actual, baseline, { driftFraction: tolerance });
         capture.baseline = baselinePath;
         capture.diffFraction = diff.diffFraction;
         capture.visualStatus = diff.status;
+        // Stamped where the comparison HAPPENED, so the report says on what terms.
+        capture.toleranceUsed = tolerance;
+        anyCompared = true;
         if (diff.status === "drift") anyDrift = true;
       } catch (error) {
         // Unreadable actual/baseline → the comparison could not be made. Never a
@@ -677,6 +869,42 @@ export async function applyVisualDiff(
   }
   if (anyDrift) artifact.visualDrift = true;
   if (anyUnreadable) artifact.visualHarnessFault = true;
+  if (anyCompared) artifact.toleranceUsed = tolerance;
+}
+
+/**
+ * The run's drift facts, derived from the artifact the run actually wrote (A3).
+ *
+ * Pure and shared: the `trace` verb summary, the suggestion loop and the unified flow
+ * section all read THIS, so the three cannot disagree about how many captures drifted
+ * or by how much. `maxDiffFraction` spans every COMPARED capture, not only the drifting
+ * ones, which is the same number when anything drifted and an honest "worst observed"
+ * when nothing did.
+ */
+export function driftFacts(artifact: Pick<ReplayRunArtifact, "segments" | "toleranceUsed">): DriftFacts {
+  const captures = artifact.segments.flatMap((s) => s.captures);
+  return {
+    driftCaptures: captures.filter((c) => c.visualStatus === "drift").length,
+    maxDiffFraction: captures.reduce((max, c) => Math.max(max, c.diffFraction ?? 0), 0),
+    toleranceUsed: artifact.toleranceUsed ?? DEFAULT_DRIFT_FRACTION,
+  };
+}
+
+/**
+ * Should the re-tolerance suggestion be printed for this run? (A6)
+ *
+ * NEVER on a harness fault. An unreadable capture is not drift, and offering "widen the
+ * tolerance" as the remedy for it would be advice to paper over a broken capture with a
+ * consented allowance: the exact laundering of a harness fault into a game-tier
+ * allowance that the tiering rules exist to prevent. Also never when the actuation itself
+ * failed: the drift is not the story, and pointing at it would be misdirection.
+ */
+export function shouldSuggestTolerance(
+  artifact: Pick<ReplayRunArtifact, "status" | "visualDrift" | "visualHarnessFault">,
+): boolean {
+  if (artifact.visualHarnessFault) return false;
+  if (artifact.status !== "pass") return false;
+  return artifact.visualDrift === true;
 }
 
 async function runReport(args: TraceArgs): Promise<number> {
@@ -792,6 +1020,7 @@ function printSummary(
   artifact: ReplayRunArtifact,
   reportJson: string,
   htmlPath: string | undefined,
+  strictVisual: boolean,
 ): void {
   const blocked = artifact.blockedReason ? ` (${artifact.blockedReason})` : "";
   console.error(`[loombridge trace] ${id}: ${artifact.status.toUpperCase()}${blocked}`);
@@ -816,6 +1045,28 @@ function printSummary(
         .join(", ")}`,
     );
   }
+  const facts = driftFacts(artifact);
+  // R3/A3: DRIFT NAMES ITSELF, at the tier this invocation actually earns. The old
+  // summary printed the artifact's own word ("PASS") and left the reader to reconcile it
+  // with a non-zero exit; the run really did actuate, and the pixels really did move, so
+  // the line says both in that order.
+  if (facts.driftCaptures > 0) {
+    console.error(
+      `[loombridge trace] ${driftRegressionLine({ ...facts, exitTier: replayExitCode(artifact, strictVisual) })}`,
+    );
+  }
+  // A non-default tolerance is never silent: it is the term the whole comparison ran on.
+  if (artifact.toleranceUsed !== undefined && artifact.toleranceUsed !== DEFAULT_DRIFT_FRACTION) {
+    console.error(
+      `[loombridge trace] graded at the approved drift tolerance ${driftPercentText(artifact.toleranceUsed)}%: ` +
+        `${toleranceConsentSentence(artifact.toleranceUsed)}.`,
+    );
+  }
+  if (shouldSuggestTolerance(artifact)) {
+    for (const line of driftSuggestionLines({ ...facts, traceId: id })) {
+      console.error(`[loombridge trace] ${line}`);
+    }
+  }
   console.error(`[loombridge trace] report → ${path.relative(root, reportJson)}`);
   if (htmlPath) console.error(`[loombridge trace] html   → ${path.relative(root, htmlPath)}`);
 }
@@ -829,7 +1080,8 @@ function parseArgs(args: string[]): TraceArgs | { help: true; usageError?: boole
     sub !== "report" &&
     sub !== "approve" &&
     sub !== "replay-all" &&
-    sub !== "record"
+    sub !== "record" &&
+    sub !== "tolerance"
   ) {
     console.error(`[loombridge trace] unknown subcommand "${sub}".`);
     return { help: true, usageError: true };
@@ -849,6 +1101,7 @@ function parseArgs(args: string[]): TraceArgs | { help: true; usageError?: boole
   let outcomesPath: string | undefined;
   let stateSignal: ObserveTraceMeta["stateSignal"] | undefined;
   let autoStateSignal = false;
+  let driftTolerance: number | undefined;
 
   /** Read a required string value for `flag`, rejecting a missing/flag-like value. */
   const value = (i: number, flag: string): string | undefined => {
@@ -901,6 +1154,25 @@ function parseArgs(args: string[]): TraceArgs | { help: true; usageError?: boole
       stateSignal = parsed;
     } else if (arg === "--auto-state-signal") {
       autoStateSignal = true;
+    } else if (arg === "--set" || arg === "--drift-tolerance") {
+      // A6, THE VERB GUARD. This flag belongs to `tolerance` and to nothing else. The
+      // parse loop is SHARED across subcommands, so without this branch `--set` typed on
+      // `approve` would be accepted by the loop and silently ignored by the handler: an
+      // operator would believe they had widened the gate while approve re-froze the
+      // drifted frames. Refuse loudly, and name the verb that does take it.
+      if (sub !== "tolerance") {
+        console.error(
+          `[loombridge trace] ${arg} is only valid on \`trace tolerance\` (got "${sub}"). ` +
+            "approve NEVER takes a tolerance: it re-freezes frames, and doing both in one " +
+            "command would promote the drifted frames it was meant to keep.",
+        );
+        return { help: true, usageError: true };
+      }
+      const v = value((i += 1), arg);
+      if (v === undefined) return { help: true, usageError: true };
+      const parsed = parseDriftTolerance(v);
+      if (parsed === null) return { help: true, usageError: true };
+      driftTolerance = parsed;
     } else if (arg === "--duration") {
       const v = value((i += 1), "--duration");
       if (v === undefined) return { help: true, usageError: true };
@@ -927,6 +1199,14 @@ function parseArgs(args: string[]): TraceArgs | { help: true; usageError?: boole
   if (id !== undefined && !isSafePathSegment(id)) {
     console.error(
       `[loombridge trace] --id must not contain path separators or '..' (got "${id}").`,
+    );
+    return { help: true, usageError: true };
+  }
+  // `tolerance` without a value has nothing to stamp: refuse rather than write a manifest
+  // whose terms the operator never stated.
+  if (sub === "tolerance" && driftTolerance === undefined) {
+    console.error(
+      "[loombridge trace] tolerance requires --set <fraction> (e.g. --set 0.015; 0 demands pixel exactness).",
     );
     return { help: true, usageError: true };
   }
@@ -959,13 +1239,47 @@ function parseArgs(args: string[]): TraceArgs | { help: true; usageError?: boole
     outcomesPath,
     stateSignal,
     autoStateSignal,
+    driftTolerance,
   };
+}
+
+/**
+ * Parse + range-check a `--set` value, printing the refusal itself. Returns null when
+ * the value is refused (the caller exits 2).
+ *
+ * NON-COERCING (F9), because `Number()` is generous in all the wrong directions:
+ * `Number("")` and `Number(" ")` are 0 (a silent "demand pixel exactness" the operator
+ * never typed), `Number("2%")` is NaN, and `Number("1e400")` is Infinity. Every one of
+ * those is a refusal here. Exact 0 typed deliberately IS valid: it is stricter than the
+ * default, so it can only ever cause more refusals.
+ */
+function parseDriftTolerance(raw: string): number | null {
+  if (raw.trim().length === 0 || !/^\d+(\.\d+)?$/.test(raw.trim())) {
+    console.error(
+      `[loombridge trace] --set must be a fraction between 0 and ${MAX_DRIFT_TOLERANCE} ` +
+        `(e.g. 0.015 for 1.5%), got "${raw}".`,
+    );
+    return null;
+  }
+  const n = Number(raw.trim());
+  // ONE PREDICATE, BOTH SIDES. The range refusal is the manifest READER's own
+  // (`toleranceRefusal`), called here rather than restated: a second comparison against
+  // the same constant is how a stamp-time cap and a read-time cap drift apart, and the
+  // read side is the one that has to hold, because the manifest is a file an operator can
+  // edit. Refusing with the same sentence also means the CLI and a broken-row report say
+  // the same thing about the same number.
+  const refusal = toleranceRefusal(n, "--set");
+  if (refusal !== null) {
+    console.error(`[loombridge trace] ${refusal}.`);
+    return null;
+  }
+  return n;
 }
 
 function printUsage(): void {
   console.error(
     [
-      "Usage: loombridge trace <record|replay|replay-all|approve|report> [--id <id>] [options]",
+      "Usage: loombridge trace <record|replay|replay-all|approve|tolerance|report> [--id <id>] [options]",
       "",
       "  record      Record a human demonstration into a replayable trace: reset to",
       "              --scene, observe your clicks/drags until you press Enter (or",
@@ -976,7 +1290,11 @@ function printUsage(): void {
       "  replay-all  Replay EVERY trace under .loombridge/replays/traces/ and write a",
       "              roll-up .loombridge/replays/fleet.report.{json,html}. Exit by worst tier.",
       "  approve     Promote the latest run's captures to the approved baseline",
-      "              (.loombridge/replays/baselines/<id>/).",
+      "              (.loombridge/replays/baselines/<id>/). Never takes a tolerance, and",
+      "              refuses a run with an unreadable capture (a capture gap is not an anchor).",
+      "  tolerance   Stamp the human-approved pixel drift tolerance onto the EXISTING",
+      "              approved baseline (--set <fraction>). Touches no frame and no sha: it",
+      "              changes the terms of the comparison, not the thing being compared.",
       "  report      Re-render the HTML report from an existing <id>.report.json.",
       "",
       "Options:",
@@ -987,6 +1305,14 @@ function printUsage(): void {
       "                    baseline/) with no nested .loombridge/ — the mini-game workspace layout.",
       "  --no-html         Skip the HTML report.",
       "  --strict-visual   Make a visual drift from baseline a failure.",
+      `  --set <fraction>  tolerance ONLY: the approved pixel drift allowance, 0 to ${MAX_DRIFT_TOLERANCE}`,
+      `                    (${driftPercentText(MAX_DRIFT_TOLERANCE)}% cap; default when never stamped is ` +
+        `${driftPercentText(DEFAULT_DRIFT_FRACTION)}%). At N%, anything covering`,
+      "                    ~sqrt(N)% of frame width by ~sqrt(N)% of height can change undetected,",
+      "                    so it is a consented hole of a stated size, not a knob. Masks (per-capture",
+      "                    regions) are the real fix for an animating game and are not implemented yet.",
+      "                    Refused on every other subcommand: approve re-freezes frames, so widening",
+      "                    the gate and re-approving in one command would destroy the anchor.",
       "  --observe         record: record by observing a human session (required).",
       "  --scene <path>    record: scene to reset to and record from (optional: when omitted,",
       "                    the recorder resolves the editor's CURRENT scene, refusing if unsaved).",
@@ -1005,8 +1331,14 @@ function printUsage(): void {
       "",
       "Exit: 0 pass · 1 game defect: fail/error (or drift with --strict-visual)",
       "      2 harness fault: blocked (undrivable), an unreadable capture/baseline PNG,",
-      "        an unreachable editor, or a usage error. A harness fault is never",
-      "        reported as a game defect.",
+      "        a baseline manifest that cannot be trusted at grade time (including one",
+      "        carrying an over-cap drift tolerance), an unreachable editor, or a usage",
+      "        error. A harness fault is never reported as a game defect.",
+      "      tolerance: 0 stamped · 1 no approved baseline to stamp (approve frames first)",
+      "        · 2 the baseline manifest exists but cannot be trusted.",
+      "      A run that failed ONLY on pixel drift prints the observed max drift and the",
+      "      exact `trace tolerance` command to consent to it. That suggestion never",
+      "      appears for an unreadable capture: a harness fault is not drift.",
     ].join("\n"),
   );
 }

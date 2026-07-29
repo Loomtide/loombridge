@@ -38,6 +38,13 @@ import {
   type ReplayLayout,
 } from "../../../domain/state.js";
 import { isInside, projectWorkspace, sanitizeWorkspaceId } from "../../../domain/workspace-paths.js";
+import {
+  driftPercentText,
+  driftRegressionLine,
+  driftSuggestionLines,
+  toleranceConsentSentence,
+  type DriftFacts,
+} from "../../replay/visual-diff.js";
 import { resolveCliProjectPin } from "../../setup/cli-project-pin.js";
 import {
   exitCodeIsUnexplained,
@@ -110,11 +117,29 @@ export interface UnifiedSectionDeps {
     quietNext: boolean;
     baselineRefOverride?: string;
   }): Promise<number>;
+  /**
+   * A3: the seam returns the DRIFT FACTS alongside the tier, so the section can say what
+   * moved and by how much. A tier alone forced the summary to print the engine's own word
+   * ("pass") next to a 1, which is the display dishonesty R3 exists to end.
+   */
   runFlowTrace(
     layout: ReplayLayout,
     id: string,
     opts: { strictVisual: boolean; projectPathCanonical?: string },
-  ): Promise<{ status: string; exitTier: number }>;
+  ): Promise<
+    {
+      status: string;
+      exitTier: number;
+      /**
+       * Whether the re-tolerance suggestion may be printed for this trace. REQUIRED, and
+       * decided by the ONE predicate (`shouldSuggestTolerance`) rather than re-derived
+       * from the tier here: an optional field would default to "no suggestion", which is
+       * a skip, and a second derivation is how the two doors would come to disagree about
+       * whether a harness fault deserves advice to widen a gate.
+       */
+      suggestTolerance: boolean;
+    } & DriftFacts
+  >;
   runFeel(args: { root: string; workspace: string; strict: boolean }): Promise<number>;
 }
 
@@ -130,9 +155,16 @@ async function realDeps(): Promise<UnifiedSectionDeps> {
       return runVerifyMinigame(args);
     },
     async runFlowTrace(layout, id, opts) {
-      const { replayTraceForVerify } = await import("../../replay/trace.js");
-      const { artifact, exitTier } = await replayTraceForVerify(layout, id, opts);
-      return { status: artifact.status, exitTier };
+      const { replayTraceForVerify, shouldSuggestTolerance } = await import("../../replay/trace.js");
+      const { artifact, exitTier, drift } = await replayTraceForVerify(layout, id, opts);
+      // The suggestion is gated on the ARTIFACT, by the SAME predicate the trace verb
+      // uses, so neither door can offer "widen the tolerance" for a harness fault.
+      return {
+        status: artifact.status,
+        exitTier,
+        ...drift,
+        suggestTolerance: shouldSuggestTolerance(artifact),
+      };
     },
     async runFeel(args) {
       const { runVerifySnapshot } = await import("../../feel/snapshot-verify.js");
@@ -509,15 +541,25 @@ async function flowSection(
   for (const asset of traces) {
     const before = await fingerprintReport(asset.paths.report);
     try {
-      const { status, exitTier } = await deps.runFlowTrace(layout, asset.id, {
-        strictVisual: true,
-        projectPathCanonical,
-      });
+      const { status, exitTier, suggestTolerance, ...drift } = await deps.runFlowTrace(
+        layout,
+        asset.id,
+        { strictVisual: true, projectPathCanonical },
+      );
+      // R1's suggestion loop, at the unified door and in the SAME words as the trace verb:
+      // an operator who only ever runs `verify --live` must get the same actionable exit
+      // from a pixel-only failure, naming `trace tolerance` (never `trace approve`).
+      if (suggestTolerance) {
+        for (const line of driftSuggestionLines({ ...drift, traceId: asset.id })) {
+          console.error(`${TAG} flow: ${line}`);
+        }
+      }
       outcomes.push({
         kind: "trace",
         id: asset.id,
         status,
         exit: exitTier,
+        drift,
         ...(await bindReport(root, asset.paths.report, before)),
       });
     } catch (error) {
@@ -538,6 +580,11 @@ async function flowSection(
   return {
     status: worst.status,
     exit,
+    // The worst asset's drift travels up as a TYPED field so `summaryLines` can name what
+    // moved. Carried only when something actually drifted: a clean section says nothing
+    // about tolerances, and an absent block can never be read as "0 captures drifted, so
+    // this was checked".
+    ...(worst.drift && worst.drift.driftCaptures > 0 ? { drift: worst.drift } : {}),
     // Every trace that reaches this section passed baseline-manifest verification at
     // discovery (unstamped and tampered baselines never become runnable rows), so a
     // section that executed at all compared a frozen anchor.
@@ -739,7 +786,19 @@ function disposition(asset: DiscoveredAsset, live: boolean, only: readonly Unifi
  * line as a claim that the named source was verified.
  */
 function provenance(asset: DiscoveredAsset): string {
-  if (asset.approvedAt) return `approved ${asset.approvedAt}${asset.approvedBy ? ` (${asset.approvedBy})` : ""}`;
+  if (asset.approvedAt) {
+    return (
+      `approved ${asset.approvedAt}${asset.approvedBy ? ` (${asset.approvedBy})` : ""}` +
+      // R1/A2, THE AUDIT SURFACE. A stamped tolerance is printed BEFORE anything runs,
+      // with the consent sentence spelling out how big the hole is, because a tolerance
+      // nobody sees is indistinguishable from a gate nobody has. The default is silent:
+      // it is the strictest value the field can hold, so it says nothing new.
+      (asset.driftTolerance !== undefined
+        ? `, drift tolerance ${driftPercentText(asset.driftTolerance)}%: ` +
+          `${toleranceConsentSentence(asset.driftTolerance)}`
+        : "")
+    );
+  }
   if (asset.runnable !== "no" && asset.reason) return `no frozen anchor (${asset.reason})`;
   return "no frozen anchor";
 }
@@ -779,9 +838,20 @@ export function summaryLines(report: UnifiedVerifyReport, live: boolean): string
   const lines: string[] = [];
   for (const [name, section] of Object.entries(report.sections)) {
     const detail = section.assets?.length
-      ? ` [${section.assets.map((a) => `${a.id}=${a.status}`).join(", ")}]`
+      ? ` [${section.assets.map(assetDetail).join(", ")}]`
       : "";
     const where = section.reportPath ? ` → ${section.reportPath}` : "";
+    // R3/A3: DRIFT NAMES ITSELF, and it leads. The engine's own word for a trace whose
+    // actuation succeeded is `pass`, so the previous line read "flow: pass (exit 1)" and
+    // taught readers to distrust either the word or the number. The failing thing goes
+    // first; the actuation result stays as the qualifier that it is.
+    if (section.drift && section.drift.driftCaptures > 0) {
+      lines.push(
+        `${TAG} ${name}: ${driftRegressionLine({ ...section.drift, exitTier: section.exit })}` +
+          `${detail}${where}`,
+      );
+      continue;
+    }
     const qualifier = section.note ? `${section.note}, exit ${section.exit}` : `exit ${section.exit}`;
     // M8: say out loud when an executed section compared no frozen anchor. "pass" and
     // "pass against nothing a human froze" must not print identically.
@@ -865,6 +935,24 @@ export function summaryLines(report: UnifiedVerifyReport, live: boolean): string
     }
   }
   return lines;
+}
+
+/**
+ * One asset inside a section's bracketed detail list.
+ *
+ * A drifted trace is NAMED as drift with its numbers, not printed as `id=pass` (R3): the
+ * per-asset list is the only place a multi-trace section says WHICH trace moved, and
+ * `pass` next to a section that exited 1 is the same dishonesty at a smaller scale.
+ */
+function assetDetail(asset: UnifiedAssetOutcome): string {
+  if (asset.drift && asset.drift.driftCaptures > 0) {
+    return (
+      `${asset.id}=pixel drift ${driftPercentText(asset.drift.maxDiffFraction)}% ` +
+      `(${asset.drift.driftCaptures} capture(s) over tolerance ` +
+      `${driftPercentText(asset.drift.toleranceUsed)}%)`
+    );
+  }
+  return `${asset.id}=${asset.status}`;
 }
 
 // ── helpers ──────────────────────────────────────────────────────────────────
