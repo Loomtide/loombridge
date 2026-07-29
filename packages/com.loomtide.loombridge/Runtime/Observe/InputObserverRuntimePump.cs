@@ -74,6 +74,18 @@ namespace UnityBridge.Runtime
         // never silent. These taps do nothing in the game, so recording them would emit
         // an unreplayable step.
         private static int _droppedNoTarget;
+        // Count of gestures DROPPED because the Game view did not have INPUT FOCUS at the
+        // press edge. The editor swallows those clicks (they never reach the game), but this
+        // observer still sees the legacy-Input edge and its raycast still resolves a target,
+        // so recording them mints steps the game never processed, and replay (virtual input,
+        // focus-independent) then diverges. Surfaced at stop alongside _droppedNoTarget so the
+        // loss is honest, never silent.
+        private static int _droppedUnfocused;
+        // Editor-supplied probe: "does the Game view currently have focus?". The observe runtime
+        // assembly must not reference UnityEditor, so the Editor handler installs this delegate
+        // (GameViewFocus.IsGameViewFocused) at observe_start. NULL means unknown, which is treated
+        // as FOCUSED, so a player build or an older Editor path behaves exactly as before.
+        private static System.Func<bool> _gameViewFocusProbe;
 
         // Keyboard EDGES (down/up) captured via legacy Input, parallel buffers. Raw edges
         // (not paired holds) so the transform can reproduce CONCURRENT keys on a timeline.
@@ -120,6 +132,9 @@ namespace UnityBridge.Runtime
         // MID-gesture (a stir that completes before the pointer is lifted records the
         // POST-gesture phase). Captured at down, emitted at Record (release).
         private static string _downStateSignal;
+        // Whether the Game view had focus at the PRESS edge: the gesture's true delivery
+        // precondition (the same reason the state signal is sampled at press, not release).
+        private static bool _downGameViewFocused;
         // Phase 2 / D1-B: per-scene AUTO-DETECT. When true the signal isn't declared up front; it's
         // detected live from the ACTIVE scene the first time a gesture occurs in it (cached by scene
         // name) and the _signalPath/_signalComponent/_signalProperty fields are switched to that scene's
@@ -161,11 +176,13 @@ namespace UnityBridge.Runtime
             _signalSpecProperty.Clear();
             _autoSignalByScene.Clear();
             _droppedNoTarget = 0;
+            _droppedUnfocused = 0;
             _keyNames.Clear();
             _keyEdges.Clear();
             _keyTimesMs.Clear();
             _heldKeys.Clear();
             _downPending = false;
+            _downGameViewFocused = false;
             // Auto-detect (D1-B) takes precedence over a declared signal: the per-scene walk supplies the
             // signal, so the explicit coordinates are ignored and the fields start empty (set per scene).
             _autoDetect = autoDetect;
@@ -210,11 +227,16 @@ namespace UnityBridge.Runtime
             _signalSpecProperty.Clear();
             _autoSignalByScene.Clear();
             _droppedNoTarget = 0;
+            _droppedUnfocused = 0;
             _keyNames.Clear();
             _keyEdges.Clear();
             _keyTimesMs.Clear();
             _heldKeys.Clear();
             _downPending = false;
+            _downGameViewFocused = false;
+            // Drop the Editor-supplied delegate with the session so a stale probe (or a
+            // reference into an unloaded editor assembly) can never outlive the recording.
+            _gameViewFocusProbe = null;
             _autoDetect = false;
             _signalPath = null;
             _signalComponent = null;
@@ -328,6 +350,46 @@ namespace UnityBridge.Runtime
             return _droppedNoTarget;
         }
 
+        /// <summary>
+        /// How many gestures were dropped this session because the Game view lacked input
+        /// focus at the press edge (the editor swallowed them, so the game never processed
+        /// them). 0 when no focus probe was installed (probe absent means unknown means focused).
+        /// </summary>
+        public static int GetDroppedUnfocused()
+        {
+            return _droppedUnfocused;
+        }
+
+        /// <summary>
+        /// Install the Editor's "is the Game view focused?" probe for this session. Called by the
+        /// Editor observe_start handler (this assembly cannot reference UnityEditor). Passing null
+        /// clears it, which restores the pre-probe behaviour: every gesture counts as focused.
+        /// </summary>
+        public static void SetGameViewFocusProbe(System.Func<bool> probe)
+        {
+            _gameViewFocusProbe = probe;
+        }
+
+        /// <summary>
+        /// The installed probe's answer, defaulting to TRUE when no probe is installed or the
+        /// probe throws. Never let a focus probe break recording: an unknown focus state must
+        /// keep recording exactly as before, not silently swallow the human's gestures.
+        /// </summary>
+        private static bool ProbeGameViewFocused()
+        {
+            System.Func<bool> probe = _gameViewFocusProbe;
+            if (probe == null)
+                return true;
+            try
+            {
+                return probe();
+            }
+            catch
+            {
+                return true;
+            }
+        }
+
         /// <summary>KeyCode name of each recorded keyboard edge (parallel to GetRecordedKeyEdges/TimesMs).</summary>
         public static string[] GetRecordedKeyNames()
         {
@@ -400,6 +462,10 @@ namespace UnityBridge.Runtime
                 _downScreen = downPoint;
                 _downTimeMs = (Time.unscaledTime - _startTime) * 1000f;
                 _downPending = true;
+                // Sample Game-view focus at the PRESS, the edge that decides whether the game
+                // receives this gesture at all. An unfocused press is swallowed by the editor
+                // even though this observer sees it, so the release path drops it (counted).
+                _downGameViewFocused = ProbeGameViewFocused();
                 // Start a fresh travel accumulation for this gesture (real screen-px motion).
                 _travel = 0f;
                 _lastMouse = _downScreen;
@@ -440,6 +506,19 @@ namespace UnityBridge.Runtime
                 _downPending = false;
                 if (_downTarget == null)
                     return; // press began on empty space — nothing actionable to record
+
+                // The Game view did not have input focus when this gesture began: the editor
+                // consumed the click and the game never processed it. Recording it would mint a
+                // phantom step (this observer's raycast still resolved a target) that replay,
+                // which drives focus-independent virtual input from a clean reset, cannot
+                // reproduce: the phantom step's target is gone by then. Count it, never record it.
+                // This backstop stands even after observe_start focuses the Game view, because
+                // focus can be stolen again mid-session.
+                if (!_downGameViewFocused)
+                {
+                    _droppedUnfocused++;
+                    return;
+                }
 
                 float dist = (upPoint - _downScreen).magnitude;
                 if (_downKind == "ui" && dist >= DragMinPixels)

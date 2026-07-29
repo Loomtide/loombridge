@@ -576,6 +576,27 @@ test("observeLive: stop() surfaces the dropped-inert-tap count from the bridge",
   assert.equal(droppedNoTarget, 3);
 });
 
+test("observeLive: stop() surfaces the unfocused-Game-view drop count from the bridge", async () => {
+  const send = async (): Promise<BridgeResponse> =>
+    fakeSend({
+      clicks: [{ tMs: 1, locator: { path: "/A" }, button: 0 }],
+      observed: true,
+      droppedNoTarget: 0,
+      droppedUnfocused: 2,
+    });
+  const { clicks, droppedUnfocused } = await (await observeLive(send)).stop();
+  assert.equal(clicks.length, 1, "the focused taps still record");
+  assert.equal(droppedUnfocused, 2, "taps the editor swallowed are reported, not silent");
+});
+
+test("observeLive: an older bridge without droppedUnfocused reads as 0 (schema-tolerant)", async () => {
+  const send = async (): Promise<BridgeResponse> =>
+    fakeSend({ clicks: [{ tMs: 1, locator: { path: "/A" }, button: 0 }], observed: true, droppedNoTarget: 1 });
+  const { droppedNoTarget, droppedUnfocused } = await (await observeLive(send)).stop();
+  assert.equal(droppedNoTarget, 1);
+  assert.equal(droppedUnfocused, 0, "absent droppedUnfocused defaults to 0, never NaN/undefined");
+});
+
 // --- Scene-evidence round-trip (regression for the parse-drop + edge-path findings) -----------------
 
 /** A click stamped with the runtime scene the bridge reported it in. */

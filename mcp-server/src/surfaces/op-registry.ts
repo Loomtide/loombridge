@@ -1192,6 +1192,9 @@ function buildOps(): OpDef[] {
       "Begin OBSERVING the developer's real left-clicks during manual Play (the observe-a-human-session " +
       "recorder). Unlike the input-driving ops, this does not inject input and needs no input session — it " +
       "reads legacy UnityEngine.Input + the uGUI EventSystem in the game's Update loop. Requires Play Mode. " +
+      "FOCUSES the Game view first, so the human's first taps reach the game instead of being swallowed by the " +
+      "editor; a gesture that still arrives while the Game view is unfocused is dropped and counted as " +
+      "`droppedUnfocused` rather than recorded as a step the game never processed. " +
       "Pair with input.observe_stop to collect the recorded clicks (each resolved to a locator).",
     inputSchema: { type: "object", properties: {} },
   });
@@ -1242,10 +1245,12 @@ function buildOps(): OpDef[] {
     command: "input.observe_stop",
     toolName: "unity_input_observe_stop",
     description:
-      "Stop observing and return { clicks: [{ tMs, locator, button }], keyEdges: [{ key, edge, tMs }], observed, droppedNoTarget }, each click resolved to a " +
+      "Stop observing and return { clicks: [{ tMs, locator, button }], keyEdges: [{ key, edge, tMs }], observed, droppedNoTarget, droppedUnfocused }, each click resolved to a " +
       "locator. `observed:false` means the recorder was not live at stop (never started, or Play Mode was " +
       "restarted after observe_start) — an empty clicks then is 'observation died', NOT 'clicked nothing', so " +
-      "refuse it. MUST be called while Play Mode is still active (runtime objects are destroyed on stop). " +
+      "refuse it. `droppedUnfocused` counts gestures the editor swallowed because the Game view lacked input " +
+      "focus: the game never processed them, so they are reported and never recorded. " +
+      "MUST be called while Play Mode is still active (runtime objects are destroyed on stop). " +
       "Feed the clicks to the replay recorder to mint a trace.",
     inputSchema: { type: "object", properties: {} },
   });

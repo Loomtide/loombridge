@@ -129,6 +129,21 @@ test("recordObservedTrace: surfaces the observer's dropped-inert-tap count", asy
   assert.equal(droppedNoTarget, 2, "the inert-tap count is reported, not silent");
 });
 
+test("recordObservedTrace: surfaces the unfocused-Game-view drop count (and 0 from an older bridge)", async () => {
+  const withFocusDrops = fakeBridge({
+    "input.observe_stop": () => ({
+      data: { clicks: oneClick, observed: true, droppedNoTarget: 0, droppedUnfocused: 3 },
+    }),
+  });
+  const reported = await recordObservedTrace(withFocusDrops.send, meta, { waitForStop: async () => {} });
+  assert.equal(reported.trace.segments.length, 1, "only the taps the game actually received are recorded");
+  assert.equal(reported.droppedUnfocused, 3, "swallowed taps are threaded to the CLI, not dropped silently");
+
+  const olderBridge = fakeBridge({ "input.observe_stop": stopWith(oneClick) });
+  const legacy = await recordObservedTrace(olderBridge.send, meta, { waitForStop: async () => {} });
+  assert.equal(legacy.droppedUnfocused, 0, "a bridge without the field reports 0, never undefined");
+});
+
 test("recordObservedTrace: a session with key edges → the timed-edge transform", async () => {
   const { send } = fakeBridge({
     "input.observe_stop": () => ({

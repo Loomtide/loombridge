@@ -24,6 +24,13 @@ export interface StopResult {
   keyEdges: ObservedKeyEdge[];
   /** uGUI taps the observer dropped for hitting no interactive element (honest, not silent). */
   droppedNoTarget: number;
+  /**
+   * Gestures the observer dropped because the Game view was UNFOCUSED at the press
+   * edge: the editor swallowed them, so the game never processed them. Recording them
+   * would mint phantom steps replay cannot reproduce. 0 when the bridge predates the
+   * field (an older editor simply reports nothing here).
+   */
+  droppedUnfocused: number;
 }
 
 export interface ObserveSession {
@@ -129,10 +136,15 @@ export async function observeLive(
       }
       const droppedNoTarget = (response.data as { droppedNoTarget?: unknown } | undefined)
         ?.droppedNoTarget;
+      // Schema-tolerant: a bridge older than the Game-view-focus backstop returns no
+      // `droppedUnfocused` field at all, which reads as 0 (nothing dropped for focus).
+      const droppedUnfocused = (response.data as { droppedUnfocused?: unknown } | undefined)
+        ?.droppedUnfocused;
       return {
         clicks: extractClicks(response.data),
         keyEdges: extractKeyEdges(response.data),
         droppedNoTarget: typeof droppedNoTarget === "number" ? droppedNoTarget : 0,
+        droppedUnfocused: typeof droppedUnfocused === "number" ? droppedUnfocused : 0,
       };
     },
   };
