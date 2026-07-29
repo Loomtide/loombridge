@@ -25,6 +25,7 @@ import path from "node:path";
 import process from "node:process";
 
 import { loombridgePaths, nowIso, readState } from "../../domain/state.js";
+import { deriveRepoIdentity } from "../../shared/repo-identity.js";
 import {
   defaultEditorLocatorSeams,
   isEditorLocatorError,
@@ -43,6 +44,7 @@ import {
 import {
   TEST_RESULTS_FILE,
   TEST_RESULTS_MANIFEST,
+  projectBindingMatches,
   projectRootForTestResultsDir,
   sha256,
   testResultsDir,
@@ -571,6 +573,9 @@ export async function runTests(cli: RunArgs, opts: TestsRunOpts = {}): Promise<n
     kind: "test-results",
     schemaVersion: "1",
     projectRoot: root,
+    // Portable binding when derivable (git working tree): lets the committed trio grade
+    // on any checkout of the same repo, while a different repo's trio still refuses.
+    ...(deriveRepoIdentity(root) ?? {}),
     projectDeclaredEditorVersion: version.version,
     logReportedEditorVersion: parseLogEditorVersion(logText),
     resolvedEditorPath: editor.path,
@@ -648,10 +653,16 @@ export async function gradeStoredResults(cli: GradeArgs, opts: TestsGradeOpts = 
         `${MISPLACED_REFUSAL}: the manifest claims projectRoot ${claimedRoot}, but this pair does not sit ` +
         `in that project's declared results directory (${testResultsDir(String(claimedRoot))})`;
       stampedNote = misplaced;
-    } else if (path.resolve(impliedRoot) !== path.resolve(String(claimedRoot))) {
+    } else if (!projectBindingMatches(integrity.manifest!, impliedRoot)) {
+      // The PORTABLE rule (same repo, same position, any checkout path) or the absolute
+      // rule may satisfy this; a pair from a genuinely different project satisfies
+      // neither. This is what lets a committed trio grade quotably on a CI runner.
       misplaced =
-        `${MISPLACED_REFUSAL}: the manifest claims projectRoot ${claimedRoot}, but this pair sits under ` +
-        `${impliedRoot}`;
+        `${MISPLACED_REFUSAL}: the manifest claims projectRoot ${claimedRoot}` +
+        (integrity.manifest?.repoIdentity !== undefined
+          ? ` (repo ${integrity.manifest.repoIdentity} at ${integrity.manifest.projectPath ?? "."})`
+          : "") +
+        `, but this pair sits under ${impliedRoot}`;
       stampedNote = misplaced;
     } else {
       stamped = true;
