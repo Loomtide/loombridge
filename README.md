@@ -185,6 +185,14 @@ Four invariants keep the gate honest:
 against a perceptual baseline; `trace approve` freezes the baseline, `trace report` writes
 a self-contained HTML report. Regressions show up as pixels, not opinions.
 
+A game that animates under its own clock can never hold a frozen frame exactly, so
+`trace tolerance --id <id> --set <fraction>` stamps a bounded, human-approved pixel
+allowance (capped at 2%) onto the approved baseline. It is a separate verb from `approve`
+for a reason: approve re-freezes frames, so a single command that widened the gate and
+re-approved would destroy the anchor it was meant to keep. Every non-default tolerance is
+printed with the size of the hole it opens, and a drift-only failure tells you the exact
+command to consent to it.
+
 ### Feel is measured, not vibed
 
 The bridge samples position, velocity, and animator state from the running game on real

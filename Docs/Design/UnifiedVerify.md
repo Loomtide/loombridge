@@ -408,9 +408,60 @@ note, so no guard enforces it.
   moment), and offering a self-serve, unanchored asset there would convert a human-anchor
   on-ramp into a self-serve one.
 
+### Drift-tolerance delivery notes (the ratchet wave)
+
+Shipped after a live session in which a real, animating game replayed at ~1.3% pixel drift on
+every capture: the gate was permanently red, so it was on its way to being ignored, which
+protects nothing.
+
+- **The allowance lives in the human-approved anchor, never in a runtime flag.**
+  `baseline-manifest.json` gained an OPTIONAL `driftTolerance`. Absent resolves to the 0.5%
+  default, which is why `schemaVersion` stays `"1"`: the omission fails safe, because a reader
+  that never heard of the field grades STRICTLY. A field that could only tighten a comparison
+  is the only kind that may be added without a version bump.
+- **`trace approve` never takes a tolerance. `trace tolerance --id <id> --set <fraction>` is a
+  separate verb.** This split is the load-bearing part. The natural design (`approve
+  --drift-tolerance`) hands an operator staring at a drift failure ONE command that both widens
+  the gate and re-freezes the drifted frames as the new truth: the anchor destroyed by the act
+  of trying to keep it. The new verb touches no PNG and no sha, re-stamps `approvedAt`, and
+  appends an approval ledger (`approvalCount`, `previousApprovedAt`, `previousDriftTolerance`)
+  so a tolerance that ratchets upward one re-stamp at a time is visible on disk. `approve`
+  preserves a stamped tolerance and prints it; it also refuses to promote a run carrying an
+  unreadable capture, because a capture gap is a harness fault and never an anchor.
+- **The cap is 0.02, enforced on BOTH sides by one constant, inside the one reader.**
+  `loadTraceBaselineManifest` rejects an over-cap, negative, non-numeric or non-finite value as
+  a typed error, so a hand-edited `0.9` makes the row BROKEN in the unified door rather than
+  making the gate wider. 1% was rejected as the cap because it kills the measured real-world
+  case, and a permanently red gate protects nothing. Exact `0` is valid (it demands pixel
+  exactness); the comparison stays `fraction > tolerance`, so a value exactly equal to the
+  tolerance passes.
+- **MASKS ARE THE REAL FIX, and are not implemented.** A tolerance is a hole of a stated size
+  anywhere in the frame; per-capture regions would let an animating area be excluded while the
+  rest stays exact. Until then the tolerance is the honest stopgap, and every surface that
+  prints one prints the consent sentence: *at N%, anything covering up to ~sqrt(N)% of frame
+  width by ~sqrt(N)% of height can change undetected*.
+- **The baseline is re-verified AT GRADE TIME.** `applyVisualDiff` runs `verifyTraceBaseline`
+  itself rather than trusting discovery's earlier plan (and the `trace` verb has no discovery
+  step at all). A manifest that is malformed, over-cap, or no longer matches its frames is a
+  harness fault for every capture, never a fall back to the default tolerance.
+- **A drift names itself, and the suggestion names the right verb.** The flow line leads with
+  `pixel-drift regression (exit 1): actuation passed, N capture(s) over tolerance, max X.X%`,
+  carried in typed report fields rather than in the M5 `note`. A drift-ONLY failure prints the
+  observed max and the exact `trace tolerance` command (never `trace approve`), with
+  `min(cap, ceil3(max) + 0.002)` as the suggested value. It never fires for a harness fault.
+- **A workspace that stamps this root but was not used is a plan NOTE, never an adoption.**
+  The one carve-out to "an asset exists because an approve step wrote it": the scan reads at
+  most two ownership stamps per workspace, at most 50 workspaces, emits routing text listing
+  every match, and produces no `DiscoveredAsset`. Which `--id` an operator passes changes what
+  is measured, so only the operator may choose it.
+
 ## Out of scope
 
-- Changing any gate's semantics, tolerance, or exit tiering.
+- Per-capture drift MASKS/regions (the real fix for a game that animates under its own clock;
+  the capped, human-approved per-trace tolerance is the honest stopgap shipped instead).
+- Changing any gate's semantics or exit tiering. (The ratchet wave added ONE tolerance, and
+  the delivery note above states why: it is per-trace, human-approved on the anchor, capped,
+  and it can only ever be as strict as the old fixed default when nobody stamps one.)
 - Folding `doneness` into `verify`.
 - Engine breadth (the CLI core stays engine-agnostic by design; Unity remains the only
   shipped engine).

@@ -35,6 +35,27 @@ loombridge verify --root . --only screens # ONE section (CI granularity); never 
 - **No assets at all** prints the on-ramp (`trace record --observe` → `trace replay` →
   `trace approve`, then `verify --live`) and exits `2`. Recording is a **human** step: the play
   session *is* the approval moment. Do not claim it as an agent action.
+- **Pixel drift can be TOLERATED, only by a human, only up to 2%.** A game that animates
+  under its own clock cannot hold a frozen frame to the 0.5% default, so `loombridge trace
+  tolerance --id <id> --set <fraction>` stamps a per-trace allowance onto the approved
+  baseline manifest. It is a **separate verb from `trace approve` on purpose**: approve
+  re-freezes frames, so one command that both widened the gate and re-approved would destroy
+  the anchor it was meant to keep. `approve` never takes a tolerance and preserves a stamped
+  one; `tolerance` never touches a frame or a sha. The cap is `0.02`, enforced at stamp time
+  *and* at read time, so a hand-edited manifest is a **broken** row, not a wider gate. Any
+  non-default tolerance prints on the plan line with its consent sentence (*at 2%, anything
+  covering up to ~14% of frame width by ~14% of height can change undetected*). Per-capture
+  masks are the real fix and are not implemented yet.
+- **A drift names itself.** A trace whose actuation passed but whose pixels moved reads
+  `flow: pixel-drift regression (exit 1): actuation passed, N capture(s) over tolerance, max
+  X.X%`, never `pass (exit 1)`, and a drift-only failure prints the exact `trace tolerance`
+  command to consent to it. That suggestion **never** appears for an unreadable capture: a
+  capture gap is a harness fault (exit `2`), not drift.
+- **A workspace that stamps this root but was not used is a NOTE, never an adoption.** When
+  the derived workspace holds nothing, the plan names any workspace under
+  `~/.loombridge/projects/` whose stamped `projectRoot` is this project, and tells you to pass
+  `--id <id>`. Nothing is adopted automatically: which id you pass changes what is measured,
+  and therefore the verdict.
 - **Each section says whether it compared a frozen anchor.** The report carries
   `anchored` per section plus `anchoredSections`/`unanchoredSections`, so "green" and "green
   against nothing a human froze" never print identically. **`pass` requires every executed
@@ -77,8 +98,9 @@ loombridge verify --root . --only screens # ONE section (CI granularity); never 
   it is a permanent diagnostic that never gates.
 - **Exit codes:** `0` a full pass, or a partial that compared **at least one anchored green
   section** and whose only gaps were assets skipped for lack of `--live` or extra unanchored
-  sections · `1` a game defect (gate fail, drift, baseline regression) · `2` a harness fault, a
-  broken asset, nothing graded, **or an all-unanchored partial** (every executed section was
+  sections · `1` a game defect (gate fail, pixel-drift regression, baseline regression) · `2` a harness
+  fault (including a baseline manifest that cannot be trusted at grade time, or one carrying
+  an over-cap drift tolerance), a broken asset, nothing graded, **or an all-unanchored partial** (every executed section was
   green but none of them compared anything a human froze: *nothing human-approved was
   compared; a self-produced green cannot exit 0*). A run that checked nothing is never a pass,
   and a `2` is never a game verdict (a found defect stays at `1` however much else went

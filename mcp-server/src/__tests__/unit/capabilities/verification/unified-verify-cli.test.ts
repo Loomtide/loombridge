@@ -34,6 +34,7 @@ import {
   type UnifiedVerifyReport,
 } from "../../../../capabilities/verification/unified/report.js";
 import { run as runTrace } from "../../../../capabilities/replay/trace.js";
+import { DEFAULT_DRIFT_FRACTION } from "../../../../capabilities/replay/visual-diff.js";
 import { run as runMinigame } from "../../../../capabilities/minigame/minigame.js";
 import { resolveCliProjectPin } from "../../../../capabilities/setup/cli-project-pin.js";
 import { createDraftAssetManifest, type AssetManifest } from "../../../../capabilities/assets/asset-manifest.js";
@@ -164,6 +165,48 @@ async function plantApprovedTrace(root: string, id: string): Promise<void> {
   );
   const approved = await captured(() => runTrace(["approve", "--id", id, "--root", root]));
   assert.equal(approved.result, 0, `approve ${id}:\n${approved.lines.join("\n")}`);
+}
+
+/**
+ * THE FLOW SEAM'S RETURN, as A3 shaped it: the tier plus the drift facts plus the
+ * suggestion gate.
+ *
+ * Every double in this file goes through these two builders rather than spelling the
+ * object inline, so the shape lives in one place. The fields are REQUIRED on the seam on
+ * purpose: a double that omitted them would silently claim "nothing drifted, no
+ * suggestion", which is a skip wearing a default, and the whole point of A3 is that the
+ * section reports drift from typed facts instead of inferring it from a tier.
+ */
+function cleanFlow(status = "pass"): {
+  status: string;
+  exitTier: number;
+  suggestTolerance: boolean;
+  driftCaptures: number;
+  maxDiffFraction: number;
+  toleranceUsed: number;
+} {
+  return {
+    status,
+    exitTier: 0,
+    suggestTolerance: false,
+    driftCaptures: 0,
+    maxDiffFraction: 0,
+    toleranceUsed: DEFAULT_DRIFT_FRACTION,
+  };
+}
+
+/** A trace whose actuation passed and whose pixels moved: tier 1, suggestion allowed. */
+function driftedFlow(
+  overrides: { status?: string; driftCaptures?: number; maxDiffFraction?: number; toleranceUsed?: number } = {},
+): ReturnType<typeof cleanFlow> {
+  return {
+    status: overrides.status ?? "pass",
+    exitTier: 1,
+    suggestTolerance: true,
+    driftCaptures: overrides.driftCaptures ?? 1,
+    maxDiffFraction: overrides.maxDiffFraction ?? 0.013,
+    toleranceUsed: overrides.toleranceUsed ?? DEFAULT_DRIFT_FRACTION,
+  };
 }
 
 // ── feel-snapshot fixture (same technique as unified-discovery.test.ts) ──────
@@ -701,7 +744,8 @@ test("--live: one trace that THROWS is that trace's harness fault; the others st
             assert.equal(opts.strictVisual, true, "the unified flow section always gates pixel drift (A5)");
             seen.push(id);
             if (id === "b-boom") throw new Error("editor went away mid-replay");
-            return { status: "pass", exitTier: 0 };
+            // A3 seam: the tier plus the drift facts (nothing drifted here).
+            return cleanFlow();
           },
         },
       }),
@@ -742,7 +786,8 @@ test("a section that throws is caught as ITS harness fault; the later sections s
             throw new Error("contract engine exploded");
           },
           async runFlowTrace() {
-            return { status: "pass", exitTier: 0 };
+            // A3 seam: a clean trace still answers the drift question, with zeroes.
+            return cleanFlow();
           },
         },
       }),
@@ -840,9 +885,8 @@ test("--live: a trace at tier 1 (pixel DRIFT) is a game defect: the run exits 1,
         workspace,
         deps: {
           async runFlowTrace(_layout, id) {
-            return id === "b-drifted"
-              ? { status: "visual-drift", exitTier: 1 }
-              : { status: "pass", exitTier: 0 };
+            // A3 seam: the drifted trace carries the numbers the section now prints.
+            return id === "b-drifted" ? driftedFlow({ status: "visual-drift" }) : cleanFlow();
           },
         },
       }),
@@ -859,6 +903,92 @@ test("--live: a trace at tier 1 (pixel DRIFT) is a game defect: the run exits 1,
     assert.equal(result, 1);
     assert.match(lines.join("\n"), /NOT MEASURED \(never folded into pass\): trace 'z-never-approved'/);
     assert.equal(report.notRun[0]!.why, "non-anchor", "the coverage gap is still reported, as a row");
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+    await fs.rm(workspace, { recursive: true, force: true });
+  }
+});
+
+test("--live: a pixel-only failure prints the SAME suggestion here as at the trace verb, naming `trace tolerance`", async () => {
+  // R1's suggestion loop, at the OTHER door. An operator who only ever runs
+  // `verify --live` must get the same actionable exit from a drift-only failure, and it
+  // must name `trace tolerance`: an approve-shaped suggestion would have them promote the
+  // drifted frames, destroying the anchor they were trying to keep.
+  const root = await unityLikeProject("unified-cli-suggest-");
+  const workspace = await tmpDir("unified-cli-ws-");
+  try {
+    await plantApprovedTrace(root, "happy-path-2");
+    const { result, lines } = await captured(() =>
+      runUnifiedVerify({
+        root,
+        strict: false,
+        live: true,
+        workspace,
+        deps: {
+          async runFlowTrace() {
+            return driftedFlow({ driftCaptures: 39 });
+          },
+        },
+      }),
+    );
+    const out = lines.join("\n");
+    assert.equal(result, 1, "drift is gated at this door (A5), so it is a game-tier result");
+    assert.match(
+      out,
+      /flow: pixel drift only: max 1\.3% across 39 capture\(s\); if this game animates, re-approve the tolerance with `loombridge trace tolerance --id happy-path-2 --set 0\.015`/,
+    );
+    assert.match(out, /this value applies to every capture in the trace/);
+    assert.doesNotMatch(out, /trace approve --id happy-path-2 --drift/, "approve never takes a tolerance");
+    // …and the section line itself leads with the failing word (R3).
+    assert.match(out, /flow: pixel-drift regression \(exit 1\): actuation passed, 39 capture\(s\) over tolerance, max 1\.3%/);
+
+    const report = await readUnified(root);
+    assert.deepEqual(report.sections.flow?.drift, {
+      driftCaptures: 39,
+      maxDiffFraction: 0.013,
+      toleranceUsed: DEFAULT_DRIFT_FRACTION,
+    }, "the numbers are TYPED on the report, never smuggled into `note`");
+    // M5's note keeps its own meaning: it answers "why is there no per-asset report"
+    // (the double wrote none) and carries no drift numbers, which is the separation A3
+    // insists on.
+    assert.equal(report.sections.flow?.note, "no report produced this run");
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+    await fs.rm(workspace, { recursive: true, force: true });
+  }
+});
+
+test("--live: NO suggestion is printed when the trace is a harness fault, only when it is drift-only", async () => {
+  // The one case the suggestion must never fire on: an unreadable capture is not drift,
+  // and "widen the tolerance" would be advice to paper over a broken capture with a
+  // consented allowance.
+  const root = await unityLikeProject("unified-cli-nosuggest-");
+  const workspace = await tmpDir("unified-cli-ws-");
+  try {
+    await plantApprovedTrace(root, "happy-path-2");
+    const { result, lines } = await captured(() =>
+      runUnifiedVerify({
+        root,
+        strict: false,
+        live: true,
+        workspace,
+        deps: {
+          async runFlowTrace() {
+            return {
+              status: "pass",
+              exitTier: 2,
+              suggestTolerance: false,
+              driftCaptures: 0,
+              maxDiffFraction: 0,
+              toleranceUsed: DEFAULT_DRIFT_FRACTION,
+            };
+          },
+        },
+      }),
+    );
+    assert.equal(result, 2);
+    assert.doesNotMatch(lines.join("\n"), /trace tolerance/, "a harness fault never earns a tolerance suggestion");
+    assert.doesNotMatch(lines.join("\n"), /pixel-drift regression/);
   } finally {
     await fs.rm(root, { recursive: true, force: true });
     await fs.rm(workspace, { recursive: true, force: true });
@@ -884,7 +1014,8 @@ test("--live: the flow section PINS the editor it replays against", async () => 
         deps: {
           async runFlowTrace(_layout, _id, o) {
             opts.push(o);
-            return { status: "pass", exitTier: 0 };
+            // A3 seam: unchanged pinning question, new (drift-aware) return shape.
+            return cleanFlow();
           },
         },
       }),

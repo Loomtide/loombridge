@@ -57,9 +57,22 @@ export function normalizeWorkspaceId(raw: string): string {
   return id.replace(/-+/g, "-");
 }
 
+/**
+ * The DECLARED root every workspace lives under: `~/.loombridge/projects`.
+ *
+ * Exported (A5) because more than one caller needs the DIRECTORY rather than one
+ * workspace inside it: unified discovery scans it to answer "some other workspace stamps
+ * this project root". Spelling that path a second time at the scan site would be the
+ * repo's own declared-path failure mode, so `projectWorkspace` composes from this
+ * function and the scan reads the same one.
+ */
+export function workspacesRoot(): string {
+  return path.resolve(os.homedir(), ".loombridge", "projects");
+}
+
 /** The default workspace path for an id: `~/.loombridge/projects/<id>`. */
 export function projectWorkspace(id: string): string {
-  return path.resolve(os.homedir(), ".loombridge", "projects", id);
+  return path.join(workspacesRoot(), id);
 }
 
 /** True if `child` resolves to `parent` or a path inside it. */
