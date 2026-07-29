@@ -25,8 +25,11 @@ import { runPlan } from "../../../../capabilities/verification/plan.js";
 import { run as runVerifyCli, runVerify } from "../../../../capabilities/verification/verify.js";
 import { runUnifiedVerify } from "../../../../capabilities/verification/unified/orchestrator.js";
 import {
+  UNIFIED_SCOPED_REPORT,
   UNIFIED_SCREENS_REPORT,
+  UNIFIED_VERIFY_REPORT,
   resolveUnifiedOutcome,
+  unifiedScopedReportPath,
   unifiedVerifyReportPath,
   type UnifiedVerifyReport,
 } from "../../../../capabilities/verification/unified/report.js";
@@ -1163,6 +1166,369 @@ test("M8: the report says which executed sections compared a frozen anchor", asy
   } finally {
     await fs.rm(root, { recursive: true, force: true });
     await fs.rm(workspace, { recursive: true, force: true });
+  }
+});
+
+// ── S2a: --only, the SCOPED run ──────────────────────────────────────────────
+
+/** Read the scoped report a `--only` run writes (never `verify.json`). */
+async function readScoped(root: string): Promise<UnifiedVerifyReport> {
+  const file = unifiedScopedReportPath(loombridgePaths(root).reports);
+  return JSON.parse(await fs.readFile(file, "utf-8")) as UnifiedVerifyReport;
+}
+
+test("--only runs the selected section, DESELECTS the healthy rest, and is never a `pass`", async () => {
+  // The fixture has two healthy offline assets: an APPROVED screens pack (anchored, green)
+  // and a planned contract (green, unanchored). `--only screens` must execute exactly one of
+  // them and record the other as deselected, and the run must still not claim a full pass.
+  const root = await plannedProject("unified-cli-only-", { graded: true });
+  const { workspace, contractPath } = await screenWorkspace("unified-cli-only-ws-");
+  try {
+    await approveScreens(root, workspace, contractPath);
+
+    const { result, lines } = await captured(() =>
+      runVerifyCli(["--root", root, "--workspace", workspace, "--only", "screens"]),
+    );
+    const text = lines.join("\n");
+    assert.equal(result, 0, `an anchored green section still exits 0 when scoped:\n${text}`);
+    assert.match(text, /scoped to --only screens/, "the plan header names the scoping");
+    assert.match(text, /contract '.*': deselected \(--only screens\): not run, and not counted/);
+    assert.match(text, /SCOPED RUN \(--only\)/);
+    assert.match(text, /DESELECTED \(--only, excluded from the verdict\): contract/);
+
+    const report = await readScoped(root);
+    assert.deepEqual(report.only, ["screens"]);
+    assert.equal(report.status, "partial", "F2: a scoped run's ceiling is partial, never pass");
+    assert.equal(report.exit, 0, "…and the ceiling lowers the WORD, not the tier");
+    assert.equal(report.sections.screens?.exit, 0);
+    assert.equal(report.sections.contract, undefined, "a deselected section must never execute");
+    assert.deepEqual(report.deselected.map((d) => [d.kind, d.section]), [["contract", "contract"]]);
+    assert.deepEqual(report.notRun, [], "a deselected row is NOT a notRun row");
+
+    // F1: the full report is a different file, and this run did not write it.
+    assert.equal(
+      await fileExists(unifiedVerifyReportPath(loombridgePaths(root).reports)),
+      false,
+      "a scoped run must never write the full unified report",
+    );
+    // …and the contract engine never ran, so no verdict was produced either.
+    assert.equal(await fileExists(loombridgePaths(root).verdict), false);
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+    await fs.rm(workspace, { recursive: true, force: true });
+  }
+});
+
+test("F2 LITMUS: a BROKEN asset is NOT scoped away: --only cannot make tampering stop counting", async () => {
+  // THE ATTACK `--only` could otherwise buy: approve a trace baseline, repaint a frame after
+  // approval, then run `--only screens` so the tampered row is "not part of this run". The
+  // deselection rule therefore only ever removes a row whose `runnable` is not `no`.
+  //
+  // The fixture is built so the ordering is the ONLY thing that decides the exit: the
+  // selected screens section is anchored and green (exit 0 on its own), and the tampered
+  // trace is in a section nobody selected. Deselect-before-classify would exit 0; the shipped
+  // order exits 2.
+  const root = await tmpDir("unified-cli-onlybroken-");
+  const { workspace, contractPath } = await screenWorkspace("unified-cli-onlybroken-ws-");
+  try {
+    await approveScreens(root, workspace, contractPath);
+    await plantApprovedTrace(root, "demo");
+
+    // CONTROL: with the baseline intact, the same scoped invocation is a clean exit 0 and the
+    // trace really is deselected, so the flip below is caused by the tampering alone.
+    const clean = await captured(() =>
+      runVerifyCli(["--root", root, "--workspace", workspace, "--only", "screens"]),
+    );
+    assert.equal(clean.result, 0, clean.lines.join("\n"));
+    assert.deepEqual((await readScoped(root)).deselected.map((d) => d.kind), ["trace"]);
+
+    // THE TAMPERING: repaint an approved frame after the fact.
+    await fs.writeFile(
+      path.join(standardReplayLayout(root).replayBaselines, "demo", "cap.png"),
+      Buffer.from("repainted after approval"),
+    );
+
+    const { result, lines } = await captured(() =>
+      runVerifyCli(["--root", root, "--workspace", workspace, "--only", "screens"]),
+    );
+    assert.equal(result, 2, `tampering must survive the scoping:\n${lines.join("\n")}`);
+    assert.match(lines.join("\n"), /trace 'demo': BROKEN, will not run/);
+
+    const report = await readScoped(root);
+    assert.equal(report.status, "partial");
+    assert.equal(report.exit, 2, "a broken anchor keeps the harness tier in a scoped run");
+    assert.equal(report.notRun.length, 1);
+    assert.equal(report.notRun[0]!.why, "broken");
+    assert.deepEqual(report.deselected, [], "a broken row is NOT deselectable, so it is not here");
+    assert.equal(report.sections.screens?.exit, 0, "…and the selected section really did pass");
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+    await fs.rm(workspace, { recursive: true, force: true });
+  }
+});
+
+test("--only over an UNANCHORED section keeps the FXH rule: a self-produced green cannot exit 0", async () => {
+  // The scoping does not buy an exemption from the anchored-exit rule. A planned contract is
+  // green and unanchored, so selecting only it exits 2 exactly as the full run does.
+  const root = await plannedProject("unified-cli-onlyfxh-", { graded: true });
+  const workspace = await tmpDir("unified-cli-ws-");
+  try {
+    const { result, lines } = await captured(() =>
+      runVerifyCli(["--root", root, "--workspace", workspace, "--only", "contract"]),
+    );
+    assert.equal(result, 2);
+    assert.match(lines.join("\n"), /REFUSED: nothing human-approved was compared/);
+    const report = await readScoped(root);
+    assert.equal(report.status, "partial");
+    assert.equal(report.exit, 2);
+    assert.deepEqual(report.only, ["contract"]);
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+    await fs.rm(workspace, { recursive: true, force: true });
+  }
+});
+
+test("a selection that matches NO discovered asset is nothing-checked (exit 2), with the row-less reason named", async () => {
+  const root = await plannedProject("unified-cli-onlynone-", { graded: true });
+  const workspace = await tmpDir("unified-cli-ws-");
+  try {
+    const { result, lines } = await captured(() =>
+      runVerifyCli(["--root", root, "--workspace", workspace, "--only", "feel"]),
+    );
+    assert.equal(result, 2, "a run that checked nothing is never a pass, scoped or not");
+    const text = lines.join("\n");
+    assert.match(text, /the selection --only feel matched no runnable asset/);
+    assert.match(text, /discovered kinds: contract/);
+    const report = await readScoped(root);
+    assert.equal(report.status, "nothing-checked");
+    assert.deepEqual(report.sections, {});
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+    await fs.rm(workspace, { recursive: true, force: true });
+  }
+});
+
+test("a malformed --only refuses BEFORE discovery and BEFORE any write, leaving a previous report untouched", async () => {
+  // F13: the selector is validated at the same position `--report` is, so a typo cannot
+  // print a plan (which would tell an operator what "will run" for an invocation that never
+  // could) and cannot disturb the previous run's report.
+  const root = await plannedProject("unified-cli-onlybad-", { graded: true });
+  const workspace = await tmpDir("unified-cli-ws-");
+  const paths = loombridgePaths(root);
+  try {
+    // A real previous full run, so "untouched" is a claim with something to protect.
+    await captured(() => runVerifyCli(["--root", root, "--workspace", workspace]));
+    const before = await fs.readFile(unifiedVerifyReportPath(paths.reports), "utf-8");
+
+    for (const [argv, pattern] of [
+      [["--only", "pixels"], /unknown --only section\(s\): pixels/],
+      [["--only", ""], /--only needs at least one section name/],
+    ] as const) {
+      const { result, lines } = await captured(() =>
+        runVerifyCli(["--root", root, "--workspace", workspace, ...argv]),
+      );
+      const text = lines.join("\n");
+      assert.equal(result, 2, text);
+      assert.match(text, pattern);
+      assert.match(text, /contract, flow, feel, screens, tests/, "the refusal names the vocabulary");
+      assert.ok(!text.includes("plan for "), "the refusal comes BEFORE the plan, so nothing ran");
+      assert.equal(await fileExists(unifiedScopedReportPath(paths.reports)), false, "no scoped report written");
+      assert.equal(await fs.readFile(unifiedVerifyReportPath(paths.reports), "utf-8"), before, "byte-identical");
+    }
+
+    // A value-less `--only` is malformed argv: the router declines it, and `run` says what is
+    // actually wrong rather than reporting it as a mode combination.
+    const bare = await captured(() => runVerifyCli(["--root", root, "--only"]));
+    assert.equal(bare.result, 2);
+    assert.match(bare.lines.join("\n"), /--only requires a comma-separated value/);
+    assert.match(bare.lines.join("\n"), /contract, flow, feel, screens, tests/);
+
+    // …and combined with a MODE flag it is the combination that is reported (F8).
+    const combined = await captured(() => runVerifyCli(["--only", "tests", "--slice", "x", "--root", root]));
+    assert.equal(combined.result, 2);
+    assert.match(combined.lines.join("\n"), /--only belongs to the bare unified run/);
+    assert.match(combined.lines.join("\n"), /cannot be combined with mode\/engine flags/);
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+    await fs.rm(workspace, { recursive: true, force: true });
+  }
+});
+
+test("F1: --report cannot point a scoped run at the full report, nor a full run at the scoped one", async () => {
+  // Both files carry `kind: "unified-verify"`, so the previous-report allowance would happily
+  // let one overwrite the other. Refused in BOTH directions, before anything runs.
+  const root = await plannedProject("unified-cli-onlyreport-", { graded: true });
+  const workspace = await tmpDir("unified-cli-ws-");
+  try {
+    const scopedAtFull = await captured(() =>
+      runVerifyCli([
+        "--root", root, "--workspace", workspace,
+        "--only", "contract",
+        "--report", `.loombridge/reports/${UNIFIED_VERIFY_REPORT}`,
+      ]),
+    );
+    assert.equal(scopedAtFull.result, 2);
+    assert.match(scopedAtFull.lines.join("\n"), /is the FULL run's unified report; a scoped run \(--only\) never writes it/);
+
+    const fullAtScoped = await captured(() =>
+      runVerifyCli([
+        "--root", root, "--workspace", workspace,
+        "--report", `.loombridge/reports/${UNIFIED_SCOPED_REPORT}`,
+      ]),
+    );
+    assert.equal(fullAtScoped.result, 2);
+    assert.match(fullAtScoped.lines.join("\n"), /is the scoped \(--only\) run's own report; a full run never writes it/);
+
+    // Neither refusal wrote anything.
+    const paths = loombridgePaths(root);
+    assert.equal(await fileExists(unifiedVerifyReportPath(paths.reports)), false);
+    assert.equal(await fileExists(unifiedScopedReportPath(paths.reports)), false);
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+    await fs.rm(workspace, { recursive: true, force: true });
+  }
+});
+
+test("M-M6: a SYMLINK cannot smuggle --report onto a declared artifact", async () => {
+  // THE ATTACK, verbatim. The collision check compared `path.resolve`d STRINGS, which see only
+  // what argv spelled. So a symlink at a fresh-looking path matched nothing in the declared
+  // list, read back through the link as a "previous unified report" (kind: unified-verify), and
+  // was then written THROUGH the link onto the file it pointed at. One `ln -s` therefore
+  // defeated F1's both-directions rule, and the same trick reaches the acceptance contract.
+  const root = await plannedProject("unified-cli-symlink-", { graded: true });
+  const workspace = await tmpDir("unified-cli-ws-");
+  const paths = loombridgePaths(root);
+  try {
+    // A real previous FULL run, so there is a genuine verify.json to destroy.
+    await captured(() => runVerifyCli(["--root", root, "--workspace", workspace]));
+    const fullBefore = await fs.readFile(unifiedVerifyReportPath(paths.reports), "utf-8");
+    const contractBefore = await fs.readFile(paths.acceptance, "utf-8");
+
+    // (1) a scoped run aimed at verify.json THROUGH a link. The link's own path is not any
+    //     declared artifact, and the file it points at is a valid previous unified report.
+    const link = path.join(paths.reports, "sneaky.json");
+    await fs.symlink(unifiedVerifyReportPath(paths.reports), link);
+    const scoped = await captured(() =>
+      runVerifyCli(["--root", root, "--workspace", workspace, "--only", "contract", "--report", link]),
+    );
+    assert.equal(scoped.result, 2, "a scoped run must never reach the full report, however it is spelled");
+    assert.match(scoped.lines.join("\n"), /is the FULL run's unified report; a scoped run \(--only\) never writes it/);
+    assert.equal(
+      await fs.readFile(unifiedVerifyReportPath(paths.reports), "utf-8"),
+      fullBefore,
+      "verify.json must be byte-identical: the refusal happens before anything is written",
+    );
+
+    // (2) the same trick aimed at the acceptance contract, which is not a unified report at
+    //     all: the declared-artifact list is what must catch it, not the JSON sniff.
+    const contractLink = path.join(paths.reports, "contract-link.json");
+    await fs.symlink(paths.acceptance, contractLink);
+    const atContract = await captured(() =>
+      runVerifyCli(["--root", root, "--workspace", workspace, "--report", contractLink]),
+    );
+    assert.equal(atContract.result, 2);
+    assert.match(atContract.lines.join("\n"), /is the acceptance contract/);
+    assert.equal(await fs.readFile(paths.acceptance, "utf-8"), contractBefore, "the contract is untouched");
+
+    // (3) CONTAINMENT through a link: a symlink spelled inside the root whose real
+    //     location is outside it. The spelled-path isInside would wave it through; the
+    //     realpathed comparison must refuse, and the outside file must never be created
+    //     or written.
+    const outside = path.join(path.dirname(root), `outside-${path.basename(root)}`);
+    await fs.mkdir(outside, { recursive: true });
+    const escapeLink = path.join(paths.reports, "escape-link.json");
+    await fs.symlink(path.join(outside, "smuggled.json"), escapeLink);
+    const escaped = await captured(() =>
+      runVerifyCli(["--root", root, "--workspace", workspace, "--report", escapeLink]),
+    );
+    assert.equal(escaped.result, 2, "a link whose realpath escapes the root is an escape");
+    assert.match(escaped.lines.join("\n"), /resolves outside the project root/);
+    assert.equal(
+      await fs
+        .access(path.join(outside, "smuggled.json"))
+        .then(() => true)
+        .catch(() => false),
+      false,
+      "nothing may be written outside the root, through any spelling",
+    );
+    await fs.rm(outside, { recursive: true, force: true });
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+    await fs.rm(workspace, { recursive: true, force: true });
+  }
+});
+
+// ── S2b: the deprecation notices ─────────────────────────────────────────────
+
+test("S2b: --snapshot and --minigame print ONE stderr notice each (three NOTICE lines), and stdout stays byte-identical", async () => {
+  // The notice is routing information, not a verdict: it goes to stderr, it does not change
+  // the mode's behavior, and it must not appear on stdout, where a machine reads the mode's
+  // own output. Both halves are pinned by capturing the two streams separately.
+  const root = await tmpDir("unified-cli-notice-");
+  try {
+    for (const [argv, section] of [
+      [["--snapshot", "--root", root, "--measurements", path.join(root, "nope.json")], "feel"],
+      [["--minigame", "--root", root, "--contract", path.join(root, "c.json"), "--captures", root], "screens"],
+    ] as const) {
+      const out: string[] = [];
+      const err: string[] = [];
+      const origError = console.error;
+      const origLog = console.log;
+      console.error = (...a: unknown[]): void => void err.push(a.map(String).join(" "));
+      console.log = (...a: unknown[]): void => void out.push(a.map(String).join(" "));
+      let code: number;
+      try {
+        code = await runVerifyCli([...argv]);
+      } finally {
+        console.error = origError;
+        console.log = origLog;
+      }
+
+      const notice = err.filter((l) => /NOTICE: (--snapshot|--minigame) is a DEPRECATED ALIAS/.test(l));
+      assert.equal(notice.length, 1, `exactly one deprecation headline on stderr:\n${err.join("\n")}`);
+      // V10: the help, `verify.md` and the RFC used to promise a "one-line notice" while the
+      // implementation printed three. The docs now say "a short stderr notice", and THIS is
+      // what "short" is allowed to mean: a notice that grew to a paragraph would be a routing
+      // hint shouting over the mode's own output, and nothing else would notice.
+      assert.equal(
+        err.filter((l) => /NOTICE:/.test(l)).length,
+        3,
+        `the deprecation notice is exactly three NOTICE-marked lines:\n${err.join("\n")}`,
+      );
+      assert.match(err.join("\n"), new RegExp(`loombridge verify --only ${section}`));
+      assert.ok(
+        !out.some((l) => /DEPRECATED ALIAS/.test(l)),
+        `the notice must never reach stdout:\n${out.join("\n")}`,
+      );
+      assert.notEqual(code, 0, "the mode still runs and still reports its own tier");
+    }
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test("S2b: the notice changes NOTHING about the mode it annotates (behavior parity), and --quiet-next suppresses it", async () => {
+  // Parity is asserted against the mode's own output, not just its exit: everything the mode
+  // printed before is still printed, in the same order, with only the notice added. And F10:
+  // the guided flow passes `--quiet-next`, so a human mid-flow is not told to leave it.
+  const root = await tmpDir("unified-cli-notice-parity-");
+  try {
+    const argv = ["--snapshot", "--root", root, "--measurements", path.join(root, "nope.json")];
+    const noisy = await captured(() => runVerifyCli([...argv]));
+    const quiet = await captured(() => runVerifyCli([...argv, "--quiet-next"]));
+
+    assert.equal(quiet.result, noisy.result, "the notice does not change the tier");
+    assert.ok(
+      !quiet.lines.some((l) => /DEPRECATED ALIAS/.test(l)),
+      `--quiet-next must suppress the notice:\n${quiet.lines.join("\n")}`,
+    );
+    // BEHAVIOR PARITY: strip the notice by its own marker (every notice line carries
+    // `NOTICE:`) and the two runs are line-for-line the same run.
+    const withoutNotice = noisy.lines.filter((l) => !l.includes("[loombridge verify] NOTICE:"));
+    assert.equal(noisy.lines.length - withoutNotice.length, 3, "the notice is the three lines, and only those");
+    assert.deepEqual(withoutNotice, quiet.lines, "only the notice differs");
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
   }
 });
 

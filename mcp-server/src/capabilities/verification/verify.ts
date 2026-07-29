@@ -27,6 +27,7 @@ import {
   type LoombridgeState,
 } from "../../domain/state.js";
 import { inspectContractPresence, noContractRefusal } from "../../domain/contract-presence.js";
+import { UNIFIED_SECTION_NAMES } from "./unified/report.js";
 import { designPaths, designStatus } from "./design.js";
 import { feelPaths } from "../feel/feel-workspace.js";
 import { resolveFeelProfileModule } from "../genre/genre-registry.js";
@@ -639,21 +640,35 @@ export const ORCHESTRATOR_FLAGS: ReadonlySet<string> = new Set([
   "--strict",
   "--live",
   "--report",
+  "--only",
   "--id",
   "--workspace",
 ]);
 
 /** The subset of {@link ORCHESTRATOR_FLAGS} that consumes the following argv token. */
-export const ORCHESTRATOR_VALUE_FLAGS: ReadonlySet<string> = new Set(["--root", "--report", "--id", "--workspace"]);
+export const ORCHESTRATOR_VALUE_FLAGS: ReadonlySet<string> = new Set([
+  "--root",
+  "--report",
+  "--only",
+  "--id",
+  "--workspace",
+]);
 
 /** The orchestrator-only flags: `parseArgs` (the legacy engine) does not know them. */
-const ORCHESTRATOR_ONLY_FLAGS: ReadonlySet<string> = new Set(["--live", "--report"]);
+const ORCHESTRATOR_ONLY_FLAGS: ReadonlySet<string> = new Set(["--live", "--report", "--only"]);
 
 interface OrchestratorArgs {
   root: string;
   strict: boolean;
   live: boolean;
   reportPath?: string;
+  /**
+   * `--only <sections>` RAW. The router deliberately does not validate the value: the
+   * selector's refusal belongs at the orchestrator's pre-write position (F13), next to
+   * `--report`'s, and a router that rejected a typo here would report it as "not
+   * orchestrator territory" and fall through to the legacy unknown-flag path instead.
+   */
+  only?: string;
   workspaceId?: string;
   workspace?: string;
 }
@@ -686,6 +701,7 @@ export function classifyOrchestratorArgs(args: string[]): OrchestratorArgs | nul
     i += 1;
     if (arg === "--root") parsed.root = path.resolve(value);
     else if (arg === "--report") rawReport = value;
+    else if (arg === "--only") parsed.only = value;
     else if (arg === "--id") parsed.workspaceId = value;
     else parsed.workspace = path.resolve(value);
   }
@@ -696,6 +712,46 @@ export function classifyOrchestratorArgs(args: string[]): OrchestratorArgs | nul
   // and in CI that "somewhere" is a scratch dir that gets thrown away.
   if (rawReport !== undefined) parsed.reportPath = path.resolve(parsed.root, rawReport);
   return parsed;
+}
+
+/**
+ * Was `--only` passed with no usable value? (F13)
+ *
+ * `classifyOrchestratorArgs` returns null for a value-flag whose value is missing or
+ * flag-like, which is right for routing but would report a malformed selector as "this argv
+ * belongs to a mode". This predicate lets `run` say what actually happened.
+ */
+function onlyValueMissing(args: readonly string[]): boolean {
+  const at = args.lastIndexOf("--only");
+  if (at === -1) return false;
+  const value = args[at + 1];
+  return value === undefined || value.startsWith("--");
+}
+
+/**
+ * The S2b deprecation notices for the two mode flags the unified door replaced.
+ *
+ * STDERR ONLY, and behavior-free: `--snapshot` and `--minigame` keep byte-identical
+ * behavior, and the notice exists to route the next invocation, not to change this one.
+ * stdout stays byte-identical with and without it, because a machine reading a mode's
+ * output must not have to learn a new line. `--profile` gets NO notice: it is a permanent
+ * diagnostic, already documented as never gating, not an alias of anything.
+ *
+ * SUPPRESSED UNDER `--quiet-next` (F10): that flag is the guided flow's existing marker for
+ * "a wrapper owns the next-step line", so the guided mini-game run, which passes it, does
+ * not tell a human to stop using the flow they are standing in the middle of.
+ */
+function deprecationNotice(mode: "snapshot" | "minigame"): string[] {
+  const [flag, section, what] = mode === "snapshot"
+    ? ["--snapshot", "feel", "the approved feel snapshot"]
+    : ["--minigame", "screens", "the screen contract + its approved layout baseline"];
+  // EVERY line carries the `NOTICE:` marker, so a consumer (and the parity test) can strip
+  // the notice by a rule rather than by counting lines or matching its prose.
+  return [
+    `[loombridge verify] NOTICE: ${flag} is a DEPRECATED ALIAS. Behavior here is unchanged, but the front`,
+    `[loombridge verify] NOTICE: door is now bare \`loombridge verify\` (or \`loombridge verify --only ${section}\`), which`,
+    `[loombridge verify] NOTICE: grades ${what} as one section of one report. The alias will be removed in a future major.`,
+  ];
 }
 
 /** A `--help`/parse outcome. `usageError` exits 2; a bare `help` exits 0. */
@@ -1156,20 +1212,44 @@ function printUsage(): void {
       "",
       "  loombridge verify                     # offline assets, plan first",
       "  loombridge verify --live              # also replay traces + grade feel drift",
+      "  loombridge verify --only screens      # one section, for CI granularity",
       "",
-      "Six flags stay on the unified run and combine only with each other: --root,",
-      "--strict, --live, --report, --id, --workspace. EVERY OTHER flag below is a mode",
-      "or engine flag, and passing any one of them selects that legacy mode instead,",
+      "Seven flags stay on the unified run and combine only with each other: --root,",
+      "--strict, --live, --report, --only, --id, --workspace. EVERY OTHER flag below is a",
+      "mode or engine flag, and passing any one of them selects that legacy mode instead,",
       "unchanged (--inputs, --acceptance, --output, --vlm, --slice, --stage, --profile,",
       "--snapshot, --minigame and their companions).",
+      "",
+      "DEPRECATED ALIASES: --snapshot and --minigame keep byte-identical behavior and now",
+      "print a short stderr notice pointing at the unified door (--only feel and",
+      "--only screens). They will be removed in a future major. --profile is NOT",
+      "deprecated: it is a permanent DIAGNOSTIC and never gates.",
       "",
       "Bare-run options (combinable only with each other):",
       "  --live                Also run the assets that need a running Unity editor",
       "                        (trace replay with pixel-drift gating, feel snapshot).",
-      "  --report <path>       Unified report path, resolved relative to --root",
-      "                        (default: .loombridge/reports/verify.json). Refused when it",
-      "                        would overwrite a project artifact or any file that is not a",
-      "                        previous unified report.",
+      "  --report <path>       Unified report path, resolved relative to --root (default:",
+      "                        .loombridge/reports/verify.json, or",
+      "                        .loombridge/reports/verify-scoped.json under --only). Refused",
+      "                        when it would overwrite a project artifact or any file that is",
+      "                        not a previous unified report.",
+      `  --only <sections>     Comma-separated subset of ${UNIFIED_SECTION_NAMES.join("|")}.`,
+      "                        A SCOPED run: healthy assets outside the selection are listed",
+      "                        as 'deselected' and excluded from the verdict, but a BROKEN or",
+      "                        unapproved asset still refuses (tier 2) whatever you selected:",
+      "                        tampering is never scoped away. A scoped run's status is never",
+      "                        `pass` (its ceiling is `partial`), it writes",
+      "                        .loombridge/reports/verify-scoped.json instead of the full",
+      "                        report, and `doneness` never certifies from it. Unknown or",
+      "                        empty selections refuse (exit 2) before anything is written;",
+      "                        a KNOWN section that matches no discovered asset is",
+      "                        nothing-checked (exit 2), naming the kinds that were found.",
+      "                        CI NOTE: `--only tests` NEVER exits 0. A red suite exits 1 and",
+      "                        a green one exits 2, because the tests section is permanently",
+      "                        unanchored (no human approves a suite), and a run that compared",
+      "                        nothing human-approved cannot exit 0. For a tests-only CI step",
+      "                        use `loombridge tests grade --results <xml>`, or include an",
+      "                        anchored section (e.g. --only screens,tests) in the selection.",
       "",
       "Options:",
       "  --root <dir>          Project root (default: cwd)",
@@ -1185,7 +1265,9 @@ function printUsage(): void {
       "  --verbose             (--minigame) Print the full per-finding breakdown in the",
       "                        terminal (default: slim — the detail lives in the report)",
       "  --quiet-next          (--minigame) Suppress the resolved next-step footer (the",
-      "                        run/check wrapper owns that line; rarely needed by hand)",
+      "                        run/check wrapper owns that line; rarely needed by hand). It",
+      "                        ALSO suppresses the deprecated-alias notice, for both",
+      "                        --snapshot and --minigame.",
       "  --stage <name>        Phase-scoped DIAGNOSTIC run — grade only a stage's gates",
       "                        (construct | level | polish | verify). Restricted stages",
       "                        write verify-<stage>.json and do NOT certify (§3a); only",
@@ -1339,6 +1421,16 @@ export async function run(args: string[]): Promise<number> {
   }
   const orchestratorOnly = args.filter((a) => ORCHESTRATOR_ONLY_FLAGS.has(a));
   if (orchestratorOnly.length > 0) {
+    // The more specific fault first: a value-less `--only` is a malformed selector, not a
+    // mode combination, and reporting it as one sends the operator looking for a mode flag
+    // they never passed. Refused here, before `parseArgs` and before any write.
+    if (onlyValueMissing(args)) {
+      console.error(
+        `[loombridge verify] REFUSED: --only requires a comma-separated value. Known sections: ${UNIFIED_SECTION_NAMES.join(", ")}.`,
+      );
+      console.error("[loombridge verify] nothing was written and nothing ran.");
+      return 2;
+    }
     console.error(
       `[loombridge verify] ${orchestratorOnly.join(" and ")} ${orchestratorOnly.length > 1 ? "belong" : "belongs"} to the bare unified run; ` +
         `they cannot be combined with mode/engine flags. Allowed alongside them: ${[...ORCHESTRATOR_FLAGS].join(", ")}.`,
@@ -1349,6 +1441,13 @@ export async function run(args: string[]): Promise<number> {
   if ("help" in parsed) {
     printUsage();
     return parsed.usageError ? 2 : 0;
+  }
+  // S2b: the deprecation notices, printed once the invocation is known to be well-formed
+  // (a usage error is not the moment to advertise the replacement) and BEFORE the mode runs,
+  // so the notice cannot be mistaken for part of the verdict.
+  if (!parsed.quietNext) {
+    for (const line of parsed.snapshot ? deprecationNotice("snapshot") : []) console.error(line);
+    for (const line of parsed.minigame ? deprecationNotice("minigame") : []) console.error(line);
   }
   // Mini-game verify-first mode (S6c-3) branches BEFORE runVerify so the
   // unconditional ACCEPTANCE.json read never happens — this mode is standalone

@@ -39,6 +39,22 @@ export const UNIFIED_VERIFY_REPORT = "verify.json";
  */
 export const UNIFIED_SCREENS_REPORT = "verify-screens.json";
 
+/**
+ * The SCOPED run's report (S2a/F1). A `--only` run NEVER writes `verify.json`.
+ *
+ * The failure this separates is quiet and total: `verify.json` is the document `doneness`
+ * reads, and a scoped run answers a strictly narrower question than the one that file is
+ * understood to answer. Letting `--only tests` overwrite the full run's roll-up would mean
+ * a subset run silently replaces (and, when the subset is green, erases) the record of
+ * every anchor the full run could not measure. Two files, two questions, and the full
+ * report keeps meaning what it has always meant.
+ *
+ * `doneness` deliberately does NOT read this file: a scoped run is never a certificate,
+ * and the belt-and-braces refusal in `unifiedVerifyRefusals` (a `verify.json` whose `only`
+ * is a non-null array) covers the unreachable case where one lands there anyway.
+ */
+export const UNIFIED_SCOPED_REPORT = "verify-scoped.json";
+
 /** Resolve the unified report path from a reports dir (the only spelling of the name). */
 export function unifiedVerifyReportPath(reportsDir: string): string {
   return path.join(reportsDir, UNIFIED_VERIFY_REPORT);
@@ -49,11 +65,74 @@ export function unifiedScreensReportPath(reportsDir: string): string {
   return path.join(reportsDir, UNIFIED_SCREENS_REPORT);
 }
 
+/** Resolve the SCOPED (`--only`) report path (the only spelling of the name). */
+export function unifiedScopedReportPath(reportsDir: string): string {
+  return path.join(reportsDir, UNIFIED_SCOPED_REPORT);
+}
+
 /**
  * One section per asset family. `flow` covers trace replay (actuation + pixels); `tests`
  * grades a stamped Unity EditMode run offline.
  */
 export type UnifiedSectionName = "contract" | "flow" | "feel" | "screens" | "tests";
+
+/**
+ * The CLOSED list of section names, in plan order. It is the `--only` vocabulary AND the
+ * report's own section vocabulary, spelled once: a selector the report cannot express
+ * would be a selector nothing could grade.
+ */
+export const UNIFIED_SECTION_NAMES = ["contract", "flow", "feel", "screens", "tests"] as const;
+
+/**
+ * Which SECTION an asset kind is graded by. Single source of truth, because `--only`
+ * deselection and the section dispatch must agree: a mapping re-spelled at the call site
+ * would let a selector name a section that the orchestrator then runs anyway (or worse,
+ * deselect an asset the orchestrator still executes).
+ */
+export const SECTION_FOR_KIND: Readonly<Record<DiscoveredAssetKind, UnifiedSectionName>> = {
+  contract: "contract",
+  trace: "flow",
+  "feel-snapshot": "feel",
+  "screen-contract": "screens",
+  "test-results": "tests",
+};
+
+/**
+ * Parse a `--only` value into a selection, or into the refusal sentence that must be
+ * printed instead (S2a). Pure, so the refusals are pinned without an argv round trip.
+ *
+ * Refuse-not-skip: an unknown name, an empty selection, and a selection made only of
+ * separators are each a REFUSAL naming the valid names, never a silently widened run. A
+ * selector that quietly fell back to "everything" would turn a CI job that believes it is
+ * checking one section into a full run, and (worse in the other direction) a typo'd
+ * selector into a run that grades nothing while reporting on its own terms.
+ */
+export function parseOnlySelection(
+  raw: string,
+): { ok: true; sections: UnifiedSectionName[] } | { ok: false; error: string } {
+  const known = UNIFIED_SECTION_NAMES.join(", ");
+  const requested = raw
+    .split(",")
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
+  if (requested.length === 0) {
+    return {
+      ok: false,
+      error: `--only needs at least one section name. Known: ${known}.`,
+    };
+  }
+  const unknown = requested.filter((s) => !(UNIFIED_SECTION_NAMES as readonly string[]).includes(s));
+  if (unknown.length > 0) {
+    return {
+      ok: false,
+      error: `unknown --only section(s): ${unknown.join(", ")}. Known: ${known}.`,
+    };
+  }
+  // De-duplicated, and re-ordered into plan order so `--only tests,contract` and
+  // `--only contract,tests` produce the same recorded scoping.
+  const selected = new Set(requested as UnifiedSectionName[]);
+  return { ok: true, sections: UNIFIED_SECTION_NAMES.filter((s) => selected.has(s)) };
+}
 
 /**
  * The run's overall word.
@@ -87,6 +166,25 @@ export interface UnifiedNotRun {
   /** The human sentence from the discovery row. */
   reason: string;
   why: NotRunReason;
+}
+
+/**
+ * A HEALTHY discovered asset the operator scoped out with `--only` (S2a/F2).
+ *
+ * A SEPARATE type from {@link UnifiedNotRun}, on purpose. `notRun` rows carry a tier into
+ * `resolveUnifiedOutcome`; deselected rows carry none, because the operator chose the
+ * scope. Keeping them in one array with a "costs nothing" class would put a zero-tier
+ * member one edit away from every unmeasured anchor, which is exactly the laundering path
+ * F2 exists to close. Two types cannot be confused by a refactor.
+ *
+ * Only a row with `runnable !== "no"` can ever land here: broken, non-anchor and draft rows
+ * stay in `notRun` whatever the selection says. Tampering is never scoped away.
+ */
+export interface UnifiedDeselected {
+  kind: DiscoveredAssetKind;
+  id: string;
+  /** The section this asset would have been graded by, i.e. the name that would select it. */
+  section: UnifiedSectionName;
 }
 
 /**
@@ -184,6 +282,14 @@ export interface UnifiedVerifyReport {
   plan: DiscoveredAsset[];
   /** Discovered assets that did not execute, and why. Never folded into pass. */
   notRun: UnifiedNotRun[];
+  /**
+   * S2a/F12: the `--only` scoping of THIS run, or `null` for a full run. REQUIRED rather
+   * than optional-when-absent, so a reader (and `doneness`) never has to treat a missing
+   * field as "probably a full run": the two states are always both written down.
+   */
+  only: UnifiedSectionName[] | null;
+  /** Healthy assets the scoping excluded. Empty on a full run. Never part of the calculus. */
+  deselected: UnifiedDeselected[];
   sections: Partial<Record<UnifiedSectionName, UnifiedVerifySection>>;
   /**
    * M8: which executed sections compared a frozen, human-approved anchor, and which
@@ -271,10 +377,18 @@ function notRunTier(why: NotRunReason): number {
  *
  * `partial` never rounds up to `pass`: only the operator's own `--live` omission is
  * allowed to keep the exit at 0.
+ *
+ * SCOPED RUNS CANNOT SAY `pass` (F2). When `scoped` is true the ceiling is `partial`, whatever
+ * the selected sections did: the word `pass` on this document means "everything this project
+ * can prove was proved", and a subset run has not asked that question. The EXIT is untouched
+ * (a scoped run of anchored green sections still exits 0, so `--only` stays usable in CI);
+ * what a scoped run may never do is produce the word an agent quotes as a full green.
  */
 export function resolveUnifiedOutcome(input: {
   executed: readonly { section: UnifiedSectionName; exit: number; anchored: boolean }[];
   notRun: readonly UnifiedNotRun[];
+  /** `--only` was in force. Never inferred from an empty selection: the caller states it. */
+  scoped?: boolean;
 }): { status: UnifiedVerifyStatus; exit: number } {
   if (input.executed.length === 0) return { status: "nothing-checked", exit: 2 };
 
@@ -287,7 +401,9 @@ export function resolveUnifiedOutcome(input: {
   // frozen is obliged to report.
   const anchoredCount = input.executed.filter((e) => e.anchored).length;
   const allAnchored = anchoredCount === input.executed.length;
-  if (input.notRun.length === 0 && allAnchored) return { status: "pass", exit: 0 };
+  if (input.notRun.length === 0 && allAnchored) {
+    return input.scoped ? { status: "partial", exit: 0 } : { status: "pass", exit: 0 };
+  }
   // FXH: counted, not merely "all or not all". Zero anchored executed sections means this run
   // compared nothing human-approved, and a self-produced green cannot exit 0.
   if (anchoredCount === 0) return { status: "partial", exit: 2 };
@@ -303,6 +419,13 @@ export function resolveUnifiedOutcome(input: {
  */
 export const ZERO_ANCHORED_SUMMARY =
   "nothing human-approved was compared; a self-produced green cannot exit 0";
+
+/**
+ * The one-line reason a scoped run is never a full pass (S2a/F2), shared by the summary
+ * line and the tests that pin it for the same reason as {@link ZERO_ANCHORED_SUMMARY}.
+ */
+export const SCOPED_SUMMARY =
+  "SCOPED RUN (--only): a subset was measured, so this is never a full pass and never a certificate";
 
 /**
  * sha256 of a per-asset report's bytes, or null when it cannot be read. Null is the

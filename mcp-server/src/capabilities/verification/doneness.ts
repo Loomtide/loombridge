@@ -44,7 +44,7 @@ import { readGenrePromotionReport } from "../genre/promotion-report.js";
 import { inspectContractPresence, noContractRefusal } from "../../domain/contract-presence.js";
 import { assertValidAcceptanceContract } from "./validator.js";
 import { SFX_GATE_NAMES } from "./run-gates.js";
-import { unifiedVerifyReportPath } from "./unified/report.js";
+import { unifiedScopedReportPath, unifiedVerifyReportPath } from "./unified/report.js";
 import {
   deriveEvidenceClassesFromUntrusted,
   EVIDENCE_CLASS_SET,
@@ -776,7 +776,7 @@ export function sfxGateRefusals(
  *
  *  - ABSENT FILE, NO NEW BEHAVIOR. S1 is additive: a project that never ran the unified
  *    door certifies exactly as it did before.
- *  - REFUSE-ONLY. A non-zero `exit` ADDS a reason. A zero `exit` adds nothing, and can
+ *  - REFUSE-ONLY. A non-zero `exit` ADDS a reason. A clean report adds nothing, and can
  *    never remove a reason any other gate produced, so a hand-written green
  *    report (the file carries no self-integrity stamp, and cannot: see the
  *    `UNIFIED_VERIFY_REPORT` doc) buys nothing but the absence of one extra refusal.
@@ -784,10 +784,57 @@ export function sfxGateRefusals(
  *    shape a "delete the inconvenient fields" attack produces, and an unreadable
  *    verdict has never been a pass anywhere else in this codebase.
  *
- * The path is resolved from the exported constant, never re-spelled here.
+ * S2/F3: ONLY A FULL GREEN IS ACCEPTED. `exit === 0` is not sufficient, because `partial`
+ * exits 0 in three ordinary situations: anchors skipped for lack of `--live`, executed
+ * sections that compared nothing a human froze, and (S2a) a `--only` run. Each of those is
+ * a run that did NOT ask the question this certificate answers, and accepting them is what
+ * made the whole overwrite family work: run the full door, get a refusal, then run a
+ * narrower door (offline after a live drift, `--only` after a full refusal, the MCP tool's
+ * own offline run) and leave a 0-exit report standing where the refusal used to be. Refusing
+ * on `status !== "pass"` closes all three at once, with the reason naming which one fired,
+ * instead of special-casing each door.
+ *
+ * F1 belt and braces: a verify.json whose `only` is a non-null array is refused outright.
+ * A scoped run writes verify-scoped.json and can never land here, so this is unreachable
+ * by the shipped code, and it refuses rather than assuming that stays true. An ABSENT `only`
+ * is read as "full run" rather than refused: a pre-S2 report has no such field, and omitting
+ * it buys an attacker nothing, since a scoped run's status is never `pass` (F2) and the
+ * status rule above already refuses it.
+ *
+ * M-H2, THE REPORT IS BOUND TO SOMETHING. Up to S2 this gate read a green verify.json and
+ * asked nothing about WHICH project, WHICH build, or WHEN. A report is not evidence about a
+ * certificate it is not bound to, so four refuse-only bindings join the status rule, each
+ * naming its own reason:
+ *
+ *  a. verify.json ABSENT while verify-scoped.json exists. A project that has only ever run
+ *     `--only` has never answered the whole question, and "no full report" must not read the
+ *     same as "no unified door was ever used". (Absent with NO scoped file stays no-new-
+ *     behavior: S1's additive posture is what keeps pre-unified projects certifying.)
+ *  b. verify-scoped.json NEWER than verify.json. The scoped run is the cheap door; a full
+ *     refusal followed by a narrow green is the overwrite family's last shape, and the
+ *     timestamps are what expose it.
+ *  c. verify.json OLDER than build-verdict.json. The roll-up must not predate the verdict it
+ *     is standing next to, or a stale green roll-up certifies a build it never saw.
+ *  d. runId. When a build is in flight, the report must be scoped to THAT build (the FXC
+ *     precedent: `null` is not a free pass, it is an absent binding).
+ *
+ * Each ordering comparison prefers the documents' own `producedAt` and falls back to mtime;
+ * an ordering that cannot be established AT ALL is a refusal, never a skipped check.
+ *
+ * M-M3: the report's `root` must be the root being certified. S1 already stamped it, so an
+ * ABSENT `root` is a pre-S1-shaped document and refuses with a re-run message rather than
+ * pretending the binding was checked.
+ *
+ * M-M4: a `pass` must be internally consistent (nothing unrun, nothing unanchored, every
+ * section at tier 0, nothing deselected, no scoping). A hand-written report is the threat
+ * model this whole file assumes, and `status: "pass"` next to a broken `notRun` row is the
+ * cheapest forgery there is.
+ *
+ * The paths are resolved from the exported constants, never re-spelled here.
  */
 export async function unifiedVerifyRefusals(paths: LoombridgePaths): Promise<string[]> {
   const reportPath = unifiedVerifyReportPath(paths.reports);
+  const scopedPath = unifiedScopedReportPath(paths.reports);
   const unreadable = [
     `unreadable unified verify report at ${reportPath}: a present-but-unparseable \`loombridge verify\` ` +
       "roll-up cannot be read as a pass; re-run `loombridge verify`",
@@ -797,7 +844,17 @@ export async function unifiedVerifyRefusals(paths: LoombridgePaths): Promise<str
   try {
     raw = await fs.readFile(reportPath, "utf-8");
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      // (a) NO full report, but a SCOPED one exists: this project has only ever answered a
+      // narrower question. Absent-and-nothing-else stays additive (no new behavior).
+      if (await fileExists(scopedPath)) {
+        return [
+          `only a SCOPED verify run exists (${scopedPath}); there is no full ${reportPath}. A subset run ` +
+            "measures a subset, so it certifies nothing; run the full `loombridge verify`",
+        ];
+      }
+      return [];
+    }
     return unreadable;
   }
 
@@ -808,14 +865,270 @@ export async function unifiedVerifyRefusals(paths: LoombridgePaths): Promise<str
     return unreadable;
   }
   if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return unreadable;
-  const report = parsed as { kind?: unknown; status?: unknown; exit?: unknown };
+  const report = parsed as {
+    kind?: unknown;
+    status?: unknown;
+    exit?: unknown;
+    only?: unknown;
+    root?: unknown;
+    runId?: unknown;
+    producedAt?: unknown;
+    notRun?: unknown;
+    deselected?: unknown;
+    sections?: unknown;
+    unanchoredSections?: unknown;
+  };
   if (report.kind !== "unified-verify" || typeof report.exit !== "number") return unreadable;
-  if (report.exit === 0) return [];
-  const status = typeof report.status === "string" ? report.status : "(absent)";
+  // The status word is now load-bearing, so an absent or non-string one is unreadable
+  // rather than a value to shrug at: "delete the inconvenient field" must not be cheaper
+  // than fixing the run.
+  if (typeof report.status !== "string") return unreadable;
+
+  const reasons: string[] = [];
+  if (report.only !== undefined && report.only !== null) {
+    reasons.push(
+      Array.isArray(report.only)
+        ? `unified verify report at ${reportPath} is SCOPED (--only ${renderOnly(report.only)}): a scoped run ` +
+          "measures a subset and is never a certificate; re-run bare `loombridge verify`"
+        : `unified verify report at ${reportPath} carries a malformed \`only\` field; a report whose scoping cannot be ` +
+          "read cannot certify anything; re-run bare `loombridge verify`",
+    );
+  }
+  if (report.exit !== 0) {
+    reasons.push(
+      `unified verify refused (status \`${report.status}\`, exit ${report.exit}): re-run \`loombridge verify\` ` +
+        `and read ${reportPath}: an anchor it could not measure is not certified by a green contract gate`,
+    );
+  } else if (report.status !== "pass") {
+    reasons.push(
+      `unified verify is \`${report.status}\`, not \`pass\` (exit 0): ${unifiedPartialCause(report)}. ` +
+        `A partial measured less than this project can prove, so it is not a certificate; re-run ` +
+        `\`loombridge verify\` (add --live if the gaps need an editor) and read ${reportPath}`,
+    );
+  }
+  reasons.push(...unifiedConsistencyRefusals(report, reportPath));
+  reasons.push(...unifiedRootRefusals(report, paths, reportPath));
+  reasons.push(...(await unifiedBindingRefusals(report, paths, reportPath, scopedPath)));
+  return reasons;
+}
+
+/** `--only` as it reads in a refusal. An EMPTY selection prints `(empty)`, never a blank (V13). */
+function renderOnly(only: readonly unknown[]): string {
+  return only.length === 0 ? "(empty)" : only.map(String).join(",");
+}
+
+/**
+ * M-M4: `status: "pass"` must agree with the rest of the document it appears in.
+ *
+ * `resolveUnifiedOutcome` can only ever produce `pass` when all five of these hold, so a report
+ * that says `pass` while one of them does not is either hand-written or produced by a resolver
+ * that has drifted. Both are refusals: this gate's whole threat model is a document nothing
+ * signed. The check is stated positively (each field is REQUIRED to be empty/zero) rather than
+ * as "if the field is present and non-empty", so a deleted field cannot buy the skip.
+ */
+function unifiedConsistencyRefusals(
+  report: {
+    status?: unknown;
+    only?: unknown;
+    notRun?: unknown;
+    deselected?: unknown;
+    sections?: unknown;
+    unanchoredSections?: unknown;
+  },
+  reportPath: string,
+): string[] {
+  if (report.status !== "pass") return [];
+  const inconsistencies: string[] = [];
+  const rows = (value: unknown): unknown[] => (Array.isArray(value) ? value : []);
+  if (rows(report.notRun).length > 0) inconsistencies.push(`${rows(report.notRun).length} \`notRun\` row(s)`);
+  if (rows(report.unanchoredSections).length > 0) {
+    inconsistencies.push(`unanchored section(s) ${rows(report.unanchoredSections).map(String).join(", ")}`);
+  }
+  if (rows(report.deselected).length > 0) inconsistencies.push(`${rows(report.deselected).length} \`deselected\` row(s)`);
+  if (report.only !== undefined && report.only !== null) inconsistencies.push("an `only` scoping");
+  const sections = typeof report.sections === "object" && report.sections !== null ? report.sections : {};
+  const red = Object.entries(sections as Record<string, unknown>)
+    .filter(([, s]) => !(typeof s === "object" && s !== null && (s as { exit?: unknown }).exit === 0))
+    .map(([name]) => name);
+  if (red.length > 0) inconsistencies.push(`section(s) that did not exit 0: ${red.join(", ")}`);
+  if (inconsistencies.length === 0) return [];
   return [
-    `unified verify refused (status \`${status}\`, exit ${report.exit}): re-run \`loombridge verify\` ` +
-      `and read ${reportPath}: an anchor it could not measure is not certified by a green contract gate`,
+    `internally inconsistent unified verify report at ${reportPath}: it claims \`pass\` while carrying ` +
+      `${inconsistencies.join("; ")}. A \`pass\` the resolver could never have produced is not a certificate; ` +
+      "re-run `loombridge verify`",
   ];
+}
+
+/**
+ * M-M3: the report must belong to the root being certified.
+ *
+ * `root` has been written by the orchestrator since S1 (`unified/orchestrator.ts` stamps
+ * `root` on the report literal), so a document without one cannot have come from a run of this
+ * code. It is still refused with a RE-RUN message rather than as a forgery, because the honest
+ * fix for a legacy or hand-trimmed document is the same either way: run the door again.
+ */
+function unifiedRootRefusals(
+  report: { root?: unknown },
+  paths: LoombridgePaths,
+  reportPath: string,
+): string[] {
+  if (typeof report.root !== "string" || report.root.length === 0) {
+    return [
+      `unified verify report at ${reportPath} names no \`root\`, so nothing binds it to this project; ` +
+        "re-run `loombridge verify`",
+    ];
+  }
+  if (path.resolve(report.root) !== path.resolve(paths.root)) {
+    return [
+      `the unified verify report at ${reportPath} belongs to another project root ` +
+        `(\`${report.root}\`, certifying \`${paths.root}\`); a roll-up from a different project certifies ` +
+        "nothing here; re-run `loombridge verify`",
+    ];
+  }
+  return [];
+}
+
+/**
+ * M-H2 (b), (c) and (d): the report must be the NEWEST answer, no older than the verdict it
+ * stands beside, and scoped to the build in flight.
+ *
+ * Ordering prefers each document's own `producedAt` (the value the writer stamped) and falls
+ * back to mtime when either side has no parseable one, because a hand-trimmed timestamp must
+ * not be able to disable the comparison. When NEITHER can be established the check refuses:
+ * "I could not tell which came first" is exactly the state an overwrite produces.
+ */
+async function unifiedBindingRefusals(
+  report: { producedAt?: unknown; runId?: unknown },
+  paths: LoombridgePaths,
+  reportPath: string,
+  scopedPath: string,
+): Promise<string[]> {
+  const reasons: string[] = [];
+  const full = await documentStamp(reportPath, report.producedAt);
+
+  // (b) a scoped run that POSTDATES the full run.
+  const scoped = await documentStamp(scopedPath);
+  if (scoped.exists) {
+    const order = compareStamps(scoped, full);
+    if (order === null) {
+      reasons.push(
+        `a scoped verify report exists at ${scopedPath} and neither document can be ordered against the other ` +
+          `(no readable \`producedAt\` or mtime); re-run the full \`loombridge verify\``,
+      );
+    } else if (order > 0) {
+      reasons.push(
+        `a scoped verify run at ${scopedPath} POSTDATES the full report at ${reportPath}: the most recent answer ` +
+          "this project gave was about a subset; re-run the full `loombridge verify`",
+      );
+    }
+  }
+
+  // (c) a roll-up that predates the verdict standing next to it.
+  const verdict = await documentStamp(paths.verdict);
+  if (verdict.exists) {
+    const order = compareStamps(verdict, full);
+    if (order === null) {
+      reasons.push(
+        `the unified report at ${reportPath} cannot be ordered against the Tier-1 verdict at ${paths.verdict} ` +
+          "(no readable `producedAt` or mtime on one of them); re-run `loombridge verify`",
+      );
+    } else if (order > 0) {
+      reasons.push(
+        `the unified report at ${reportPath} PREDATES the Tier-1 verdict at ${paths.verdict}: the roll-up never saw ` +
+          "the verdict it is standing next to; re-run `loombridge verify`",
+      );
+    }
+  }
+
+  // (d) the FXC precedent: with a build in flight, an absent scope is an absent binding.
+  const currentRunId = (await readState(paths).catch(() => null))?.currentBuild?.runId ?? null;
+  if (currentRunId !== null && report.runId !== currentRunId) {
+    reasons.push(
+      `the unified verify report at ${reportPath} is not scoped to the build in flight (it carries runId ` +
+        `\`${report.runId === null || report.runId === undefined ? "none" : String(report.runId)}\`, the build in flight is ` +
+        `\`${currentRunId}\`); re-run \`loombridge verify\` against this build`,
+    );
+  }
+  return reasons;
+}
+
+/** A document's position in time: its own stamped `producedAt` when parseable, plus its mtime. */
+interface DocumentStamp {
+  exists: boolean;
+  producedAt: number | null;
+  mtimeMs: number | null;
+}
+
+/**
+ * Stamp a document. `declared` lets a caller pass the `producedAt` it already parsed out of the
+ * file, so the ordering never re-reads (and never re-parses) bytes it has in hand.
+ */
+async function documentStamp(file: string, declared?: unknown): Promise<DocumentStamp> {
+  let mtimeMs: number | null = null;
+  let exists = false;
+  try {
+    mtimeMs = (await fs.stat(file)).mtimeMs;
+    exists = true;
+  } catch {
+    return { exists: false, producedAt: null, mtimeMs: null };
+  }
+  let producedAt = isoInstant(declared);
+  if (producedAt === null && declared === undefined) {
+    producedAt = isoInstant((await readJsonField(file, "producedAt")) ?? undefined);
+  }
+  return { exists, producedAt, mtimeMs };
+}
+
+/** Milliseconds since the epoch for a parseable ISO instant, else null. */
+function isoInstant(value: unknown): number | null {
+  if (typeof value !== "string") return null;
+  const at = Date.parse(value);
+  return Number.isNaN(at) ? null : at;
+}
+
+/** One top-level field out of a JSON document, or null when it cannot be read. */
+async function readJsonField(file: string, field: string): Promise<unknown> {
+  try {
+    const parsed: unknown = JSON.parse(await fs.readFile(file, "utf-8"));
+    if (typeof parsed !== "object" || parsed === null) return null;
+    return (parsed as Record<string, unknown>)[field] ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Order two documents: > 0 when `a` is NEWER than `b`, <= 0 when it is not, and `null` when the
+ * two cannot be ordered at all (which the caller refuses on, rather than skipping).
+ */
+function compareStamps(a: DocumentStamp, b: DocumentStamp): number | null {
+  if (a.producedAt !== null && b.producedAt !== null) return a.producedAt - b.producedAt;
+  if (a.mtimeMs !== null && b.mtimeMs !== null) return a.mtimeMs - b.mtimeMs;
+  return null;
+}
+
+/**
+ * WHAT was partial, named from the report's own fields (F3).
+ *
+ * Read from the machine-readable rows, never from prose: the refusal has to tell an operator
+ * which of the three exit-0 partials fired, because the fix differs (`--live`, approve an
+ * anchor, or re-run without `--only`).
+ */
+function unifiedPartialCause(report: { notRun?: unknown; unanchoredSections?: unknown; only?: unknown }): string {
+  const causes: string[] = [];
+  if (Array.isArray(report.only) && report.only.length > 0) causes.push(`scoped to --only ${report.only.map(String).join(",")}`);
+  const notRun = Array.isArray(report.notRun) ? (report.notRun as { why?: unknown; kind?: unknown; id?: unknown }[]) : [];
+  const skipped = notRun.filter((n) => n.why === "live-only-skipped");
+  if (skipped.length > 0) {
+    causes.push(`${skipped.length} anchor(s) skipped for lack of --live (${skipped.map((n) => `${String(n.kind)} '${String(n.id)}'`).join(", ")})`);
+  }
+  const otherNotRun = notRun.filter((n) => n.why !== "live-only-skipped");
+  if (otherNotRun.length > 0) {
+    causes.push(`${otherNotRun.length} anchor(s) it could not measure (${otherNotRun.map((n) => `${String(n.kind)} '${String(n.id)}'`).join(", ")})`);
+  }
+  const unanchored = Array.isArray(report.unanchoredSections) ? report.unanchoredSections.map(String) : [];
+  if (unanchored.length > 0) causes.push(`section(s) that compared no frozen human approval: ${unanchored.join(", ")}`);
+  return causes.length > 0 ? causes.join("; ") : "the report does not say which coverage was missing";
 }
 
 export function evidenceClassRefusals(

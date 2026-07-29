@@ -11,21 +11,26 @@ import path from "node:path";
 import test from "node:test";
 
 import {
+  SECTION_FOR_KIND,
+  UNIFIED_SCOPED_REPORT,
   UNIFIED_SCREENS_REPORT,
+  UNIFIED_SECTION_NAMES,
   UNIFIED_VERIFY_REPORT,
   fingerprintReport,
   notRunFor,
+  parseOnlySelection,
   reportPathFor,
   reportSha256,
   reportWasWritten,
   resolveUnifiedOutcome,
+  unifiedScopedReportPath,
   unifiedScreensReportPath,
   unifiedVerifyReportPath,
   worstExitTier,
   writeUnifiedVerifyReport,
   type UnifiedVerifyReport,
 } from "../../../../capabilities/verification/unified/report.js";
-import type { DiscoveredAsset } from "../../../../capabilities/verification/unified/discovery.js";
+import { ASSET_KINDS, type DiscoveredAsset } from "../../../../capabilities/verification/unified/discovery.js";
 
 test("worstExitTier: 2 beats 1 beats 0, in any order", () => {
   assert.equal(worstExitTier([]), 0);
@@ -254,6 +259,112 @@ test("resolveUnifiedOutcome: a FOUND GAME DEFECT stays at exit 1, however much w
   );
 });
 
+// ── S2a: the --only selector vocabulary and the scoped ceiling ───────────────
+
+test("parseOnlySelection accepts the closed vocabulary, de-duplicates, and normalises to plan order", () => {
+  assert.deepEqual(parseOnlySelection("tests"), { ok: true, sections: ["tests"] });
+  // Order in, order out: `--only tests,contract` and `--only contract,tests` must record the
+  // SAME scoping, or two identical runs would write two different `only` arrays.
+  assert.deepEqual(parseOnlySelection("tests,contract"), { ok: true, sections: ["contract", "tests"] });
+  assert.deepEqual(parseOnlySelection("contract,tests"), { ok: true, sections: ["contract", "tests"] });
+  assert.deepEqual(parseOnlySelection("feel, feel , flow"), { ok: true, sections: ["flow", "feel"] });
+  assert.deepEqual(parseOnlySelection(UNIFIED_SECTION_NAMES.join(",")), {
+    ok: true,
+    sections: [...UNIFIED_SECTION_NAMES],
+  });
+});
+
+test("parseOnlySelection REFUSES an unknown or empty selection, naming the valid sections", () => {
+  // Refuse-not-skip at the selector: a typo must never widen silently into a full run, and an
+  // empty selection must never be read as "everything".
+  for (const raw of ["", " ", ",", ",,"]) {
+    const parsed = parseOnlySelection(raw);
+    assert.equal(parsed.ok, false, `"${raw}" must refuse`);
+    if (!parsed.ok) assert.match(parsed.error, /--only needs at least one section name/);
+  }
+  for (const raw of ["pixels", "contract,pixels", "TESTS", "test"]) {
+    const parsed = parseOnlySelection(raw);
+    assert.equal(parsed.ok, false, `"${raw}" must refuse`);
+    if (!parsed.ok) {
+      assert.match(parsed.error, /unknown --only section/);
+      // The refusal is actionable: it names the whole closed vocabulary.
+      for (const name of UNIFIED_SECTION_NAMES) assert.ok(parsed.error.includes(name), name);
+    }
+  }
+});
+
+test("SECTION_FOR_KIND covers every discovered asset kind, and lands inside the selector vocabulary", () => {
+  // The mapping is what deselection reads. A kind missing from it would be a `undefined`
+  // section: never selectable, and (worse) deselected by every selection.
+  for (const kind of ASSET_KINDS) {
+    const section = SECTION_FOR_KIND[kind];
+    assert.ok(section, `asset kind ${kind} has no section`);
+    assert.ok((UNIFIED_SECTION_NAMES as readonly string[]).includes(section), `${kind} -> ${section}`);
+  }
+  // …and every section name is reachable from some kind, so no selector can name a section
+  // that nothing could ever fill.
+  const reachable = new Set(ASSET_KINDS.map((k) => SECTION_FOR_KIND[k]));
+  assert.deepEqual([...reachable].sort(), [...UNIFIED_SECTION_NAMES].sort());
+});
+
+test("F2: a SCOPED run can never say `pass`; its ceiling is `partial` at the same exit", () => {
+  const executed = [anchoredSection("contract", 0), anchoredSection("screens", 0)];
+  // The identical run, unscoped, is a pass…
+  assert.deepEqual(resolveUnifiedOutcome({ executed, notRun: [] }), { status: "pass", exit: 0 });
+  // …and scoped it is a partial at the SAME exit: `--only` stays usable in CI, but the word
+  // an agent quotes is never the full-pass word.
+  assert.deepEqual(resolveUnifiedOutcome({ executed, notRun: [], scoped: true }), {
+    status: "partial",
+    exit: 0,
+  });
+  // The ceiling only ever LOWERS the word. Every other outcome is untouched by scoping, so
+  // a scoped run cannot be a way to soften a defect or a harness fault either.
+  for (const [rows, expected] of [
+    [[anchoredSection("contract", 1)], { status: "fail", exit: 1 }],
+    [[anchoredSection("flow", 2)], { status: "harness-fault", exit: 2 }],
+    [[unanchoredSection("tests", 0)], { status: "partial", exit: 2 }],
+    [[], { status: "nothing-checked", exit: 2 }],
+  ] as const) {
+    assert.deepEqual(resolveUnifiedOutcome({ executed: rows, notRun: [], scoped: true }), expected);
+    assert.deepEqual(resolveUnifiedOutcome({ executed: rows, notRun: [], scoped: false }), expected);
+  }
+});
+
+test("F14: a RED `--only tests` exits 1 and a GREEN one exits 2, and both are deliberate", () => {
+  // The two scoped exits an operator will meet first, pinned together because they look
+  // backwards until you read them: a real assertion failure is a GAME DEFECT (tier 1) whatever
+  // else was scoped out, while an all-green suite is the FXH case (tier 2), because the tests
+  // section is permanently unanchored and a self-produced green certifies nothing. A green
+  // subset is not a smaller pass; it is a run that compared nothing a human froze.
+  assert.deepEqual(
+    resolveUnifiedOutcome({ executed: [unanchoredSection("tests", 1)], notRun: [], scoped: true }),
+    { status: "fail", exit: 1 },
+  );
+  assert.deepEqual(
+    resolveUnifiedOutcome({ executed: [unanchoredSection("tests", 0)], notRun: [], scoped: true }),
+    { status: "partial", exit: 2 },
+  );
+});
+
+test("F2: deselection is EXCLUDED from the calculus, but a notRun row keeps its tier under scoping", () => {
+  // Deselected rows never reach `resolveUnifiedOutcome` (they are a separate array on the
+  // report), so a scoped run over the selected sections resolves as if the rest did not
+  // exist. What must NOT happen is a notRun row losing its tier because the run was scoped:
+  // the tiering of an unmeasurable anchor is identical with and without `scoped`.
+  for (const notRun of [[NON_ANCHOR], [DRAFT], [BROKEN]]) {
+    assert.deepEqual(
+      resolveUnifiedOutcome({ executed: [anchoredSection("contract", 0)], notRun, scoped: true }),
+      { status: "partial", exit: 2 },
+      `${notRun[0]!.why} must keep the harness tier in a scoped run`,
+    );
+  }
+  // The live-only allowance is likewise unchanged by scoping.
+  assert.deepEqual(
+    resolveUnifiedOutcome({ executed: [anchoredSection("contract", 0)], notRun: [LIVE_SKIPPED], scoped: true }),
+    { status: "partial", exit: 0 },
+  );
+});
+
 test("notRunFor reads the machine class off the row, never re-parses its prose", () => {
   const row: DiscoveredAsset = {
     kind: "trace",
@@ -332,10 +443,11 @@ test("reportPathFor: an ESCAPING relative path is stored absolute, never as `../
   assert.equal(reportPathFor(root, undefined), undefined);
 });
 
-test("the report path helpers are the ONLY spelling of the two declared filenames", async () => {
+test("the report path helpers are the ONLY spelling of the three declared filenames", async () => {
   assert.equal(unifiedVerifyReportPath("/r"), path.join("/r", UNIFIED_VERIFY_REPORT));
   assert.equal(unifiedScreensReportPath("/r"), path.join("/r", UNIFIED_SCREENS_REPORT));
-  assert.notEqual(UNIFIED_VERIFY_REPORT, UNIFIED_SCREENS_REPORT);
+  assert.equal(unifiedScopedReportPath("/r"), path.join("/r", UNIFIED_SCOPED_REPORT));
+  assert.equal(new Set([UNIFIED_VERIFY_REPORT, UNIFIED_SCREENS_REPORT, UNIFIED_SCOPED_REPORT]).size, 3);
 
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), "unified-report-"));
   try {
@@ -348,6 +460,10 @@ test("the report path helpers are the ONLY spelling of the two declared filename
       live: false,
       plan: [],
       notRun: [],
+      // S2a/F12: `only` and `deselected` are REQUIRED on the type, so a full run has to say
+      // out loud that it was not scoped rather than leaving the field off.
+      only: null,
+      deselected: [],
       sections: {},
       anchoredSections: [],
       unanchoredSections: [],
