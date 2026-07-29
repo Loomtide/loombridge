@@ -2,8 +2,10 @@
  * Portable evidence binding: the repo-identity derivation and the manifest matching rule.
  *
  * The scenario the whole feature exists for: a dev stamps a test run on their machine,
- * COMMITS the trio, and CI (a different absolute path, the same repository) grades it.
- * The scenario it must never enable: a trio from a DIFFERENT repository grading here.
+ * COMMITS the trio, and CI (a different absolute path, a DIFFERENT REMOTE SPELLING, the
+ * same repository) grades it. The scenarios it must never enable: a trio from a
+ * different repository grading here, and a directory-name coincidence counting as
+ * identity (the adversarial review demonstrated both against the first cut).
  */
 
 import assert from "node:assert/strict";
@@ -32,21 +34,32 @@ async function plantRepo(root: string, origin?: string): Promise<void> {
   await fs.writeFile(path.join(root, ".git", "config"), config);
 }
 
-test("deriveRepoIdentity: origin URL + repo-relative project path, '.' at the toplevel", async () => {
+test("normalizeRepoUrl canonicalizes the SPELLING FAMILY of one repo to host/path", () => {
+  const canonical = "github.com/Loomtide/game";
+  for (const spelling of [
+    "git@github.com:Loomtide/game.git", // scp-style ssh (the dev machine)
+    "https://github.com/Loomtide/game", // what actions/checkout writes (CI)
+    "https://github.com/Loomtide/game.git/",
+    "ssh://git@GitHub.com:22/Loomtide/game.git",
+    '"https://github.com/Loomtide/game.git"', // quoted config value
+  ]) {
+    assert.equal(normalizeRepoUrl(spelling), canonical, spelling);
+  }
+});
+
+test("deriveRepoIdentity: canonical origin + repo-relative project path, '.' at the toplevel", async () => {
   const repo = await tmpDir();
   try {
     await plantRepo(repo, "git@github.com:Loomtide/game.git");
-    const atRoot = deriveRepoIdentity(repo);
-    assert.deepEqual(atRoot, {
-      repoIdentity: "git@github.com:Loomtide/game",
+    assert.deepEqual(deriveRepoIdentity(repo), {
+      repoIdentity: "github.com/Loomtide/game",
       projectPath: ".",
     });
 
     const nested = path.join(repo, "unity", "MyGame");
     await fs.mkdir(nested, { recursive: true });
-    const inside = deriveRepoIdentity(nested);
-    assert.deepEqual(inside, {
-      repoIdentity: "git@github.com:Loomtide/game",
+    assert.deepEqual(deriveRepoIdentity(nested), {
+      repoIdentity: "github.com/Loomtide/game",
       projectPath: "unity/MyGame",
     });
   } finally {
@@ -54,12 +67,11 @@ test("deriveRepoIdentity: origin URL + repo-relative project path, '.' at the to
   }
 });
 
-test("deriveRepoIdentity: no origin falls back to a STATED basename identity; no git yields null", async () => {
+test("deriveRepoIdentity: no origin yields the basename PROVENANCE marker; no git yields null", async () => {
   const repo = await tmpDir();
   try {
     await plantRepo(repo);
-    const derived = deriveRepoIdentity(repo);
-    assert.equal(derived?.repoIdentity, `basename:${path.basename(repo)}`);
+    assert.equal(deriveRepoIdentity(repo)?.repoIdentity, `basename:${path.basename(repo)}`);
 
     const bare = await tmpDir();
     try {
@@ -73,63 +85,114 @@ test("deriveRepoIdentity: no origin falls back to a STATED basename identity; no
   }
 });
 
-test("normalizeRepoUrl converges .git suffix spellings; readOriginUrl survives a missing config", async () => {
-  assert.equal(normalizeRepoUrl("https://github.com/x/y.git"), "https://github.com/x/y");
-  assert.equal(normalizeRepoUrl("https://github.com/x/y"), "https://github.com/x/y");
-  const empty = await tmpDir();
+test("readOriginUrl: an INDENTED following section cannot leak its url into origin, and last-url wins", async () => {
+  const repo = await tmpDir();
   try {
-    assert.equal(readOriginUrl(empty), null, "no .git at all reads as no origin, never a throw");
+    // The adversarial shape: origin section empty, upstream section indented so a naive
+    // column-0 terminator swallows it into origin.
+    await fs.mkdir(path.join(repo, ".git"), { recursive: true });
+    await fs.writeFile(
+      path.join(repo, ".git", "config"),
+      `[remote "origin"]\n  [remote "upstream"]\n\turl = https://github.com/UPSTREAM/repo.git\n`,
+    );
+    assert.equal(readOriginUrl(repo), null, "upstream's url must never become origin's");
+
+    // git precedence: last value wins.
+    await fs.writeFile(
+      path.join(repo, ".git", "config"),
+      `[remote "origin"]\n\turl = https://github.com/OLD/repo.git\n\turl = https://github.com/NEW/repo.git\n`,
+    );
+    assert.equal(readOriginUrl(repo), "github.com/NEW/repo");
+
+    const missing = await tmpDir();
+    try {
+      assert.equal(readOriginUrl(missing), null, "no .git reads as no origin, never a throw");
+    } finally {
+      await fs.rm(missing, { recursive: true, force: true });
+    }
   } finally {
-    await fs.rm(empty, { recursive: true, force: true });
+    await fs.rm(repo, { recursive: true, force: true });
   }
 });
 
-test("projectBindingMatches: SAME repo at a DIFFERENT checkout path matches; a DIFFERENT repo refuses", async () => {
+test("projectBindingMatches: ssh dev + https CI of the SAME repo matches; different repo refuses", async () => {
   const devCheckout = await tmpDir();
   const ciCheckout = await tmpDir();
   const otherRepo = await tmpDir();
   try {
-    await plantRepo(devCheckout, "https://github.com/Loomtide/game.git");
-    await plantRepo(ciCheckout, "https://github.com/Loomtide/game"); // same repo, .git-less spelling
+    await plantRepo(devCheckout, "git@github.com:Loomtide/game.git"); // ssh clone (dev)
+    await plantRepo(ciCheckout, "https://github.com/Loomtide/game"); // https checkout (CI)
     await plantRepo(otherRepo, "https://github.com/Loomtide/other-game.git");
 
-    // The manifest as the dev machine stamped it.
-    const stamp = {
-      projectRoot: devCheckout,
-      ...deriveRepoIdentity(devCheckout)!,
-    };
+    const stamp = { projectRoot: devCheckout, ...deriveRepoIdentity(devCheckout)! };
 
     assert.equal(projectBindingMatches(stamp, devCheckout), true, "absolute rule on the origin machine");
     assert.equal(
       projectBindingMatches(stamp, ciCheckout),
       true,
-      "THE FEATURE: same repo, different absolute path (CI), matches portably",
+      "THE FEATURE: ssh spelling at dev, https at CI, same repo: matches portably",
     );
-    assert.equal(
-      projectBindingMatches(stamp, otherRepo),
-      false,
-      "a different repository can never claim the trio",
-    );
+    assert.equal(projectBindingMatches(stamp, otherRepo), false, "a different repository never claims the trio");
 
     // Legacy manifest (no portable stamp): absolute path is the only rule.
     const legacy = { projectRoot: devCheckout };
     assert.equal(projectBindingMatches(legacy, devCheckout), true);
     assert.equal(projectBindingMatches(legacy, ciCheckout), false, "legacy stays machine-bound (re-stamp to port)");
-
-    // Monorepo: same repo, different project position: refuses.
-    const nestedStamp = {
-      projectRoot: path.join(devCheckout, "games", "a"),
-      repoIdentity: "https://github.com/Loomtide/game",
-      projectPath: "games/a",
-    };
-    const otherPosition = path.join(ciCheckout, "games", "b");
-    await fs.mkdir(otherPosition, { recursive: true });
-    assert.equal(
-      projectBindingMatches(nestedStamp, otherPosition),
-      false,
-      "two projects inside one repo stay distinct",
-    );
   } finally {
     for (const d of [devCheckout, ciCheckout, otherRepo]) await fs.rm(d, { recursive: true, force: true });
+  }
+});
+
+test("the basename fallback NEVER matches portably (two unrelated repos share a name), and projectPath is required", async () => {
+  const alice = await tmpDir();
+  const bobParent = await tmpDir();
+  try {
+    // Two genuinely different no-origin repos with the SAME directory name.
+    const name = "demo-platformer";
+    const aliceRepo = path.join(alice, name);
+    const bobRepo = path.join(bobParent, name);
+    await fs.mkdir(aliceRepo, { recursive: true });
+    await fs.mkdir(bobRepo, { recursive: true });
+    await plantRepo(aliceRepo);
+    await plantRepo(bobRepo);
+
+    const stamp = { projectRoot: aliceRepo, ...deriveRepoIdentity(aliceRepo)! };
+    assert.ok(stamp.repoIdentity.startsWith("basename:"), "the fixture really is the fallback case");
+    assert.equal(
+      projectBindingMatches(stamp, bobRepo),
+      false,
+      "a directory-name coincidence is not an identity: basename never matches portably",
+    );
+    assert.equal(projectBindingMatches(stamp, aliceRepo), true, "the origin machine still matches, by the absolute rule");
+
+    // F9: an absent projectPath is a refusal in the PREDICATE itself, never a default,
+    // even though the on-disk validator also enforces the pairing. The check must run
+    // through the PORTABLE arm, so the roots differ (same-root would legitimately match
+    // by the absolute rule before the portable fields are ever consulted).
+    await plantRepo(aliceRepo, "https://github.com/Loomtide/game.git");
+    await plantRepo(bobRepo, "https://github.com/Loomtide/game.git");
+    const missingPath = { projectRoot: aliceRepo, repoIdentity: "github.com/Loomtide/game" };
+    assert.equal(
+      projectBindingMatches(missingPath, bobRepo),
+      false,
+      "repoIdentity without projectPath refuses (the falsy-field anti-pattern, closed at the predicate)",
+    );
+    assert.equal(
+      projectBindingMatches({ ...missingPath, projectPath: "." }, bobRepo),
+      true,
+      "control: with the pair complete, the same-origin checkout matches portably",
+    );
+
+    // Monorepo separation: same repo, different position, refuses.
+    const nestedStamp = {
+      projectRoot: path.join(aliceRepo, "games", "a"),
+      repoIdentity: "github.com/Loomtide/game",
+      projectPath: "games/a",
+    };
+    const otherPosition = path.join(aliceRepo, "games", "b");
+    await fs.mkdir(otherPosition, { recursive: true });
+    assert.equal(projectBindingMatches(nestedStamp, otherPosition), false, "monorepo siblings stay distinct");
+  } finally {
+    for (const d of [alice, bobParent]) await fs.rm(d, { recursive: true, force: true });
   }
 });

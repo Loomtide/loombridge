@@ -457,3 +457,52 @@ test("G15: the on-ramp text does NOT name the tests asset", () => {
   assert.ok(!text.includes("test-results"), text);
   assert.match(text, /a HUMAN plays it/, "…and it still names the human actor, so this guard is not vacuous");
 });
+
+// ── portable binding at the DOORS (F4: the rule must be live, not merely defined) ──
+
+test("PORTABLE: a committed trio grades at a moved checkout of the SAME repo; a foreign repo refuses", async () => {
+  // The tier-2 CI story from Docs/Licensing-and-CI.md, driven through the REAL unified
+  // door: the stamp carries the repo identity, the "CI checkout" lives at a different
+  // absolute path with a different remote SPELLING of the same repository, and the trio
+  // is copied over exactly as a git checkout would materialize it.
+  const devRoot = await tmpDir("tests-portable-dev-");
+  const ciRoot = await tmpDir("tests-portable-ci-");
+  const foreignRoot = await tmpDir("tests-portable-foreign-");
+  const workspace = await tmpDir("tests-portable-ws-");
+  try {
+    const plantGit = async (root: string, origin: string) => {
+      await fs.mkdir(path.join(root, ".git"), { recursive: true });
+      await fs.writeFile(
+        path.join(root, ".git", "config"),
+        `[remote "origin"]\n\turl = ${origin}\n`,
+      );
+    };
+    await plantGit(devRoot, "git@github.com:Loomtide/portable-game.git");
+    await plantGit(ciRoot, "https://github.com/Loomtide/portable-game");
+    await plantGit(foreignRoot, "https://github.com/Loomtide/another-game");
+
+    // Stamp at the dev checkout, with the portable identity the producer would derive.
+    await plantTestResults(devRoot, {
+      repoIdentity: "github.com/Loomtide/portable-game",
+      projectPath: ".",
+    });
+    // "Commit + checkout": the trio materializes at the other roots byte-identically.
+    for (const target of [ciRoot, foreignRoot]) {
+      await fs.cp(loombridgePaths(devRoot).tests, loombridgePaths(target).tests, { recursive: true });
+    }
+
+    // Same repo, moved checkout: the row is runnable and the section grades.
+    const ci = await captured(() => runVerifyCli(["--root", ciRoot, "--workspace", workspace]));
+    assert.match(ci.lines.join("\n"), /test-results 'editmode': will run \(offline\)/, "portable match is LIVE at the door");
+    assert.equal((await readUnified(ciRoot)).sections.tests?.exit, 1, "the real red grades as a real red in CI");
+
+    // Different repo: refused, with the stamped identity named.
+    const foreign = await captured(() => runVerifyCli(["--root", foreignRoot, "--workspace", workspace]));
+    const text = foreign.lines.join("\n");
+    assert.match(text, /BROKEN, will not run/);
+    assert.match(text, /github\.com\/Loomtide\/portable-game/, "the refusal names the stamped identity");
+    assert.equal(foreign.result, 2);
+  } finally {
+    for (const d of [devRoot, ciRoot, foreignRoot, workspace]) await fs.rm(d, { recursive: true, force: true });
+  }
+});

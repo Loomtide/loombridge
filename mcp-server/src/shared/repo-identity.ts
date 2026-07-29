@@ -7,8 +7,8 @@
  * different checkout path) can grade it. What identifies "the same project" across
  * machines is the REPOSITORY plus the project's position inside it:
  *
- *  - `repoIdentity`: the git origin URL when one exists (a clone of a different project
- *    cannot share it), else the toplevel directory's basename (weaker, stated as such).
+ *  - `repoIdentity`: the canonicalized git origin URL when one exists, else a
+ *    `basename:` marker that is provenance only and NEVER matches portably.
  *  - `projectPath`: the project root relative to the git toplevel ("." for a repo-root
  *    project), which keeps two Unity projects in one monorepo distinct.
  *
@@ -17,17 +17,28 @@
  * git installed, and a child process is not worth two file reads.
  *
  * HONEST SCOPE: like every stamp in this repo, this is anti-accident provenance, not
- * anti-forgery (the manifest is plain text; so was the absolute path). What it must
- * never do is MATCH two genuinely different projects by accident: an origin URL cannot
- * collide across different repositories, and the basename fallback is only consulted
- * when neither side has an origin.
+ * anti-forgery (the manifest is plain text; so was the absolute path). Two accidental
+ * collisions remain and are stated rather than hidden: sibling clones of one template
+ * repository share the template's origin until `git remote set-url` runs, and the
+ * `basename:` fallback would collide on a directory name, which is why the matcher
+ * refuses to match on it at all.
  */
 
 import fsSync from "node:fs";
 import path from "node:path";
 
 export interface RepoIdentity {
-  /** Origin URL (normalized) when the repo has one, else `basename:<toplevel basename>`. */
+  /**
+   * Canonicalized origin URL when the repo has one, else `basename:<toplevel basename>`.
+   * The `basename:` form is PROVENANCE ONLY: two unrelated local repos trivially share
+   * a directory name (and an empty `.git` marker suffices to derive one), so the
+   * matcher never accepts a portable match on it. Only a real origin identity matches.
+   *
+   * HONEST LIMIT even for real origins: clones of one template repository share the
+   * template's origin (and its history) until `git remote set-url` runs, and no git
+   * metadata distinguishes "another checkout of my repo" from "a sibling clone of the
+   * same template". The binding is anti-accident provenance; the docs say so.
+   */
   repoIdentity: string;
   /** Project root relative to the git toplevel, POSIX separators, "." for the toplevel itself. */
   projectPath: string;
@@ -68,18 +79,50 @@ export function readOriginUrl(toplevel: string): string | null {
       }
     }
     const config = fsSync.readFileSync(path.join(gitDir, "config"), "utf-8");
-    // Minimal ini walk: the url line inside the [remote "origin"] section.
-    const section = config.match(/\[remote "origin"\]([\s\S]*?)(?=\n\[|$)/);
-    const url = section?.[1]?.match(/^\s*url\s*=\s*(.+)\s*$/m)?.[1];
+    // Minimal ini walk. Section headers may be INDENTED (git allows it), so the
+    // terminator anchors on any line whose first non-blank char is `[`, and git's own
+    // precedence is last-value-wins, so the LAST url across all origin sections is
+    // taken (the adversarial review defeated the first cut with an indented following
+    // section that leaked the upstream url into origin).
+    const sections = [...config.matchAll(/^[ \t]*\[remote "origin"\][ \t]*$([\s\S]*?)(?=^[ \t]*\[|(?![\s\S]))/gm)];
+    let url: string | undefined;
+    for (const section of sections) {
+      const urls = [...(section[1] ?? "").matchAll(/^\s*url\s*=\s*(.+?)\s*$/gm)];
+      const last = urls[urls.length - 1]?.[1];
+      if (last !== undefined) url = last;
+    }
     return url ? normalizeRepoUrl(url) : null;
   } catch {
     return null;
   }
 }
 
-/** Trailing `.git` and whitespace stripped so ssh/https spellings of one repo converge more often. */
+/**
+ * Canonicalize a remote URL so the SPELLINGS of one repository converge: scp-style ssh
+ * (`git@host:path`), `ssh://`, `https://`, `git://`, quoted config values, trailing
+ * slashes and the `.git` suffix all reduce to `host/path` with a lowercased host. The
+ * single most common real split is an ssh clone on the dev machine and the https
+ * checkout actions/checkout writes in CI: those MUST converge or the doc's flagship
+ * tier-2 flow refuses on every runner (found by adversarial review before it shipped).
+ */
 export function normalizeRepoUrl(url: string): string {
-  return url.trim().replace(/\.git$/, "");
+  let u = url.trim().replace(/^"(.*)"$/, "$1").trim();
+  // scp-style: user@host:path (no scheme, single colon not followed by //)
+  const scp = u.match(/^(?:[^@/]+@)?([^:/]+):(?!\/\/)(.+)$/);
+  if (scp) {
+    u = `${scp[1]}/${scp[2]}`;
+  } else {
+    // scheme://[user@]host[:port]/path
+    const schemed = u.match(/^[a-z+]+:\/\/(?:[^@/]+@)?([^/]+)(\/.*)?$/i);
+    if (schemed) u = `${schemed[1]}${schemed[2] ?? ""}`;
+  }
+  u = u.replace(/\/+$/, "").replace(/\.git$/, "");
+  const slash = u.indexOf("/");
+  if (slash > 0) {
+    const host = u.slice(0, slash).toLowerCase().replace(/:\d+$/, "");
+    return `${host}${u.slice(slash)}`;
+  }
+  return u;
 }
 
 /**

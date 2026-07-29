@@ -318,13 +318,18 @@ export function projectBindingMatches(
   root: string,
 ): boolean {
   if (path.resolve(root) === path.resolve(manifest.projectRoot)) return true;
-  if (manifest.repoIdentity === undefined) return false;
+  // BOTH portable fields must be present: an absent projectPath is a refusal, never a
+  // default (the falsy-field anti-pattern; the validator enforces the pairing on disk,
+  // and this predicate is exported, so the refusal lives here too, not one file away).
+  if (manifest.repoIdentity === undefined || manifest.projectPath === undefined) return false;
+  // A `basename:` identity is a directory-name guess: two unrelated local repos (or two
+  // directories with an empty `.git` marker) trivially share one, so it never matches
+  // portably. Provenance only; the failure message names the re-stamp path.
+  if (manifest.repoIdentity.startsWith("basename:")) return false;
   const derived = deriveRepoIdentity(root);
   if (derived === null) return false;
-  return (
-    derived.repoIdentity === manifest.repoIdentity &&
-    derived.projectPath === (manifest.projectPath ?? ".")
-  );
+  if (derived.repoIdentity.startsWith("basename:")) return false;
+  return derived.repoIdentity === manifest.repoIdentity && derived.projectPath === manifest.projectPath;
 }
 
 export async function verifyTestResults(
