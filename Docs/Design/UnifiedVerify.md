@@ -157,8 +157,10 @@ LAST, once the internal providers have proven the row shape twice.
   that discovers assets and delegates to the existing mode implementations. Empty-project
   on-ramp text. Plan-first output.
 - **S2 (SHIPPED):** `--only` selectors; mode flags become deprecated aliases (stderr notice,
-  the `design` -> `target` precedent); `--profile` explicitly marked diagnostic and removed
-  from bare-verify's plan; the `loombridge_verify` MCP tool routes through the orchestrator.
+  the `design` -> `target` precedent); `--profile` explicitly marked diagnostic and CONFIRMED
+  ABSENT from bare-verify's discovery (it was never a discovered asset, so there was nothing to
+  remove: the audit is the deliverable); the `loombridge_verify` MCP tool routes through the
+  orchestrator.
 - **S3:** screen-contract rename in docs/report vocabulary (verbs stay aliased); README
   repositions around the one-command story.
 - **S4 (later):** provider SDK, once a second external consumer exists.
@@ -270,7 +272,18 @@ would this let a run CLAIM that it did not measure?
   offline run after a live drift, a scoped run after a full refusal, and the MCP tool's own
   offline write are all non-certificates by construction. Belt and braces: a `verify.json`
   whose `only` is non-null is refused outright, though a scoped run cannot write there.
-- **The deprecated aliases print one stderr line each.** `--snapshot` and `--minigame` keep
+- **…and the report has to be BOUND to what it certifies** (the S2 fix pass). A green roll-up
+  said nothing about WHICH project, WHICH build, or WHEN, so five further refuse-only bindings
+  joined the status rule: the report's `root` must be the root being certified (an absent
+  `root` refuses with a re-run message, since the orchestrator has stamped it since S1); a
+  `pass` must be internally consistent (nothing in `notRun`, nothing unanchored, nothing
+  deselected, no scoping, every section at tier 0); a `verify-scoped.json` that POSTDATES
+  `verify.json`, or that exists while no `verify.json` does, refuses; a `verify.json` that
+  PREDATES `build-verdict.json` refuses; and with a build in flight the report must carry THAT
+  `runId` (the FXC precedent: a `null` scope is an absent binding, not a free pass). Ordering
+  prefers each document's own `producedAt` and falls back to mtime; an ordering that cannot be
+  established at all is a refusal, never a skipped check.
+- **The deprecated aliases print a short stderr notice each.** `--snapshot` and `--minigame` keep
   byte-identical behavior (stdout is unchanged with and without the notice) and point at
   `--only feel` / `--only screens`. `--profile` gets NO notice: it is a permanent diagnostic,
   not an alias. The notices are SUPPRESSED under `--quiet-next`, the guided flow's existing
@@ -293,10 +306,36 @@ would this let a run CLAIM that it did not measure?
   BUILDING a new game has arrived at door two by mistake, and telling it to record a
   demonstration of a game that does not exist yet is the wrong instruction.
 
-RECORDED AS S3 SURFACE WORK (deliberately not in S2): the nine printed next-step sites across
-the guided flows still name mode flags rather than the unified door. Rewriting them is a
-vocabulary change that belongs with the S3 screen-contract rename, and doing it here would
-have meant editing nine strings with no verdict-level guard behind them.
+RECORDED AS S3 SURFACE WORK (deliberately not in S2): the printed next-step sites across the
+guided flows still name the mode flags rather than the unified door. The S2 note first put the
+count at nine, which was a guess; the audited truth (every non-test occurrence of
+`verify --minigame` / `verify --snapshot` that is PRINTED, rather than a code comment) is
+**16 source sites**:
+
+- `capabilities/minigame/minigame.ts` x4 (baseline refusal, baseline-enforced notice, the
+  scaffold next-step, the init next-step)
+- `capabilities/minigame/verify-minigame.ts` x2 (both remediation sentences)
+- `capabilities/minigame/minigame-report-render.ts` x2 (the HTML command chip and the footer)
+- `capabilities/minigame/minigame-declare-background.ts` x2 (the `--from-report` refusal and
+  the printed re-run command)
+- `capabilities/minigame/minigame-next.ts` (the resolved `verify` step of the guided flow)
+- `capabilities/minigame/minigame-setup.ts` (the proven-verbs sentence)
+- `capabilities/minigame/minigame-sync.ts` (the re-capture next step)
+- `capabilities/feel/snapshot.ts` x2 (the approve-then-grade sentence and the printed drift
+  gate)
+- `surfaces/cli.ts` (the top-level verb summary)
+
+plus **11 user-facing Markdown documents outside this RFC** (`README.md`, `ROADMAP.md`,
+`ARCHITECTURE.md`, `commands/loombridge/verify.md`, `Docs/Design/Positioning.md`, and the six
+`Docs/Profiles/` guides: `ExistingGameFeelVerification.md`, `MiniGameVerificationContract.md`,
+`MiniGameVerifyCI.md`, `MiniGameVerifyQuickstart.md`, `TuningSnapshotVerification.md`,
+`VerifyFirstEntry.md`), and one CI example workflow
+(`Docs/Profiles/examples/minigame-verify.github-actions.yml`).
+
+Rewriting them is a vocabulary change that belongs with the S3 screen-contract rename, and
+doing it here would have meant editing 27 strings with no verdict-level guard behind them. The
+count is recorded so the S3 estimate is a measurement rather than an impression; it is a scope
+note, so no guard enforces it.
 
 ### Test-results delivery notes (the fifth asset kind)
 

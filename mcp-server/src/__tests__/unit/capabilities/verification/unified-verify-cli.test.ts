@@ -1389,9 +1389,78 @@ test("F1: --report cannot point a scoped run at the full report, nor a full run 
   }
 });
 
+test("M-M6: a SYMLINK cannot smuggle --report onto a declared artifact", async () => {
+  // THE ATTACK, verbatim. The collision check compared `path.resolve`d STRINGS, which see only
+  // what argv spelled. So a symlink at a fresh-looking path matched nothing in the declared
+  // list, read back through the link as a "previous unified report" (kind: unified-verify), and
+  // was then written THROUGH the link onto the file it pointed at. One `ln -s` therefore
+  // defeated F1's both-directions rule, and the same trick reaches the acceptance contract.
+  const root = await plannedProject("unified-cli-symlink-", { graded: true });
+  const workspace = await tmpDir("unified-cli-ws-");
+  const paths = loombridgePaths(root);
+  try {
+    // A real previous FULL run, so there is a genuine verify.json to destroy.
+    await captured(() => runVerifyCli(["--root", root, "--workspace", workspace]));
+    const fullBefore = await fs.readFile(unifiedVerifyReportPath(paths.reports), "utf-8");
+    const contractBefore = await fs.readFile(paths.acceptance, "utf-8");
+
+    // (1) a scoped run aimed at verify.json THROUGH a link. The link's own path is not any
+    //     declared artifact, and the file it points at is a valid previous unified report.
+    const link = path.join(paths.reports, "sneaky.json");
+    await fs.symlink(unifiedVerifyReportPath(paths.reports), link);
+    const scoped = await captured(() =>
+      runVerifyCli(["--root", root, "--workspace", workspace, "--only", "contract", "--report", link]),
+    );
+    assert.equal(scoped.result, 2, "a scoped run must never reach the full report, however it is spelled");
+    assert.match(scoped.lines.join("\n"), /is the FULL run's unified report; a scoped run \(--only\) never writes it/);
+    assert.equal(
+      await fs.readFile(unifiedVerifyReportPath(paths.reports), "utf-8"),
+      fullBefore,
+      "verify.json must be byte-identical: the refusal happens before anything is written",
+    );
+
+    // (2) the same trick aimed at the acceptance contract, which is not a unified report at
+    //     all: the declared-artifact list is what must catch it, not the JSON sniff.
+    const contractLink = path.join(paths.reports, "contract-link.json");
+    await fs.symlink(paths.acceptance, contractLink);
+    const atContract = await captured(() =>
+      runVerifyCli(["--root", root, "--workspace", workspace, "--report", contractLink]),
+    );
+    assert.equal(atContract.result, 2);
+    assert.match(atContract.lines.join("\n"), /is the acceptance contract/);
+    assert.equal(await fs.readFile(paths.acceptance, "utf-8"), contractBefore, "the contract is untouched");
+
+    // (3) CONTAINMENT through a link: a symlink spelled inside the root whose real
+    //     location is outside it. The spelled-path isInside would wave it through; the
+    //     realpathed comparison must refuse, and the outside file must never be created
+    //     or written.
+    const outside = path.join(path.dirname(root), `outside-${path.basename(root)}`);
+    await fs.mkdir(outside, { recursive: true });
+    const escapeLink = path.join(paths.reports, "escape-link.json");
+    await fs.symlink(path.join(outside, "smuggled.json"), escapeLink);
+    const escaped = await captured(() =>
+      runVerifyCli(["--root", root, "--workspace", workspace, "--report", escapeLink]),
+    );
+    assert.equal(escaped.result, 2, "a link whose realpath escapes the root is an escape");
+    assert.match(escaped.lines.join("\n"), /resolves outside the project root/);
+    assert.equal(
+      await fs
+        .access(path.join(outside, "smuggled.json"))
+        .then(() => true)
+        .catch(() => false),
+      false,
+      "nothing may be written outside the root, through any spelling",
+    );
+    await fs.rm(outside, { recursive: true, force: true });
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+    await fs.rm(workspace, { recursive: true, force: true });
+  }
+});
+
 // ── S2b: the deprecation notices ─────────────────────────────────────────────
 
-test("S2b: --snapshot and --minigame print ONE stderr notice each, and stdout stays byte-identical", async () => {
+test("S2b: --snapshot and --minigame print ONE stderr notice each (three NOTICE lines), and stdout stays byte-identical", async () => {
   // The notice is routing information, not a verdict: it goes to stderr, it does not change
   // the mode's behavior, and it must not appear on stdout, where a machine reads the mode's
   // own output. Both halves are pinned by capturing the two streams separately.
@@ -1417,6 +1486,15 @@ test("S2b: --snapshot and --minigame print ONE stderr notice each, and stdout st
 
       const notice = err.filter((l) => /NOTICE: (--snapshot|--minigame) is a DEPRECATED ALIAS/.test(l));
       assert.equal(notice.length, 1, `exactly one deprecation headline on stderr:\n${err.join("\n")}`);
+      // V10: the help, `verify.md` and the RFC used to promise a "one-line notice" while the
+      // implementation printed three. The docs now say "a short stderr notice", and THIS is
+      // what "short" is allowed to mean: a notice that grew to a paragraph would be a routing
+      // hint shouting over the mode's own output, and nothing else would notice.
+      assert.equal(
+        err.filter((l) => /NOTICE:/.test(l)).length,
+        3,
+        `the deprecation notice is exactly three NOTICE-marked lines:\n${err.join("\n")}`,
+      );
       assert.match(err.join("\n"), new RegExp(`loombridge verify --only ${section}`));
       assert.ok(
         !out.some((l) => /DEPRECATED ALIAS/.test(l)),

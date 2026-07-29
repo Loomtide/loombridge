@@ -162,6 +162,32 @@ test("G1/FXH: a FORGED all-green pair is `partial` at EXIT 2; a tests-only run c
   }
 });
 
+test("V7: `--only tests` NEVER exits 0: a red suite is 1, a GREEN one is 2 (the documented CI claim)", async () => {
+  // The help text, `verify.md` and the RFC all used `--only tests` as THE example of a CI
+  // step, and it is the one selection that can never produce the exit a CI step is looking
+  // for: the tests section is permanently unanchored, so FXH caps a green tests-only run at 2
+  // while a red one short-circuits at 1. The example moved to `--only screens` and the two
+  // exits are now stated out loud, so they are pinned here rather than left as prose.
+  const workspace = await tmpDir("tests-section-ws-");
+  const red = await tmpDir("tests-only-red-");
+  const green = await tmpDir("tests-only-green-");
+  try {
+    await plantTestResults(red); // the committed fixture: one genuine assertion failure
+    const redRun = await captured(() => runVerifyCli(["--root", red, "--workspace", workspace, "--only", "tests"]));
+    assert.equal(redRun.result, 1, "a real assertion failure is a GAME DEFECT, whatever else was scoped out");
+
+    await plantTestResults(green, { xml: greenNUnitXml(), exitCode: 0 });
+    const greenRun = await captured(() => runVerifyCli(["--root", green, "--workspace", workspace, "--only", "tests"]));
+    assert.equal(greenRun.result, 2, "a GREEN tests-only run compared nothing human-approved, so it cannot exit 0");
+    assert.match(
+      greenRun.lines.join("\n"),
+      /nothing human-approved was compared; a self-produced green cannot exit 0/,
+    );
+  } finally {
+    for (const d of [workspace, red, green]) await fs.rm(d, { recursive: true, force: true });
+  }
+});
+
 test("doneness needs ZERO code change: it is keyed on the report's `exit`, and FXH only ADDS refusals", async () => {
   // `doneness` consumes the unified report as a REFUSE-ONLY input keyed on `exit`: a non-zero
   // exit ADDS a refusal reason and a zero exit adds nothing at all. FXH only ever turns a 0

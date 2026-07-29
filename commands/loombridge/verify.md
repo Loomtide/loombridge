@@ -20,7 +20,7 @@ the per-asset reports.
 ```bash
 loombridge verify --root .              # offline assets only
 loombridge verify --root . --live       # also replay traces + grade feel drift
-loombridge verify --root . --only tests # ONE section (CI granularity); never a certificate
+loombridge verify --root . --only screens # ONE section (CI granularity); never a certificate
 ```
 
 - **The plan prints before anything is written.** One row per asset: what it is, when and by
@@ -62,15 +62,19 @@ loombridge verify --root . --only tests # ONE section (CI granularity); never a 
     `loombridge doneness` refuses to certify from it.
   - **Unknown or empty selections refuse (exit `2`) before anything is written**, and a
     selection matching no discovered asset is a nothing-checked run (exit `2`), named as such.
+  - **`--only tests` never exits `0`.** A red suite exits `1`; a *green* one exits `2`, because
+    the tests section is permanently unanchored (nothing human-approved was compared). For a
+    tests-only CI step use `loombridge tests grade --results <xml>`, or put an anchored section
+    in the selection (`--only screens,tests`).
 - **`doneness` reads the full report when it exists.** A unified run that exited non-zero, OR
   whose status is anything but `pass` (a `--live` gap, an unanchored section, a scoping), adds
   a refusal to `loombridge doneness`. Only a FULL green certifies: an exit-0 `partial` is a run
   that measured less than this project can prove. An absent report changes nothing.
 - **`--snapshot` and `--minigame` are DEPRECATED ALIASES.** Behavior is byte-identical and
-  each now prints one stderr notice pointing at the unified door (`--only feel` and
+  each now prints a short stderr notice pointing at the unified door (`--only feel` and
   `--only screens`); removal comes in a future major. The notice is suppressed under
-  `--quiet-next` (the guided flows pass it). `--profile` is NOT deprecated: it is a permanent
-  diagnostic that never gates.
+  `--quiet-next` (the guided flows pass it), for both aliases. `--profile` is NOT deprecated:
+  it is a permanent diagnostic that never gates.
 - **Exit codes:** `0` a full pass, or a partial that compared **at least one anchored green
   section** and whose only gaps were assets skipped for lack of `--live` or extra unanchored
   sections · `1` a game defect (gate fail, drift, baseline regression) · `2` a harness fault, a

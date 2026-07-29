@@ -199,6 +199,14 @@ test("the test-results DIRECTORY has one declaration, and both layers resolve th
 const PROSE_SITES: [string, string][] = [
   [path.join(PKG_ROOT, "src", "capabilities", "verification", "verify.ts"), `.loombridge/reports/${UNIFIED_VERIFY_REPORT}`],
   [path.join(PKG_ROOT, "src", "surfaces", "cli.ts"), `.loombridge/reports/${UNIFIED_VERIFY_REPORT}`],
+  // V6/S2c. The MCP TOOL DESCRIPTION is a prose site with a reader nothing else reaches: it is
+  // the only place an AGENT is told where the roll-up lands, it ships in the served tool list
+  // rather than in any document a human opens, and a rename of the constant would leave it
+  // routing to a file nothing writes while every code-level check stayed green.
+  [
+    path.join(PKG_ROOT, "src", "surfaces", "loombridge-bridge-tools.ts"),
+    `.loombridge/reports/${UNIFIED_VERIFY_REPORT}`,
+  ],
   [path.join(REPO_ROOT, "commands", "loombridge", "verify.md"), `.loombridge/reports/${UNIFIED_VERIFY_REPORT}`],
   [path.join(REPO_ROOT, "Docs", "Design", "UnifiedVerify.md"), `.loombridge/reports/${UNIFIED_VERIFY_REPORT}`],
   // The verify-owned screens report is named in the two docs that describe the bare run.

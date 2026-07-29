@@ -207,7 +207,12 @@ export async function runUnifiedVerify(opts: UnifiedVerifyOpts): Promise<number>
   // path that escapes the root would let a verify run write outside the project it is
   // grading (observed in the S1 final test: `--report ../../escape.json` was accepted).
   // Refuse rather than clamp: a silently relocated report is a report nobody finds.
-  if (!isInside(reportPath, root)) {
+  // BOTH sides go through realpath (M-M6 family): a symlink inside the root whose real
+  // location is outside it is an escape wearing a contained spelling, and comparing
+  // spelled paths would wave it through. `realTarget` resolves the deepest existing
+  // ancestor, so a not-yet-created report path still resolves honestly, and the root is
+  // realpathed so macOS /tmp vs /private/tmp cannot produce a false mismatch.
+  if (!isInside(await realTarget(reportPath), await realTarget(root))) {
     console.error(`${TAG} REFUSED: --report ${reportPath} resolves outside the project root ${root}`);
     console.error(
       `${TAG} nothing was written and nothing ran. Point --report inside the project, or omit it to use ` +
@@ -878,12 +883,20 @@ export function summaryLines(report: UnifiedVerifyReport, live: boolean): string
  *
  * The known-artifact list is resolved from `loombridgePaths` + the report constants,
  * never re-spelled here: a renamed artifact moves both ends at once.
+ *
+ * M-M6, SYMLINKS. Both sides are resolved through `realTarget` before they are compared. A
+ * string comparison of `path.resolve`d paths sees only what the argv spelled, so a symlink at
+ * a fresh-looking path (`.loombridge/reports/sneaky.json -> verify.json`) matched nothing in
+ * the declared list, read back as a previous unified report through the link, and was then
+ * written THROUGH the link onto the file it pointed at. That is the F1 both-directions rule
+ * defeated by one `ln -s`, and the same trick reaches the acceptance contract and the verdict.
  */
 async function reportCollision(
   paths: ReturnType<typeof loombridgePaths>,
   target: string,
   scoped: boolean,
 ): Promise<string | null> {
+  const realTargetPath = await realTarget(target);
   const declared: [string, string][] = [
     // F1, BOTH DIRECTIONS. The full report and the scoped report answer different questions,
     // and `--report` is the one way an operator could point one run at the other's file. A
@@ -910,18 +923,18 @@ async function reportCollision(
     [testRunLogPath(paths.tests), "is the Unity test run log"],
   ];
   for (const [artifact, what] of declared) {
-    if (path.resolve(artifact) === target) return what;
+    if ((await realTarget(artifact)) === realTargetPath) return what;
   }
   // …and the whole directory as a backstop: `.loombridge/tests/` is committed EVIDENCE, so
   // nothing under it is ever a report destination, named file or not.
-  const testsDir = path.resolve(paths.tests);
-  if (target === testsDir || target.startsWith(`${testsDir}${path.sep}`)) {
+  const testsDir = await realTarget(paths.tests);
+  if (realTargetPath === testsDir || realTargetPath.startsWith(`${testsDir}${path.sep}`)) {
     return "is inside the stamped test-results directory";
   }
   // The whole design directory: the frozen hero shot and its metadata live there, and
   // nothing under it is ever a report destination.
-  const designDir = path.resolve(paths.design);
-  if (target === designDir || target.startsWith(`${designDir}${path.sep}`)) {
+  const designDir = await realTarget(paths.design);
+  if (realTargetPath === designDir || realTargetPath.startsWith(`${designDir}${path.sep}`)) {
     return "is inside the Design Target directory";
   }
 
@@ -936,6 +949,51 @@ async function reportCollision(
     return "already exists and is not a previous unified verify report";
   } catch {
     return null;
+  }
+}
+
+/**
+ * A path as the FILESYSTEM sees it: every symlink in the chain resolved, for the part of the
+ * path that exists, with the not-yet-created remainder appended (M-M6).
+ *
+ * A plain `fs.realpath` cannot be used: the report target usually does NOT exist yet (that is
+ * the point of writing it), and realpath on a missing path throws ENOENT, which would leave
+ * exactly the comparison this exists to fix. So the deepest EXISTING ancestor is resolved and
+ * the remaining segments are joined back on. Both the target and each declared artifact go
+ * through this, so the comparison is between two paths the kernel would agree are the same
+ * file, rather than between two strings the caller happened to type.
+ */
+async function realTarget(p: string): Promise<string> {
+  const resolved = path.resolve(p);
+  const remainder: string[] = [];
+  let current = resolved;
+  for (;;) {
+    try {
+      const real = await fs.realpath(current);
+      return remainder.length === 0 ? real : path.join(real, ...remainder.reverse());
+    } catch {
+      // A DANGLING symlink fails realpath (its target does not exist yet), but a write
+      // through it would CREATE the target: resolving to the link's spelled parent would
+      // let a link inside the root smuggle a write outside it (caught live by the escape
+      // test). Follow the link text by hand and resolve where the write would land.
+      try {
+        const linkText = await fs.readlink(current);
+        const followed = path.resolve(path.dirname(current), linkText);
+        // A self-referential or cyclic link chain cannot make progress; refuse to loop.
+        if (followed !== current) {
+          const real = await realTarget(followed);
+          return remainder.length === 0 ? real : path.join(real, ...remainder.reverse());
+        }
+      } catch {
+        // Not a symlink (plain nonexistent path): fall through to ancestor resolution.
+      }
+      const parent = path.dirname(current);
+      // The filesystem root itself is unresolvable only on a broken system; fall back to the
+      // literal path rather than looping.
+      if (parent === current) return resolved;
+      remainder.push(path.basename(current));
+      current = parent;
+    }
   }
 }
 

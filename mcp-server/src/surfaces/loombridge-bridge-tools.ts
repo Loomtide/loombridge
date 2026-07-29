@@ -24,7 +24,11 @@ import path from "node:path";
 import { designStatus } from "../capabilities/verification/design.js";
 import { isProjectDone, runDoneness } from "../capabilities/verification/doneness.js";
 import { runUnifiedVerify } from "../capabilities/verification/unified/orchestrator.js";
-import { unifiedVerifyReportPath } from "../capabilities/verification/unified/report.js";
+import {
+  fingerprintReport,
+  reportWasWritten,
+  unifiedVerifyReportPath,
+} from "../capabilities/verification/unified/report.js";
 import { ensureScaffold, loombridgePaths, readState } from "../domain/state.js";
 import { inspectContractPresence } from "../domain/contract-presence.js";
 import {
@@ -370,13 +374,40 @@ async function withCapturedConsole<T>(fn: () => Promise<T>): Promise<{ result: T
   }
 }
 
-/** Select the CLI's own status/refusal line as the headline — a verbatim line, never a new verdict. */
+/**
+ * The unified run's own terminal verdict line, e.g. `status=fail exit=1 report=…` (M-M5).
+ *
+ * Matched as a PAIR (`status=` … `exit=`), because `status=` alone also appears in prose, and
+ * scanned from the END so the last one wins: that line is printed once, after every section,
+ * and it is the only line in the output that states the run's tier.
+ */
+const TERMINAL_STATUS_LINE = /\bstatus=.*\bexit=/;
+
+/**
+ * Select the CLI's own status/refusal line as the headline: a verbatim line, never a new verdict.
+ *
+ * ORDER MATTERS, and it was wrong (M-M5). The old scan looked for a refusal first and then for
+ * `/\bstatus=|\bOK —|PASS\b/i`, which collided with the unified door's very first line: the plan
+ * header reads `…(offline only; pass --live for live assets)`, and `PASS` matched it
+ * case-insensitively. A red run therefore headlined with the PLAN rather than the verdict, so
+ * the one field an agent reads first said nothing about what the run found.
+ *
+ * The order now is: the run's own terminal `status=… exit=…` line (the verdict the orchestrator
+ * printed), then a refusal line (the tiers that return before any verdict line: the on-ramp, a
+ * `--report` collision, a fatal), then the old heuristics for the verbs that print neither
+ * (`doneness`). The plan header is excluded explicitly rather than by tightening the regex,
+ * because it is a KNOWN non-verdict line and naming it is what stops the next lookalike.
+ */
 function pickHeadline(output: string[], fallback: string): string {
-  const refusal = output.find((l) => /REFUSED|NOT done|NOT green|not verified|not complete|\bfatal:/i.test(l));
+  const candidates = output.filter((l) => !/\bplan for\b/.test(l));
+  for (let i = candidates.length - 1; i >= 0; i--) {
+    if (TERMINAL_STATUS_LINE.test(candidates[i]!)) return candidates[i]!.trim();
+  }
+  const refusal = candidates.find((l) => /REFUSED|NOT done|NOT green|not verified|not complete|\bfatal:/i.test(l));
   if (refusal) return refusal.trim();
-  const status = output.find((l) => /\bstatus=|\bOK —|PASS\b/i.test(l));
+  const status = candidates.find((l) => /\bstatus=|\bOK —|PASS\b/i.test(l));
   if (status) return status.trim();
-  const first = output.find((l) => l.trim().length > 0);
+  const first = candidates.find((l) => l.trim().length > 0);
   return (first ?? fallback).trim();
 }
 
@@ -404,16 +435,20 @@ export interface LoombridgeVerifyToolPayload {
   /** The verb's enforcement exit code (0 pass/warn · 1 fail · 2 refusal/harness-fault). This is the authoritative verdict. */
   exitCode: number;
   /**
-   * The run did not come back clean: the unified report's `exit` is non-zero (S2c/F4).
+   * THIS RUN's unified report exited NON-ZERO: a game defect (tier 1) or a harness fault /
+   * refusal (tier 2). Either way, not a clean result (S2c/F4).
    *
-   * DERIVED FROM THE REPORT, never from a stderr regex. Matching `/REFUSED/` in the output
-   * meant the payload's own summary field could be flipped by rewording a log line, and it
-   * could not see a refusal that printed nothing. When no report exists at all (the on-ramp
-   * refuses before writing one, and a fatal never gets that far) this falls back to the
-   * process tier, which is the only fact there is.
+   * DERIVED FROM THE REPORT THIS RUN WROTE, never from a stderr regex. Matching `/REFUSED/` in
+   * the output meant the payload's own summary field could be flipped by rewording a log line,
+   * and it could not see a refusal that printed nothing. When this run wrote no report at all
+   * (the on-ramp refuses before writing one, a fatal never gets that far, a blocked write left
+   * an earlier run's file standing) this falls back to the process tier, which is the only fact
+   * there is.
    *
-   * `refused: true` covers BOTH the harness tier and a found game defect; the tier that
-   * separates them is `unifiedExit` (and `exitCode`), which is why both are on the payload.
+   * NAMING (M-M8): `refused` covers ANY non-clean exit, INCLUDING a found game defect; it is not
+   * restricted to the harness tier. The two are distinguishable without reading the prose:
+   * `unifiedExit === 1` is a game defect, `unifiedExit === 2` is the harness tier, which is why
+   * both fields are on the payload.
    */
   refused: boolean;
   /** The refusal or verdict line, verbatim from the gate. */
@@ -434,16 +469,32 @@ export interface LoombridgeVerifyToolPayload {
   verdictPath: string;
   /** Whether THIS run produced the Tier-1 verdict named by `verdictPath` (same rule as `verdictStatus`). */
   verdictExists: boolean;
-  /** The unified run's own word (`pass`/`partial`/`fail`/`harness-fault`/`nothing-checked`), or null when no report was written. */
+  /** The unified run's own word (`pass`/`partial`/`fail`/`harness-fault`/`nothing-checked`), or null when THIS run wrote no report. */
   unifiedStatus: string | null;
-  /** The unified run's tier, or null when no report was written (the on-ramp, or a fatal). */
+  /** The unified run's tier, or null when THIS run wrote no report (the on-ramp, a fatal, a blocked write). */
   unifiedExit: number | null;
   /**
-   * Executed sections that compared NOTHING a human froze. Empty is meaningful; `null` means
-   * no report exists. This is the field that stops a green tool payload reading as a full
-   * pass when the only thing graded was self-produced.
+   * EXECUTED sections that compared NOTHING a human froze. Empty is meaningful; `null` means
+   * this run wrote no report. This is the field that stops a green tool payload reading as a
+   * full pass when the only thing graded was self-produced.
+   *
+   * SCOPE (M-M7): executed sections ONLY. An anchor that never ran is not here; it is in
+   * `notRun`, which is why both fields ship together.
    */
   unanchoredSections: string[] | null;
+  /**
+   * M-M7: discovered assets that did NOT execute, and why (`live-only-skipped`, `broken`,
+   * `non-anchor`, `draft`). Structured rather than prose-only, because "two anchors were
+   * skipped" is the difference between a partial and a pass and an agent should not have to
+   * regex the verbatim output to find it. `null` when this run wrote no report.
+   */
+  notRun: Array<{ kind: string; id: string; why: string; reason: string }> | null;
+  /**
+   * M-M7: healthy assets a `--only` scoping excluded. ALWAYS empty from this tool (it never
+   * scopes), and present so a reader of the payload can tell "nothing was scoped out" from
+   * "scoping is not reported here". `null` when this run wrote no report.
+   */
+  deselected: Array<{ kind: string; id: string; section: string }> | null;
   /** The unified report path relative to `root` (written even when the run refused, unless nothing ran at all). */
   reportPath: string;
 }
@@ -469,14 +520,25 @@ export interface LoombridgeVerifyToolPayload {
 export async function runLoombridgeVerifyTool(root: string): Promise<LoombridgeVerifyToolPayload> {
   const paths = loombridgePaths(root);
   const reportPath = unifiedVerifyReportPath(paths.reports);
+  // M-H1, THE STALE-REPORT BINDING. Reading verify.json after the run and trusting whatever is
+  // there binds the payload to a FILE, not to this run. Two ordinary situations then hand the
+  // agent an earlier run's verdict as if it were this one's: the zero-asset on-ramp (which
+  // refuses before writing anything) and any blocked write (a read-only report, a full disk,
+  // an EACCES), both of which leave a previous green standing. The fix is the same M5
+  // fingerprint the sections use for their own per-asset reports: capture the bytes BEFORE,
+  // and read the file afterwards only when this run actually (re)wrote it. No write means the
+  // unified fields are `null` and `refused` falls back to the process tier, which is honest:
+  // this run produced no roll-up.
+  const before = await fingerprintReport(reportPath);
   const { result: exitCode, output } = await withCapturedConsole(() =>
     // F6: a throw out of the orchestrator path is the HARNESS tier, matching the CLI router
     // (`run()` maps the same throw to 2). A fatal that reported 1 would be a harness fault
     // wearing a game defect's clothes, which is the one thing the tiers must never do.
     runVerbWithFatalTier("verify", () => runUnifiedVerify({ root, strict: false, live: false }), 2),
   );
+  const after = await fingerprintReport(reportPath);
 
-  const unified = await readUnifiedReport(reportPath);
+  const unified = reportWasWritten(before, after) ? await readUnifiedReport(reportPath) : null;
   // F5: the contract verdict is quoted only when THIS run produced it. `reportSha256` is
   // stamped by the orchestrator exactly when the section (re)wrote the file (M5), so it is
   // the binding that answers "is this verdict about this run?".
@@ -504,6 +566,8 @@ export async function runLoombridgeVerifyTool(root: string): Promise<LoombridgeV
     unifiedStatus: unified?.status ?? null,
     unifiedExit: unified?.exit ?? null,
     unanchoredSections: unified?.unanchoredSections ?? null,
+    notRun: unified?.notRun ?? null,
+    deselected: unified?.deselected ?? null,
     reportPath: path.relative(root, reportPath),
   };
 }
@@ -513,15 +577,32 @@ async function readUnifiedReport(reportPath: string): Promise<{
   status: string;
   exit: number;
   unanchoredSections: string[];
+  notRun: Array<{ kind: string; id: string; why: string; reason: string }>;
+  deselected: Array<{ kind: string; id: string; section: string }>;
   sections?: { contract?: { reportSha256?: unknown } };
 } | null> {
   try {
     const raw = JSON.parse(await fs.readFile(reportPath, "utf-8")) as Record<string, unknown>;
     if (raw.kind !== "unified-verify" || typeof raw.exit !== "number" || typeof raw.status !== "string") return null;
+    const rows = (value: unknown): Record<string, unknown>[] =>
+      Array.isArray(value) ? value.filter((r): r is Record<string, unknown> => typeof r === "object" && r !== null) : [];
     return {
       status: raw.status,
       exit: raw.exit,
       unanchoredSections: Array.isArray(raw.unanchoredSections) ? raw.unanchoredSections.map(String) : [],
+      // Trimmed to the four fields an agent acts on. The full rows (with the discovery
+      // provenance behind them) stay in the report file, which `reportPath` names.
+      notRun: rows(raw.notRun).map((r) => ({
+        kind: String(r.kind ?? ""),
+        id: String(r.id ?? ""),
+        why: String(r.why ?? ""),
+        reason: String(r.reason ?? ""),
+      })),
+      deselected: rows(raw.deselected).map((r) => ({
+        kind: String(r.kind ?? ""),
+        id: String(r.id ?? ""),
+        section: String(r.section ?? ""),
+      })),
       sections: (raw.sections ?? undefined) as { contract?: { reportSha256?: unknown } } | undefined,
     };
   } catch {

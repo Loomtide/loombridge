@@ -21,6 +21,7 @@ import {
   type VerdictLike,
 } from "../../../../capabilities/verification/doneness.js";
 import {
+  unifiedScopedReportPath,
   unifiedVerifyReportPath,
   writeUnifiedVerifyReport,
   type UnifiedVerifyReport,
@@ -1248,14 +1249,36 @@ async function captureDonenessOutput(root: string): Promise<{ code: number; text
  * an approved-but-UNSTAMPED trace baseline, which is a non-anchor row, so the run is
  * `partial` at the harness tier. Built through the SHIPPED writer and type, so a change
  * to either moves this fixture with it.
+ *
+ * UPDATED FOR M-H2 / M-M3 (the S2 fix pass). The roll-up is now BOUND to what it certifies, so
+ * a fixture that hard-coded a stale `producedAt` and a `runId: null` was writing a report no
+ * real run could produce, and every assertion built on it would have been measuring the
+ * binding rather than the rule under test. This fixture is therefore honest by construction:
+ * the CURRENT time (so the report never predates the verdict written moments earlier) and the
+ * runId of the build actually in flight (read from STATE, `null` when there is no build, which
+ * is what a real run stamps). An individual case can still override either field to attack the
+ * binding on purpose.
+ *
+ * The timestamp is taken from the VERDICT when one exists (one millisecond after it), not from
+ * the wall clock: these fixtures write a verdict whose `producedAt` is synthesised from
+ * `currentBuild.startedAt`, so a wall-clock stamp would be a roll-up that predates the verdict
+ * beside it, which is exactly what M-H2 (c) refuses. A real run writes the verdict first and
+ * the roll-up after it, and this reproduces that order.
  */
 async function writeUnifiedReport(root: string, over: Partial<UnifiedVerifyReport>): Promise<void> {
+  const paths = loombridgePaths(root);
+  const state = await readState(paths);
+  const verdictProducedAt = await fs
+    .readFile(paths.verdict, "utf-8")
+    .then((raw) => (JSON.parse(raw) as { producedAt?: unknown }).producedAt)
+    .catch(() => undefined);
+  const after = typeof verdictProducedAt === "string" ? Date.parse(verdictProducedAt) + 1 : Date.now();
   const report: UnifiedVerifyReport = {
     kind: "unified-verify",
     schemaVersion: "1",
-    producedAt: "2026-07-28T00:00:00.000Z",
+    producedAt: new Date(Number.isNaN(after) ? Date.now() : after).toISOString(),
     root,
-    runId: null,
+    runId: state?.currentBuild?.runId ?? null,
     live: false,
     plan: [],
     notRun: [
@@ -1388,6 +1411,173 @@ test("F3: an exit-0 PARTIAL is not a certificate either, and the refusal names w
     const statusless = await captureDonenessOutput(root);
     assert.equal(statusless.code, 1);
     assert.match(statusless.text, /unreadable unified verify report/);
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+/**
+ * A project that certifies RIGHT NOW: planned, built, every declared capture on disk, and a
+ * fresh runId-bound green verdict. Every case below starts from it, so a refusal is caused by
+ * the one field the case attacks and by nothing else.
+ */
+async function certifiedProject(): Promise<{
+  root: string;
+  paths: ReturnType<typeof loombridgePaths>;
+  runId: string;
+}> {
+  const root = await tmpRoot();
+  await runPlan({ root, genre: "platformer-2d", engine: "unity", force: false, allowMissingDesignTarget: true });
+  const paths = loombridgePaths(root);
+  await injectArtMode(root, "deferred");
+  assert.equal(await runBuild({ root }), 0);
+  const { runId, producedAt } = await fulfilCurrentBuildCaptures(root);
+  await updateState(paths, { phase: "verified-green" });
+  await fs.writeFile(paths.verdict, JSON.stringify({ status: "pass", runId, producedAt }), "utf-8");
+  return { root, paths, runId };
+}
+
+/** A full-green unified report, i.e. the ONLY shape `doneness` accepts. */
+const FULL_GREEN = { status: "pass" as const, exit: 0, notRun: [], unanchoredSections: [] };
+
+test("M-H2: a green roll-up bound to nothing certifies nothing (project, build, and ordering)", async () => {
+  // THE HOLE. `unifiedVerifyRefusals` read a green verify.json and asked it no questions: not
+  // which project it described, not which build, not whether it was the newest thing on disk.
+  // A green report is a file anyone can produce, so every one of those is a way to keep an old
+  // green standing where a refusal belongs. Four bindings, each attacked separately, each
+  // starting from a project that certifies.
+  const { root, paths, runId } = await certifiedProject();
+  try {
+    // CONTROL. Without any of the attacks below this project is `done`, so every refusal that
+    // follows is caused by the field its case changed.
+    await writeUnifiedReport(root, FULL_GREEN);
+    assert.equal(await runDoneness({ root }), 0, "the setup must certify, or this proves nothing");
+    const fullGreen = await fs.readFile(unifiedVerifyReportPath(paths.reports), "utf-8");
+    const fullProducedAt = Date.parse((JSON.parse(fullGreen) as UnifiedVerifyReport).producedAt);
+
+    /** Write a scoped report stamped at `producedAt`. A scoped run's ceiling is `partial`. */
+    const writeScoped = async (producedAt: string): Promise<void> => {
+      await writeUnifiedVerifyReport(unifiedScopedReportPath(paths.reports), {
+        ...(JSON.parse(fullGreen) as UnifiedVerifyReport),
+        producedAt,
+        only: ["contract"],
+        status: "partial",
+      });
+    };
+
+    // (a) ONLY a scoped run exists. "This project never ran the full door" must not read the
+    //     same as "this project never ran the door at all" (which is the additive S1 case).
+    await fs.rm(unifiedVerifyReportPath(paths.reports));
+    await writeScoped(new Date(fullProducedAt).toISOString());
+    const scopedOnly = await captureDonenessOutput(root);
+    assert.equal(scopedOnly.code, 1, "a subset run is the only answer this project ever gave");
+    assert.match(scopedOnly.text, /only a SCOPED verify run exists/);
+    assert.match(scopedOnly.text, /run the full `loombridge verify`/);
+
+    // (b) a scoped run that POSTDATES the full report: full door refuses, narrow door greens.
+    await fs.writeFile(unifiedVerifyReportPath(paths.reports), fullGreen, "utf-8");
+    await writeScoped(new Date(fullProducedAt + 60_000).toISOString());
+    const postdates = await captureDonenessOutput(root);
+    assert.equal(postdates.code, 1);
+    assert.match(postdates.text, /POSTDATES the full report/);
+
+    // …and the same file stamped BEFORE the full run is no refusal at all: the full report is
+    // still this project's most recent whole answer.
+    await writeScoped(new Date(fullProducedAt - 60_000).toISOString());
+    assert.equal(await runDoneness({ root }), 0, "an OLDER scoped run says nothing about the full one");
+    await fs.rm(unifiedScopedReportPath(paths.reports));
+
+    // (c) a roll-up that PREDATES the verdict standing next to it: the report never saw it.
+    await writeUnifiedReport(root, { ...FULL_GREEN, producedAt: new Date(fullProducedAt - 60_000).toISOString() });
+    const predates = await captureDonenessOutput(root);
+    assert.equal(predates.code, 1);
+    assert.match(predates.text, /PREDATES the Tier-1 verdict/);
+
+    // (d) the FXC precedent: with a build in flight the report must carry THAT runId, and an
+    //     ABSENT scope is an absent binding, never a comparison that quietly does not happen.
+    for (const stamped of [null, "run-somebody-elses"]) {
+      await writeUnifiedReport(root, { ...FULL_GREEN, runId: stamped });
+      const unbound = await captureDonenessOutput(root);
+      assert.equal(unbound.code, 1, `runId ${String(stamped)} must not certify the build in flight`);
+      assert.match(unbound.text, /not scoped to the build in flight/);
+      assert.match(unbound.text, new RegExp(`the build in flight is \`${runId}\``));
+    }
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test("M-M3/M-M4/V3: the report must name THIS root, agree with itself, and carry a status that cannot be skipped", async () => {
+  const { root, paths } = await certifiedProject();
+  const other = await tmpRoot();
+  try {
+    await writeUnifiedReport(root, FULL_GREEN);
+    assert.equal(await runDoneness({ root }), 0, "the setup must certify, or this proves nothing");
+
+    // M-M3. A green report from ANOTHER project is still a green report; nothing in the
+    // document stopped it certifying this one.
+    await writeUnifiedReport(root, { ...FULL_GREEN, root: other });
+    const foreign = await captureDonenessOutput(root);
+    assert.equal(foreign.code, 1);
+    assert.match(foreign.text, /belongs to another project root/);
+
+    // …and an ABSENT root is refused too, with a re-run message: the orchestrator has stamped
+    // `root` since S1, so a document without one cannot have come from a run of this code.
+    await writeUnifiedReport(root, { ...FULL_GREEN, root: undefined as unknown as string });
+    const rootless = await captureDonenessOutput(root);
+    assert.equal(rootless.code, 1);
+    assert.match(rootless.text, /names no `root`/);
+    assert.match(rootless.text, /re-run `loombridge verify`/);
+
+    // M-M4. `pass` is a word the resolver can only produce when all five of these hold, so a
+    // document that claims it beside any one of them is hand-written (or produced by a
+    // resolver that has drifted). Each is attacked on its own.
+    const inconsistent: [Partial<UnifiedVerifyReport>, RegExp][] = [
+      [{ notRun: [{ kind: "trace", id: "happy-path", reason: "broken baseline", why: "broken" }] }, /1 `notRun` row/],
+      [{ unanchoredSections: ["contract"] }, /unanchored section\(s\) contract/],
+      [{ deselected: [{ kind: "trace", id: "happy-path", section: "flow" }] }, /1 `deselected` row/],
+      [{ sections: { contract: { status: "fail", exit: 1, anchored: true } } }, /section\(s\) that did not exit 0: contract/],
+    ];
+    for (const [over, pattern] of inconsistent) {
+      await writeUnifiedReport(root, { ...FULL_GREEN, ...over });
+      const claim = await captureDonenessOutput(root);
+      assert.equal(claim.code, 1, `a \`pass\` beside ${JSON.stringify(over)} must not certify`);
+      assert.match(claim.text, /internally inconsistent unified verify report/);
+      assert.match(claim.text, pattern);
+    }
+
+    // V3, THE FALSY-SKIP LITMUS. The status rule is `report.status !== "pass"`, and the
+    // anti-pattern one edit away is `report.status && report.status !== "pass"`, which lets an
+    // EMPTY status word skip the check entirely. This report is green-looking and broken in
+    // every other way, so nothing else here would catch it: if the empty status stops
+    // refusing, this test fails.
+    await writeUnifiedReport(root, {
+      status: "" as unknown as UnifiedVerifyReport["status"],
+      exit: 0,
+      notRun: [{ kind: "trace", id: "happy-path", reason: "broken baseline", why: "broken" }],
+      unanchoredSections: ["contract"],
+    });
+    const empty = await captureDonenessOutput(root);
+    assert.equal(empty.code, 1, "an EMPTY status word is not `pass`, and must not skip the check");
+    assert.match(empty.text, /unified verify is ``, not `pass`/);
+    assert.match(empty.text, /trace 'happy-path'/, "the refusal still names what went unmeasured");
+    assert.match(empty.text, /compared no frozen human approval: contract/);
+  } finally {
+    for (const d of [root, other]) await fs.rm(d, { recursive: true, force: true });
+  }
+});
+
+test("V13: an EMPTY `only` array renders as `(empty)`, never as a blank", async () => {
+  // The refusal interpolates the selection, so `only: []` printed "(--only )", a sentence that
+  // reads like a formatting bug rather than a refusal, in the one line an operator is meant to
+  // act on. Unreachable from the shipped code (a scoped run writes elsewhere), which is exactly
+  // why it has to read correctly when it does happen.
+  const { root } = await certifiedProject();
+  try {
+    await writeUnifiedReport(root, { ...FULL_GREEN, only: [] });
+    const rendered = await captureDonenessOutput(root);
+    assert.equal(rendered.code, 1);
+    assert.match(rendered.text, /is SCOPED \(--only \(empty\)\)/);
   } finally {
     await fs.rm(root, { recursive: true, force: true });
   }
