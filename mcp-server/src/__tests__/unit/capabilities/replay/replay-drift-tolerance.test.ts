@@ -250,7 +250,9 @@ test("CAP LITMUS (stamp side): --set 0.06 refuses with the vacuity sentence and 
     const refused = await captured(() => run(["tolerance", "--id", "demo", "--root", root, "--set", "0.06"]));
     assert.equal(refused.code, 2, refused.out);
     assert.match(refused.out, /above the 0\.02 cap/);
-    assert.match(refused.out, /makes the pixel comparison vacuous; use masks \(future work\) or investigate the drift/);
+    // The sentence now names the verb that DOES exist: masks shipped, so pointing an
+    // operator at "future work" would be pointing them at nothing.
+    assert.match(refused.out, /makes the pixel comparison vacuous; use masks \(`trace mask`\) or investigate the drift/);
     const after = await readManifest(root);
     assert.equal(after.driftTolerance, undefined, "a refused value must not reach the manifest");
     assert.equal(after.approvedAt, before.approvedAt, "…and must not re-stamp the anchor either");
@@ -503,10 +505,17 @@ test("A6 FLAG GUARD: --set / --drift-tolerance is refused on every subcommand ex
 
   const root = await tmpRoot();
   try {
-    // Every subcommand the parser knows EXCEPT the one that owns the flag. Derived from
+    // Every subcommand the parser knows EXCEPT the ones that own each flag. Derived from
     // the scan rather than listed, so a new subcommand is covered the day it is added.
-    for (const sub of subs.filter((s) => s !== "tolerance")) {
-      for (const flag of ["--set", "--drift-tolerance"]) {
+    // `--set` now has TWO owners (the two anchor-term verbs, tolerance and mask) and they
+    // parse it differently; `--drift-tolerance` still names exactly one term, so it stays
+    // tolerance-only and `mask` is walked for it like every other stranger.
+    const owners: Record<string, string[]> = {
+      "--set": ["tolerance", "mask"],
+      "--drift-tolerance": ["tolerance"],
+    };
+    for (const [flag, owned] of Object.entries(owners)) {
+      for (const sub of subs.filter((s) => !owned.includes(s))) {
         const { code, out } = await captured(() => run([sub, "--id", "demo", "--root", root, flag, "0.01"]));
         assert.equal(code, 2, `${sub} ${flag} must be a usage refusal:\n${out}`);
         assert.match(
@@ -514,7 +523,15 @@ test("A6 FLAG GUARD: --set / --drift-tolerance is refused on every subcommand ex
           /is only valid on `trace tolerance`/,
           `${sub} ${flag} must name the verb that DOES take it`,
         );
-        assert.match(out, /approve NEVER takes a tolerance/);
+        assert.match(out, /approve NEVER takes a tolerance or a mask/);
+      }
+    }
+    // …and the mask-only flags are refused everywhere else, by the same guard.
+    for (const flag of ["--clear", "--list"]) {
+      for (const sub of subs.filter((s) => s !== "mask")) {
+        const { code, out } = await captured(() => run([sub, "--id", "demo", "--root", root, flag]));
+        assert.equal(code, 2, `${sub} ${flag} must be a usage refusal:\n${out}`);
+        assert.match(out, /is only valid on `trace mask`/);
       }
     }
     // …and the one subcommand that does take it parses it (it fails later, on there
@@ -604,7 +621,9 @@ test("the suggestion NAMES `trace tolerance` (never approve) and states the blan
   });
   assert.equal(atCap.length, 1);
   assert.match(atCap[0]!, /already at the 2% cap/);
-  assert.match(atCap[0]!, /masks are the real fix and are not implemented yet/);
+  // Masks shipped, so the at-cap line points at the verb rather than at future work. It
+  // still does NOT hand over a rect: only the two-run mask suggestion may do that.
+  assert.match(atCap[0]!, /to MASK if it is localized ambient animation \(`loombridge trace mask --id t --list`\)/);
 });
 
 test("the consent sentence states the size of the hole, in both dimensions", () => {

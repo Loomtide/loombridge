@@ -8,6 +8,7 @@
  * server. Kept pure (no fs, no Date) so it is fully unit-testable.
  */
 
+import type { MaskRect } from "./visual-diff.js";
 import type { ReplayRunArtifact } from "./types.js";
 
 export interface CaptureImage {
@@ -21,6 +22,23 @@ export interface CaptureImage {
   visualStatus?: "match" | "drift" | "no-baseline" | "unreadable";
   /** Fraction of perceptually-differing pixels, in [0,1]. */
   diffFraction?: number;
+  /**
+   * The approved masks in force for THIS capture, drawn on both thumbnails. A blanked
+   * region is invisible in a "match": the outline is what stops a reader concluding the
+   * frames agree everywhere, when in fact part of the frame was never compared.
+   */
+  masks?: readonly MaskRect[];
+  /** Fraction of this frame the masks blanked, in [0,1]. */
+  maskedFraction?: number;
+}
+
+/** Report-wide facts the header needs, none of which live on the artifact. */
+export interface ReportChrome {
+  /** The frame size the mask rects are expressed in; without it nothing is drawn. */
+  frameWidth?: number;
+  frameHeight?: number;
+  /** The ONE combined consent sentence for this anchor's terms, when there is one. */
+  anchorTerms?: string | null;
 }
 
 const STATUS_COLOR: Record<string, string> = {
@@ -56,6 +74,7 @@ function vstatusClass(visualStatus: string): string {
 export function renderReplayReportHtml(
   artifact: ReplayRunArtifact,
   captures: CaptureImage[],
+  chrome: ReportChrome = {},
 ): string {
   const color = STATUS_COLOR[artifact.status] ?? "#57606a";
   const blocked = artifact.blockedReason ? ` (${esc(artifact.blockedReason)})` : "";
@@ -102,8 +121,15 @@ export function renderReplayReportHtml(
   );
 
   const gallery = captures.length
-    ? captures.map(captureFigure).join("")
+    ? captures.map((c) => captureFigure(c, chrome)).join("")
     : `<p>— no captures —</p>`;
+
+  // THE COMBINED CONSENT, IN THE HEADER (Q7). The gallery shows two frames side by side
+  // and invites the eye to conclude they agree; the terms under which that conclusion was
+  // reached belong above the pictures, not in a terminal the reader no longer has.
+  const terms = chrome.anchorTerms
+    ? `<div class="terms">anchor terms: ${esc(chrome.anchorTerms)}</div>`
+    : "";
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -140,6 +166,9 @@ export function renderReplayReportHtml(
   .vstatus-drift { color: #cf222e; background: #fff5f5; }
   .vstatus-none { color: #57606a; background: #f6f8fa; }
   .vstatus-unreadable { color: #9a6700; background: #fff8c5; }
+  .terms { font-size: 13px; color: #9a6700; background: #fff8c5; border-radius: 6px; padding: 6px 10px; margin: 0 0 16px; }
+  .mask { position: absolute; border: 2px dashed #bf3989; background: rgba(191,57,137,.12); box-sizing: border-box; pointer-events: none; }
+  .mask b { position: absolute; bottom: 100%; left: 0; font-size: 10px; font-weight: 600; color: #fff; background: #bf3989; padding: 0 4px; border-radius: 3px 3px 0 0; white-space: nowrap; }
 </style>
 </head>
 <body>
@@ -150,6 +179,7 @@ export function renderReplayReportHtml(
       artifact.visualDrift ? ` · <span class="vstatus vstatus-drift">visual drift</span>` : ""
     }
   </div>
+  ${terms}
   ${divergence}
   ${section("Segments", `<table><thead><tr><th>segment</th><th>status</th><th>anchors reached</th><th>captures</th></tr></thead><tbody>${segmentsRows}</tbody></table>`)}
   ${section("Assertions", `<table><tbody>${assertionsRows}</tbody></table>`)}
@@ -160,10 +190,11 @@ export function renderReplayReportHtml(
 `;
 }
 
-function captureFigure(c: CaptureImage): string {
+function captureFigure(c: CaptureImage, chrome: ReportChrome): string {
+  const overlay = maskOverlay(c, chrome);
   const frame = (b64: string | undefined, label: string): string =>
     b64
-      ? `<div class="frame"><img alt="${esc(c.id)} ${label}" src="data:image/png;base64,${b64}" /><span>${label}</span></div>`
+      ? `<div class="frame"><img alt="${esc(c.id)} ${label}" src="data:image/png;base64,${b64}" /><span>${label}</span>${overlay}</div>`
       : `<div class="frame missing">${label} missing</div>`;
 
   const hasBaseline = c.visualStatus === "match" || c.visualStatus === "drift";
@@ -178,11 +209,42 @@ function captureFigure(c: CaptureImage): string {
     const pct = c.diffFraction !== undefined ? ` · ${(c.diffFraction * 100).toFixed(2)}%` : "";
     visual = `<span class="vstatus ${vstatusClass(c.visualStatus)}">${esc(c.visualStatus)}${pct}</span>`;
   }
+  const masked =
+    c.maskedFraction !== undefined && c.maskedFraction > 0
+      ? ` · <span class="vstatus vstatus-none">${(c.maskedFraction * 100).toFixed(2)}% masked</span>`
+      : "";
 
   return `<figure>
     <div class="frames">${frames}</div>
-    <figcaption><code>${esc(c.id)}</code> · segment <code>${esc(c.segment)}</code> ${visual}</figcaption>
+    <figcaption><code>${esc(c.id)}</code> · segment <code>${esc(c.segment)}</code> ${visual}${masked}</figcaption>
   </figure>`;
+}
+
+/**
+ * The mask rects, drawn over BOTH thumbnails as percentage-positioned outlines.
+ *
+ * Percentages rather than pixels because the thumbnails are `width: 100%` of a
+ * responsive column, so a pixel offset would be wrong at every size but one. Nothing is
+ * drawn without the frame dimensions: a rect positioned against an unknown frame would
+ * be an outline pointing at the wrong pixels, which is worse than no outline at all.
+ */
+function maskOverlay(c: CaptureImage, chrome: ReportChrome): string {
+  const W = chrome.frameWidth ?? 0;
+  const H = chrome.frameHeight ?? 0;
+  if (!c.masks?.length || !(W > 0) || !(H > 0)) return "";
+  return c.masks
+    .map((m) => {
+      const style =
+        `left:${pct(m.x / W)};top:${pct(m.y / H)};width:${pct(m.w / W)};height:${pct(m.h / H)}`;
+      return `<div class="mask" style="${esc(style)}"><b>masked: ${esc(m.reason)}</b></div>`;
+    })
+    .join("");
+}
+
+/** A clamped percentage with two decimals: never emits an attacker-shaped style value. */
+function pct(fraction: number): string {
+  const safe = Number.isFinite(fraction) ? Math.min(1, Math.max(0, fraction)) : 0;
+  return `${(safe * 100).toFixed(2)}%`;
 }
 
 function section(title: string, body: string): string {

@@ -48,6 +48,7 @@ import {
 } from "../../../domain/workspace-paths.js";
 import { discoverTraces } from "../../replay/trace.js";
 import { TRACE_BASELINE_MANIFEST, verifyTraceBaseline } from "../../replay/trace-baseline-manifest.js";
+import { DEFAULT_DRIFT_FRACTION, maskAnchorTerms } from "../../replay/visual-diff.js";
 import { feelPaths } from "../../feel/feel-workspace.js";
 import { FEEL_SNAPSHOT_MANIFEST, verifySnapshotIntegrity } from "../../feel/snapshot-manifest.js";
 import { findContract } from "../../minigame/minigame-next.js";
@@ -134,6 +135,16 @@ export interface DiscoveredAsset {
    * Absent means the default, which is the strictest value the field can carry.
    */
   driftTolerance?: number;
+  /**
+   * Q7: how many regions of the frame this anchor excludes from the pixel comparison,
+   * and the largest fraction of any one frame they hide. TYPED for the same reason the
+   * tolerance is: "was this run graded blind anywhere, and how much?" must be answerable
+   * without parsing a sentence. Absent means no masks, which is the strictest value.
+   */
+  maskCount?: number;
+  maskedFraction?: number;
+  /** How many of those rects are scoped to ONE capture (so not every frame is hidden equally). */
+  maskScopedCount?: number;
   paths: DiscoveredAssetPaths;
 }
 
@@ -335,6 +346,24 @@ async function discoverTraceAssets(root: string): Promise<DiscoveredAsset[]> {
     // Absent field means the default, and the row stays silent about it.
     if (integrity.manifest!.driftTolerance !== undefined) {
       row.driftTolerance = integrity.manifest!.driftTolerance;
+    }
+    // Masks travel into the plan for the same reason, and more urgently: a tolerance
+    // makes the whole frame slightly forgiving, while a mask makes part of it entirely
+    // ungraded. Both numbers are re-derived from the manifest that just verified, never
+    // from the row's own earlier opinion.
+    const masks = integrity.manifest!.maskRects ?? [];
+    if (masks.length > 0) {
+      // Derived by the SAME helper the stamp verbs and the replay summary use, so the
+      // plan cannot describe this anchor's terms in numbers the stamp never printed.
+      const terms = maskAnchorTerms(
+        masks,
+        integrity.manifest!.frameWidth ?? 0,
+        integrity.manifest!.frameHeight ?? 0,
+        integrity.manifest!.driftTolerance ?? DEFAULT_DRIFT_FRACTION,
+      );
+      row.maskCount = terms.maskCount;
+      row.maskedFraction = terms.maskedFraction;
+      row.maskScopedCount = terms.scopedCount;
     }
     // RECORDED, not audited (L13). The frame shas above were re-derived from disk, so
     // the FRAMES are audited; the source report is a provenance note copied from the

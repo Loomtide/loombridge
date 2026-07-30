@@ -33,12 +33,14 @@ import {
 import { observeRecordLive } from "./observe-record-live.js";
 import {
   TRACE_BASELINE_MANIFEST,
+  carryForward,
   isTraceBaselineManifestError,
   loadTraceBaselineManifest,
   MIN_SCALED_SETTLE_MS,
   nextApprovalLedger,
   replaySpeedRefusal,
   resolveDriftTolerance,
+  resolveMaskRects,
   sha256,
   traceBaselineManifestPath,
   toleranceRefusal,
@@ -50,11 +52,25 @@ import {
 import {
   DEFAULT_DRIFT_FRACTION,
   MAX_DRIFT_TOLERANCE,
+  MAX_MASKED_FRACTION,
+  REPRODUCED_DRIFT_SIMILARITY,
+  anchorTermsSentence,
+  deriveMaskSuggestion,
   driftPercentText,
   driftRegressionLine,
   driftSuggestionLines,
+  formatRectGeometry,
+  maskAnchorTerms,
+  maskRefusal,
+  maskSuggestionLines,
+  masksForCapture,
+  rectKey,
   toleranceConsentSentence,
+  type AnchorTerms,
+  type CaptureDriftEvidence,
   type DriftFacts,
+  type MaskRect,
+  type MaskSuggestion,
 } from "./visual-diff.js";
 import { isScenePath } from "../minigame/profiles/types.js";
 import { runLiveReplay } from "./run-live.js";
@@ -69,7 +85,7 @@ import { printNextStep } from "../minigame/minigame-next.js";
 import { readPng } from "../verification/analyze-frames.js";
 
 interface TraceArgs {
-  sub: "replay" | "report" | "approve" | "replay-all" | "record" | "tolerance";
+  sub: "replay" | "report" | "approve" | "replay-all" | "record" | "tolerance" | "mask";
   id: string;
   root: string;
   /** Override the trace input path (default `.loombridge/replays/traces/<id>.trace.json`). */
@@ -91,6 +107,18 @@ interface TraceArgs {
    * re-freeze drifted frames in the same breath.
    */
   driftTolerance?: number;
+  /**
+   * `mask --set <captureId?>:<x>,<y>,<w>x<h>@<reason>` (repeatable). THE WHOLE LIST, every
+   * stamp (Q4): a `--add` that appended would make each stamp a local edit to a set
+   * nobody was looking at, which is how a mask list grows to cover the frame one
+   * reasonable-looking rect at a time. Restating it means the operator sees, and consents
+   * to, the total every single time.
+   */
+  maskSet?: MaskRect[];
+  /** `mask --clear`: stamp an EMPTY mask list (the whole frame goes back to being graded). */
+  maskClear: boolean;
+  /** `mask --list`: print the approved masks and their terms. Touches nothing. */
+  maskList: boolean;
   /** Replay pacing multiplier (replay only): divides recorded settles, floored. */
   speed?: number;
   // ── record --observe ──
@@ -187,6 +215,7 @@ export async function run(args: string[]): Promise<number> {
     if (parsed.sub === "replay-all") return await runReplayAll(parsed);
     if (parsed.sub === "approve") return await runApprove(parsed);
     if (parsed.sub === "tolerance") return await runTolerance(parsed);
+    if (parsed.sub === "mask") return await runMask(parsed);
     if (parsed.sub === "record") return await runRecord(parsed);
     return await runReport(parsed);
   } catch (error) {
@@ -661,6 +690,74 @@ async function runApprove(args: TraceArgs): Promise<number> {
     return 2;
   }
 
+  // MASKS ARE RE-VALIDATED AGAINST THE FRAMES THIS APPROVE IS FREEZING (Q1), BEFORE a
+  // single byte is written. A re-freeze at a new resolution leaves every approved rect
+  // pointing at pixels that are no longer where the human put them, and the two silent
+  // options are both wrong: dropping the masks un-blinds a region an operator consented
+  // to hide (the next replay fails, and the suggestion tells them to mask it again),
+  // while keeping them re-interprets a human decision against a frame they never saw.
+  // Refuse instead, and name the verb that owns the decision.
+  const carried = carryForward(previous);
+  // The masked fraction this approve is re-affirming, appended to the ledger below so the
+  // history has one entry PER APPROVAL EVENT (MX2). A history that only mask stamps wrote
+  // reads as "nothing happened to the masks between stamp #1 and stamp #7", when in fact
+  // five re-freezes each re-consented to the same blindness against new frames.
+  let approvedMaskedFraction: number | undefined;
+  if ((carried.maskRects?.length ?? 0) > 0) {
+    const dims = await captureFrameDims(parsed, paths);
+    if ("error" in dims) {
+      console.error(
+        `[loombridge trace] cannot approve "${args.id}" while masks are stamped: ${dims.error}. ` +
+          `Clear them first (\`loombridge trace mask --id ${args.id} --clear\`) or fix the capture.`,
+      );
+      return 2;
+    }
+    // A RESOLUTION CHANGE REFUSES, IT NEVER REINTERPRETS (M2/M3, MX2). The rects still
+    // "fit" a bigger frame, and that is exactly the trap: the same 20x20 rect hides 4% of a
+    // 100x100 frame and 1% of a 200x200 one, so a silent re-freeze at a new resolution
+    // would move a human's stated blindness AND every number printed about it, with no
+    // event anywhere saying so. The bound field is checked for presence first and refused
+    // when absent, never skipped: masks with no stamped dimensions were never measurable.
+    if (
+      typeof carried.frameWidth !== "number" ||
+      typeof carried.frameHeight !== "number" ||
+      carried.frameWidth !== dims.width ||
+      carried.frameHeight !== dims.height
+    ) {
+      const stamped =
+        typeof carried.frameWidth === "number" && typeof carried.frameHeight === "number"
+          ? `${carried.frameWidth}x${carried.frameHeight}`
+          : "an unrecorded size";
+      console.error(
+        `[loombridge trace] cannot approve "${args.id}": the game's resolution changed ` +
+          `(${stamped} to ${dims.width}x${dims.height}): masks were approved against the old frames; ` +
+          `re-stamp with \`loombridge trace mask --id ${args.id} --set ...\` against the new frames (or --clear).`,
+      );
+      console.error(
+        `[loombridge trace]   the ${carried.maskRects!.length} rect(s) would hide a different share of the new ` +
+          "frame than the one their approver consented to, so a re-freeze never reinterprets them.",
+      );
+      return 2;
+    }
+    // NO SECOND `maskRefusal` CALL HERE, and that is deliberate rather than an omission.
+    // It would be unreachable: `loadTraceBaselineManifest` already ran the SAME predicate
+    // over these rects against these stamped dims (a manifest that failed it never becomes
+    // `previous` at all, so nothing is carried), and the branch above has just proven the
+    // new frames are that same size. An unreachable guard is a vacuous guard, and this repo
+    // has paid for those. The dims equality IS the check.
+    //
+    // The dims travel with the frames: the masks were just proven against THESE, and the
+    // fraction is unchanged BY CONSTRUCTION (same rects, same dims) rather than by luck.
+    carried.frameWidth = dims.width;
+    carried.frameHeight = dims.height;
+    approvedMaskedFraction = maskAnchorTerms(
+      carried.maskRects!,
+      dims.width,
+      dims.height,
+      previous === null ? DEFAULT_DRIFT_FRACTION : resolveDriftTolerance(previous),
+    ).maskedFraction;
+  }
+
   await fs.mkdir(baselineDir, { recursive: true });
   const pngs: TraceBaselinePng[] = [];
   for (const segment of parsed.segments) {
@@ -696,15 +793,20 @@ async function runApprove(args: TraceArgs): Promise<number> {
     approvedAt: new Date().toISOString(),
     sourceReportSha256: sha256(raw),
     pngs,
-    ...(previous?.driftTolerance !== undefined ? { driftTolerance: previous.driftTolerance } : {}),
-    // The pacing the promoted frames were captured at rides the report into the anchor:
-    // a later replay at any other pacing refuses the comparison instead of grading
-    // animation phase skew as drift.
-    ...((parsed as ReplayRunArtifact).replaySpeed !== undefined && (parsed as ReplayRunArtifact).replaySpeed !== 1
-      ? { replaySpeed: (parsed as ReplayRunArtifact).replaySpeed }
-      : {}),
-    ...nextApprovalLedger(previous),
+    // Q6: ONE helper names every preserved field, for all three writers.
+    ...carried,
+    ...nextApprovalLedger(
+      previous,
+      approvedMaskedFraction !== undefined ? { maskedFraction: approvedMaskedFraction } : {},
+    ),
   };
+  // The pacing the promoted frames were captured at rides the REPORT into the anchor, so
+  // approve re-derives it rather than carrying the old value: these frames really were
+  // captured at this pacing, and inheriting the previous one would mislabel them and
+  // break the "approve from this report to re-anchor at 1x" escape hatch.
+  const promotedSpeed = (parsed as ReplayRunArtifact).replaySpeed ?? 1;
+  if (promotedSpeed !== 1) manifest.replaySpeed = promotedSpeed;
+  else delete manifest.replaySpeed;
   await writeTraceBaselineManifest(baselineDir, manifest);
 
   console.error(
@@ -722,7 +824,79 @@ async function runApprove(args: TraceArgs): Promise<number> {
         `approval: ${toleranceConsentSentence(manifest.driftTolerance)}.`,
     );
   }
+  // Same rule for masks, and for the stronger version of the same reason: a preserved
+  // mask is a region of the new frames that will never be graded, and it was approved
+  // against the OLD ones. It survives the re-freeze (re-validated above), and it says so.
+  if ((manifest.maskRects?.length ?? 0) > 0) {
+    console.error(
+      `[loombridge trace] ${manifest.maskRects!.length} mask(s) preserved and re-validated against the new frames: ` +
+        `${anchorTermsSentence(manifestAnchorTerms(manifest))}.`,
+    );
+  }
   return pngs.length > 0 ? 0 : 1;
+}
+
+/**
+ * The ONE frame size a report's captures were taken at, decoded from the PNGs
+ * themselves (Q1). REFUSES a mixed-size run rather than picking one: masks are measured
+ * against a frame, and "the frame" has to be a single thing for the cap to mean anything.
+ */
+async function captureFrameDims(
+  artifact: ReplayRunArtifact,
+  paths: ReplayLayout,
+): Promise<{ width: number; height: number } | { error: string }> {
+  let dims: { width: number; height: number } | null = null;
+  let seen = 0;
+  for (const segment of artifact.segments) {
+    for (const capture of segment.captures) {
+      if (!capture.artifact || !isReplayArtifact(capture.artifact, paths)) continue;
+      let image: { width: number; height: number };
+      try {
+        image = await readPng(capture.artifact);
+      } catch (error) {
+        return { error: `capture '${capture.id}' could not be decoded (${message(error)})` };
+      }
+      seen += 1;
+      if (dims === null) {
+        dims = { width: image.width, height: image.height };
+      } else if (dims.width !== image.width || dims.height !== image.height) {
+        return {
+          error:
+            `the captures are not all one size (${dims.width}x${dims.height} and ` +
+            `${image.width}x${image.height} at '${capture.id}')`,
+        };
+      }
+    }
+  }
+  if (dims === null || seen === 0) return { error: "the run captured no readable frame" };
+  return dims;
+}
+
+/** The ONE frame size the APPROVED baseline PNGs decode to, or a named refusal. */
+async function baselineFrameDims(
+  dir: string,
+  pngs: readonly TraceBaselinePng[],
+): Promise<{ width: number; height: number } | { error: string }> {
+  let dims: { width: number; height: number } | null = null;
+  for (const png of pngs) {
+    let image: { width: number; height: number };
+    try {
+      image = await readPng(path.join(dir, `${png.captureId}.png`));
+    } catch (error) {
+      return { error: `approved baseline '${png.captureId}.png' could not be decoded (${message(error)})` };
+    }
+    if (dims === null) {
+      dims = { width: image.width, height: image.height };
+    } else if (dims.width !== image.width || dims.height !== image.height) {
+      return {
+        error:
+          `the approved frames are not all one size (${dims.width}x${dims.height} and ` +
+          `${image.width}x${image.height} at '${png.captureId}')`,
+      };
+    }
+  }
+  if (dims === null) return { error: "the baseline declares no frames" };
+  return dims;
 }
 
 /**
@@ -771,6 +945,9 @@ async function runTolerance(args: TraceArgs): Promise<number> {
 
   const stamped: TraceBaselineManifest = {
     ...loaded,
+    // Q6: the preserved half goes through the one helper, so a field this verb never
+    // heard of (a mask, a frame size) cannot be dropped by a spread that predates it.
+    ...carryForward(loaded),
     driftTolerance: tolerance,
     approvedAt: new Date().toISOString(),
     ...nextApprovalLedger(loaded),
@@ -785,12 +962,206 @@ async function runTolerance(args: TraceArgs): Promise<number> {
     `[loombridge trace] stamped ${manifestRel}: drift tolerance ${previousText} → ` +
       `${driftPercentText(tolerance)}% (approval #${stamped.approvalCount}, ${stamped.pngs.length} frame(s) untouched).`,
   );
-  console.error(`[loombridge trace] ${toleranceConsentSentence(tolerance)}.`);
+  // THE COMBINED CONSENT (Q4): masks and tolerance in ONE sentence, because they are one
+  // decision about how much of this frame is still being graded.
+  console.error(
+    `[loombridge trace] ${anchorTermsSentence(manifestAnchorTerms(stamped)) ?? toleranceConsentSentence(tolerance)}.`,
+  );
   console.error(
     `[loombridge trace] re-run \`loombridge trace replay --id ${args.id}\` to grade against the new terms.`,
   );
   return 0;
 }
+
+/**
+ * `trace mask --id <id> --set <captureId?>:<x>,<y>,<w>x<h>@<reason> | --clear | --list`:
+ * stamp the human-approved EXCLUDED REGIONS onto an EXISTING approved baseline.
+ *
+ * The tolerance's twin, and deliberately the same shape (P1): it lives in the anchor, it
+ * is a separate verb from `approve` so nobody can widen the gate and re-freeze the frames
+ * in one command, it touches no PNG and no sha, and it appends to the same approval
+ * ledger. What is different is what it buys: a tolerance is a hole of a stated size
+ * ANYWHERE in the frame, while a mask is a NAMED region, so the rest of the frame keeps
+ * grading at full strictness. That is why it exists at all, and why every rect must
+ * carry a reason.
+ *
+ * Tiers, mirroring `tolerance` exactly: 1 when there is no baseline to stamp (an ordinary
+ * state error: approve frames first), 2 when one exists but cannot be trusted, or when
+ * the rects are refused (re-stamping a broken anchor would launder it).
+ */
+async function runMask(args: TraceArgs): Promise<number> {
+  const paths = layoutFor(args);
+  const baselineDir = path.join(paths.replayBaselines, args.id);
+  const manifestRel = path.relative(args.root, traceBaselineManifestPath(baselineDir));
+
+  const loaded = await loadTraceBaselineManifest(baselineDir);
+  if (loaded === null) {
+    console.error(
+      `[loombridge trace] no approved baseline for "${args.id}" (${manifestRel} is absent): approve frames first: ` +
+        `loombridge trace replay --id ${args.id} && loombridge trace approve --id ${args.id}`,
+    );
+    return 1;
+  }
+  if (isTraceBaselineManifestError(loaded)) {
+    console.error(
+      `[loombridge trace] cannot stamp masks onto "${args.id}": ${loaded.error}. ` +
+        "A baseline that cannot be read is not an anchor; re-approve it.",
+    );
+    return 2;
+  }
+
+  const current = resolveMaskRects(loaded);
+  const tolerance = resolveDriftTolerance(loaded);
+  if (args.maskList) {
+    // READ-ONLY, and it touches nothing: no re-stamp, no ledger entry, no approvedAt. A
+    // verb that mutated the anchor just to show it would make "look before you trust"
+    // impossible to do safely.
+    //
+    // THE VERIFIER RUNS FIRST (MX3). Everything below is a fraction, and every fraction is
+    // computed against the manifest's own `frameWidth`/`frameHeight`. Until the integrity
+    // check decodes a real frame and cross-checks those two numbers, "4% masked" is the
+    // manifest quoting itself: inflate the stamped dims by hand and 40% of the frame prints
+    // as 4%. This surface exists to be LOOKED at before trusting an anchor, so it is the
+    // last place that may print a number it has not checked.
+    const integrity = await verifyTraceBaseline(baselineDir);
+    if (!integrity.unstamped && !integrity.ok) {
+      console.error(
+        `[loombridge trace] the approved baseline for "${args.id}" cannot be trusted: ` +
+          `${integrity.failures.join("; ")}.`,
+      );
+      console.error(
+        "[loombridge trace] refusing to quote this anchor's terms: a masked fraction measured against a " +
+          "denominator nothing checked is not a disclosure.",
+      );
+      return 2;
+    }
+    console.error(`[loombridge trace] ${manifestRel}: ${current.length} approved mask(s).`);
+    for (const rect of current) {
+      console.error(
+        `[loombridge trace]   ${rect.captureId ?? "(every capture)"} ${formatRectGeometry(rect)} reason: ${rect.reason}`,
+      );
+    }
+    console.error(
+      `[loombridge trace] ${anchorTermsSentence(manifestAnchorTerms(loaded)) ?? NO_MASKS_DEFAULT_TERMS}.`,
+    );
+    // THE LEDGER'S OTHER HALF (MX13). `previousMaskRects` was written and never read back
+    // by anything a human sees, which makes it a record kept for nobody: the question
+    // "what did this anchor hide BEFORE the last stamp" is exactly the one an auditor
+    // arrives with, and the fraction history alone answers "how much", never "where".
+    if (loaded.previousMaskRects?.length) {
+      console.error(
+        `[loombridge trace] previously: ${loaded.previousMaskRects
+          .map((r) => `${r.captureId ?? "(every capture)"} ${formatRectGeometry(r)}@${r.reason}`)
+          .join(", ")} at ${loaded.previousApprovedAt ?? "an unrecorded time"}.`,
+      );
+    }
+    if (loaded.maskedFractionHistory?.length) {
+      console.error(
+        `[loombridge trace] mask history: ${loaded.maskedFractionHistory.map((f) => `${driftPercentText(f)}%`).join(" → ")} ` +
+          `(one entry per approval event, mask stamps and mask-bearing re-freezes alike).`,
+      );
+    }
+    return 0;
+  }
+
+  // The frame size comes from DECODING the approved PNGs, never from a flag: the cap is a
+  // fraction of a real frame, and a caller-supplied denominator is a caller-supplied cap.
+  const dims = await baselineFrameDims(baselineDir, loaded.pngs);
+  if ("error" in dims) {
+    console.error(
+      `[loombridge trace] cannot stamp masks onto "${args.id}": ${dims.error}. ` +
+        "A mask is measured against the approved frame, so an unreadable frame is a harness fault, not a mask.",
+    );
+    return 2;
+  }
+
+  const rects = args.maskClear ? [] : (args.maskSet ?? []);
+  // ONE PREDICATE, BOTH SIDES (Q1). This is the manifest READER's own refusal, called
+  // here rather than restated: a second bounds/cap check against the same constants is
+  // exactly how a stamp-time cap and a read-time cap drift apart, and the read side is
+  // the one that has to hold, because the manifest is a file an operator can edit.
+  const refusal = maskRefusal(rects, dims.width, dims.height);
+  if (refusal !== null) {
+    console.error(`[loombridge trace] ${refusal}.`);
+    console.error(
+      `[loombridge trace] nothing was stamped; the approved baseline for "${args.id}" is unchanged.`,
+    );
+    return 2;
+  }
+
+  const before = maskAnchorTerms(current, loaded.frameWidth ?? dims.width, loaded.frameHeight ?? dims.height, tolerance)
+    .maskedFraction;
+  const after = maskAnchorTerms(rects, dims.width, dims.height, tolerance).maskedFraction;
+  const stamped: TraceBaselineManifest = {
+    ...loaded,
+    ...carryForward(loaded),
+    maskRects: rects,
+    frameWidth: dims.width,
+    frameHeight: dims.height,
+    approvedAt: new Date().toISOString(),
+    ...nextApprovalLedger(loaded, { maskedFraction: after }),
+  };
+  if (rects.length === 0) delete stamped.maskRects;
+  await writeTraceBaselineManifest(baselineDir, stamped);
+
+  // WHAT THIS STAMP TOOK AWAY, BY NAME (M6/MX5). `--set` restates the whole list, so a
+  // stamp that swaps one rect for another is a REMOVAL and an addition, and the counts
+  // alone hide it perfectly: "2 to 2 mask(s)" reads as "nothing happened" while a region a
+  // human approved has silently gone back to being graded (or, in the other direction, a
+  // typo'd re-stamp has quietly un-masked the thing the operator was protecting). The
+  // removed rects are printed with their reasons, because the reason is the only record of
+  // what that region was, and it is about to stop existing.
+  const kept = new Set(rects.map(rectKey));
+  const removed = current.filter((r) => !kept.has(rectKey(r)));
+  const previouslyStamped = new Set(current.map(rectKey));
+  const added = rects.filter((r) => !previouslyStamped.has(rectKey(r)));
+  const churn =
+    removed.length > 0 || added.length > 0
+      ? ` (${removed.length} removed, ${added.length} added)`
+      : " (unchanged)";
+  console.error(
+    `[loombridge trace] stamped ${manifestRel}: ${current.length} to ${rects.length} mask(s)${churn}, masked ` +
+      `${driftPercentText(before)}% to ${driftPercentText(after)}% of the frame ` +
+      `(approval #${stamped.approvalCount}, ${stamped.pngs.length} frame(s) untouched).`,
+  );
+  if (removed.length > 0) {
+    console.error(
+      `[loombridge trace] ${removed.length} mask(s) REMOVED: ${removed
+        .map((r) => `${r.captureId === undefined ? "" : `${r.captureId}:`}${formatRectGeometry(r)}@${r.reason}`)
+        .join(", ")}. Those regions are GRADED again.`,
+    );
+  }
+  for (const rect of rects) {
+    console.error(
+      `[loombridge trace]   ${rect.captureId ?? "(every capture)"} ${formatRectGeometry(rect)} reason: ${rect.reason}`,
+    );
+  }
+  if (rects.length === 0) {
+    console.error(
+      "[loombridge trace] the mask list is now EMPTY: the whole frame is graded again.",
+    );
+  }
+  console.error(
+    `[loombridge trace] ${anchorTermsSentence(manifestAnchorTerms(stamped)) ?? NO_MASKS_DEFAULT_TERMS}.`,
+  );
+  console.error(
+    `[loombridge trace] re-run \`loombridge trace replay --id ${args.id}\` to grade against the new terms.`,
+  );
+  return 0;
+}
+
+/** What this anchor concedes, as the ONE sentence function takes it. */
+function manifestAnchorTerms(manifest: TraceBaselineManifest): AnchorTerms {
+  return maskAnchorTerms(
+    resolveMaskRects(manifest),
+    manifest.frameWidth ?? 0,
+    manifest.frameHeight ?? 0,
+    resolveDriftTolerance(manifest),
+  );
+}
+
+/** What an anchor with nothing to concede says, once, for the verbs that state it. */
+const NO_MASKS_DEFAULT_TERMS = `no masks; the whole frame grades at the ${driftPercentText(DEFAULT_DRIFT_FRACTION)}% default`;
 
 /** Remove `*.png` in a baseline dir that this approval did not promote. Returns the count. */
 async function pruneUndeclaredBaselines(dir: string, pngs: TraceBaselinePng[]): Promise<number> {
@@ -835,6 +1206,11 @@ export async function replayTraceForVerify(
   exitTier: number;
   /** A3: the drift facts, so the unified section reports numbers instead of a bare tier. */
   drift: DriftFacts;
+  /**
+   * Q3: the mask verdict for this run, derived once in `applyVisualDiff` and carried to
+   * whichever door is printing. Absent when nothing drifted.
+   */
+  maskSuggestion?: MaskSuggestion;
 }> {
   const { artifact, reportJson } = await replayOneTrace(layout, id, {
     html: false,
@@ -845,6 +1221,7 @@ export async function replayTraceForVerify(
     reportJson,
     exitTier: replayExitCode(artifact, opts.strictVisual),
     drift: driftFacts(artifact),
+    ...(artifact.maskSuggestion ? { maskSuggestion: artifact.maskSuggestion } : {}),
   };
 }
 
@@ -874,6 +1251,9 @@ export async function applyVisualDiff(
   const baselineDir = path.join(paths.replayBaselines, id);
   const integrity = await verifyTraceBaseline(baselineDir);
   let tolerance = DEFAULT_DRIFT_FRACTION;
+  let maskRects: MaskRect[] = [];
+  let frameWidth = 0;
+  let frameHeight = 0;
   let baselineFault: string | null = null;
   if (integrity.unstamped) {
     // Legacy baseline (or none yet): default terms, no fault.
@@ -881,6 +1261,26 @@ export async function applyVisualDiff(
     baselineFault = integrity.failures.join("; ");
   } else {
     tolerance = resolveDriftTolerance(integrity.manifest!);
+    maskRects = resolveMaskRects(integrity.manifest!);
+    frameWidth = integrity.manifest!.frameWidth ?? 0;
+    frameHeight = integrity.manifest!.frameHeight ?? 0;
+    // A DIMS MISMATCH IS A MANIFEST-LEVEL FAULT (Q6), the pacing precedent exactly: the
+    // masks were approved against a frame of a stated size, and if the frozen frames are
+    // no longer that size then every rect points somewhere its approver never looked. The
+    // fault belongs to the ANCHOR, so the captures are left ungraded rather than stamped
+    // `unreadable` (they decode fine, and calling them unreadable would make `approve`
+    // refuse the very report that re-anchors at the new size).
+    if (maskRects.length > 0) {
+      const dims = await baselineFrameDims(baselineDir, integrity.manifest!.pngs);
+      if ("error" in dims) {
+        baselineFault = `masks are stamped but ${dims.error}`;
+      } else if (dims.width !== frameWidth || dims.height !== frameHeight) {
+        baselineFault =
+          `the masks were approved against a ${frameWidth}x${frameHeight} frame but the approved frames are ` +
+          `${dims.width}x${dims.height}; re-state them with \`loombridge trace mask --id ${id} --set ...\`, ` +
+          `or drop them with \`--clear\``;
+      }
+    }
     // Pacing mismatch is a HARNESS refusal, not drift: frames captured at different
     // pacings sit at different animation phases, and grading them against each other
     // reads phase skew as drift (or hides real drift behind it).
@@ -899,9 +1299,15 @@ export async function applyVisualDiff(
     );
   }
 
+  // THE PREVIOUS RUN, read BEFORE this one overwrites it (Q3). The two-run discriminator
+  // is the whole safety property of the mask suggestion, and the only place the previous
+  // run's evidence still exists is the report this replay is about to replace.
+  const previousEvidence = await readPreviousDriftEvidence(paths, id);
+
   let anyDrift = false;
   let anyUnreadable = false;
   let anyCompared = false;
+  const evidence: CaptureDriftEvidence[] = [];
   for (const segment of artifact.segments) {
     for (const capture of segment.captures) {
       if (!capture.artifact) continue;
@@ -929,12 +1335,38 @@ export async function applyVisualDiff(
           readPng(capture.artifact),
           readPng(baselinePath),
         ]);
-        const diff = comparePerceptual(actual, baseline, { driftFraction: tolerance });
+        // THE MASKS ARE APPLIED HERE, in the ONE reader path (P3), for every capture of
+        // the trace. Both doors (the verb and the unified flow) come through this
+        // function, so neither can grade a run on different terms from the other.
+        const diff = comparePerceptual(actual, baseline, {
+          driftFraction: tolerance,
+          maskRects,
+          captureId: capture.id,
+        });
         capture.baseline = baselinePath;
         capture.diffFraction = diff.diffFraction;
         capture.visualStatus = diff.status;
         // Stamped where the comparison HAPPENED, so the report says on what terms.
         capture.toleranceUsed = tolerance;
+        if (diff.maskedFraction > 0) capture.maskedFraction = diff.maskedFraction;
+        if (diff.driftDiffSha !== undefined) capture.driftDiffSha = diff.driftDiffSha;
+        if (diff.driftBounds !== undefined) capture.driftBounds = diff.driftBounds;
+        // MX1: THE STRUCTURAL FINGERPRINT GOES ON DISK. The discriminator's bar is measured
+        // between two RUNS, and the only place run one still exists when run two grades is
+        // this report. A grid that lived only in memory would leave the next run with the
+        // sha alone, which one flipped pixel defeats.
+        if (diff.driftGrid !== undefined) capture.driftGrid = diff.driftGrid;
+        evidence.push({
+          captureId: capture.id,
+          drifted: diff.status === "drift",
+          ...(diff.driftDiffSha !== undefined ? { driftDiffSha: diff.driftDiffSha } : {}),
+          ...(diff.driftBounds !== undefined ? { driftBounds: diff.driftBounds } : {}),
+          ...(diff.driftGrid !== undefined ? { driftGrid: diff.driftGrid } : {}),
+          ...(diff.driftClusters !== undefined ? { driftClusters: diff.driftClusters } : {}),
+          ...(diff.driftClusterRefusal !== undefined
+            ? { driftClusterRefusal: diff.driftClusterRefusal }
+            : {}),
+        });
         anyCompared = true;
         if (diff.status === "drift") anyDrift = true;
       } catch (error) {
@@ -954,6 +1386,79 @@ export async function applyVisualDiff(
   if (anyDrift) artifact.visualDrift = true;
   if (anyUnreadable || baselineFault !== null) artifact.visualHarnessFault = true;
   if (anyCompared) artifact.toleranceUsed = tolerance;
+  if (anyCompared && maskRects.length > 0) {
+    artifact.maskRects = maskRects;
+    artifact.maskedFraction = maskAnchorTerms(maskRects, frameWidth, frameHeight, tolerance).maskedFraction;
+  }
+  // Derived even when nothing is printed, so the report records WHY a suggestion did or
+  // did not appear. The dims fall back to the compared frame when the anchor never
+  // stamped any (an unmasked baseline), because the suggestion's own cap still needs a
+  // denominator, and an anchor with no masks has no stamped one.
+  if (anyDrift) {
+    const dims = frameWidth > 0 && frameHeight > 0 ? { frameWidth, frameHeight } : await comparedFrameDims(artifact);
+    // MX5: the ALREADY STAMPED rects go in, so the command the suggestion prints restates
+    // them. `--set` replaces the whole list, so a suggestion naming only the new rects
+    // would be an instruction to delete every mask the operator previously approved.
+    const suggestion = deriveMaskSuggestion(
+      evidence,
+      previousEvidence,
+      dims.frameWidth,
+      dims.frameHeight,
+      maskRects,
+    );
+    if (suggestion) artifact.maskSuggestion = suggestion;
+  }
+}
+
+/** The frame size the captures were compared at, for a baseline that stamped none. */
+async function comparedFrameDims(
+  artifact: ReplayRunArtifact,
+): Promise<{ frameWidth: number; frameHeight: number }> {
+  for (const segment of artifact.segments) {
+    for (const capture of segment.captures) {
+      if (!capture.artifact || capture.visualStatus === undefined) continue;
+      try {
+        const image = await readPng(capture.artifact);
+        return { frameWidth: image.width, frameHeight: image.height };
+      } catch {
+        /* the unreadable case is already tiered above; keep looking */
+      }
+    }
+  }
+  return { frameWidth: 0, frameHeight: 0 };
+}
+
+/**
+ * The PREVIOUS run's per-capture drift evidence, off the report this replay is about to
+ * overwrite. Missing, unreadable or pre-field reports all read as "no evidence", which
+ * lands the suggestion on `first-run`: the branch that asks for another run rather than
+ * naming a rect. Absence never invents agreement.
+ */
+async function readPreviousDriftEvidence(
+  paths: ReplayLayout,
+  id: string,
+): Promise<CaptureDriftEvidence[]> {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(await fs.readFile(path.join(paths.replayReports, `${id}.report.json`), "utf8"));
+  } catch {
+    return [];
+  }
+  if (!isReplayRunArtifact(parsed)) return [];
+  return parsed.segments.flatMap((segment) =>
+    segment.captures
+      .filter((capture) => capture.visualStatus === "drift")
+      .map((capture) => ({
+        captureId: capture.id,
+        drifted: true,
+        ...(capture.driftDiffSha !== undefined ? { driftDiffSha: capture.driftDiffSha } : {}),
+        ...(capture.driftBounds !== undefined ? { driftBounds: capture.driftBounds } : {}),
+        // Semi-trusted, and deliberately NOT validated here: `deriveMaskSuggestion` runs
+        // every grid through `asDriftGrid`, so one validator decides what a fingerprint is,
+        // and a malformed one lands on "ask for another run" rather than on a rect.
+        ...(capture.driftGrid !== undefined ? { driftGrid: capture.driftGrid } : {}),
+      })),
+  );
 }
 
 /**
@@ -965,12 +1470,19 @@ export async function applyVisualDiff(
  * ones, which is the same number when anything drifted and an honest "worst observed"
  * when nothing did.
  */
-export function driftFacts(artifact: Pick<ReplayRunArtifact, "segments" | "toleranceUsed">): DriftFacts {
+export function driftFacts(
+  artifact: Pick<ReplayRunArtifact, "segments" | "toleranceUsed">,
+): DriftFacts {
   const captures = artifact.segments.flatMap((s) => s.captures);
+  const masked = captures.reduce((max, c) => Math.max(max, c.maskedFraction ?? 0), 0);
   return {
     driftCaptures: captures.filter((c) => c.visualStatus === "drift").length,
     maxDiffFraction: captures.reduce((max, c) => Math.max(max, c.diffFraction ?? 0), 0),
     toleranceUsed: artifact.toleranceUsed ?? DEFAULT_DRIFT_FRACTION,
+    // Carried ONLY when something was actually masked, so an unmasked run's facts are
+    // byte-identical to what they were before masks existed, and every line about it
+    // reads exactly as it did.
+    ...(masked > 0 ? { maskedFraction: masked } : {}),
   };
 }
 
@@ -1046,6 +1558,12 @@ async function writeHtmlReport(
   id: string,
   artifact: ReplayRunArtifact,
 ): Promise<string> {
+  // The masks the run graded with, so the report can DRAW them on the thumbnails: a
+  // reader looking at two frames that "match" has no way to know a region was blanked
+  // unless the picture says so.
+  const manifest = await loadTraceBaselineManifest(path.join(paths.replayBaselines, id));
+  const anchor = manifest !== null && !isTraceBaselineManifestError(manifest) ? manifest : null;
+  const maskRects = artifact.maskRects ?? (anchor ? resolveMaskRects(anchor) : []);
   const captures: CaptureImage[] = [];
   for (const segment of artifact.segments) {
     for (const capture of segment.captures) {
@@ -1056,11 +1574,35 @@ async function writeHtmlReport(
         baselineBase64: await readBase64(capture.baseline, paths),
         visualStatus: capture.visualStatus,
         diffFraction: capture.diffFraction,
+        ...(capture.maskedFraction !== undefined ? { maskedFraction: capture.maskedFraction } : {}),
+        masks: masksForCapture(maskRects, capture.id),
       });
     }
   }
   const htmlPath = path.join(paths.replayReports, `${id}.report.html`);
-  await fs.writeFile(htmlPath, renderReplayReportHtml(artifact, captures), "utf-8");
+  await fs.writeFile(
+    htmlPath,
+    renderReplayReportHtml(artifact, captures, {
+      ...(anchor?.frameWidth !== undefined ? { frameWidth: anchor.frameWidth } : {}),
+      ...(anchor?.frameHeight !== undefined ? { frameHeight: anchor.frameHeight } : {}),
+      anchorTerms: anchorTermsSentence(
+        maskAnchorTerms(
+          maskRects,
+          anchor?.frameWidth ?? 0,
+          anchor?.frameHeight ?? 0,
+          // THE TOLERANCE FALLS BACK TO THE ANCHOR, EXACTLY AS THE MASKS DO (V3/MX9).
+          // `toleranceUsed` is stamped only where a comparison actually HAPPENED, so a run
+          // whose captures were left ungraded (a pacing mismatch, a dims fault: the harness
+          // tier) carries none, and defaulting to 0.5% there would print a STRICTER anchor
+          // than the one on disk. The report of a refused run is exactly when a reader needs
+          // the real terms, and the report must not be the surface that flatters them.
+          artifact.toleranceUsed ??
+            (anchor ? resolveDriftTolerance(anchor) : DEFAULT_DRIFT_FRACTION),
+        ),
+      ),
+    }),
+    "utf-8",
+  );
   return htmlPath;
 }
 
@@ -1098,7 +1640,18 @@ function isReplayArtifact(child: string, paths: ReplayLayout): boolean {
   return isUnderDir(child, paths.replayReports) || isUnderDir(child, paths.replayBaselines);
 }
 
-function printSummary(
+/**
+ * The `trace replay` verb's own summary block: the tier, the terms it graded on, and the
+ * suggestion loop.
+ *
+ * EXPORTED FOR TESTS, and for a specific reason (V1/MX8): the only other way to reach it
+ * is a live replay against a running editor, so every rule enforced here (above all, that
+ * the mask suggestion is gated behind {@link shouldSuggestTolerance} and therefore never
+ * answers a capture gap with "mask this region") was pinned only through the pure helpers
+ * it calls. A gate that no test drives through the code that applies it is a gate that can
+ * be hoisted out of its `if` by a refactor, with a green suite.
+ */
+export function printSummary(
   root: string,
   id: string,
   artifact: ReplayRunArtifact,
@@ -1139,8 +1692,21 @@ function printSummary(
       `[loombridge trace] ${driftRegressionLine({ ...facts, exitTier: replayExitCode(artifact, strictVisual) })}`,
     );
   }
-  // A non-default tolerance is never silent: it is the term the whole comparison ran on.
-  if (artifact.toleranceUsed !== undefined && artifact.toleranceUsed !== DEFAULT_DRIFT_FRACTION) {
+  // P5: the terms this run graded on are never silent. With masks it is the ONE combined
+  // sentence (a green run with 4% of every frame blanked is a different claim from a green
+  // run, and both halves have to be read together); without them it is the tolerance line
+  // exactly as it has always read.
+  const masks = artifact.maskRects ?? [];
+  if (masks.length > 0) {
+    console.error(
+      `[loombridge trace] ${anchorTermsSentence({
+        maskCount: masks.length,
+        maskedFraction: artifact.maskedFraction ?? 0,
+        scopedCount: masks.filter((m) => m.captureId !== undefined).length,
+        tolerance: artifact.toleranceUsed ?? DEFAULT_DRIFT_FRACTION,
+      })}.`,
+    );
+  } else if (artifact.toleranceUsed !== undefined && artifact.toleranceUsed !== DEFAULT_DRIFT_FRACTION) {
     console.error(
       `[loombridge trace] graded at the approved drift tolerance ${driftPercentText(artifact.toleranceUsed)}%: ` +
         `${toleranceConsentSentence(artifact.toleranceUsed)}.`,
@@ -1149,6 +1715,13 @@ function printSummary(
   if (shouldSuggestTolerance(artifact)) {
     for (const line of driftSuggestionLines({ ...facts, traceId: id })) {
       console.error(`[loombridge trace] ${line}`);
+    }
+    // Masks for CONCENTRATED drift, tolerance for diffuse: both are printed when both
+    // could help (P4), and the mask branch is the one that can refuse outright.
+    if (artifact.maskSuggestion) {
+      for (const line of maskSuggestionLines(artifact.maskSuggestion, id)) {
+        console.error(`[loombridge trace] ${line}`);
+      }
     }
   }
   console.error(`[loombridge trace] report → ${path.relative(root, reportJson)}`);
@@ -1165,7 +1738,8 @@ function parseArgs(args: string[]): TraceArgs | { help: true; usageError?: boole
     sub !== "approve" &&
     sub !== "replay-all" &&
     sub !== "record" &&
-    sub !== "tolerance"
+    sub !== "tolerance" &&
+    sub !== "mask"
   ) {
     console.error(`[loombridge trace] unknown subcommand "${sub}".`);
     return { help: true, usageError: true };
@@ -1186,6 +1760,9 @@ function parseArgs(args: string[]): TraceArgs | { help: true; usageError?: boole
   let stateSignal: ObserveTraceMeta["stateSignal"] | undefined;
   let autoStateSignal = false;
   let driftTolerance: number | undefined;
+  let maskSet: MaskRect[] | undefined;
+  let maskClear = false;
+  let maskList = false;
   let speed: number | undefined;
 
   /** Read a required string value for `flag`, rejecting a missing/flag-like value. */
@@ -1259,24 +1836,49 @@ function parseArgs(args: string[]): TraceArgs | { help: true; usageError?: boole
       }
       speed = n;
     } else if (arg === "--set" || arg === "--drift-tolerance") {
-      // A6, THE VERB GUARD. This flag belongs to `tolerance` and to nothing else. The
-      // parse loop is SHARED across subcommands, so without this branch `--set` typed on
-      // `approve` would be accepted by the loop and silently ignored by the handler: an
-      // operator would believe they had widened the gate while approve re-froze the
-      // drifted frames. Refuse loudly, and name the verb that does take it.
-      if (sub !== "tolerance") {
+      // A6, THE VERB GUARD. These flags belong to the two ANCHOR-TERM verbs and to
+      // nothing else. The parse loop is SHARED across subcommands, so without this branch
+      // `--set` typed on `approve` would be accepted by the loop and silently ignored by
+      // the handler: an operator would believe they had widened the gate (or masked a
+      // region) while approve re-froze the drifted frames. Refuse loudly, and name the
+      // verbs that do take it. `--drift-tolerance` stays tolerance-only: it names one
+      // term, and accepting it on `mask` would let the two terms be typed at the verb
+      // that does not stamp them.
+      const owners = arg === "--set" ? ["tolerance", "mask"] : ["tolerance"];
+      if (!owners.includes(sub)) {
         console.error(
-          `[loombridge trace] ${arg} is only valid on \`trace tolerance\` (got "${sub}"). ` +
-            "approve NEVER takes a tolerance: it re-freezes frames, and doing both in one " +
+          `[loombridge trace] ${arg} is only valid on \`trace tolerance\`` +
+            `${owners.includes("mask") ? " or `trace mask`" : ""} (got "${sub}"). ` +
+            "approve NEVER takes a tolerance or a mask: it re-freezes frames, and doing both in one " +
             "command would promote the drifted frames it was meant to keep.",
         );
         return { help: true, usageError: true };
       }
       const v = value((i += 1), arg);
       if (v === undefined) return { help: true, usageError: true };
-      const parsed = parseDriftTolerance(v);
-      if (parsed === null) return { help: true, usageError: true };
-      driftTolerance = parsed;
+      if (sub === "mask") {
+        const rect = parseMaskRectSpec(v);
+        if (rect === null) return { help: true, usageError: true };
+        // --set RESTATES THE WHOLE LIST (Q4), so repeated flags in ONE invocation build
+        // the list, and the next invocation starts from empty rather than appending to
+        // what is already stamped.
+        maskSet = [...(maskSet ?? []), rect];
+      } else {
+        const parsed = parseDriftTolerance(v);
+        if (parsed === null) return { help: true, usageError: true };
+        driftTolerance = parsed;
+      }
+    } else if (arg === "--clear" || arg === "--list") {
+      // Same guard, same reason: on any other verb these would be accepted and ignored,
+      // and "I cleared the masks" is exactly the belief that must never be wrong.
+      if (sub !== "mask") {
+        console.error(
+          `[loombridge trace] ${arg} is only valid on \`trace mask\` (got "${sub}").`,
+        );
+        return { help: true, usageError: true };
+      }
+      if (arg === "--clear") maskClear = true;
+      else maskList = true;
     } else if (arg === "--duration") {
       const v = value((i += 1), "--duration");
       if (v === undefined) return { help: true, usageError: true };
@@ -1314,6 +1916,26 @@ function parseArgs(args: string[]): TraceArgs | { help: true; usageError?: boole
     );
     return { help: true, usageError: true };
   }
+  // `mask` takes EXACTLY ONE mode. Combining them is ambiguous in the dangerous
+  // direction: `--set A --clear` would either stamp A or stamp nothing, and an operator
+  // who guessed wrong ends up believing a region is masked when it is graded, or graded
+  // when it is masked.
+  if (sub === "mask") {
+    const modes = [maskSet !== undefined, maskClear, maskList].filter(Boolean).length;
+    if (modes === 0) {
+      console.error(
+        "[loombridge trace] mask requires exactly one of --set <captureId?>:<x>,<y>,<w>x<h>@<reason> " +
+          "(repeatable; it restates the WHOLE list), --clear, or --list.",
+      );
+      return { help: true, usageError: true };
+    }
+    if (modes > 1) {
+      console.error(
+        "[loombridge trace] mask takes exactly one of --set, --clear or --list, never a combination.",
+      );
+      return { help: true, usageError: true };
+    }
+  }
   // `record` needs a scene to reset to and (v1) the --observe mode flag.
   if (sub === "record") {
     if (!observe) {
@@ -1344,7 +1966,61 @@ function parseArgs(args: string[]): TraceArgs | { help: true; usageError?: boole
     stateSignal,
     autoStateSignal,
     driftTolerance,
+    maskSet,
+    maskClear,
+    maskList,
     speed,
+  };
+}
+
+/**
+ * Parse ONE `--set` mask spec: `[<captureId>:]<x>,<y>,<w>x<h>@<reason>`. Returns null
+ * (after printing the refusal) when the shape is wrong.
+ *
+ * The `@reason` is MANDATORY and parsed here rather than defaulted, because a default
+ * reason is a reason nobody typed, and the whole audit value of a mask is that a human
+ * said why. Geometry validity (positive, in bounds, under the cap) is NOT decided here:
+ * that is {@link maskRefusal}'s job, called once at the stamp with the frame dimensions
+ * it needs, so this parser can never grow a second, laxer copy of the rules.
+ */
+export function parseMaskRectSpec(raw: string): MaskRect | null {
+  const at = raw.indexOf("@");
+  if (at < 0) {
+    console.error(
+      `[loombridge trace] --set needs a reason: <captureId?>:<x>,<y>,<w>x<h>@<reason> (got "${raw}"). ` +
+        "A masked region is never graded again, so the anchor records why in the operator's own words.",
+    );
+    return null;
+  }
+  const geometry = raw.slice(0, at);
+  const reason = raw.slice(at + 1).trim();
+  if (reason.length === 0) {
+    console.error(`[loombridge trace] --set has an empty reason (got "${raw}").`);
+    return null;
+  }
+  const colon = geometry.indexOf(":");
+  const captureId = colon < 0 ? undefined : geometry.slice(0, colon);
+  const rect = colon < 0 ? geometry : geometry.slice(colon + 1);
+  if (captureId !== undefined && (captureId.length === 0 || !isSafePathSegment(captureId))) {
+    console.error(
+      `[loombridge trace] --set has an unusable capture id "${captureId}" (it names a capture, so it must be a plain id).`,
+    );
+    return null;
+  }
+  const match = /^(\d+),(\d+),(\d+)x(\d+)$/.exec(rect.trim());
+  if (match === null) {
+    console.error(
+      `[loombridge trace] --set geometry must be <x>,<y>,<w>x<h> in whole pixels (got "${rect}").`,
+    );
+    return null;
+  }
+  return {
+    x: Number(match[1]),
+    y: Number(match[2]),
+    w: Number(match[3]),
+    h: Number(match[4]),
+    reason,
+    ...(captureId !== undefined ? { captureId } : {}),
   };
 }
 
@@ -1384,7 +2060,7 @@ function parseDriftTolerance(raw: string): number | null {
 function printUsage(): void {
   console.error(
     [
-      "Usage: loombridge trace <record|replay|replay-all|approve|tolerance|report> [--id <id>] [options]",
+      "Usage: loombridge trace <record|replay|replay-all|approve|tolerance|mask|report> [--id <id>] [options]",
       "",
       "  record      Record a human demonstration into a replayable trace: reset to",
       "              --scene, observe your clicks/drags until you press Enter (or",
@@ -1404,6 +2080,13 @@ function printUsage(): void {
       "  tolerance   Stamp the human-approved pixel drift tolerance onto the EXISTING",
       "              approved baseline (--set <fraction>). Touches no frame and no sha: it",
       "              changes the terms of the comparison, not the thing being compared.",
+      "  mask        Stamp the human-approved EXCLUDED REGIONS onto the EXISTING approved",
+      "              baseline (--set <captureId?>:<x>,<y>,<w>x<h>@<reason>, repeatable;",
+      "              --clear; --list). The localized fix a tolerance cannot be: the masked",
+      "              rects are blanked in BOTH images so they cannot differ, while the rest",
+      "              of the frame keeps grading at full strictness. Touches no frame and no",
+      `              sha, capped at ${driftPercentText(MAX_MASKED_FRACTION)}% of any one frame, and every rect needs a`,
+      "              @reason (a region nobody grades again has to say why in the anchor).",
       "  report      Re-render the HTML report from an existing <id>.report.json.",
       "",
       "Options:",
@@ -1416,14 +2099,21 @@ function printUsage(): void {
       "  --strict-visual   Make a visual drift from baseline a failure.",
       "  --speed <n>       replay only: pacing multiplier, 1 to 8 (default: the baseline's",
       "                    stamped pacing, else 1).",
-      `  --set <fraction>  tolerance ONLY: the approved pixel drift allowance, 0 to ${MAX_DRIFT_TOLERANCE}`,
+      `  --set <fraction>  tolerance: the approved pixel drift allowance, 0 to ${MAX_DRIFT_TOLERANCE}`,
       `                    (${driftPercentText(MAX_DRIFT_TOLERANCE)}% cap; default when never stamped is ` +
         `${driftPercentText(DEFAULT_DRIFT_FRACTION)}%). At N%, anything covering`,
       "                    ~sqrt(N)% of frame width by ~sqrt(N)% of height can change undetected,",
-      "                    so it is a consented hole of a stated size, not a knob. Masks (per-capture",
-      "                    regions) are the real fix for an animating game and are not implemented yet.",
-      "                    Refused on every other subcommand: approve re-freezes frames, so widening",
-      "                    the gate and re-approving in one command would destroy the anchor.",
+      "                    so it is a consented hole of a stated size, not a knob. A tolerance is a",
+      "                    hole ANYWHERE in the frame; `trace mask` is the localized alternative.",
+      "  --set <captureId?>:<x>,<y>,<w>x<h>@<reason>",
+      "                    mask: one excluded region, repeatable. Each invocation RESTATES the whole",
+      "                    list, so a mask set can never grow one unnoticed rect at a time; an absent",
+      "                    captureId means every capture in the trace. The reason is mandatory.",
+      "  --clear           mask ONLY: stamp an empty list (the whole frame is graded again).",
+      "  --list            mask ONLY: print the approved masks and their terms. Touches nothing.",
+      "                    --set/--clear/--list are refused on every other subcommand: approve",
+      "                    re-freezes frames, so widening the gate and re-approving in one command",
+      "                    would destroy the anchor.",
       "  --observe         record: record by observing a human session (required).",
       "  --scene <path>    record: scene to reset to and record from (optional: when omitted,",
       "                    the recorder resolves the editor's CURRENT scene, refusing if unsaved).",
@@ -1445,11 +2135,23 @@ function printUsage(): void {
       "        a baseline manifest that cannot be trusted at grade time (including one",
       "        carrying an over-cap drift tolerance), an unreachable editor, or a usage",
       "        error. A harness fault is never reported as a game defect.",
-      "      tolerance: 0 stamped · 1 no approved baseline to stamp (approve frames first)",
-      "        · 2 the baseline manifest exists but cannot be trusted.",
+      "      tolerance/mask: 0 stamped, or (for the read-only `mask --list`) printed: it",
+      "        stamps nothing and still exits 0 · 1 no approved baseline to stamp (approve",
+      "        frames first) · 2 the baseline manifest exists but cannot be trusted, the",
+      "        approved frames cannot be decoded, or the rects are refused (out of bounds,",
+      `        no reason, or over the ${driftPercentText(MAX_MASKED_FRACTION)}% masked-area cap). A refused stamp writes`,
+      "        nothing, and `--list` refuses to quote the terms of an untrusted anchor.",
       "      A run that failed ONLY on pixel drift prints the observed max drift and the",
       "      exact `trace tolerance` command to consent to it. That suggestion never",
       "      appears for an unreadable capture: a harness fault is not drift.",
+      "      The same run may also print a MASK suggestion, but only after TWO runs whose",
+      "      drift lands in the same region and does NOT reproduce between them",
+      "      (nondeterministic ambient animation). Reproduction is structural, not byte",
+      `      equality: at or above ${driftPercentText(REPRODUCED_DRIFT_SIMILARITY)}% of the drifted pixels landing in the same cells`,
+      "      of a 16x16 grid, the drift is called deterministic and the tool says so instead",
+      "      of naming a rect, so re-running until the bitmaps differ buys nothing. A",
+      "      diffuse drift says masks cannot cover it honestly, naming which of the three",
+      "      bounds it broke. Nothing is ever applied.",
     ].join("\n"),
   );
 }
