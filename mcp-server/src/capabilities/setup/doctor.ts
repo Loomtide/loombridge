@@ -24,10 +24,12 @@ import {
   METADATA_RELPATH,
   PKG_ID,
   SUPERSEDED_PKG_IDS,
+  bundledBridgeFreshness,
+  judgeBridgeFreshness,
+  locateBridgeTarball,
   looksLikeUnityProject,
   readInstallMetadata,
   readTarballVersion,
-  resolveBundledTarball,
   sha256File,
 } from "./bridge-install-common.js";
 import { ROUTING_DOC_RELPATH, ROUTING_DOC_VERSION, parseRoutingDocVersion } from "./routing-doc.js";
@@ -89,8 +91,8 @@ function checkLocalInstall(checks: DoctorCheck[]): { bundledVersion?: string; bu
     remediation: nodeMajor >= 18 ? undefined : "Install Node 18+ (Loombridge targets an active LTS).",
   });
 
-  const tgz = safe(() => resolveBundledTarball());
-  if (!tgz) {
+  const located = safe(() => locateBridgeTarball());
+  if (!located) {
     checks.push({
       id: "bridge.bundled",
       label: "Bundled bridge tarball",
@@ -98,16 +100,67 @@ function checkLocalInstall(checks: DoctorCheck[]): { bundledVersion?: string; bu
       detail: "no bridge tarball ships with this CLI build",
       remediation: "In the dev repo, run scripts/loombridge-pack-bridge.sh (CI should bundle it into @loomtide/loombridge).",
     });
+    // The freshness row is pushed even here: a check that vanishes when its input is
+    // missing reads, in the JSON report and to the eye, exactly like a check that passed.
+    checks.push({
+      id: "bridge.freshness",
+      label: "Bundled bridge freshness",
+      status: "fail",
+      detail: "no tarball to grade",
+    });
     return {};
   }
-  const bundledVersion = safe(() => readTarballVersion(tgz)) ?? "unknown";
+  const tgz = located.path;
+  const bundledVersion = safe(() => readTarballVersion(tgz));
   const bundledSha = safe(() => sha256File(tgz));
   checks.push({
     id: "bridge.bundled",
     label: "Bundled bridge tarball",
     status: "pass",
-    detail: `${PKG_ID}@${bundledVersion} (${path.basename(tgz)})`,
+    detail: `${PKG_ID}@${bundledVersion ?? "unknown"} (${path.basename(tgz)})`,
   });
+
+  // Is that tarball actually built from the sources this CLI ships? The `.tgz.sha256`
+  // sidecar cannot answer this (it hashes the tarball itself), which is how a symlinked
+  // global install kept delivering a bridge packed months earlier while every row here
+  // stayed green.
+  let freshness;
+  try {
+    freshness = bundledBridgeFreshness(tgz);
+  } catch (error) {
+    // An unreadable archive or source tree is its OWN failed row. Never a skipped one:
+    // the whole point of this guard is that a check which cannot run must be loud.
+    checks.push({
+      id: "bridge.freshness",
+      label: "Bundled bridge freshness",
+      status: "fail",
+      detail: `could not be evaluated (${error instanceof Error ? error.message.split("\n")[0] : String(error)})`,
+      remediation: "Re-pack or reinstall the bridge bundle, then re-run doctor.",
+    });
+    return { bundledVersion, bundledSha };
+  }
+  const judged = judgeBridgeFreshness(freshness, tgz);
+  switch (judged.disposition) {
+    case "ok":
+      checks.push({ id: "bridge.freshness", label: "Bundled bridge freshness", status: "pass", detail: judged.detail });
+      break;
+    case "info":
+      checks.push({ id: "bridge.freshness", label: "Bundled bridge freshness", status: "info", detail: judged.detail });
+      break;
+    case "reject":
+      checks.push({
+        id: "bridge.freshness",
+        label: "Bundled bridge freshness",
+        status: "fail",
+        detail: judged.consequence ? `${judged.detail}; ${judged.consequence}` : judged.detail,
+        remediation: judged.remediation,
+      });
+      break;
+    default: {
+      const exhaustive: never = judged.disposition;
+      throw new Error(`unhandled freshness disposition: ${String(exhaustive)}`);
+    }
+  }
   return { bundledVersion, bundledSha };
 }
 
@@ -190,13 +243,33 @@ function checkProjectWiring(
   checkAgentSurface(project, meta, checks);
 
   // Drift: is a newer bridge bundled with this CLI than what the project has?
-  if (bundled.bundledVersion && bundled.bundledVersion !== meta.bridgeVersion) {
+  //
+  // Pushed UNCONDITIONALLY. The previous `if (bundled.bundledVersion && ...)` shape meant
+  // an UNREADABLE bundled version silently removed the row, so a report with nothing to
+  // compare against was indistinguishable from a report that compared and agreed. Absence
+  // of a bound field is a refusal here, not a skip.
+  if (!bundled.bundledVersion) {
+    checks.push({
+      id: "bridge.drift",
+      label: "Bridge up to date",
+      status: "fail",
+      detail: `cannot compare: the CLI-bundled bridge version could not be read (project has ${meta.bridgeVersion})`,
+      remediation: "Re-pack or reinstall the bridge bundle, then re-run doctor.",
+    });
+  } else if (bundled.bundledVersion !== meta.bridgeVersion) {
     checks.push({
       id: "bridge.drift",
       label: "Bridge up to date",
       status: "warn",
       detail: `project has ${meta.bridgeVersion}; CLI bundles ${bundled.bundledVersion}`,
-      remediation: `Update available — run: loombridge update --project ${project}  (until update lands: ${installCmd})`,
+      remediation: `Update available, run: loombridge update --project ${project}  (until update lands: ${installCmd})`,
+    });
+  } else {
+    checks.push({
+      id: "bridge.drift",
+      label: "Bridge up to date",
+      status: "pass",
+      detail: `project and CLI both at ${meta.bridgeVersion}`,
     });
   }
 }
@@ -308,10 +381,54 @@ function checkAgentSurface(project: string, meta: InstallMetadata, checks: Docto
   );
 }
 
+/**
+ * Grade the PROJECT's tarball against the CLI's bundle, byte for byte.
+ *
+ * `bundledSha` was accepted by this function and never read: doctor compared versions and
+ * stopped there, so "same version, different bytes" (a project holding a tarball packed
+ * from different sources than the CLI now bundles) was invisible. That state is ALWAYS a
+ * mistake, because the version string is the only thing a re-pack does not change.
+ * Pushed unconditionally, including from the early-exit paths, so an absent input is a
+ * failed comparison rather than a missing row.
+ */
+function pushContentDrift(
+  project: string,
+  meta: InstallMetadata,
+  bundled: { bundledVersion?: string; bundledSha?: string },
+  actualSha: string | undefined,
+  checks: DoctorCheck[],
+): void {
+  const push = (status: CheckStatus, detail: string, remediation?: string) =>
+    checks.push({ id: "bridge.content-drift", label: "Bridge bytes match the CLI bundle", status, detail, remediation });
+
+  if (!bundled.bundledSha || !bundled.bundledVersion) {
+    push("fail", "cannot compare: the CLI-bundled tarball could not be hashed or versioned");
+    return;
+  }
+  if (actualSha === undefined) {
+    push("fail", "cannot compare: the project's tarball could not be hashed", `loombridge update --project ${project}`);
+    return;
+  }
+  if (bundled.bundledVersion !== meta.bridgeVersion) {
+    // Different versions are the "Bridge up to date" row's business; comparing bytes
+    // across versions would just restate it.
+    push("info", `different versions (project ${meta.bridgeVersion}, CLI ${bundled.bundledVersion}), see Bridge up to date`);
+    return;
+  }
+  const same = actualSha === bundled.bundledSha;
+  push(
+    same ? "pass" : "fail",
+    same
+      ? `same version and same bytes (${bundled.bundledVersion})`
+      : `SAME version ${meta.bridgeVersion} but DIFFERENT bytes (project=${actualSha.slice(0, 12)}…, CLI bundle=${bundled.bundledSha.slice(0, 12)}…); the editor is running a different bridge than this CLI ships`,
+    same ? undefined : `loombridge update --project ${project}`,
+  );
+}
+
 function checkTarballWiring(
   project: string,
   meta: InstallMetadata,
-  bundled: { bundledSha?: string },
+  bundled: { bundledVersion?: string; bundledSha?: string },
   checks: DoctorCheck[],
   installCmd: string,
 ): void {
@@ -362,6 +479,7 @@ function checkTarballWiring(
       detail: "metadata has no tarball path",
       remediation: installCmd,
     });
+    pushContentDrift(project, meta, bundled, undefined, checks);
     return;
   }
   const tarballPath = path.join(project, "Packages", meta.tarball);
@@ -373,6 +491,7 @@ function checkTarballWiring(
       detail: `missing ${meta.tarball}`,
       remediation: installCmd,
     });
+    pushContentDrift(project, meta, bundled, undefined, checks);
     return;
   }
   const actualSha = safe(() => sha256File(tarballPath));
@@ -386,6 +505,10 @@ function checkTarballWiring(
         : `sha256 mismatch (file=${actualSha?.slice(0, 12)}…, metadata=${meta.tarballSha256?.slice(0, 12)}…)`,
     remediation: actualSha === meta.tarballSha256 ? undefined : `Tarball altered — reinstall: ${installCmd}`,
   });
+
+  // The project is graded against the CLI's bundle, not just against its own metadata:
+  // a record can agree with the file beside it and both can be months behind the bundle.
+  pushContentDrift(project, meta, bundled, actualSha, checks);
 }
 
 // --- live check -----------------------------------------------------------
