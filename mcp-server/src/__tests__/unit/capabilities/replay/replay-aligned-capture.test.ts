@@ -900,17 +900,21 @@ test("approve REFUSES a run with a capture-level harness fault, and prunes nothi
   }
 });
 
-test("approve REFUSES a report whose pixel gate was refused at grade time (BX1)", async () => {
+test("approve ALLOWS a refused-comparison run, loudly: it is the mismatch escape (BX1)", async () => {
   const root = await tmpRoot();
   try {
-    // `visualHarnessFault` with no per-capture fault: the anchor could not be trusted, so
-    // NOTHING in this run was graded. Freezing its frames would promote evidence the tool
-    // itself declined to read (the clock-refused-report laundering path).
+    // `visualHarnessFault` with no per-capture fault and no unreadable capture is a run
+    // whose COMPARISON was refused (a clock or pacing mismatch, a broken anchor): every
+    // frame decodes and every settle completed. Approving from exactly this report is the
+    // escape the mismatch refusal names; refusing it here locked the operator out of
+    // re-anchoring entirely (found live: a wall-clock baseline could never migrate to an
+    // aligned clock, and the pacing escape from the ratchet wave died with it). The consent
+    // is the loud part: the note states the new anchor is minted WITHOUT any comparison.
     await approvable(root, { visualHarnessFault: true });
     const { value: exit, out } = await captured(() => runTrace(["approve", "--id", "demo", "--root", root]));
-    assert.equal(exit, 2);
-    assert.match(out, /HARNESS FAULT/);
-    assert.match(out, /refused at grade time/);
+    assert.equal(exit, 0, out);
+    assert.match(out, /pixel comparison was REFUSED at grade time/);
+    assert.match(out, /WITHOUT any comparison against the previous baseline/);
   } finally {
     await fs.rm(root, { recursive: true, force: true });
   }

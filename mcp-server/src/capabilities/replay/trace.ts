@@ -816,26 +816,18 @@ async function runApprove(args: TraceArgs): Promise<number> {
     return 2;
   }
 
-  // BX1: A RUN CARRYING ANY HARNESS FAULT IS NOT AN ANCHOR, whole-run, the F13 shape.
-  //
-  // Two laundering paths close on this one rule. (1) THE PRUNE-TO-PERMANENT-GREEN path: a
-  // capture whose settle never completed has no artifact, so the copy loop below skips it and
-  // `pruneUndeclaredBaselines` then DELETES its approved baseline. The next replay finds no
-  // anchor for that capture, reports `no-baseline`, and the trace is green forever over a
-  // frame nobody grades. (2) THE REFUSED-REPORT path: a run whose pixel gate was refused at
-  // grade time (a clock or pacing mismatch, an untrustworthy anchor) graded NOTHING, and
-  // freezing its frames would promote evidence the tool declined to read.
-  //
-  // Whole-run, never per-capture: promoting the healthy subset is exactly how a baseline
-  // quietly shrinks while the word "approved" stays the same.
+  // BX1: A RUN WITH A CAPTURE-LEVEL HARNESS FAULT IS NOT AN ANCHOR, whole-run, the F13
+  // shape. THE PRUNE-TO-PERMANENT-GREEN path: a capture whose settle never completed has no
+  // artifact, so the copy loop below skips it and `pruneUndeclaredBaselines` then DELETES
+  // its approved baseline. The next replay finds no anchor for that capture, reports
+  // `no-baseline`, and the trace is green forever over a frame nobody grades. Whole-run,
+  // never per-capture: promoting the healthy subset is exactly how a baseline quietly
+  // shrinks while the word "approved" stays the same.
   const faultedCaptures = parsed.segments
     .flatMap((s) => s.captures)
     .filter((c) => c.harnessFault !== undefined);
-  if (faultedCaptures.length > 0 || parsed.visualHarnessFault === true) {
-    const named =
-      faultedCaptures.length > 0
-        ? faultedCaptures.map((c) => `${c.id} (${c.harnessFault})`).join("; ")
-        : "the run's pixel comparison was refused at grade time (see the replay output for which term)";
+  if (faultedCaptures.length > 0) {
+    const named = faultedCaptures.map((c) => `${c.id} (${c.harnessFault})`).join("; ");
     console.error(
       `[loombridge trace] cannot approve "${args.id}": the latest run carries a HARNESS FAULT, so its evidence ` +
         `includes frames nothing could compare: ${named}. A run the harness could not complete is never an anchor.`,
@@ -846,6 +838,24 @@ async function runApprove(args: TraceArgs): Promise<number> {
         "so the trace would go permanently green over the very frames that failed.",
     );
     return 2;
+  }
+
+  // A REFUSED COMPARISON is NOT a capture fault, and refusing to approve it would lock the
+  // operator out of the one door the refusal itself names. When the pixel gate declines to
+  // grade (a clock or pacing mismatch, a broken anchor), every frame in the run is still a
+  // complete, decodable capture: the F13 check above proved it, and the capture-fault check
+  // proved every settle completed. Re-anchoring from exactly such a run is the DESIGNED
+  // escape (found live in the pacing wave: the mismatch refusal pointed at approve, and an
+  // earlier version of this rule refused the very report it pointed at, twice). The consent
+  // is loud, not silent: this note, plus the pacing/clock/tolerance/mask lines below, state
+  // that the new anchor is minted WITHOUT any comparison against the old one.
+  if (parsed.visualHarnessFault === true) {
+    console.error(
+      `[loombridge trace] note: this run's pixel comparison was REFUSED at grade time (the replay output ` +
+        "names the term). Approving re-anchors from these frames WITHOUT any comparison against the previous " +
+        "baseline: every capture decodes and every settle completed, but nothing graded them. The terms the " +
+        "new anchor takes are stated below.",
+    );
   }
 
   // BX5: AN ALIGNED STAMP HAS TO CARRY FRAME EVIDENCE. `alignedCaptureFps` on a report is a
