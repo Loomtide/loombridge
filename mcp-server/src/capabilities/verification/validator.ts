@@ -696,7 +696,93 @@ export function validateAcceptanceContract(input: unknown): AcceptanceValidation
     }
   }
 
+  // ---- harness (M14) ----
+  validateHarnessSection(input.harness, issues);
+
   return { valid: issues.length === 0, issues };
+}
+
+/**
+ * Validate the optional `harness` block's SHAPE when present (M14).
+ *
+ * Absence is legal (the feel recipe refuses at run time and names the JSON to add,
+ * which is where an operator actually needs the message). What is NOT legal is a
+ * half-declared seam: a `feelSeam` that omits the input-reader component, or names
+ * a field with an empty string, would send the recipe at the game with a seam it
+ * cannot drive. Contract validation is the cheapest place to catch that, long
+ * before a live editor is involved.
+ */
+function validateHarnessSection(
+  harness: unknown,
+  issues: AcceptanceValidationIssue[],
+): void {
+  if (harness === undefined) return;
+  if (!isRecord(harness)) {
+    push(issues, "INVALID_HARNESS", "harness must be an object.", "harness");
+    return;
+  }
+  const seam = harness.feelSeam;
+  if (seam === undefined) return;
+  if (!isRecord(seam)) {
+    push(issues, "INVALID_HARNESS", "harness.feelSeam must be an object.", "harness.feelSeam");
+    return;
+  }
+  for (const field of ["playerLocator", "controllerComponent", "inputReaderComponent"]) {
+    if (!isString(seam[field])) {
+      push(
+        issues,
+        "MISSING_FIELD",
+        `harness.feelSeam.${field} is required (a non-empty string).`,
+        `harness.feelSeam.${field}`,
+      );
+    }
+  }
+  if (!isRecord(seam.fields)) {
+    push(issues, "MISSING_FIELD", "harness.feelSeam.fields is required.", "harness.feelSeam.fields");
+  } else {
+    if (!isString(seam.fields.moveX)) {
+      push(
+        issues,
+        "MISSING_FIELD",
+        "harness.feelSeam.fields.moveX is required (the horizontal drive field every seam-driven leg pins).",
+        "harness.feelSeam.fields.moveX",
+      );
+    }
+    for (const optional of ["jumpHeld", "dashHeld"]) {
+      if (seam.fields[optional] !== undefined && !isString(seam.fields[optional])) {
+        push(
+          issues,
+          "INVALID_HARNESS",
+          `harness.feelSeam.fields.${optional} must be a non-empty string when present.`,
+          `harness.feelSeam.fields.${optional}`,
+        );
+      }
+    }
+  }
+  if (!isRecord(seam.keys)) {
+    push(issues, "MISSING_FIELD", "harness.feelSeam.keys is required.", "harness.feelSeam.keys");
+  } else {
+    for (const required of ["jump", "moveRight"]) {
+      if (!isString(seam.keys[required])) {
+        push(
+          issues,
+          "MISSING_FIELD",
+          `harness.feelSeam.keys.${required} is required (the keyed captures inject it).`,
+          `harness.feelSeam.keys.${required}`,
+        );
+      }
+    }
+    for (const optional of ["moveLeft", "jumpCut", "dash"]) {
+      if (seam.keys[optional] !== undefined && !isString(seam.keys[optional])) {
+        push(
+          issues,
+          "INVALID_HARNESS",
+          `harness.feelSeam.keys.${optional} must be a non-empty string when present.`,
+          `harness.feelSeam.keys.${optional}`,
+        );
+      }
+    }
+  }
 }
 
 export function assertValidAcceptanceContract(input: unknown): AcceptanceContract {

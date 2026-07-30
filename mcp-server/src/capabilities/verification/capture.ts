@@ -9,6 +9,9 @@
  *   - `screen-rects.json`                     → framing recipe (+ console.json)
  *   - `platform-tiles.json` / `tile-render.json` → tiles recipe, via the
  *       allowlisted `GroundTiling.WriteTileCaptures` (+ console.json)
+ *   - `feel.json`                             → feel recipe (drives the canonical
+ *       feel measurements over the bridge and writes the file from the op echoes;
+ *       needs `acceptance.harness.feelSeam`) (+ console.json)
  *   - `console.json` alone                    → console recipe (play-enter startup
  *       + steady soak logs, phase-tagged; nothing cleared after play, so real
  *       startup errors are still graded)
@@ -37,6 +40,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 
 import { captureConsoleEvidence } from "./capture-console.js";
+import { captureFeelEvidence } from "./capture-feel.js";
 import { captureFramingEvidence } from "./capture-framing.js";
 import { captureTileEvidence, TILE_CAPTURE_FILES } from "./capture-tiles.js";
 import { loombridgePaths, readState } from "../../domain/state.js";
@@ -77,12 +81,14 @@ export interface CaptureDeps {
   captureFraming: typeof captureFramingEvidence;
   captureTiles: typeof captureTileEvidence;
   captureConsole: typeof captureConsoleEvidence;
+  captureFeel: typeof captureFeelEvidence;
 }
 
 const defaultDeps: CaptureDeps = {
   captureFraming: captureFramingEvidence,
   captureTiles: captureTileEvidence,
   captureConsole: captureConsoleEvidence,
+  captureFeel: captureFeelEvidence,
 };
 
 type ParseHelp = { help: true; usageError?: boolean };
@@ -255,7 +261,7 @@ export async function runCapture(args: CaptureArgs, deps: CaptureDeps = defaultD
         `[loombridge capture] no capture recipe for slice "${args.slice}" (gates: ${slice.acceptance.gates.join(", ")}; ` +
           `manifest: ${manifest.join(", ") || "(empty)"}). ` +
           "Recipes exist for screen-rects.json (framing), platform-tiles.json/tile-render.json (GroundTiling tile captures), " +
-          "and console.json (steady play-soak). Every other entry is agent-assembled evidence today.",
+          "feel.json (the feel producer), and console.json (steady play-soak). Every other entry is agent-assembled evidence today.",
       );
       return printExit(2);
     }
@@ -297,6 +303,37 @@ export async function runCapture(args: CaptureArgs, deps: CaptureDeps = defaultD
           console.error(`[loombridge capture] ${error}`);
           outcomes.push({ recipe, ok: false, error });
           continue;
+        }
+        outcomes.push({ recipe, ok: true });
+        continue;
+      }
+
+      if (recipe === "feel") {
+        // The feel recipe needs the CONTRACT (its `harness.feelSeam` block, M14).
+        // A missing/unreadable contract is a refusal with the JSON to add, raised by
+        // the recipe itself so the message is one message wherever it is reached.
+        let contract: unknown = undefined;
+        try {
+          contract = JSON.parse(await fs.readFile(paths.acceptance, "utf-8"));
+        } catch (error) {
+          contract = undefined;
+          void error;
+        }
+        const result = await deps.captureFeel({
+          outDir,
+          contract,
+          runId,
+          ...(args.project ? { project: args.project } : {}),
+        });
+        console.error(
+          `[loombridge capture] feel: wrote ${rel(result.feelPath)} (measured ${result.measured.join(", ") || "(nothing)"}) ` +
+            `+ ${rel(result.consolePath)} (${result.logCount} log(s))`,
+        );
+        for (const entry of result.omitted) {
+          console.error(`[loombridge capture] feel: ${entry.metric} NOT measured: ${entry.reason}`);
+        }
+        for (const gap of result.gaps) {
+          console.error(`[loombridge capture] feel: provenance gap: ${gap}`);
         }
         outcomes.push({ recipe, ok: true });
         continue;
@@ -410,7 +447,9 @@ function recipeSelectionForKind(kind: CaptureKind): string[] {
     ? ["platform-tiles.json", "tile-render.json"]
     : kind === "console"
       ? ["console.json"]
-      : ["screen-rects.json"];
+      : kind === "feel"
+        ? ["feel.json"]
+        : ["screen-rects.json"];
 }
 
 function printUsage(): void {
@@ -424,6 +463,8 @@ function printUsage(): void {
       "  screen-rects.json           → framing recipe (+ console.json)",
       "  platform-tiles.json /       → tiles recipe (GroundTiling.WriteTileCaptures)",
       "  tile-render.json               (+ console.json)",
+      "  feel.json                   → feel recipe (drives the canonical feel",
+      "                                 measurements; needs acceptance.harness.feelSeam)",
       "  console.json (alone)        → console recipe (steady play-soak; e.g. parallax)",
       "A slice needing several of these runs several recipes.",
       "",

@@ -97,7 +97,7 @@ The speed runner does not cover the static / pre-play / structural gates. Drive 
 | `reachability.json` | `unity_scene_get_bounds` per platform/launcher/collectible (jump/dash/trampoline envelope) | reachability | `references/playability-checks.md` |
 | `platform-tiles.json` | Platformer terrain construction: tile counts, row roles, collider top vs visible top | platform-tiles | `platformer-level-design/SKILL.md` |
 | `objects.json` | Per-prop bounds + components for the prop-purpose gate | prop-purpose | `references/acceptance-gates.md` |
-| `feel.json` | FeelHarness + `unity_runtime_probe` recipes (assembled) | feel | `references/feel-checks.md` |
+| `feel.json` | **`loombridge capture --slice <feel slice>`**: the CLI feel recipe drives run/jump/short-hop/coyote/jump-buffer/dash and writes the file from the op echoes (needs `harness.feelSeam` in the contract). Never hand-assembled. | feel | `references/feel-checks.md` |
 | `vlm-review.json` (advisory, but required to run) | **independent adversarial ensemble** (≥2 fresh-context reviewers) scoring **play-mode, HUD-visible** frames vs the mock, **flags unioned**, passed to verify via `--vlm` | reviewFindings | `references/vlm-review.md` |
 
 Missing files degrade to a WARN gate, so a partial run still produces a useful verdict. Save the op's `content[].text` JSON verbatim.

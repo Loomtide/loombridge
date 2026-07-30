@@ -57,8 +57,9 @@ When building platformer movement:
 2. Create `PlatformerPlayerController` under `Assets/Scripts/Player/`.
 3. Configure `Rigidbody2D`, collider, frictionless `PhysicsMaterial2D`, and project
    `fixedDeltaTime` from the acceptance contract.
-4. Measure with `FeelHarness` plus `runtime.probe`; final `feel.json` must include
-   `provenance.sources[]`.
+4. Measure with `loombridge capture --slice player-feel` (the CLI feel recipe writes
+   `feel.json` from the op echoes; declare `harness.feelSeam` in `ACCEPTANCE.json` first :
+   the recipe refuses with the exact JSON when it is missing). Never hand-author it.
 5. Tune using the `game-polish-2d` tuning templates for run speed, jump apex, and dash distance.
 6. Run `loombridge verify --slice player-feel`.
 

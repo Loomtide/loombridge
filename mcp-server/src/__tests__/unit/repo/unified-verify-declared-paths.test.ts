@@ -47,6 +47,8 @@ import {
   testRunLogPath,
 } from "../../../capabilities/tests/test-results-manifest.js";
 import { LOOMBRIDGE_DIRNAME, loombridgePaths } from "../../../domain/state.js";
+import { captureRecipesForFiles, recipeOutputs, type CaptureKind } from "../../../domain/capture-recipes.js";
+import { SUPPORTED_GATE_IDS, gateInputFiles } from "../../../capabilities/verification/run-gates.js";
 import { CAPTURE_REPORT_FILE, captureReportPath } from "../../../domain/capture-manifest.js";
 
 const SRC = path.join(PKG_ROOT, "src");
@@ -379,4 +381,57 @@ test("LITMUS: the scan does NOT fire on a name that merely resembles a declared 
     [],
     "a lookalike filename must not be reported as a duplicate spelling",
   );
+});
+
+/**
+ * THE RECIPE OUTPUT NAMES (evidence arc stage 2). A capture recipe declares the
+ * filenames it exists to write, and `build` mints a slice's captureManifest from a
+ * DIFFERENT map (the gate→file map in `run-gates.ts`). Those are two spellings of the
+ * same set of names in two modules, which is this repo's oldest failure shape: a
+ * recipe declaring `feel-json` or `feels.json` would be selected by nothing, capture
+ * would report the entry as agent-assembly-required, and every test would stay green
+ * because no test compares the two lists.
+ */
+const RECIPE_KINDS: CaptureKind[] = ["tiles", "framing", "feel", "console"];
+
+/**
+ * THE WALK. Both the real check and its LITMUS call this; `outputsOf` is a parameter
+ * so the LITMUS can feed it a misspelled recipe output and prove the walk sees it.
+ */
+export function orphanedRecipeOutputs(
+  kinds: readonly CaptureKind[],
+  outputsOf: (kind: CaptureKind) => string[] = recipeOutputs,
+): string[] {
+  const gateFiles = new Set(gateInputFiles(SUPPORTED_GATE_IDS));
+  return kinds.flatMap((kind) =>
+    outputsOf(kind)
+      .filter((file) => !gateFiles.has(file))
+      .map((file) => `${kind} → ${file}`),
+  );
+}
+
+test("every filename a capture recipe declares is a file some GATE actually consumes", () => {
+  assert.deepEqual(
+    orphanedRecipeOutputs(RECIPE_KINDS),
+    [],
+    "a recipe declares an output no gate reads; the dispatch and the minted manifest have drifted apart",
+  );
+});
+
+test("LITMUS: the recipe/gate name walk really fires on a misspelled output", () => {
+  // An empty result is exactly what a defused walk returns, so plant the near-miss a
+  // rename would really produce and confirm the REAL walk reports it.
+  const planted = (kind: CaptureKind): string[] =>
+    kind === "feel" ? ["feels.json"] : recipeOutputs(kind);
+  assert.deepEqual(orphanedRecipeOutputs(RECIPE_KINDS, planted), ["feel → feels.json"]);
+});
+
+test("the feel recipe is REACHABLE from the gate map: feel.json dispatches to it", () => {
+  // The other half of the same binding, walked through the real dispatch: the file
+  // `build` mints for a feel slice must select a recipe. Before stage 2 it selected
+  // none and the slice's evidence was hand-authored (ledger L34/L45).
+  const feelSliceFiles = gateInputFiles(["feel", "feel-provenance", "feel-rederive", "physics-timestep", "console-clean"]);
+  const dispatch = captureRecipesForFiles(feelSliceFiles);
+  assert.deepEqual(dispatch.unproduced, []);
+  assert.ok(dispatch.recipes.includes("feel"));
 });

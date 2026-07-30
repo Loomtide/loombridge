@@ -24,8 +24,11 @@
  * runSpeed/shortHopApex and the F5 accel/decel/fall/inputLatency metrics).
  * `inputLatency` additionally needs the source's recorded `inputOnsetMs` (passed to
  * deriveMetric); a source reporting it with no usable onset is refused.
- * coyote/jumpBuffer come from input-timing bisection, a different derivation, and
- * remain covered by feel-provenance.
+ * coyote/jumpBuffer come from input-timing bisection, a different derivation. STAGE 2
+ * binds them here too: a `derivation:"input-bisection"` source must RETAIN its trials
+ * and the reported window is re-derived from them by the same pure function the
+ * producer used (`deriveSweepMetric`). Before that, the sweep was a declaration and
+ * the number beside it was unchecked (ledger L76/L77).
  */
 
 import type { AcceptanceContract } from "../types.js";
@@ -36,6 +39,11 @@ import {
   isValidTrajectory,
   REDERIVABLE_METRIC_SET,
 } from "../feel-derive.js";
+import {
+  deriveSweepMetric,
+  type SweepMetric,
+  type SweepTrialEcho,
+} from "../../../domain/feel-primitives.js";
 
 export const GATE_NAME = "feel-rederive";
 
@@ -77,6 +85,63 @@ function rederivePhaseDelta(source: FeelMeasurementSource): number | null {
   const key = source.axis === "y" ? "deltaY" : "deltaX";
   const delta = phase[key];
   return isFiniteNumber(delta) ? Math.abs(delta) : null;
+}
+
+/**
+ * Re-derive ONE sweep metric from the trials retained on its source.
+ *
+ * Refuse-don't-skip at every step: absent trials, an absent measurement timestep
+ * (the ticks→seconds conversion), a sweep that no longer resolves a threshold, and
+ * a mismatch are all failures. The fixed timestep comes from the source's own
+ * ECHOED `measurementFixedTimestep`, never from the contract: the contract is what
+ * the run is graded against, so using it here would let a wrong sim rate convert
+ * itself into a right-looking answer.
+ */
+function rederiveSweep(
+  source: FeelMeasurementSource,
+  metric: SweepMetric,
+  reportedValue: number,
+): RederiveVerdict {
+  const trials = source.trials;
+  if (!Array.isArray(trials) || trials.length === 0) {
+    return {
+      metric,
+      reported: reportedValue,
+      rederived: null,
+      status: "fail",
+      detail: `${metric}: source declares derivation:"input-bisection" and reports a value but retains NO trials: cannot re-derive (ledger L77: the trial table was retyped from console output and half of it had no raw file at all).`,
+    };
+  }
+  const fixedTimestep = source.measurementFixedTimestep;
+  if (!isFiniteNumber(fixedTimestep) || fixedTimestep <= 0) {
+    return {
+      metric,
+      reported: reportedValue,
+      rederived: null,
+      status: "fail",
+      detail: `${metric}: the sweep source echoes no usable measurementFixedTimestep, so its tick offsets cannot be converted to seconds: refused (an absent binding is a refusal, never a skip).`,
+    };
+  }
+  const derivation = deriveSweepMetric(metric, trials as SweepTrialEcho[], fixedTimestep);
+  if (derivation.windowSeconds === null) {
+    return {
+      metric,
+      reported: reportedValue,
+      rederived: null,
+      status: "fail",
+      detail: `${metric}: reported ${reportedValue} but the retained trials do not resolve a threshold (${derivation.reason ?? "no reason given"}): refused as self-grading.`,
+    };
+  }
+  const ok = withinTolerance(reportedValue, derivation.windowSeconds);
+  return {
+    metric,
+    reported: reportedValue,
+    rederived: derivation.windowSeconds,
+    status: ok ? "pass" : "fail",
+    detail: ok
+      ? `${metric}: reported ${reportedValue} matches the re-derivation ${derivation.windowSeconds.toFixed(4)} from ${trials.length} retained trial(s) (last jumped at ${derivation.boundaryTicks} tick(s), first failed at ${derivation.firstFailedTicks}).`
+      : `${metric}: reported ${reportedValue} does NOT match the re-derivation ${derivation.windowSeconds.toFixed(4)} from the source's OWN trials (last jumped at ${derivation.boundaryTicks} tick(s), first failed at ${derivation.firstFailedTicks}): the headline is not what the sweep measured.`,
+  };
 }
 
 export interface RederiveVerdict {
@@ -163,6 +228,61 @@ export function rederiveFromSources(
       verdicts.push(...refusals);
       continue;
     }
+    // ── the SWEEP binding (stage 2; ledger L76/L77, review M12(3)) ────────────
+    //
+    // `input-bisection` used to be a DECLARATION and nothing more: a source could
+    // say "this came from a sweep" and report any number, because the trials lived
+    // in prose and nothing re-ran them. The door-one run showed exactly what that
+    // is worth: the reported coyoteTime was a function of an agent-chosen `+2`
+    // tick convention whose swing (one tick = 0.0167s) is most of the ±0.02s band,
+    // and the trial table itself was retyped from console output. Now the gate
+    // re-runs the same pure derivation the producer used, over the trials retained
+    // in the same file, and refuses a headline the trials do not produce.
+    if (source.derivation === "input-bisection") {
+      const metrics = (source.measuredMetrics ?? []).filter((m) => BISECTION_METRICS.has(m));
+      for (const metric of metrics) {
+        const reportedValue = reported[metric];
+        if (!isFiniteNumber(reportedValue)) continue;
+        verdicts.push(rederiveSweep(source, metric as SweepMetric, reportedValue));
+      }
+      continue;
+    }
+
+    // ── the WHOLE-WINDOW dash (ledger L42/L91) ───────────────────────────────
+    // The phase-delta dash is off by one tick by construction, so the honest recipe
+    // pins the horizontal drive to 0 and takes the whole-window displacement. That
+    // re-derives from the source's own samples with no phase accounting at all.
+    if (source.derivation === "window-delta") {
+      const metrics = (source.measuredMetrics ?? []).filter((m) => m === "dashDistance");
+      for (const metric of metrics) {
+        const reportedValue = reported[metric];
+        if (!isFiniteNumber(reportedValue)) continue;
+        if (!isValidTrajectory(source.samples)) {
+          verdicts.push({
+            metric,
+            reported: reportedValue,
+            rederived: null,
+            status: "fail",
+            detail: `${metric}: source declares derivation:"window-delta" and reports a value but carries no valid samples: cannot re-derive (refused as self-grading).`,
+          });
+          continue;
+        }
+        const samples = source.samples;
+        const rederived = Math.abs(samples[samples.length - 1].x - samples[0].x);
+        const ok = withinTolerance(reportedValue, rederived);
+        verdicts.push({
+          metric,
+          reported: reportedValue,
+          rederived,
+          status: ok ? "pass" : "fail",
+          detail: ok
+            ? `${metric}: reported ${reportedValue} matches the whole-window re-derivation ${rederived.toFixed(4)} from ${samples.length} samples.`
+            : `${metric}: reported ${reportedValue} does NOT match the whole-window re-derivation ${rederived.toFixed(4)} from the source's own samples: tampered or param-read.`,
+        });
+      }
+      continue;
+    }
+
     if (source.derivation === "phase-delta") {
       const metrics = (source.measuredMetrics ?? []).filter((m) => m === "dashDistance");
       for (const metric of metrics) {

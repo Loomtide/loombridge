@@ -54,22 +54,39 @@ test("captureRecipesForFiles: a slice needing BOTH gets BOTH recipes (the old si
 });
 
 test("captureRecipesForFiles: entries no recipe writes are named as unproduced (never silently dropped)", () => {
-  const d = captureRecipesForFiles(["feel.json", "verify-manifest.json", "console.json"]);
+  const d = captureRecipesForFiles(["asset-manifest.json", "verify-manifest.json", "console.json"]);
   assert.deepEqual(d.recipes, ["console"]);
-  assert.deepEqual(d.unproduced, ["feel.json", "verify-manifest.json"]);
-  assert.equal(d.files.find((f) => f.file === "feel.json")?.recipe, null);
+  assert.deepEqual(d.unproduced, ["asset-manifest.json", "verify-manifest.json"]);
+  assert.equal(d.files.find((f) => f.file === "asset-manifest.json")?.recipe, null);
   assert.equal(d.files.find((f) => f.file === "console.json")?.recipe, "console");
 });
 
 test("captureRecipesForFiles: a manifest with nothing producible selects no recipe", () => {
-  const d = captureRecipesForFiles(["feel.json", "verify-manifest.json"]);
+  const d = captureRecipesForFiles(["asset-manifest.json", "verify-manifest.json"]);
   assert.deepEqual(d.recipes, []);
-  assert.deepEqual(d.unproduced, ["feel.json", "verify-manifest.json"]);
+  assert.deepEqual(d.unproduced, ["asset-manifest.json", "verify-manifest.json"]);
+});
+
+test("captureRecipesForFiles: feel.json selects the feel recipe (evidence arc stage 2)", () => {
+  const d = captureRecipesForFiles(["feel.json", "console.json"]);
+  assert.deepEqual(d.recipes, ["feel"]);
+  assert.deepEqual(d.unproduced, []);
+  // The feel session holds play mode for the whole run, so its own console snapshot
+  // covers it: the console-only recipe must NOT also be selected.
+  assert.equal(d.files.find((f) => f.file === "console.json")?.recipe, "feel");
+});
+
+test("captureRecipesForFiles: a slice needing framing AND feel runs both, in run order", () => {
+  const d = captureRecipesForFiles(["screen-rects.json", "feel.json", "console.json"]);
+  assert.deepEqual(d.recipes, ["framing", "feel"]);
+  assert.deepEqual(d.unproduced, []);
 });
 
 test("recipeOutputs: every recipe writes console.json on its way past", () => {
   assert.ok(recipeOutputs("framing").includes("console.json"));
   assert.ok(recipeOutputs("tiles").includes("console.json"));
+  assert.ok(recipeOutputs("feel").includes("console.json"));
+  assert.ok(recipeOutputs("feel").includes("feel.json"));
   assert.deepEqual(recipeOutputs("console"), ["console.json"]);
 });
 
@@ -154,6 +171,15 @@ const SLICES = {
       state: "built",
     },
     {
+      id: "manifest-only",
+      title: "Asset manifest",
+      dependsOn: [],
+      skill: "unity-2d-game",
+      feelIntent: "nothing driveable",
+      acceptance: { gates: ["manifest"] },
+      state: "pending",
+    },
+    {
       id: "feel-only",
       title: "Feel",
       dependsOn: [],
@@ -212,6 +238,17 @@ function recordingDeps(options: { writeFiles?: boolean } = {}): RecordedDeps {
         await writeJson(consolePath, { logs: [] });
       }
       return { screenRectsPath, consolePath, pixelPerfectCaptured: true, objectCount: 1, logCount: 3 };
+    },
+    captureFeel: async (a) => {
+      calls.push("feel");
+      runIds.push(a.runId);
+      const feelPath = path.join(a.outDir, "feel.json");
+      const consolePath = path.join(a.outDir, "console.json");
+      if (writeFiles) {
+        await writeJson(feelPath, { runSpeed: 7 });
+        await writeJson(consolePath, { logs: [] });
+      }
+      return { feelPath, consolePath, measured: ["runSpeed"], omitted: [], gaps: [], logCount: 0 };
     },
     captureTiles: async (a) => {
       calls.push("tiles");
@@ -279,6 +316,9 @@ test("runCapture: tile capture requires both expected gate files to be provenanc
     captureFraming: async () => {
       throw new Error("should not be called");
     },
+    captureFeel: async () => {
+      throw new Error("should not be called");
+    },
     captureTiles: async (a) => {
       await writeJson(path.join(a.outDir, "platform-tiles.json"), { platforms: [] });
       return {
@@ -333,6 +373,10 @@ function projectRecordingDeps(): { deps: CaptureDeps; seen: Record<string, unkno
       seen.console = a.project;
       return base.deps.captureConsole(a);
     },
+    captureFeel: async (a) => {
+      seen.feel = a.project;
+      return base.deps.captureFeel(a);
+    },
   };
   return { deps, seen };
 }
@@ -360,7 +404,7 @@ test("runCapture: unknown slice is refused (exit 2), no capture invoked", async 
 test("runCapture: a slice whose manifest no recipe can produce is refused (exit 2)", async () => {
   const root = await scaffold();
   const { deps, calls } = recordingDeps();
-  const code = await runCapture(baseArgs(root, "feel-only"), deps);
+  const code = await runCapture(baseArgs(root, "manifest-only"), deps);
   assert.equal(code, 2);
   assert.deepEqual(calls, []);
   await fs.rm(root, { recursive: true, force: true });
@@ -387,6 +431,9 @@ test("runCapture: a missing-GroundTiling bridge error surfaces as exit 1 (not a 
   const root = await scaffold();
   const deps: CaptureDeps = {
     captureFraming: async () => {
+      throw new Error("should not be called");
+    },
+    captureFeel: async () => {
       throw new Error("should not be called");
     },
     captureTiles: async () => {
@@ -506,21 +553,37 @@ test("runCapture: a producer that reports success but lands NOTHING is exit 1, a
   await fs.rm(root, { recursive: true, force: true });
 });
 
-test("runCapture: agent-assembly-required entries are named and exit stays 0 (the L34 player-feel shape)", async () => {
-  // The ledger case: `capture --slice player-feel` wrote console.json, exited 0,
-  // and said nothing about feel.json. It still exits 0 (nothing was asked to
-  // produce feel.json) but the gap is now named, in the report and on stderr.
+test("runCapture: the L34 player-feel shape is now PRODUCED (stage 2: the feel recipe writes feel.json)", async () => {
+  // The ledger case: `capture --slice player-feel` wrote console.json, exited 0, and
+  // said nothing about feel.json, which the agent then hand-authored (L45). The feel
+  // recipe now produces it, so the slice's whole manifest comes from the CLI and the
+  // agent-assembly list is empty.
   const root = await scaffold();
   const { deps, calls } = recordingDeps();
-  const { code, errors } = await runCapturing(baseArgs(root, "player-feel"), deps);
+  const { code } = await runCapturing(baseArgs(root, "player-feel"), deps);
   assert.equal(code, 0);
-  assert.deepEqual(calls, ["console"]);
+  assert.deepEqual(calls, ["feel"]);
   const report = await readReport(root, "player-feel");
-  assert.deepEqual(report.agentAssemblyRequired, ["player-feel/feel.json"]);
-  assert.deepEqual(report.produced, ["player-feel/console.json"]);
+  assert.deepEqual(report.agentAssemblyRequired, []);
+  assert.deepEqual(report.produced, ["player-feel/feel.json", "player-feel/console.json"]);
   assert.deepEqual(report.producerFailed, []);
+  await fs.rm(root, { recursive: true, force: true });
+});
+
+test("runCapture: agent-assembly-required entries are still named when a recipe covers only part of the manifest", async () => {
+  // `feel-only` owes verify-manifest.json AND feel.json. The feel recipe produces one
+  // of them; the other is named on stderr and in the report, and the exit stays 0
+  // because nothing was asked to write it.
+  const root = await scaffold();
+  const { deps, calls } = recordingDeps();
+  const { code, errors } = await runCapturing(baseArgs(root, "feel-only"), deps);
+  assert.equal(code, 0);
+  assert.deepEqual(calls, ["feel"]);
+  const report = await readReport(root, "feel-only");
+  assert.deepEqual(report.agentAssemblyRequired, ["feel-only/verify-manifest.json"]);
+  assert.ok((report.produced as string[]).includes("feel-only/feel.json"));
   assert.ok(
-    errors.some((line) => /agent-assembly required/.test(line) && /player-feel\/feel\.json/.test(line)),
+    errors.some((line) => /agent-assembly required/.test(line) && /feel-only\/verify-manifest\.json/.test(line)),
     errors.join("\n"),
   );
   await fs.rm(root, { recursive: true, force: true });

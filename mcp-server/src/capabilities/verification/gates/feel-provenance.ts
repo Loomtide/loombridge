@@ -94,6 +94,43 @@ function includesAllKeys(actualKeys: unknown, requiredKeys: unknown): boolean {
   return required.every((key) => actual.has(key.toLowerCase()));
 }
 
+/**
+ * STAGE 2 (ledger L38/L75, the seam that made the three probe-owned metrics
+ * uncertifiable by any honest route).
+ *
+ * `SOURCE_METRIC_OWNERSHIP` gave `runtime.probe` SOLE ownership of coyoteTime and
+ * jumpBuffer, and `validMeasurementSource` demands three fields: captureFps and
+ * both timestep numbers: that `runtime.probe` does not echo. The only way to a
+ * green was therefore for the writer to TYPE them, which the door-one run did and
+ * disclosed in a `seams[]` block. The gate was structurally requiring a fabrication.
+ *
+ * The producer's sweeps run on `runtime.capture_input_motion`, which echoes both
+ * timestep fields and the sample counts, so the fields come from the RUN. This
+ * ownership is strictly narrower than the probe's: the source must ALSO declare the
+ * bisection derivation and retain its trials, which `feel-rederive` then re-runs.
+ * A capture_input_motion source that just claims coyoteTime gains nothing.
+ */
+function validSweepSource(source: FeelMeasurementSource | undefined, metric: string): boolean {
+  if (!source) return false;
+  if (source.derivation !== "input-bisection") return false;
+  // The sweep certifies the metric it actually swept, not every threshold metric:
+  // one sweep drives one stimulus, and a source that lists only coyoteTime has no
+  // jump-buffer trials in it.
+  if (!source.measuredMetrics?.includes(metric)) return false;
+  return Array.isArray(source.trials) && source.trials.length > 0;
+}
+
+/**
+ * The whole-window dash (ledger L42/L91): `moveX` pinned to 0 for the window, so
+ * the whole-window displacement IS the dash and no phase boundary can leak a tick.
+ * Requires the samples it was derived from, which `feel-rederive` re-runs.
+ */
+function validWindowDeltaDashSource(source: FeelMeasurementSource | undefined): boolean {
+  if (!source) return false;
+  if (source.derivation !== "window-delta") return false;
+  return Array.isArray(source.samples) && source.samples.length >= 2;
+}
+
 function validPhaseDeltaDashSource(source: FeelMeasurementSource | undefined): boolean {
   if (!source) return false;
   if (!validMeasurementSource(source)) return false;
@@ -148,6 +185,16 @@ export function validMeasurementSource(source: FeelMeasurementSource | undefined
 
 export function validMeasurementSourceForMetric(source: FeelMeasurementSource | undefined, metric: string): boolean {
   if (!validMeasurementSource(source)) return false;
+  // Stage 2: the sweep route. Narrower than the probe's blanket ownership: the
+  // source must declare the bisection derivation AND retain its trials (which
+  // feel-rederive re-runs), and its provenance fields are echoes rather than
+  // literals, which is the whole point (L38/L75).
+  if ((metric === "coyoteTime" || metric === "jumpBuffer") && source?.source === "runtime.capture_input_motion") {
+    return validSweepSource(source, metric);
+  }
+  if (metric === "dashDistance" && source?.derivation === "window-delta") {
+    return validWindowDeltaDashSource(source);
+  }
   if (metric === "dashDistance" && source?.source === "runtime.capture_input_motion") {
     return validPhaseDeltaDashSource(source);
   }

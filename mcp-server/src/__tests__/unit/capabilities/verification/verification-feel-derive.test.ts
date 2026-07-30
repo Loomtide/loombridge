@@ -888,7 +888,13 @@ test("feel-rederive: `input-bisection` cannot be declared over a trajectory-deri
       ],
     },
   };
-  assert.equal(evaluateFeelRederive(legit, ACCEPTANCE).verdict, "not_applicable");
+  // STAGE 2 changed what "legit" means here. A bisection source that reports a value
+  // and retains NO trials used to be `not_applicable` (nothing re-derived it); it is
+  // now REFUSED, because the sweep binding re-derives the window from the trials in
+  // the same file and an absent binding is a refusal (ledger L76/L77).
+  const withoutTrials = evaluateFeelRederive(legit, ACCEPTANCE);
+  assert.equal(withoutTrials.verdict, "fail");
+  assert.match(withoutTrials.checks.find((c) => c.id === "feel-rederive.coyoteTime")!.detail, /retains NO trials/);
 
   const laundered: FeelMeasurements = {
     jumpApex: 9.0,

@@ -97,9 +97,17 @@ export interface FeelMeasurementSource {
    * `"input-bisection"` is the explicit declaration for the coyote/jumpBuffer
    * threshold sweep: a real derivation that is NOT a trajectory re-derivation.
    * It exists so a producer can declare "this value came from a bisection" out
-   * loud instead of leaving the marker absent, which is the legacy escape.
+   * loud instead of leaving the marker absent, which is the legacy escape. Stage 2
+   * gives it teeth: a source declaring it must carry `trials`, and the reported
+   * window is re-derived from them (`deriveSweepMetric`): the sweep binding.
+   *
+   * `"window-delta"` is the dash derivation the ledger's own technique produced
+   * (L42/L91): the phase-delta dash recipe is off by one tick BY CONSTRUCTION
+   * (one dash tick always lands in the next phase), so the honest recipe pins the
+   * horizontal drive to 0 for the whole window, making the whole-window
+   * displacement the dash distance with no phase boundary involved.
    */
-  derivation?: "trajectory" | "phase-delta" | "input-bisection";
+  derivation?: "trajectory" | "phase-delta" | "input-bisection" | "window-delta";
   /**
    * PRODUCER MARKER (stage 1, ledger L45/L48/L75).
    *
@@ -151,6 +159,31 @@ export interface FeelMeasurementSource {
    * never a fabricated 0. Absent for non-latency captures.
    */
   inputOnsetMs?: number;
+  /**
+   * H8. `captureFps` is an INPUT to the capture ops and is never echoed back, so a
+   * file recording it alone says only what the writer asked for. A produced source
+   * records the pair: `requestedCaptureFps` (what was asked) and
+   * `effectiveCaptureFps` (re-derived from the echoed sampleCount/durationMs). The
+   * physics-timestep gate re-derives the effective value itself and refuses a
+   * recorded one that does not match, so writing a flattering number gains nothing.
+   */
+  requestedCaptureFps?: number;
+  effectiveCaptureFps?: number;
+  /**
+   * The RETAINED raw echo of every threshold-sweep trial (required when
+   * `derivation === "input-bisection"`). Ledger L77: the door-one jumpBuffer trial
+   * table was a literal array retyped from console output, and three of its six
+   * rows had no raw file on disk at all. The gate re-derives the reported window
+   * from these, so the headline is bound to the trials in the same file.
+   */
+  trials?: unknown[];
+  /** What the sweep derivation read out of `trials` (report only; never its input). */
+  observations?: unknown[];
+  /** The tick-indexing convention the sweep used (`BRIDGE_SAMPLE_TICK_OFFSET`). */
+  tickOffset?: number;
+  /** Largest still-registering offset in ticks, and the first failing one. */
+  boundaryTicks?: number;
+  firstFailedTicks?: number;
 }
 
 /** The input stimulus that produced a stimulus-sensitive feel metric (F5). */

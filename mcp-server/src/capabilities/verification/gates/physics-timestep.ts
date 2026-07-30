@@ -189,6 +189,64 @@ function effectiveCadenceCheck(sources: FeelMeasurementSource[]): GateCheck {
   };
 }
 
+/**
+ * H8: the request/reality PAIR a produced source records.
+ *
+ * `captureFps` is an INPUT to the capture ops; none of them echo it back. A file
+ * carrying it alone therefore states an intention, and the door-one run shipped an
+ * ~11Hz capture under a file that said 120 (L45/L47). A producer records both
+ * `requestedCaptureFps` (what it asked for) and `effectiveCaptureFps` (what the run
+ * achieved): but a recorded derivation is only worth something if someone
+ * re-derives it, so this check refuses when the recorded effective value disagrees
+ * with the gate's own re-derivation, or when the recorded request disagrees with the
+ * `captureFps` every other check grades. Half a pair is also a refusal: a source
+ * that records the flattering member and drops the other is exactly the shape this
+ * exists to catch.
+ */
+function recordedCadencePairCheck(sources: FeelMeasurementSource[]): GateCheck {
+  const problems: string[] = [];
+  const rows: string[] = [];
+  for (const [index, source] of sources.entries()) {
+    const label = `${index}:${source.source ?? "(missing source)"}`;
+    const requested = source.requestedCaptureFps;
+    const effective = source.effectiveCaptureFps;
+    rows.push(`${label} requested=${requested ?? "(absent)"}, effective=${effective ?? "(absent)"}`);
+    if (requested === undefined || !Number.isFinite(requested)) {
+      problems.push(`${label} records effectiveCaptureFps but no requestedCaptureFps`);
+    } else if (typeof source.captureFps === "number" && !near(requested, source.captureFps)) {
+      problems.push(`${label} records requestedCaptureFps ${requested} while captureFps says ${source.captureFps}`);
+    }
+    if (effective === undefined || !Number.isFinite(effective)) {
+      problems.push(`${label} records requestedCaptureFps but no effectiveCaptureFps`);
+      continue;
+    }
+    const cadence = effectiveCadenceFor(source);
+    if (cadence.refusal !== null || cadence.effectiveFps === null) {
+      problems.push(`${label} records an effectiveCaptureFps that cannot be re-derived (${cadence.refusal ?? "no cadence"})`);
+      continue;
+    }
+    // One sample of slack: N samples span N-1 intervals, so the two honest endpoint
+    // conventions differ by exactly that and nothing larger.
+    const spread = Math.abs(effective - cadence.effectiveFps);
+    const oneSample = cadence.windowMs === null ? 0 : 1000 / cadence.windowMs;
+    if (spread > oneSample + 1e-6) {
+      problems.push(
+        `${label} records effectiveCaptureFps ${effective.toFixed(2)} but its own echoes re-derive ${cadence.effectiveFps.toFixed(2)}`,
+      );
+    }
+  }
+  return {
+    id: "physics-timestep.recordedCadencePair",
+    expected: "requestedCaptureFps === captureFps, and effectiveCaptureFps === the cadence re-derived from the source's own echoes",
+    actual: rows.join("; ") || "(none)",
+    status: problems.length === 0 ? "pass" : "fail",
+    detail:
+      problems.length === 0
+        ? "Every source recording a request/reality cadence pair agrees with the re-derivation from its own echoes."
+        : `${problems.length} problem(s): ${problems.join("; ")}. A recorded derivation nobody re-derives is a self-declared number (ledger L45/L47, review H8).`,
+  };
+}
+
 export function evaluatePhysicsTimestep(
   input: FeelMeasurements,
   acceptance: AcceptanceContract,
@@ -282,6 +340,13 @@ export function evaluatePhysicsTimestep(
 
   // L47: the declared cadence, re-derived from the run's own echoes.
   checks.push(effectiveCadenceCheck(sources));
+
+  // H8: a produced source records the request/reality PAIR. Grade the recorded pair
+  // against this gate's own re-derivation so the second number cannot be flattering.
+  const recordedPair = sources.filter(
+    (source) => source.requestedCaptureFps !== undefined || source.effectiveCaptureFps !== undefined,
+  );
+  if (recordedPair.length > 0) checks.push(recordedCadencePairCheck(recordedPair));
 
   return makeGateReport(GATE_NAME, checks);
 }

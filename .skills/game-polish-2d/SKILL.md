@@ -39,8 +39,13 @@ tune toward the profile's bands.
    fallbacks.
 3. Set project `Time.fixedDeltaTime` to the contract value, usually `0.0166667`, before measuring.
 4. Assign a frictionless `PhysicsMaterial2D` to the player body/collider.
-5. Measure with `FeelHarness` and `runtime.probe`; final `feel.json` must include
-   `provenance.sources[]`.
+5. Measure with `loombridge capture --slice player-feel`: the CLI's feel recipe drives the
+   canonical measurements and WRITES `feel.json` from the op echoes. Declare the controller
+   seam once in `ACCEPTANCE.json` under `harness.feelSeam` (player locator, controller
+   component, the input-reader component to disable, the drive field names, the keys); the
+   recipe refuses and prints the exact JSON when it is absent. Do NOT hand-author
+   `feel.json`: the gates re-derive its headline numbers from the raw evidence it carries,
+   so a typed value is refused, not graded.
 6. Tune with the reference configs:
    - `references/tuning-run-speed.md`
    - `references/tuning-jump-apex.md`
