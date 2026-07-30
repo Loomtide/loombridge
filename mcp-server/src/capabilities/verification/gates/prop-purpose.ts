@@ -33,7 +33,9 @@
  *     grounds?: [{ name, minX, maxX, topY }],   // same shape the placement gate uses
  *   }
  *
- * ACCEPTANCE: the optional `props` section —
+ * ACCEPTANCE: the optional `props` section. A contract that declares ANY of it
+ * must also declare `props.purposes` (refused at validation time, not skipped
+ * here: ledger L101).
  *   • `intentionalDecor`     — prop names that pass PURPOSE even with no collider/script.
  *   • `intentionalFloating`  — prop names exempt from the GROUNDING check (a deliberate
  *     floating collectible / cloud). May also reuse `intentionalDecor`.
@@ -249,9 +251,15 @@ export function evaluatePropPurpose(
     }
 
     // ---- SEMANTIC PURPOSE ----
-    // Backward-compatible: this stricter rule only runs when the contract opts in
-    // with props.purposes OR the capture itself declares a purpose.
-    if (purposeSpecs.length > 0 || prop.purpose) {
+    // UNCONDITIONAL (ledger L101). This used to read
+    // `if (purposeSpecs.length > 0 || prop.purpose)`, which is the exact
+    // falsy-skip CLAUDE.md forbids sitting on a gate's own opt-in seam: a
+    // contract with no `props.purposes` plus a capture that omits `purpose`
+    // disabled the whole semantic tier in silence. The rule now always runs; the
+    // MIGRATION edge (a contract that never declared purposes) is answered at
+    // CONTRACT VALIDATION, which refuses such a contract by name
+    // (`props.purposes`) instead of letting the gate quietly grade nothing.
+    {
       const semanticId = `prop-semantic.${prop.name}`;
       if (!declaredPurpose) {
         checks.push({
@@ -259,7 +267,7 @@ export function evaluatePropPurpose(
           expected: "declared semantic gameplay purpose",
           actual: "none",
           status: hasCollider ? "fail" : "warn",
-          detail: `Prop "${prop.name}" has no semantic purpose. A collider alone is not enough; declare route_platform/blocker/hazard/launcher/collectible/goal/cover/enemy/decor or remove it.`,
+          detail: `Prop "${prop.name}" has no semantic purpose. A collider alone is not enough; declare route_platform/blocker/hazard/launcher/collectible/goal/cover/enemy/decor (in props.purposes, or as the capture's own purpose field) or remove it.`,
         });
       } else if (declaredPurpose === "decor") {
         checks.push({

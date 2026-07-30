@@ -64,6 +64,33 @@ test("EVERY registered genre's templates exist AND parse through their own valid
   }
 });
 
+test("every pack slice that grades feel.json also runs feel-rederive (L48)", () => {
+  // The ledger case: platformer-2d's `player-feel` listed feel, feel-provenance,
+  // physics-timestep and console-clean, so a 103KB evidence file full of real
+  // trajectory samples was graded on its four HEADLINE numbers and the one gate
+  // that binds those numbers to the samples never ran. A slice that grades the
+  // headline without the binding is exactly the moat hole, so pin the pairing for
+  // every pack, not just the one that got caught.
+  //
+  // LITMUS: remove "feel-rederive" from platformer-2d/slices.json and this fails.
+  const bindingGates = ["feel", "feel-provenance"];
+  let checked = 0;
+  for (const id of knownGenreIds()) {
+    const pack = resolveGenrePack(id)!;
+    const plan = assertValidSlicePlan(JSON.parse(readFileSync(pack.sliceTemplatePath, "utf-8")));
+    for (const slice of plan.slices) {
+      const gates = slice.acceptance.gates;
+      if (!bindingGates.some((g) => gates.includes(g))) continue;
+      checked += 1;
+      assert.ok(
+        gates.includes("feel-rederive"),
+        `${id}/${slice.id} grades feel evidence (${gates.join(", ")}) without feel-rederive: the reported numbers are never bound to the samples they claim to come from`,
+      );
+    }
+  }
+  assert.ok(checked > 0, "expected at least one feel-grading slice across the registered packs");
+});
+
 test("3d-topdown-arena is registered — the pack shipped complete but unreachable", () => {
   // It shipped with a validating acceptance contract (whose own note calls itself a seed for
   // `plan --genre 3d-topdown-arena`) and an 11-slice DAG, but no registration, so the front door could

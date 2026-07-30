@@ -5,7 +5,8 @@ import path from "node:path";
 import test from "node:test";
 
 import {
-  captureKindForSlice,
+  captureRecipesForFiles,
+  recipeOutputs,
   runCapture,
   type CaptureArgs,
   type CaptureDeps,
@@ -15,34 +16,61 @@ import {
   stampExpectedTileCaptures,
   stampProvenance,
 } from "../../../../capabilities/verification/capture-tiles.js";
+import { CAPTURE_REPORT_FILE } from "../../../../domain/capture-manifest.js";
+import { loombridgePaths, writeState } from "../../../../domain/state.js";
+import { REPO_ROOT } from "../../../_support/paths.js";
 
-// ── captureKindForSlice (pure dispatch from gates) ───────────────────────────
+// ── captureRecipesForFiles (dispatch on the manifest FILE LIST, not gate names) ──
+//
+// The single source of truth is `gateInputFiles`, the map `build` mints a slice's
+// captureManifest from, so dispatch and the verifier's demand cannot drift.
 
-test("captureKindForSlice: a framing gate ⇒ framing", () => {
-  assert.equal(captureKindForSlice(["framing", "console-clean"]), "framing");
+test("captureRecipesForFiles: screen-rects.json selects the framing recipe", () => {
+  const d = captureRecipesForFiles(["screen-rects.json", "console.json"]);
+  assert.deepEqual(d.recipes, ["framing"]);
+  assert.deepEqual(d.unproduced, []);
 });
 
-test("captureKindForSlice: a platform-tiles/tile-render gate ⇒ tiles", () => {
-  assert.equal(captureKindForSlice(["platform-tiles", "tile-render", "placement", "console-clean"]), "tiles");
-  assert.equal(captureKindForSlice(["tile-render"]), "tiles");
+test("captureRecipesForFiles: the tile capture files select the tiles recipe", () => {
+  const d = captureRecipesForFiles(["platform-tiles.json", "tile-render.json", "console.json"]);
+  assert.deepEqual(d.recipes, ["tiles"]);
+  assert.deepEqual(d.unproduced, []);
 });
 
-test("captureKindForSlice: tiles wins even if framing is also present", () => {
-  assert.equal(captureKindForSlice(["framing", "platform-tiles"]), "tiles");
+test("captureRecipesForFiles: console.json alone selects the console-only recipe", () => {
+  const d = captureRecipesForFiles(["console.json"]);
+  assert.deepEqual(d.recipes, ["console"]);
 });
 
-test("captureKindForSlice: a console-clean gate (no framing/tiles) ⇒ console", () => {
-  assert.equal(captureKindForSlice(["coverage", "parallax-motion", "render-frame", "visual-artifacts", "console-clean"]), "console");
-  assert.equal(captureKindForSlice(["console-clean"]), "console");
+test("captureRecipesForFiles: a slice needing BOTH gets BOTH recipes (the old single-kind dispatch lost one)", () => {
+  // LITMUS for the regression this replaces: `captureKindForSlice` returned one
+  // kind by positional precedence, so a slice declaring framing AND tiling
+  // silently captured tiles only and screen-rects.json was never written.
+  const d = captureRecipesForFiles(["screen-rects.json", "platform-tiles.json", "tile-render.json", "console.json"]);
+  assert.deepEqual(d.recipes, ["tiles", "framing"]);
+  assert.deepEqual(d.unproduced, []);
+  assert.equal(d.files.find((f) => f.file === "screen-rects.json")?.recipe, "framing");
+  assert.equal(d.files.find((f) => f.file === "platform-tiles.json")?.recipe, "tiles");
 });
 
-test("captureKindForSlice: framing/tiles win over console-clean", () => {
-  assert.equal(captureKindForSlice(["framing", "console-clean"]), "framing");
-  assert.equal(captureKindForSlice(["platform-tiles", "console-clean"]), "tiles");
+test("captureRecipesForFiles: entries no recipe writes are named as unproduced (never silently dropped)", () => {
+  const d = captureRecipesForFiles(["feel.json", "verify-manifest.json", "console.json"]);
+  assert.deepEqual(d.recipes, ["console"]);
+  assert.deepEqual(d.unproduced, ["feel.json", "verify-manifest.json"]);
+  assert.equal(d.files.find((f) => f.file === "feel.json")?.recipe, null);
+  assert.equal(d.files.find((f) => f.file === "console.json")?.recipe, "console");
 });
 
-test("captureKindForSlice: no recognized gate ⇒ null (caller refuses)", () => {
-  assert.equal(captureKindForSlice(["manifest", "feel"]), null);
+test("captureRecipesForFiles: a manifest with nothing producible selects no recipe", () => {
+  const d = captureRecipesForFiles(["feel.json", "verify-manifest.json"]);
+  assert.deepEqual(d.recipes, []);
+  assert.deepEqual(d.unproduced, ["feel.json", "verify-manifest.json"]);
+});
+
+test("recipeOutputs: every recipe writes console.json on its way past", () => {
+  assert.ok(recipeOutputs("framing").includes("console.json"));
+  assert.ok(recipeOutputs("tiles").includes("console.json"));
+  assert.deepEqual(recipeOutputs("console"), ["console.json"]);
 });
 
 // ── stampProvenance (we never fabricate capture content) ─────────────────────
@@ -117,6 +145,15 @@ const SLICES = {
       state: "built",
     },
     {
+      id: "player-feel",
+      title: "Player feel",
+      dependsOn: [],
+      skill: "game-polish-2d",
+      feelIntent: "numbers",
+      acceptance: { gates: ["feel", "feel-provenance", "feel-rederive", "physics-timestep", "console-clean"] },
+      state: "built",
+    },
+    {
       id: "feel-only",
       title: "Feel",
       dependsOn: [],
@@ -128,34 +165,103 @@ const SLICES = {
   ],
 };
 
-async function scaffold(): Promise<string> {
+/** A project with SLICES.json AND a minted run (the door `capture` refuses without). */
+async function scaffold(options: { runId?: string | null } = {}): Promise<string> {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "loombridge-capture-"));
   await fs.mkdir(path.join(root, ".loombridge"), { recursive: true });
   await fs.writeFile(path.join(root, ".loombridge", "SLICES.json"), JSON.stringify(SLICES, null, 2), "utf-8");
+  const runId = options.runId === undefined ? "run-test-0001" : options.runId;
+  await writeState(loombridgePaths(root), {
+    genre: "platformer-2d",
+    engine: "unity",
+    phase: "built-unverified",
+    ...(runId ? { currentBuild: { runId, startedAt: "2026-07-01T00:00:00.000Z" } } : {}),
+    updatedAt: "2026-07-01T00:00:00.000Z",
+  });
   return root;
 }
 
-function recordingDeps(): { deps: CaptureDeps; calls: string[]; throwTiles?: () => void } {
+async function writeJson(file: string, body: unknown): Promise<void> {
+  await fs.mkdir(path.dirname(file), { recursive: true });
+  await fs.writeFile(file, JSON.stringify(body, null, 2), "utf-8");
+}
+
+interface RecordedDeps {
+  deps: CaptureDeps;
+  calls: string[];
+  runIds: string[];
+}
+
+/**
+ * Fakes that behave like the real producers: they WRITE the files they claim.
+ * A fake that only returned paths would make the manifest diff vacuous, so every
+ * positive control here really lands its evidence on disk.
+ */
+function recordingDeps(options: { writeFiles?: boolean } = {}): RecordedDeps {
+  const writeFiles = options.writeFiles !== false;
   const calls: string[] = [];
+  const runIds: string[] = [];
   const deps: CaptureDeps = {
-    captureFraming: async () => {
+    captureFraming: async (a) => {
       calls.push("framing");
-      return { screenRectsPath: "sr.json", consolePath: "c.json", pixelPerfectCaptured: true, objectCount: 1, logCount: 3 };
+      runIds.push(a.runId);
+      const screenRectsPath = path.join(a.outDir, "screen-rects.json");
+      const consolePath = path.join(a.outDir, "console.json");
+      if (writeFiles) {
+        await writeJson(screenRectsPath, { objects: [] });
+        await writeJson(consolePath, { logs: [] });
+      }
+      return { screenRectsPath, consolePath, pixelPerfectCaptured: true, objectCount: 1, logCount: 3 };
     },
-    captureTiles: async () => {
+    captureTiles: async (a) => {
       calls.push("tiles");
-      return { outDir: "out", wrote: ["platform-tiles.json", "tile-render.json"], provenancedFiles: ["platform-tiles.json", "tile-render.json"], consolePath: "c.json", logCount: 3, playMode: false };
+      runIds.push(a.runId);
+      const consolePath = path.join(a.outDir, "console.json");
+      if (writeFiles) {
+        await writeJson(path.join(a.outDir, "platform-tiles.json"), { platforms: [] });
+        await writeJson(path.join(a.outDir, "tile-render.json"), { platforms: [] });
+        await writeJson(consolePath, { logs: [] });
+      }
+      return {
+        outDir: a.outDir,
+        wrote: ["platform-tiles.json", "tile-render.json"],
+        provenancedFiles: ["platform-tiles.json", "tile-render.json"],
+        consolePath,
+        logCount: 3,
+        playMode: false,
+      };
     },
-    captureConsole: async () => {
+    captureConsole: async (a) => {
       calls.push("console");
-      return { consolePath: "c.json", logCount: 0, startupCount: 0, steadyCount: 0 };
+      runIds.push(a.runId);
+      const consolePath = path.join(a.outDir, "console.json");
+      if (writeFiles) await writeJson(consolePath, { logs: [] });
+      return { consolePath, logCount: 0, startupCount: 0, steadyCount: 0 };
     },
   };
-  return { deps, calls };
+  return { deps, calls, runIds };
 }
 
 function baseArgs(root: string, slice: string): CaptureArgs {
   return { root, slice, locators: ["/Player"] };
+}
+
+async function readReport(root: string, slice: string): Promise<Record<string, unknown>> {
+  const file = path.join(root, ".loombridge", "verify", slice, CAPTURE_REPORT_FILE);
+  return JSON.parse(await fs.readFile(file, "utf-8")) as Record<string, unknown>;
+}
+
+/** Run `capture` capturing stderr, so the named-refusal assertions see real output. */
+async function runCapturing(args: CaptureArgs, deps: CaptureDeps): Promise<{ code: number; errors: string[] }> {
+  const errors: string[] = [];
+  const original = console.error;
+  console.error = (...parts: unknown[]) => void errors.push(parts.map((p) => String(p)).join(" "));
+  try {
+    const code = await runCapture(args, deps);
+    return { code, errors };
+  } finally {
+    console.error = original;
+  }
 }
 
 test("runCapture: ground-tiling slice dispatches to the tiles capture (not framing)", async () => {
@@ -173,12 +279,13 @@ test("runCapture: tile capture requires both expected gate files to be provenanc
     captureFraming: async () => {
       throw new Error("should not be called");
     },
-    captureTiles: async () => {
+    captureTiles: async (a) => {
+      await writeJson(path.join(a.outDir, "platform-tiles.json"), { platforms: [] });
       return {
-        outDir: "out",
+        outDir: a.outDir,
         wrote: ["platform-tiles.json"],
         provenancedFiles: ["platform-tiles.json"],
-        consolePath: "c.json",
+        consolePath: path.join(a.outDir, "console.json"),
         logCount: 0,
         playMode: false,
       };
@@ -212,18 +319,19 @@ test("runCapture: framing slice dispatches to the framing capture (not tiles)", 
 
 function projectRecordingDeps(): { deps: CaptureDeps; seen: Record<string, unknown> } {
   const seen: Record<string, unknown> = {};
+  const base = recordingDeps();
   const deps: CaptureDeps = {
     captureFraming: async (a) => {
       seen.framing = a.project;
-      return { screenRectsPath: "sr.json", consolePath: "c.json", pixelPerfectCaptured: true, objectCount: 1, logCount: 3 };
+      return base.deps.captureFraming(a);
     },
     captureTiles: async (a) => {
       seen.tiles = a.project;
-      return { outDir: "out", wrote: ["platform-tiles.json", "tile-render.json"], provenancedFiles: ["platform-tiles.json", "tile-render.json"], consolePath: "c.json", logCount: 3, playMode: false };
+      return base.deps.captureTiles(a);
     },
     captureConsole: async (a) => {
       seen.console = a.project;
-      return { consolePath: "c.json", logCount: 0, startupCount: 0, steadyCount: 0 };
+      return base.deps.captureConsole(a);
     },
   };
   return { deps, seen };
@@ -249,7 +357,7 @@ test("runCapture: unknown slice is refused (exit 2), no capture invoked", async 
   await fs.rm(root, { recursive: true, force: true });
 });
 
-test("runCapture: a slice with no capture-recipe gate is refused (exit 2)", async () => {
+test("runCapture: a slice whose manifest no recipe can produce is refused (exit 2)", async () => {
   const root = await scaffold();
   const { deps, calls } = recordingDeps();
   const code = await runCapture(baseArgs(root, "feel-only"), deps);
@@ -261,6 +369,13 @@ test("runCapture: a slice with no capture-recipe gate is refused (exit 2)", asyn
 test("runCapture: missing SLICES.json is refused (exit 2)", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "loombridge-capture-noplan-"));
   await fs.mkdir(path.join(root, ".loombridge"), { recursive: true });
+  await writeState(loombridgePaths(root), {
+    genre: "platformer-2d",
+    engine: "unity",
+    phase: "built-unverified",
+    currentBuild: { runId: "run-test-0001", startedAt: "2026-07-01T00:00:00.000Z" },
+    updatedAt: "2026-07-01T00:00:00.000Z",
+  });
   const { deps, calls } = recordingDeps();
   const code = await runCapture(baseArgs(root, "ground-tiling"), deps);
   assert.equal(code, 2);
@@ -284,6 +399,163 @@ test("runCapture: a missing-GroundTiling bridge error surfaces as exit 1 (not a 
     },
   };
   const code = await runCapture(baseArgs(root, "ground-tiling"), deps);
-  assert.equal(code, 1); // surfaced, not swallowed — and nothing was hand-authored
+  assert.equal(code, 1); // surfaced, not swallowed, and nothing was hand-authored
+  await fs.rm(root, { recursive: true, force: true });
+});
+
+// ── H11: the run binding is a DOOR, not an optional stamp ────────────────────
+
+test("runCapture: no currentBuild.runId REFUSES at the door (exit 2), naming `loombridge build`", async () => {
+  const root = await scaffold({ runId: null });
+  const { deps, calls } = recordingDeps();
+  const { code, errors } = await runCapturing(baseArgs(root, "ground-tiling"), deps);
+  assert.equal(code, 2);
+  assert.deepEqual(calls, [], "nothing may be captured before the run binding exists");
+  assert.ok(errors.some((line) => /REFUSED/.test(line) && /loombridge build/.test(line)), errors.join("\n"));
+  await fs.rm(root, { recursive: true, force: true });
+});
+
+test("runCapture: every producer receives the minted runId unconditionally", async () => {
+  const root = await scaffold();
+  const { deps, runIds } = recordingDeps();
+  assert.equal(await runCapture(baseArgs(root, "framing"), deps), 0);
+  assert.equal(await runCapture(baseArgs(root, "ground-tiling"), deps), 0);
+  assert.equal(await runCapture(baseArgs(root, "parallax"), deps), 0);
+  assert.deepEqual(runIds, ["run-test-0001", "run-test-0001", "run-test-0001"]);
+  await fs.rm(root, { recursive: true, force: true });
+});
+
+test("capture writers declare runId REQUIRED and stamp it with no conditional spread (H11)", async () => {
+  // The behavioural test above can only prove the runId that IS passed arrives.
+  // The property that matters is that the field cannot be OMITTED: an optional
+  // `runId?` plus a `...(args.runId ? { runId } : {})` spread is how an
+  // unbindable capture got written and looked normal. Both shapes are pinned
+  // here at the source level, where the type is the enforcement.
+  //
+  // LITMUS: change any of the three back to `runId?: string` and this fails.
+  const writers = [
+    "mcp-server/src/capabilities/verification/capture-console.ts",
+    "mcp-server/src/capabilities/verification/capture-framing.ts",
+    "mcp-server/src/capabilities/verification/capture-tiles.ts",
+  ];
+  for (const rel of writers) {
+    const source = await fs.readFile(path.join(REPO_ROOT, rel), "utf-8");
+    assert.match(source, /^\s*runId: string;$/m, `${rel} must declare runId as REQUIRED`);
+    assert.equal(/runId\?: string/.test(source), false, `${rel} must not make runId optional again`);
+    assert.equal(
+      /\.\.\.\(\s*args\.runId\s*\?/.test(source),
+      false,
+      `${rel} must stamp runId unconditionally, not through a conditional spread`,
+    );
+  }
+});
+
+// ── E3/M16: the manifest diff is loud, and the exit is in-band ───────────────
+
+test("runCapture: the last line carries exit=N in band", async () => {
+  const root = await scaffold();
+  const { deps } = recordingDeps();
+  const { code, errors } = await runCapturing(baseArgs(root, "framing"), deps);
+  assert.equal(code, 0);
+  assert.equal(errors[errors.length - 1], "[loombridge capture] exit=0");
+  await fs.rm(root, { recursive: true, force: true });
+});
+
+test("runCapture: a complete capture reports every manifest entry produced (positive control)", async () => {
+  const root = await scaffold();
+  const { deps } = recordingDeps();
+  const code = await runCapture(baseArgs(root, "ground-tiling"), deps);
+  assert.equal(code, 0);
+  const report = await readReport(root, "ground-tiling");
+  assert.deepEqual(report.manifest, [
+    "ground-tiling/placement.json",
+    "ground-tiling/platform-tiles.json",
+    "ground-tiling/tile-render.json",
+    "ground-tiling/console.json",
+  ]);
+  assert.deepEqual(report.producerFailed, []);
+  // `placement.json` has no CLI producer: named, not silently dropped, exit stays 0.
+  assert.deepEqual(report.agentAssemblyRequired, ["ground-tiling/placement.json"]);
+  assert.deepEqual(report.produced, [
+    "ground-tiling/platform-tiles.json",
+    "ground-tiling/tile-render.json",
+    "ground-tiling/console.json",
+  ]);
+  assert.equal(report.exit, 0);
+  assert.equal(report.runId, "run-test-0001");
+  await fs.rm(root, { recursive: true, force: true });
+});
+
+test("runCapture: a producer that reports success but lands NOTHING is exit 1, and the report names the entries", async () => {
+  // LITMUS: the same slice and the same deps as the positive control above, with
+  // only the file writes removed. The recipe "succeeds"; the disk disagrees.
+  const root = await scaffold();
+  const { deps } = recordingDeps({ writeFiles: false });
+  const { code, errors } = await runCapturing(baseArgs(root, "ground-tiling"), deps);
+  assert.equal(code, 1);
+  const report = await readReport(root, "ground-tiling");
+  assert.deepEqual(report.producerFailed, [
+    "ground-tiling/platform-tiles.json",
+    "ground-tiling/tile-render.json",
+    "ground-tiling/console.json",
+  ]);
+  assert.deepEqual(report.produced, []);
+  assert.equal(report.exit, 1);
+  assert.ok(errors.some((line) => /PRODUCER FAILED/.test(line)), errors.join("\n"));
+  assert.equal(errors[errors.length - 1], "[loombridge capture] exit=1");
+  await fs.rm(root, { recursive: true, force: true });
+});
+
+test("runCapture: agent-assembly-required entries are named and exit stays 0 (the L34 player-feel shape)", async () => {
+  // The ledger case: `capture --slice player-feel` wrote console.json, exited 0,
+  // and said nothing about feel.json. It still exits 0 (nothing was asked to
+  // produce feel.json) but the gap is now named, in the report and on stderr.
+  const root = await scaffold();
+  const { deps, calls } = recordingDeps();
+  const { code, errors } = await runCapturing(baseArgs(root, "player-feel"), deps);
+  assert.equal(code, 0);
+  assert.deepEqual(calls, ["console"]);
+  const report = await readReport(root, "player-feel");
+  assert.deepEqual(report.agentAssemblyRequired, ["player-feel/feel.json"]);
+  assert.deepEqual(report.produced, ["player-feel/console.json"]);
+  assert.deepEqual(report.producerFailed, []);
+  assert.ok(
+    errors.some((line) => /agent-assembly required/.test(line) && /player-feel\/feel\.json/.test(line)),
+    errors.join("\n"),
+  );
+  await fs.rm(root, { recursive: true, force: true });
+});
+
+test("runCapture: a minted manifest entry outside the slice's own verify dir is UNSAFE (exit 2)", async () => {
+  // A path-safe entry that escapes the slice scope is its own refusal class, so
+  // it can never be laundered through the "missing" list.
+  const root = await scaffold();
+  const plan = JSON.parse(JSON.stringify(SLICES)) as typeof SLICES;
+  const slice = plan.slices.find((s) => s.id === "parallax") as Record<string, unknown>;
+  slice.proof = { runId: "run-test-0001", captureManifest: ["other-slice/console.json"] };
+  await fs.writeFile(path.join(root, ".loombridge", "SLICES.json"), JSON.stringify(plan, null, 2), "utf-8");
+
+  const { deps } = recordingDeps();
+  const { code, errors } = await runCapturing(baseArgs(root, "parallax"), deps);
+  assert.equal(code, 2);
+  const report = await readReport(root, "parallax");
+  assert.deepEqual(report.unsafe, ["other-slice/console.json"]);
+  assert.deepEqual(report.producerFailed, []);
+  assert.ok(errors.some((line) => /unsafe captureManifest/.test(line)), errors.join("\n"));
+  await fs.rm(root, { recursive: true, force: true });
+});
+
+test("runCapture: the minted proof manifest wins over re-derivation, and the report says which", async () => {
+  const root = await scaffold();
+  const plan = JSON.parse(JSON.stringify(SLICES)) as typeof SLICES;
+  const slice = plan.slices.find((s) => s.id === "parallax") as Record<string, unknown>;
+  slice.proof = { runId: "run-test-0001", captureManifest: ["parallax/console.json"] };
+  await fs.writeFile(path.join(root, ".loombridge", "SLICES.json"), JSON.stringify(plan, null, 2), "utf-8");
+
+  const { deps } = recordingDeps();
+  assert.equal(await runCapture(baseArgs(root, "parallax"), deps), 0);
+  const report = await readReport(root, "parallax");
+  assert.equal(report.manifestSource, "slice.proof.captureManifest");
+  assert.deepEqual(report.manifest, ["parallax/console.json"]);
   await fs.rm(root, { recursive: true, force: true });
 });

@@ -15,8 +15,9 @@
  * measured-vs-target honoring the band → PASS/FAIL. Emits the proven feel-report
  * shape (metric, target, measured, band, result) in each check's fields/detail.
  *
- * Missing measurements (metric in acceptance but not measured) -> WARN
- * ("not measured"). Measured metrics with no acceptance target are skipped.
+ * Missing measurements (metric in acceptance but not measured) -> REFUSAL
+ * ("(not measured)" is a FAIL, not a warn: see `evaluateFeel`). Measured
+ * metrics with no acceptance target are skipped.
  */
 
 import type { AcceptanceContract, FeelSection, NumericTarget } from "../types.js";
@@ -68,6 +69,17 @@ export interface FeelTrajectorySample {
 export interface FeelMeasurementSource {
   source?: FeelMeasurementSourceKind | string;
   sampleCount?: number;
+  /**
+   * The measurement WINDOW the bridge echoed back, in milliseconds (the op's own
+   * `durationMs`). Together with `sampleCount` it makes the EFFECTIVE sampling
+   * cadence re-derivable, which is the whole point: `captureFps` alone is a
+   * self-declared number, and the ledger (L45/L47) records a capture that ran at
+   * roughly 11Hz while its file said 120. `physics-timestep` re-derives the
+   * effective cadence from this pair and refuses a divergence beyond one tick.
+   * Absent here, the window falls back to the `samples[].tMs` span; a source with
+   * neither carries no cadence evidence at all and is refused.
+   */
+  durationMs?: number;
   captureFps?: number;
   measuredAt?: string;
   projectFixedTimestepBeforeMeasurement?: number;
@@ -78,9 +90,30 @@ export interface FeelMeasurementSource {
    * `feel-rederive` gate: it MUST carry `samples`, and every re-derivable metric
    * it lists is re-computed from those samples and must match the reported value
    * (a tampered/param-read value can't survive). A source without this marker is
-   * legacy and `feel-rederive` treats it as not_applicable.
+   * legacy and `feel-rederive` treats it as not_applicable, EXCEPT on a source
+   * carrying the `producedBy` marker, where an absent derivation is a refusal
+   * (see `PRODUCER_MARKER`).
+   *
+   * `"input-bisection"` is the explicit declaration for the coyote/jumpBuffer
+   * threshold sweep: a real derivation that is NOT a trajectory re-derivation.
+   * It exists so a producer can declare "this value came from a bisection" out
+   * loud instead of leaving the marker absent, which is the legacy escape.
    */
-  derivation?: "trajectory" | "phase-delta";
+  derivation?: "trajectory" | "phase-delta" | "input-bisection";
+  /**
+   * PRODUCER MARKER (stage 1, ledger L45/L48/L75).
+   *
+   * A closed-enum, machine-checkable field a CLI capture recipe sets on every
+   * source it writes. It is deliberately NOT the `_provenance.writer` string:
+   * that is free text, a report LABEL, and a label cannot be a control.
+   *
+   * The marker only ever makes grading STRICTER: a source that carries it must
+   * declare a `derivation` and must satisfy that derivation's evidence rule, or
+   * `feel-rederive` refuses it. An agent that stamps it to look official gains
+   * nothing and loses the legacy opt-out, which is the property that makes a
+   * self-declared marker safe to trust in this direction.
+   */
+  producedBy?: "loombridge-capture";
   /** Raw trajectory the value was derived from (required when derivation==="trajectory"). */
   samples?: FeelTrajectorySample[];
   /** Raw phase breakdown the value was derived from (required when derivation==="phase-delta"). */
@@ -192,12 +225,19 @@ export function evaluateFeel(
     const { label } = bandWindow(target);
 
     if (measured === undefined) {
+      // REFUSE, never warn (ledger L49, CLAUDE.md "a gate predicate must REFUSE
+      // when a bound field is absent"). A metric the contract accepts and the run
+      // did not measure is an EVIDENCE GAP: the contract's claim about it is
+      // ungraded. Warning made "measured nothing hard" cheaper than measuring, and
+      // an unmeasured metric is exactly the one an agent could not make pass. This
+      // is the harness tier in intent; the deterministic gate vocabulary has no
+      // separate harness status, so it is a fail whose detail says why.
       checks.push({
         id: `feel.${key}`,
         expected: `${target.target}${target.unit} (${label})`,
         actual: "(not measured)",
-        status: "warn",
-        detail: `${key}: target ${target.target}${target.unit} ${label} — not measured this run.`,
+        status: "fail",
+        detail: `${key}: target ${target.target}${target.unit} ${label}: NOT MEASURED this run, so the contract's band for it was never graded. Refused (not a warn): measure it, or remove the acceptance target if the metric does not apply to this game.`,
       });
       continue;
     }

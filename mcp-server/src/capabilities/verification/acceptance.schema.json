@@ -428,6 +428,8 @@
     "props": {
       "type": "object",
       "additionalProperties": false,
+      "description": "Declaring ANY of this section requires 'purposes': the prop-purpose gate's semantic tier is unconditional, so an absent purposes list would leave every prop's role ungraded (ledger L101).",
+      "required": ["purposes"],
       "properties": {
         "intentionalDecor": { "type": "array", "items": { "type": "string" } },
         "intentionalFloating": { "type": "array", "items": { "type": "string" } },

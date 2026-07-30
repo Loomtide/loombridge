@@ -90,6 +90,44 @@ test("status routes built slice to capture only when deterministic captures are 
   }
 });
 
+test("status names the evidence NO capture recipe produces, per slice", async () => {
+  // A missing capture file is not one thing: some entries `loombridge capture`
+  // will write on the next run and some it will never write. Reporting only
+  // "missing capture file(s)" sends a developer back to the same command that
+  // cannot fix it, which is the L34/L65 shape at the status surface.
+  const root = await tmpRoot();
+  try {
+    await scaffoldApprovedRoadmap(root);
+    const paths = loombridgePaths(root);
+    const plan = (await readSlicePlan(paths)) as SlicePlan;
+    const feel = plan.slices.find((s) => s.id === "player-feel")!;
+    plan.slices = [
+      {
+        ...feel,
+        dependsOn: [],
+        state: "built",
+        proof: {
+          runId: "run-player-feel-test",
+          startedAt: "2026-01-01T00:00:00.000Z",
+          captureManifest: ["player-feel/feel.json", "player-feel/console.json"],
+        },
+      },
+    ];
+    await writeSlicePlan(paths, plan);
+
+    const model = await statusModel(root);
+    const capture = model.captures.find((c) => c.sliceId === "player-feel")!;
+    assert.deepEqual(capture.recipes, ["console"]);
+    assert.deepEqual(capture.agentAssemblyRequired, ["feel.json"]);
+    assert.ok(
+      model.warnings.some((w) => /player-feel: no CLI capture recipe produces feel\.json/.test(w)),
+      model.warnings.join("\n"),
+    );
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
 test("status routes verified slice to approval flow and reports proof warnings", async () => {
   const root = await tmpRoot();
   try {

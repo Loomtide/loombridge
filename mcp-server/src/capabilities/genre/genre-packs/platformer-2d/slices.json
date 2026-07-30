@@ -46,6 +46,7 @@
         "gates": [
           "feel",
           "feel-provenance",
+          "feel-rederive",
           "physics-timestep",
           "console-clean"
         ]

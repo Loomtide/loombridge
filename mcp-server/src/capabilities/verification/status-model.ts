@@ -1,9 +1,11 @@
 import path from "node:path";
 
 import { isSafeCapturePath, isWithin } from "../../domain/capture-paths.js";
-import { captureKindForSlice, type CaptureKind } from "../../domain/capture-recipes.js";
+import { checkCaptureManifest } from "../../domain/capture-manifest.js";
+import { captureRecipesForFiles, type CaptureKind } from "../../domain/capture-recipes.js";
 import { inspectContractPresence } from "../../domain/contract-presence.js";
 import { fileExists, type CurrentBuildRef, type LoombridgePaths, type LoombridgeState } from "../../domain/state.js";
+import { gateInputFiles } from "./run-gates.js";
 import type { DesignStatusReport } from "./design.js";
 import {
   awaitingApprovalSlices,
@@ -26,7 +28,10 @@ export interface StatusCounts {
 
 export interface SliceCaptureStatus {
   sliceId: string;
-  captureKind: CaptureKind | null;
+  /** The recipe SET `loombridge capture --slice <id>` will run (may be empty). */
+  recipes: CaptureKind[];
+  /** Declared evidence files no CLI recipe produces (the agent must assemble them). */
+  agentAssemblyRequired: string[];
   missing: string[];
   unsafe: string[];
 }
@@ -93,29 +98,25 @@ function countsFor(plan: SlicePlan | null): StatusCounts {
 }
 
 async function captureStatusForSlice(paths: LoombridgePaths, slice: SliceEntry): Promise<SliceCaptureStatus> {
-  const captureKind = captureKindForSlice(slice.acceptance.gates);
-  const missing: string[] = [];
-  const unsafe: string[] = [];
-  const manifest = slice.proof?.captureManifest ?? [];
-  const verifyRoot = path.resolve(paths.verifyInputs);
-  const sliceVerifyRoot = path.resolve(getSliceVerifyDir(paths, slice.id));
+  // The recipe SET this slice's declared evidence resolves to, derived from the
+  // same gate→file map `build` mints the manifest from.
+  const dispatch = captureRecipesForFiles(gateInputFiles(slice.acceptance.gates));
+  // THE shared manifest predicate (also used by `capture` and both doneness
+  // paths). This was a private re-implementation of it; three copies of a
+  // refusal is three chances for one to drift into a skip.
+  const completeness = await checkCaptureManifest({
+    manifest: slice.proof?.captureManifest ?? [],
+    verifyRoot: paths.verifyInputs,
+    scopeRoot: getSliceVerifyDir(paths, slice.id),
+  });
 
-  for (const entry of manifest) {
-    if (!isSafeCapturePath(entry)) {
-      unsafe.push(entry);
-      continue;
-    }
-    const candidate = path.resolve(verifyRoot, entry);
-    if (!isWithin(verifyRoot, candidate) || !isWithin(sliceVerifyRoot, candidate)) {
-      unsafe.push(entry);
-      continue;
-    }
-    if (!(await fileExists(candidate))) {
-      missing.push(entry);
-    }
-  }
-
-  return { sliceId: slice.id, captureKind, missing, unsafe };
+  return {
+    sliceId: slice.id,
+    recipes: dispatch.recipes,
+    agentAssemblyRequired: dispatch.unproduced,
+    missing: completeness.missing,
+    unsafe: completeness.unsafe,
+  };
 }
 
 function nextCommandFor(args: {
@@ -132,7 +133,7 @@ function nextCommandFor(args: {
   const slice = args.currentSlice;
   if (slice.state === "built") {
     const capture = args.captures.find((c) => c.sliceId === slice.id);
-    if (capture && capture.captureKind && (capture.missing.length > 0 || capture.unsafe.length > 0)) {
+    if (capture && capture.recipes.length > 0 && (capture.missing.length > 0 || capture.unsafe.length > 0)) {
       return `loombridge capture --slice ${slice.id}`;
     }
     return `loombridge verify --slice ${slice.id} --strict`;
@@ -220,6 +221,17 @@ export async function computeStatusModel(args: {
     }
     if (capture.missing.length > 0) {
       warnings.push(`${capture.sliceId}: missing capture file(s): ${capture.missing.join(", ")}`);
+      // Say WHICH of the missing files `loombridge capture` will never write, so
+      // "run capture again" is not the answer a developer keeps trying. Only the
+      // missing ones: an agent-assembled file already on disk is not a gap.
+      const stillOwed = capture.agentAssemblyRequired.filter((file) =>
+        capture.missing.some((entry) => entry === file || entry.endsWith(`/${file}`)),
+      );
+      if (stillOwed.length > 0) {
+        warnings.push(
+          `${capture.sliceId}: no CLI capture recipe produces ${stillOwed.join(", ")}; the agent must assemble ${stillOwed.length === 1 ? "it" : "them"}.`,
+        );
+      }
     }
   }
 

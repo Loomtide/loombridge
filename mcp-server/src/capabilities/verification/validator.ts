@@ -4,7 +4,7 @@ import type {
   AcceptanceValidationResult,
   NumericTarget,
 } from "./types.js";
-import { ACCEPTANCE_SCHEMA_VERSION } from "./types.js";
+import { ACCEPTANCE_SCHEMA_VERSION, PROP_PURPOSE_ROLES } from "./types.js";
 import { isSafeCapturePath } from "../../domain/capture-paths.js";
 import { EVIDENCE_CLASS_SET, EVIDENCE_CLASSES } from "./gates/evidence-classes.js";
 
@@ -22,6 +22,9 @@ const MANIFEST_MATCHING = new Set(["exact", "prefix", "regex"]);
 const MANIFEST_TYPES = new Set(["GameObject", "Sprite", "Prefab"]);
 const GATE_MODES = new Set(["required", "not_applicable"]);
 const WIN_END_STATE_MODES = new Set(["modal", "continuous"]);
+
+/** The closed prop-role set, shared with the `PropPurposeRole` union in types.ts. */
+const PROP_PURPOSE_ROLE_SET: ReadonlySet<string> = new Set<string>(PROP_PURPOSE_ROLES);
 
 const GATE_TUNING_NUMBER_FIELDS: ReadonlyMap<string, ReadonlySet<string>> = new Map([
   ["platform-tiles", new Set(["tileIntegerTolerance", "colliderSurfaceToleranceU"])],
@@ -555,6 +558,57 @@ export function validateAcceptanceContract(input: unknown): AcceptanceValidation
           }
         }
       }
+    }
+  }
+
+  // ---- props (optional section, but MIGRATION-CLOSED: ledger L101) ----
+  // `prop-purpose`'s semantic tier used to be opt-in through a falsy skip in the
+  // gate (`if (purposeSpecs.length > 0 || prop.purpose)`): a contract that
+  // declared a `props` section but no `props.purposes` silently disabled the
+  // whole tier. The gate rule is now unconditional, so the migration edge (a
+  // contract written before `purposes` existed) is answered HERE, at rest, by
+  // NAMING the missing section rather than by letting the gate grade nothing.
+  // A contract with no `props` section at all is untouched: it declares no prop
+  // context, so there is nothing to migrate.
+  if (input.props !== undefined) {
+    if (!isRecord(input.props)) {
+      push(issues, "INVALID_PROPS", "props must be an object.", "props");
+    } else if (input.props.purposes === undefined) {
+      push(
+        issues,
+        "MISSING_FIELD",
+        "props.purposes is required once the contract declares a props section: the prop-purpose gate's semantic tier " +
+          "grades every non-ground prop against a declared role, and an absent purposes list would leave it ungraded " +
+          "(refused, not skipped). Declare the roles (route_platform/blocker/hazard/launcher/collectible/" +
+          "collectible_support/goal/cover/enemy/decor/pickup), or remove the props section entirely.",
+        "props.purposes",
+      );
+    } else if (!Array.isArray(input.props.purposes) || input.props.purposes.length === 0) {
+      push(
+        issues,
+        "MISSING_FIELD",
+        "props.purposes must be a non-empty array of { name | nameRegex, purpose } specs.",
+        "props.purposes",
+      );
+    } else {
+      input.props.purposes.forEach((spec, i) => {
+        const p = `props.purposes[${i}]`;
+        if (!isRecord(spec)) {
+          push(issues, "INVALID_PROP_PURPOSE", `${p} must be an object.`, p);
+          return;
+        }
+        if (!isString(spec.name) && !isString(spec.nameRegex)) {
+          push(issues, "MISSING_FIELD", `${p} must declare 'name' or 'nameRegex'.`, `${p}.name`);
+        }
+        if (!isString(spec.purpose) || !PROP_PURPOSE_ROLE_SET.has(spec.purpose)) {
+          push(
+            issues,
+            "INVALID_PROP_PURPOSE",
+            `${p}.purpose must be one of: ${PROP_PURPOSE_ROLES.join(", ")}.`,
+            `${p}.purpose`,
+          );
+        }
+      });
     }
   }
 

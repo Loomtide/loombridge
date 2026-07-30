@@ -518,18 +518,27 @@ export interface PlatformerSection {
   note?: string;
 }
 
-export type PropPurposeRole =
-  | "route_platform"
-  | "blocker"
-  | "hazard"
-  | "launcher"
-  | "collectible"
-  | "collectible_support"
-  | "goal"
-  | "cover"
-  | "enemy"
-  | "decor"
-  | "pickup";
+/**
+ * The closed set of semantic prop roles, as VALUES so the contract validator can
+ * check a declared `props.purposes[].purpose` against the same list the type
+ * enforces at compile time (the union below is derived from this array, so the
+ * two cannot drift).
+ */
+export const PROP_PURPOSE_ROLES = [
+  "route_platform",
+  "blocker",
+  "hazard",
+  "launcher",
+  "collectible",
+  "collectible_support",
+  "goal",
+  "cover",
+  "enemy",
+  "decor",
+  "pickup",
+] as const;
+
+export type PropPurposeRole = (typeof PROP_PURPOSE_ROLES)[number];
 
 export interface PropPurposeSpec {
   name?: string;

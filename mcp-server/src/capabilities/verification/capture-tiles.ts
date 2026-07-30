@@ -30,8 +30,11 @@ export interface CaptureTilesArgs {
   component?: string;
   /** Static method to invoke (default "WriteTileCaptures"). */
   method?: string;
-  /** Optional currentBuild runId, stamped into provenance. */
-  runId?: string;
+  /**
+   * The minted `currentBuild.runId`. REQUIRED and stamped unconditionally (H11):
+   * see the `capture` door refusal; never a conditional spread.
+   */
+  runId: string;
   /** Console log count to pull (default 200). */
   consoleCount?: number;
   /** Optional multi-editor routing target. Falls back to LOOMBRIDGE_UNITY_PROJECT. */
@@ -174,7 +177,7 @@ export async function captureTileEvidence(args: CaptureTilesArgs): Promise<Captu
     component,
     method,
     outDir: invokeResult.outDir ?? args.outDir,
-    ...(args.runId ? { runId: args.runId } : {}),
+    runId: args.runId,
     editorMode,
     unityRouting,
     consoleCleared: true,
@@ -195,7 +198,7 @@ export async function captureTileEvidence(args: CaptureTilesArgs): Promise<Captu
     _provenance: {
       writer: "loombridge capture (ground-tiling)",
       capturedAt,
-      ...(args.runId ? { runId: args.runId } : {}),
+      runId: args.runId,
       editorMode,
       unityRouting,
       consoleCleared: true,
