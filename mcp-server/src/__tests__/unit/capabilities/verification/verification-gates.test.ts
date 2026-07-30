@@ -52,6 +52,7 @@ import {
   type VerifyManifestResult,
 } from "../../../../capabilities/verification/gates/index.js";
 import type { AcceptanceContract } from "../../../../capabilities/verification/types.js";
+import { validateAcceptanceContract } from "../../../../capabilities/verification/validator.js";
 import { createDraftAssetManifest, type AssetManifest } from "../../../../capabilities/assets/asset-manifest.js";
 import { REPO_ROOT as REPO_ROOT_SUPPORT } from "../../../_support/paths.js";
 
@@ -1273,7 +1274,9 @@ test("prop-purpose: a decor box (no collider/script) overlapping the player FAIL
 });
 
 test("prop-purpose: the same box listed in intentionalDecor and clear of the player PASSes", () => {
-  const accept = propAcceptance({ intentionalDecor: ["DecorBox"] });
+  // L101: the semantic tier is unconditional now, so a passing fixture must
+  // DECLARE the role. That is the migration the contract validator enforces.
+  const accept = propAcceptance({ intentionalDecor: ["DecorBox"], purposes: [{ name: "DecorBox", purpose: "decor" }] });
   const input: PropPurposeInput = {
     player: propPlayer,
     props: [
@@ -1294,7 +1297,7 @@ test("prop-purpose: a collectible (scripts [Collectible]) PASSes the purpose rul
       { name: "Apple1", bounds: { minX: 8, maxX: 9, minY: 1, maxY: 2 }, hasCollider: false, scripts: ["Collectible"] },
     ],
   };
-  const r = evaluatePropPurpose(input, propAcceptance());
+  const r = evaluatePropPurpose(input, propAcceptance({ purposes: [{ name: "Apple1", purpose: "collectible" }] }));
   const c = checkById(r, "prop-purpose.Apple1");
   assert.equal(c.status, "pass");
   assert.match(c.detail, /Collectible/);
@@ -1313,6 +1316,13 @@ test("prop-purpose: missing capture (no props) -> single WARN", () => {
 
 // One ground span the floating-prop cases reason against.
 const propGrounds = [{ name: "Ground", minX: 0, maxX: 20, topY: 1 }];
+
+/**
+ * The declared role the grounding fixtures need. The semantic tier runs on EVERY
+ * prop now (L101), so a collider-bearing box in a passing fixture has to say what
+ * it is for; leaving it undeclared is the failure these cases are not about.
+ */
+const GROUNDING_PURPOSES = { purposes: [{ nameRegex: "FloatBox", purpose: "route_platform" as const }] };
 
 test("prop-purpose (grounding): a collider box floating above all grounds FAILs (prop-grounded)", () => {
   // The live dodge: a decorative box given a Collider2D (passes purpose) and moved
@@ -1342,10 +1352,10 @@ test("prop-purpose (grounding): the same box resting on the ground (bottom ≈ t
     grounds: propGrounds,
     props: [
       // bottom (minY 1.05) within 0.1u of the ground top (1) and over [0,20] -> rests.
-      { name: "FloatBox", bounds: { minX: 10, maxX: 11, minY: 1.05, maxY: 2.05 }, hasCollider: true, scripts: [] },
+      { name: "FloatBox", bounds: { minX: 10, maxX: 11, minY: 1.05, maxY: 2.05 }, hasCollider: true, scripts: [], routeEvidence: { usedInTraversal: true } },
     ],
   };
-  const r = evaluatePropPurpose(input, propAcceptance());
+  const r = evaluatePropPurpose(input, propAcceptance(GROUNDING_PURPOSES));
   const g = checkById(r, "prop-grounded.FloatBox");
   assert.equal(g.status, "pass");
   assert.match(g.detail, /rests on/i);
@@ -1353,13 +1363,13 @@ test("prop-purpose (grounding): the same box resting on the ground (bottom ≈ t
 });
 
 test("prop-purpose (grounding): a box listed in intentionalFloating is exempt and PASSes", () => {
-  const accept = propAcceptance({ intentionalFloating: ["FloatBox"] });
+  const accept = propAcceptance({ intentionalFloating: ["FloatBox"], ...GROUNDING_PURPOSES });
   const input: PropPurposeInput = {
     player: propPlayer,
     grounds: propGrounds,
     props: [
       // floats, but it's a deliberate floating object.
-      { name: "FloatBox", bounds: { minX: 10, maxX: 11, minY: 5, maxY: 6 }, hasCollider: true, scripts: [] },
+      { name: "FloatBox", bounds: { minX: 10, maxX: 11, minY: 5, maxY: 6 }, hasCollider: true, scripts: [], routeEvidence: { usedInTraversal: true } },
     ],
   };
   const r = evaluatePropPurpose(input, accept);
@@ -1373,10 +1383,10 @@ test("prop-purpose (grounding): no grounds captured -> grounding check skipped (
     player: propPlayer,
     // grounds intentionally absent.
     props: [
-      { name: "FloatBox", bounds: { minX: 10, maxX: 11, minY: 5, maxY: 6 }, hasCollider: true, scripts: [] },
+      { name: "FloatBox", bounds: { minX: 10, maxX: 11, minY: 5, maxY: 6 }, hasCollider: true, scripts: [], routeEvidence: { usedInTraversal: true } },
     ],
   };
-  const r = evaluatePropPurpose(input, propAcceptance());
+  const r = evaluatePropPurpose(input, propAcceptance(GROUNDING_PURPOSES));
   // Purpose + overlap still run; grounding is entirely skipped.
   assert.equal(checkById(r, "prop-purpose.FloatBox").status, "pass");
   assert.ok(!r.checks.some((c) => c.id === "prop-grounded.FloatBox"));
@@ -1395,6 +1405,69 @@ test("prop-purpose (grounding): bottomY overrides bounds.minY for the float chec
   const r = evaluatePropPurpose(input, propAcceptance());
   assert.equal(checkById(r, "prop-grounded.FloatBox").status, "fail");
   assert.equal(r.verdict, "fail");
+});
+
+// ── L101/M23: the migration edge is answered at CONTRACT VALIDATION ──────────
+
+test("contract validation: a props section with NO purposes is REFUSED, naming props.purposes", () => {
+  // POSITIVE CONTROL first: the shipped contract declares props AND purposes and
+  // validates, so the refusal below is caused by the deletion and nothing else.
+  assert.equal(validateAcceptanceContract(acceptance).valid, true);
+
+  const migrated = JSON.parse(JSON.stringify(acceptance)) as Record<string, unknown>;
+  delete (migrated.props as Record<string, unknown>).purposes;
+  const result = validateAcceptanceContract(migrated);
+  assert.equal(result.valid, false);
+  const issue = result.issues.find((i) => i.path === "props.purposes");
+  assert.ok(issue, `expected a props.purposes issue; got ${JSON.stringify(result.issues)}`);
+  assert.match(issue.message, /props\.purposes is required/);
+});
+
+test("contract validation: NO props section at all stays valid (nothing to migrate)", () => {
+  const noProps = JSON.parse(JSON.stringify(acceptance)) as Record<string, unknown>;
+  delete noProps.props;
+  assert.equal(validateAcceptanceContract(noProps).valid, true);
+});
+
+test("contract validation: an empty purposes list is refused, and a bogus role is named", () => {
+  const empty = JSON.parse(JSON.stringify(acceptance)) as Record<string, unknown>;
+  (empty.props as Record<string, unknown>).purposes = [];
+  assert.equal(validateAcceptanceContract(empty).valid, false);
+
+  const bogus = JSON.parse(JSON.stringify(acceptance)) as Record<string, unknown>;
+  (bogus.props as Record<string, unknown>).purposes = [{ name: "Crate", purpose: "vibes" }];
+  const result = validateAcceptanceContract(bogus);
+  assert.equal(result.valid, false);
+  assert.ok(result.issues.some((i) => i.path === "props.purposes[0].purpose"), JSON.stringify(result.issues));
+});
+
+test("prop-purpose (semantic): the tier runs even when NOTHING opts in (L101 falsy-skip)", () => {
+  // THE ledger case: a contract with no props.purposes plus a capture that omits
+  // `purpose` used to disable the entire semantic tier in silence, because the
+  // rule sat behind `if (purposeSpecs.length > 0 || prop.purpose)`. It now runs
+  // unconditionally, so an undeclared solid prop is a refusal, not an absence.
+  const input: PropPurposeInput = {
+    player: propPlayer,
+    props: [
+      { name: "MysteryCrate", bounds: { minX: 10, maxX: 11, minY: 1, maxY: 2 }, hasCollider: true, scripts: [] },
+    ],
+  };
+  const r = evaluatePropPurpose(input, propAcceptance()); // no `purposes` anywhere
+  const semantic = checkById(r, "prop-semantic.MysteryCrate");
+  assert.equal(semantic.status, "fail");
+  assert.match(semantic.detail, /no semantic purpose/i);
+  assert.equal(r.verdict, "fail");
+});
+
+test("prop-purpose (semantic): a NON-solid undeclared prop is warned, and still never skipped", () => {
+  const input: PropPurposeInput = {
+    player: propPlayer,
+    props: [
+      { name: "Cloud", bounds: { minX: 10, maxX: 11, minY: 6, maxY: 7 }, hasCollider: false, scripts: ["Collectible"] },
+    ],
+  };
+  const r = evaluatePropPurpose(input, propAcceptance());
+  assert.equal(checkById(r, "prop-semantic.Cloud").status, "warn");
 });
 
 test("prop-purpose (semantic): a collider-only prop fails when no gameplay role/evidence exists", () => {
@@ -1960,12 +2033,27 @@ test("feel (out of band): run + dash out of band FAIL", () => {
   assert.equal(r.verdict, "fail");
 });
 
-test("feel: unmeasured metric -> WARN, not fail", () => {
+test("feel: an accepted metric the run did not measure REFUSES (M13/L49), it never warns", () => {
+  // LITMUS with its own positive control in the same fixture: runSpeed IS
+  // measured and passes, so the gate is reached and grading normally; jumpApex is
+  // accepted and unmeasured, and that is a refusal. Warning made "measure nothing
+  // hard" cheaper than measuring.
   const m: FeelMeasurements = { runSpeed: 7.0 };
   const r = evaluateFeel(m, acceptance);
   assert.equal(checkById(r, "feel.runSpeed").status, "pass");
-  assert.equal(checkById(r, "feel.jumpApex").status, "warn");
-  assert.equal(r.verdict, "warn");
+  const unmeasured = checkById(r, "feel.jumpApex");
+  assert.equal(unmeasured.status, "fail");
+  assert.equal(unmeasured.actual, "(not measured)");
+  assert.match(unmeasured.detail, /NOT MEASURED/);
+  assert.equal(r.verdict, "fail");
+});
+
+test("feel: no accepted metric anywhere in the report is left at warn for being unmeasured", () => {
+  // Vacuity guard for the check above: sweep the whole report, so a future
+  // refactor cannot reintroduce the warn on some other metric's path.
+  const r = evaluateFeel({}, acceptance);
+  const softened = r.checks.filter((c) => c.actual === "(not measured)" && c.status !== "fail");
+  assert.deepEqual(softened, []);
 });
 
 function feelWithProvenance(overrides: Partial<FeelMeasurements> = {}): FeelMeasurements {
@@ -1982,6 +2070,10 @@ function feelWithProvenance(overrides: Partial<FeelMeasurements> = {}): FeelMeas
         {
           source: "FeelHarness",
           sampleCount: 180,
+          // L47: sampleCount + durationMs must RE-DERIVE the declared captureFps
+          // (180 samples over 3000ms is 60fps). A source carrying no window carries
+          // no cadence evidence at all, and physics-timestep refuses it.
+          durationMs: 3000,
           captureFps: 60,
           measuredAt: "2026-05-31T00:00:00.000Z",
           projectFixedTimestepBeforeMeasurement: 0.0166667,
@@ -1993,6 +2085,7 @@ function feelWithProvenance(overrides: Partial<FeelMeasurements> = {}): FeelMeas
         {
           source: "runtime.probe",
           sampleCount: 90,
+          durationMs: 1500,
           captureFps: 60,
           measuredAt: "2026-05-31T00:00:01.000Z",
           projectFixedTimestepBeforeMeasurement: 0.0166667,
@@ -2404,8 +2497,12 @@ test("physics-timestep: a finer integer-multiple captureFps (120fps sampling of 
   // the deterministic sim. captureFps is allowed to be a finer integer multiple.
   const m = feelWithProvenance();
   m.provenance!.sources![1]!.captureFps = 120;
+  // Sampling twice as fast over the same window really does yield twice the
+  // samples; the source has to say so, or the cadence re-derivation refuses it.
+  m.provenance!.sources![1]!.sampleCount = 180;
   const r = evaluatePhysicsTimestep(m, acceptance);
   assert.equal(checkById(r, "physics-timestep.captureFps").status, "pass");
+  assert.equal(checkById(r, "physics-timestep.effectiveCadence").status, "pass");
   assert.equal(checkById(r, "physics-timestep.project").status, "pass");
   assert.equal(checkById(r, "physics-timestep.measurement").status, "pass");
   assert.equal(r.verdict, "pass");
@@ -2417,6 +2514,7 @@ test("physics-timestep: a NON-integer captureFps multiple (90fps of 60Hz) warns;
   // is untouched and still passes. This is the same logic that keeps 60fps-of-50Hz (1.2x) flagged.
   const m = feelWithProvenance();
   m.provenance!.sources![1]!.captureFps = 90;
+  m.provenance!.sources![1]!.sampleCount = 135; // 90fps over the same 1500ms window
   const r = evaluatePhysicsTimestep(m, acceptance);
   assert.equal(checkById(r, "physics-timestep.captureFps").status, "warn");
   assert.equal(checkById(r, "physics-timestep.project").status, "pass");
@@ -2430,6 +2528,71 @@ test("physics-timestep: absent timestep fields fail", () => {
   const r = evaluatePhysicsTimestep(m, acceptance);
   assert.equal(checkById(r, "physics-timestep.project").status, "fail");
   assert.equal(checkById(r, "physics-timestep.measurement").status, "fail");
+});
+
+// ── L47: the EFFECTIVE cadence, re-derived from the run's own echoes ─────────
+
+test("physics-timestep: a consistent sampleCount/durationMs/captureFps triple passes the cadence re-derivation", () => {
+  // POSITIVE CONTROL: this is the fixture every negative case below mutates, and
+  // it must REACH the cadence check (not be short-circuited by an earlier refusal).
+  const r = evaluatePhysicsTimestep(feelWithProvenance(), acceptance);
+  const check = checkById(r, "physics-timestep.effectiveCadence");
+  assert.equal(check.status, "pass");
+  assert.match(check.actual, /effective=60\.00fps/);
+  assert.equal(r.verdict, "pass");
+});
+
+test("physics-timestep: the L47 shape (real ~11Hz sampling under a declared 120fps) FAILS", () => {
+  // The door-one file: `const FPS = 120` typed into the harness while the capture
+  // really produced 20 samples over 1.8s. Every timestep check passed and the
+  // captureFps check was warn-only, so the lie shipped.
+  const m = feelWithProvenance();
+  m.provenance!.sources![1]!.captureFps = 120;
+  m.provenance!.sources![1]!.sampleCount = 20;
+  m.provenance!.sources![1]!.durationMs = 1800;
+  const r = evaluatePhysicsTimestep(m, acceptance);
+  const check = checkById(r, "physics-timestep.effectiveCadence");
+  assert.equal(check.status, "fail");
+  assert.match(check.actual, /effective=11\.11fps/);
+  assert.equal(r.verdict, "fail");
+});
+
+test("physics-timestep: divergence of exactly one tick (the endpoint convention) still passes", () => {
+  // N samples span N-1 intervals, so an honest capture can legitimately land one
+  // sample either side. One tick is the tolerance, and not one more.
+  const m = feelWithProvenance();
+  m.provenance!.sources![1]!.sampleCount = 89; // 90 expected at 60fps over 1500ms
+  assert.equal(checkById(evaluatePhysicsTimestep(m, acceptance), "physics-timestep.effectiveCadence").status, "pass");
+  m.provenance!.sources![1]!.sampleCount = 88; // two ticks out
+  assert.equal(checkById(evaluatePhysicsTimestep(m, acceptance), "physics-timestep.effectiveCadence").status, "fail");
+});
+
+test("physics-timestep: a source with NO window and NO samples is refused, not skipped", () => {
+  const m = feelWithProvenance();
+  delete m.provenance!.sources![1]!.durationMs;
+  const r = evaluatePhysicsTimestep(m, acceptance);
+  const check = checkById(r, "physics-timestep.effectiveCadence");
+  assert.equal(check.status, "fail");
+  assert.match(check.actual, /NOT RE-DERIVABLE/);
+  assert.match(check.detail, /no re-derivable cadence evidence/);
+});
+
+test("physics-timestep: an absent captureFps is refused by the cadence check (L47's warn-only hole)", () => {
+  const m = feelWithProvenance();
+  delete m.provenance!.sources![1]!.captureFps;
+  const check = checkById(evaluatePhysicsTimestep(m, acceptance), "physics-timestep.effectiveCadence");
+  assert.equal(check.status, "fail");
+  assert.match(check.actual, /absent captureFps/);
+});
+
+test("physics-timestep: the window falls back to the samples[].tMs span when the op echoed no durationMs", () => {
+  const m = feelWithProvenance();
+  delete m.provenance!.sources![1]!.durationMs;
+  m.provenance!.sources![1]!.sampleCount = 91;
+  m.provenance!.sources![1]!.samples = Array.from({ length: 91 }, (_, i) => ({ tMs: i * (1000 / 60), x: 0, y: 0 }));
+  const check = checkById(evaluatePhysicsTimestep(m, acceptance), "physics-timestep.effectiveCadence");
+  assert.equal(check.status, "pass");
+  assert.match(check.actual, /samples\[\]\.tMs span/);
 });
 
 test("physics-timestep: no measured accepted metrics warns", () => {

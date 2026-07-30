@@ -47,6 +47,7 @@ import {
   testRunLogPath,
 } from "../../../capabilities/tests/test-results-manifest.js";
 import { LOOMBRIDGE_DIRNAME, loombridgePaths } from "../../../domain/state.js";
+import { CAPTURE_REPORT_FILE, captureReportPath } from "../../../domain/capture-manifest.js";
 
 const SRC = path.join(PKG_ROOT, "src");
 
@@ -128,6 +129,30 @@ test("LITMUS: the one-spelling scan really fires on a second copy of the SCOPED 
     filesHardCodingName(UNIFIED_SCOPED_REPORT, [...ALL, planted], read)
       .includes("capabilities/verification/unified/__planted_scoped__.ts"),
     "the scan missed a planted duplicate of the scoped report filename",
+  );
+});
+
+test("capture-report.json has ONE spelling, and its writer resolves the path from the constant", () => {
+  // The newest declared path: `loombridge capture` writes the manifest diff here
+  // and the help text routes an operator to it. Without this guard the filename is
+  // exactly the shape the module header claims it is not (declared once, walked by
+  // nothing), because a full green suite never compares the two spellings.
+  assert.deepEqual(
+    filesHardCodingName(CAPTURE_REPORT_FILE, ALL),
+    ["domain/capture-manifest.ts"],
+    `"${CAPTURE_REPORT_FILE}" must have exactly ONE spelling; every other module imports the constant`,
+  );
+  assert.equal(captureReportPath("/v"), path.join("/v", CAPTURE_REPORT_FILE));
+
+  // LITMUS for the empty-set half: a defused scan returns the same shape, so plant
+  // a second spelling and confirm the REAL scan sees it.
+  const planted = path.join(SRC, "capabilities/verification/__planted_capture_report__.ts");
+  const read = (p: string): string =>
+    p === planted ? `const target = "${CAPTURE_REPORT_FILE}";\nexport default target;\n` : readFileSync(p, "utf-8");
+  assert.ok(
+    filesHardCodingName(CAPTURE_REPORT_FILE, [...ALL, planted], read)
+      .includes("capabilities/verification/__planted_capture_report__.ts"),
+    "the scan missed a planted duplicate of the capture-report filename",
   );
 });
 

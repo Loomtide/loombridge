@@ -36,8 +36,13 @@ import {
 export interface CaptureConsoleArgs {
   /** Output dir for console.json (the slice's verify dir). */
   outDir: string;
-  /** Optional currentBuild runId, stamped into provenance for freshness tracing. */
-  runId?: string;
+  /**
+   * The minted `currentBuild.runId`. REQUIRED and stamped unconditionally (H11):
+   * evidence with no run binding cannot be told apart from a leftover file, so the
+   * `capture` door refuses before any producer runs rather than writing an
+   * unbindable capture. Never a conditional spread.
+   */
+  runId: string;
   /** Console log count to pull (default 200). */
   consoleCount?: number;
   /** Frames to wait after play-enter before snapshotting startup logs (default 30). */
@@ -211,7 +216,7 @@ export async function captureConsoleEvidence(args: CaptureConsoleArgs): Promise<
       "Startup logs are captured (not cleared) so play-enter Awake/Start errors are graded by console-clean. " +
       "The benign IPC-fallback infra warning is excused by the gate's narrow allowlist, not hidden here.",
     unityRouting,
-    ...(args.runId ? { runId: args.runId } : {}),
+    runId: args.runId,
     sources: [
       { op: "unity_editor_clear_console", captured: "pre-play (edit-mode baseline only)" },
       { op: "unity_editor_play", captured: "enter play" },

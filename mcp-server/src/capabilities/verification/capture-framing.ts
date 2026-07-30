@@ -34,8 +34,11 @@ export interface CaptureFramingArgs {
   cameraPath?: string;
   /** Optional boundsMode for screen rects ("opaque" | "renderer" | "collider"). */
   boundsMode?: string;
-  /** Optional currentBuild runId, stamped into provenance for freshness tracing. */
-  runId?: string;
+  /**
+   * The minted `currentBuild.runId`. REQUIRED and stamped unconditionally (H11):
+   * see the `capture` door refusal; never a conditional spread.
+   */
+  runId: string;
   /** Console log count to pull (default 200). */
   consoleCount?: number;
   /** Optional multi-editor routing target. Falls back to LOOMBRIDGE_UNITY_PROJECT. */
@@ -246,7 +249,7 @@ export async function captureFramingEvidence(args: CaptureFramingArgs): Promise<
     capturedAt,
     capturedInPlayMode: true,
     unityRouting,
-    ...(args.runId ? { runId: args.runId } : {}),
+    runId: args.runId,
     sources: [
       { op: "unity_component_get_properties", type_name: "Camera", locator: cameraPath, captured: "edit-mode (authored orthographicSize + fieldOfView)" },
       { op: "unity_component_get_properties", type_name: "PixelPerfectCamera", locator: cameraPath, captured: "edit-mode" },

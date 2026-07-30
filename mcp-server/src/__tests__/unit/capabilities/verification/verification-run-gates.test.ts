@@ -104,6 +104,8 @@ function cleanFeelCapture(): Record<string, unknown> {
         {
           source: "FeelHarness",
           sampleCount: 180,
+          // L47: the echoed window makes the cadence re-derivable (180/3000ms = 60fps).
+          durationMs: 3000,
           captureFps: 60,
           measuredAt: "2026-05-31T00:00:00.000Z",
           projectFixedTimestepBeforeMeasurement: 0.0166667,
@@ -115,6 +117,7 @@ function cleanFeelCapture(): Record<string, unknown> {
         {
           source: "runtime.probe",
           sampleCount: 90,
+          durationMs: 1500,
           captureFps: 60,
           measuredAt: "2026-05-31T00:00:01.000Z",
           projectFixedTimestepBeforeMeasurement: 0.0166667,

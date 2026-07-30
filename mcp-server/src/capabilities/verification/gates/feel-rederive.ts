@@ -14,6 +14,12 @@
  * keeps working). A new S5c output always sets the marker, so it can never
  * masquerade as legacy and skip re-derivation.
  *
+ * STAGE 1 (ledger L45/L48): the legacy path DIES for produced evidence. A source
+ * carrying `producedBy:"loombridge-capture"` with an ABSENT `derivation` is
+ * REFUSED rather than reported as legacy. Otherwise the CLI's own producer could
+ * emit exactly the file shape this gate declines to grade. See
+ * `producerMarkerRefusals`.
+ *
  * Scope: re-derives the trajectory-derivable metrics (jumpApex/timeToApex/
  * runSpeed/shortHopApex and the F5 accel/decel/fall/inputLatency metrics).
  * `inputLatency` additionally needs the source's recorded `inputOnsetMs` (passed to
@@ -75,10 +81,62 @@ function rederivePhaseDelta(source: FeelMeasurementSource): number | null {
 
 export interface RederiveVerdict {
   metric: string;
-  reported: number;
+  /** The value the file reports, or `null` when the refusal fired before any value was read. */
+  reported: number | null;
   rederived: number | null;
   status: Extract<CheckStatus, "pass" | "fail">;
   detail: string;
+}
+
+/**
+ * The producer marker (see `FeelMeasurementSource.producedBy`). A source that
+ * carries it has declared "a CLI capture recipe wrote me", and the legacy
+ * opt-out (an ABSENT `derivation` reading as not_applicable) dies for it.
+ */
+const PRODUCER_MARKER = "loombridge-capture";
+
+/**
+ * Metrics the input-timing bisection legitimately owns. A source declaring
+ * `derivation:"input-bisection"` may only cover these; listing a
+ * trajectory-derivable metric there would be laundering (declare the derivation
+ * that skips re-derivation, report a number nothing re-derives).
+ */
+const BISECTION_METRICS: ReadonlySet<string> = new Set(["coyoteTime", "jumpBuffer"]);
+
+/**
+ * The refusals a source owes BEFORE its metrics are re-derived (stage 1).
+ *
+ * Ordering matters and is load-bearing (M19): these fire on the source itself,
+ * so they are reached even when the source reports no re-derivable metric, which
+ * is exactly the shape a legacy-masquerading producer file would have.
+ */
+function producerMarkerRefusals(source: FeelMeasurementSource, index: number): RederiveVerdict[] {
+  if (source.producedBy !== PRODUCER_MARKER) return [];
+  const metrics = (source.measuredMetrics ?? []).filter((m) => typeof m === "string" && m.length > 0);
+  const labels = metrics.length > 0 ? metrics : [`(source ${index}: no measuredMetrics)`];
+
+  if (source.derivation === undefined) {
+    return labels.map((metric) => ({
+      metric,
+      reported: null,
+      rederived: null,
+      status: "fail" as const,
+      detail: `${metric}: source declares producedBy:"${PRODUCER_MARKER}" but records NO derivation: refused. A produced source must say how the value was derived ("trajectory", "phase-delta" or "input-bisection"); the absent-marker legacy path is for hand-assembled files only and cannot be claimed by a producer.`,
+    }));
+  }
+  if (source.derivation === "input-bisection") {
+    const offOwnership = metrics.filter((metric) => !BISECTION_METRICS.has(metric));
+    if (offOwnership.length > 0) {
+      return offOwnership.map((metric) => ({
+        metric,
+        reported: null,
+        rederived: null,
+        status: "fail" as const,
+        detail: `${metric}: source declares derivation:"input-bisection", which owns only ${[...BISECTION_METRICS].join("/")}: refused (a trajectory-derivable metric cannot be routed around re-derivation by declaring the bisection derivation).`,
+      }));
+    }
+  }
+  return [];
 }
 
 /**
@@ -97,7 +155,14 @@ export function rederiveFromSources(
   reported: Record<string, number | undefined>,
 ): RederiveVerdict[] {
   const verdicts: RederiveVerdict[] = [];
-  for (const source of sources) {
+  for (const [index, source] of sources.entries()) {
+    // Producer-marker refusals first: they must be reachable on a source that
+    // lists no re-derivable metric at all, which is where the legacy skip lived.
+    const refusals = producerMarkerRefusals(source, index);
+    if (refusals.length > 0) {
+      verdicts.push(...refusals);
+      continue;
+    }
     if (source.derivation === "phase-delta") {
       const metrics = (source.measuredMetrics ?? []).filter((m) => m === "dashDistance");
       for (const metric of metrics) {

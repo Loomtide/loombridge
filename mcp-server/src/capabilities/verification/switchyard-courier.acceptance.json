@@ -232,6 +232,12 @@
       "ElectricArc",
       "TopDownPlayerController",
       "SfxPlayer"
+    ],
+    "purposes": [
+      { "nameRegex": "battery|cell|charge", "purpose": "pickup", "note": "the run's carried resource" },
+      { "nameRegex": "terminal|socket|delivery", "purpose": "goal", "note": "delivering here is the win condition" },
+      { "nameRegex": "security|cone|arc|hazard|electric", "purpose": "hazard" },
+      { "nameRegex": "arena|boundary|rail|wall", "purpose": "blocker", "note": "bounds the arena" }
     ]
   },
 

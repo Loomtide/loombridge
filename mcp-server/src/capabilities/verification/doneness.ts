@@ -24,7 +24,7 @@ import {
   type LoombridgeState,
 } from "../../domain/state.js";
 import { designStatus } from "./design.js";
-import { isSafeCapturePath, isWithin } from "../../domain/capture-paths.js";
+import { checkCaptureManifest } from "../../domain/capture-manifest.js";
 import {
   getSliceVerifyDir,
   readSlicePlan,
@@ -1609,28 +1609,19 @@ export async function isSliceDone(slice: SliceEntry, paths: LoombridgePaths): Pr
       }
     }
 
-    const manifest = proof.captureManifest ?? [];
-    const sliceVerifyDirAbs = path.resolve(getSliceVerifyDir(paths, slice.id));
-    const verifyDirAbs = path.resolve(paths.verifyInputs);
-    const unsafe: string[] = [];
-    const missing: string[] = [];
-    for (const entry of manifest) {
-      if (!isSafeCapturePath(entry)) {
-        unsafe.push(entry);
-        continue;
-      }
-      const candidate = path.resolve(paths.verifyInputs, entry);
-      if (!isWithin(verifyDirAbs, candidate) || !isWithin(sliceVerifyDirAbs, candidate)) {
-        unsafe.push(entry);
-        continue;
-      }
-      if (!(await fileExists(candidate))) missing.push(entry);
+    // THE shared manifest predicate (`capture`, `status` and the whole-game
+    // doneness path call the same one). A slice manifest is additionally scoped
+    // to its own verify dir.
+    const completeness = await checkCaptureManifest({
+      manifest: proof.captureManifest ?? [],
+      verifyRoot: paths.verifyInputs,
+      scopeRoot: getSliceVerifyDir(paths, slice.id),
+    });
+    if (completeness.unsafe.length) {
+      reasons.push(`slice.proof.captureManifest has UNSAFE entries: ${completeness.unsafe.join(", ")}`);
     }
-    if (unsafe.length) {
-      reasons.push(`slice.proof.captureManifest has UNSAFE entries: ${unsafe.join(", ")}`);
-    }
-    if (missing.length) {
-      reasons.push(`missing slice captureManifest entries: ${missing.join(", ")}`);
+    if (completeness.missing.length) {
+      reasons.push(`missing slice captureManifest entries: ${completeness.missing.join(", ")}`);
     }
   }
 
@@ -1678,21 +1669,17 @@ export async function wholeGameDonenessReasons(
   }
 
   const manifest = state?.currentBuild?.captureManifest ?? [];
-  const verifyDirAbs = path.resolve(paths.verifyInputs);
-  const captures: CaptureCheck[] = await Promise.all(
-    manifest.map(async (entry) => {
-      // First gate: the raw entry must be a normalized, relative, non-`..` path.
-      if (!isSafeCapturePath(entry)) {
-        return { path: entry, exists: false, unsafe: true };
-      }
-      // Second gate: even after `path.resolve`, the result MUST live inside
-      // `.loombridge/verify/`. This catches edge cases (symlinks, future ifs).
-      const candidate = path.resolve(paths.verifyInputs, entry);
-      if (!isWithin(verifyDirAbs, candidate)) {
-        return { path: entry, exists: false, unsafe: true };
-      }
-      return { path: entry, exists: await fileExists(candidate) };
-    }),
+  // THE shared manifest predicate. Both containment rules (safe relative entry,
+  // AND a resolved path inside `.loombridge/verify/`) live inside it, so this
+  // path and the per-slice one can never disagree about what "present" means.
+  const completeness = await checkCaptureManifest({
+    manifest,
+    verifyRoot: paths.verifyInputs,
+  });
+  const captures: CaptureCheck[] = completeness.entries.map((entry) =>
+    entry.unsafe
+      ? { path: entry.entry, exists: false, unsafe: true }
+      : { path: entry.entry, exists: entry.exists },
   );
 
   // Gray-box / feel-only resolution (RCL-D01) — read from DISK truth (the on-disk

@@ -825,6 +825,96 @@ test("feel-rederive: legacy source WITHOUT the marker -> not_applicable", () => 
   assert.equal(report.verdict, "not_applicable");
 });
 
+// ── The producer marker kills the legacy opt-out (stage 1, L45/L48) ──────────
+
+test("feel-rederive: a PRODUCED source with a derivation still re-derives and passes (positive control)", () => {
+  // The control that proves the refusals below are caused by the missing/wrong
+  // derivation and not by the producer marker itself: the marker only ever adds
+  // obligations, it never blocks a source that meets them.
+  const input: FeelMeasurements = {
+    jumpApex: 3.0,
+    timeToApex: 280,
+    provenance: { sources: [trajectorySource({ producedBy: "loombridge-capture" })] },
+  };
+  const report = evaluateFeelRederive(input, ACCEPTANCE);
+  assert.equal(report.verdict, "pass");
+  assert.ok(report.checks.some((c) => c.id === "feel-rederive.jumpApex" && c.status === "pass"));
+});
+
+test("feel-rederive: a PRODUCED source with NO derivation is REFUSED, not treated as legacy", () => {
+  // Same source as the control, with `derivation` deleted. Without this, the
+  // CLI's own producer could emit exactly the file shape the gate declines to
+  // grade, and a marked file would buy the legacy not_applicable.
+  const input: FeelMeasurements = {
+    jumpApex: 3.0,
+    provenance: {
+      sources: [trajectorySource({ producedBy: "loombridge-capture", derivation: undefined, measuredMetrics: ["jumpApex"] })],
+    },
+  };
+  const report = evaluateFeelRederive(input, ACCEPTANCE);
+  assert.equal(report.verdict, "fail");
+  const check = report.checks.find((c) => c.id === "feel-rederive.jumpApex");
+  assert.ok(check, report.checks.map((c) => c.id).join(", "));
+  assert.equal(check.status, "fail");
+  assert.match(check.detail, /records NO derivation/);
+});
+
+test("feel-rederive: a PRODUCED source listing no metrics at all is still reached by the refusal", () => {
+  // M19's ordering lesson: the refusal fires on the SOURCE, so it must survive
+  // the shape that carries nothing to re-derive, which is where the skip lived.
+  const input: FeelMeasurements = {
+    provenance: {
+      sources: [trajectorySource({ producedBy: "loombridge-capture", derivation: undefined, measuredMetrics: [] })],
+    },
+  };
+  const report = evaluateFeelRederive(input, ACCEPTANCE);
+  assert.equal(report.verdict, "fail");
+  assert.ok(report.checks.some((c) => /no measuredMetrics/.test(c.id)), report.checks.map((c) => c.id).join(", "));
+});
+
+test("feel-rederive: `input-bisection` cannot be declared over a trajectory-derivable metric", () => {
+  // The bisection derivation is real, but it owns coyoteTime/jumpBuffer only.
+  // Declaring it over jumpApex would route a re-derivable number around the
+  // re-derivation, so it is refused.
+  const legit: FeelMeasurements = {
+    coyoteTime: 0.1,
+    provenance: {
+      sources: [
+        trajectorySource({
+          producedBy: "loombridge-capture",
+          derivation: "input-bisection",
+          measuredMetrics: ["coyoteTime"],
+        }),
+      ],
+    },
+  };
+  assert.equal(evaluateFeelRederive(legit, ACCEPTANCE).verdict, "not_applicable");
+
+  const laundered: FeelMeasurements = {
+    jumpApex: 9.0,
+    provenance: {
+      sources: [
+        trajectorySource({
+          producedBy: "loombridge-capture",
+          derivation: "input-bisection",
+          measuredMetrics: ["jumpApex"],
+        }),
+      ],
+    },
+  };
+  const report = evaluateFeelRederive(laundered, ACCEPTANCE);
+  assert.equal(report.verdict, "fail");
+  assert.match(report.checks.find((c) => c.id === "feel-rederive.jumpApex")!.detail, /input-bisection/);
+});
+
+test("feel-rederive: an UNMARKED legacy source keeps the not_applicable path (compat is unchanged)", () => {
+  const input: FeelMeasurements = {
+    jumpApex: 3.0,
+    provenance: { sources: [{ source: "FeelHarness", measuredMetrics: ["jumpApex"], sampleCount: 10, captureFps: 60 }] },
+  };
+  assert.equal(evaluateFeelRederive(input, ACCEPTANCE).verdict, "not_applicable");
+});
+
 test("rederiveFromSources only verdicts trajectory-marked sources", () => {
   const verdicts = rederiveFromSources(
     [{ source: "FeelHarness", measuredMetrics: ["jumpApex"] }],
