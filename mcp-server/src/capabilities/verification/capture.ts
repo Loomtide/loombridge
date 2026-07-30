@@ -12,6 +12,11 @@
  *   - `feel.json`                             → feel recipe (drives the canonical
  *       feel measurements over the bridge and writes the file from the op echoes;
  *       needs `acceptance.harness.feelSeam`) (+ console.json)
+ *   - `playability.json`                      → playability OBSERVER: opens an
+ *       in-game-loop recording window, prints a machine-readable DRIVE NOW line for
+ *       the agent to play the level, then derives every headline field from the
+ *       recorded buffers plus its own post-win probes (needs
+ *       `acceptance.harness.playability`) (+ console.json)
  *   - `console.json` alone                    → console recipe (play-enter startup
  *       + steady soak logs, phase-tagged; nothing cleared after play, so real
  *       startup errors are still graded)
@@ -41,6 +46,7 @@ import path from "node:path";
 
 import { captureConsoleEvidence } from "./capture-console.js";
 import { captureFeelEvidence } from "./capture-feel.js";
+import { capturePlayabilityEvidence } from "./capture-playability.js";
 import { captureFramingEvidence } from "./capture-framing.js";
 import { captureTileEvidence, TILE_CAPTURE_FILES } from "./capture-tiles.js";
 import { loombridgePaths, readState } from "../../domain/state.js";
@@ -82,6 +88,7 @@ export interface CaptureDeps {
   captureTiles: typeof captureTileEvidence;
   captureConsole: typeof captureConsoleEvidence;
   captureFeel: typeof captureFeelEvidence;
+  capturePlayability: typeof capturePlayabilityEvidence;
 }
 
 const defaultDeps: CaptureDeps = {
@@ -89,6 +96,7 @@ const defaultDeps: CaptureDeps = {
   captureTiles: captureTileEvidence,
   captureConsole: captureConsoleEvidence,
   captureFeel: captureFeelEvidence,
+  capturePlayability: capturePlayabilityEvidence,
 };
 
 type ParseHelp = { help: true; usageError?: boolean };
@@ -261,7 +269,8 @@ export async function runCapture(args: CaptureArgs, deps: CaptureDeps = defaultD
         `[loombridge capture] no capture recipe for slice "${args.slice}" (gates: ${slice.acceptance.gates.join(", ")}; ` +
           `manifest: ${manifest.join(", ") || "(empty)"}). ` +
           "Recipes exist for screen-rects.json (framing), platform-tiles.json/tile-render.json (GroundTiling tile captures), " +
-          "feel.json (the feel producer), and console.json (steady play-soak). Every other entry is agent-assembled evidence today.",
+          "feel.json (the feel producer), playability.json (the playability observer), and console.json (steady play-soak). " +
+          "Every other entry is agent-assembled evidence today.",
       );
       return printExit(2);
     }
@@ -335,6 +344,33 @@ export async function runCapture(args: CaptureArgs, deps: CaptureDeps = defaultD
         for (const gap of result.gaps) {
           console.error(`[loombridge capture] feel: provenance gap: ${gap}`);
         }
+        outcomes.push({ recipe, ok: true });
+        continue;
+      }
+
+      if (recipe === "playability") {
+        // The observer needs the CONTRACT for both halves of its binding: the
+        // `harness.playability` seam (which component carries win/score/lives) and
+        // the `feel` targets the kinematic bound is derived from. Both refusals are
+        // raised by the recipe itself, before play mode, with the JSON to add.
+        let contract: unknown = undefined;
+        try {
+          contract = JSON.parse(await fs.readFile(paths.acceptance, "utf-8"));
+        } catch (error) {
+          contract = undefined;
+          void error;
+        }
+        const result = await deps.capturePlayability({
+          outDir,
+          contract,
+          runId,
+          ...(args.project ? { project: args.project } : {}),
+        });
+        console.error(
+          `[loombridge capture] playability: wrote ${rel(result.playabilityPath)} ` +
+            `(completionMethod=${result.completionMethod}, ${result.sampleCount} sample(s) over ${result.driveSeconds}s of drive) ` +
+            `+ ${rel(result.consolePath)} (${result.logCount} log(s))`,
+        );
         outcomes.push({ recipe, ok: true });
         continue;
       }
@@ -449,7 +485,9 @@ function recipeSelectionForKind(kind: CaptureKind): string[] {
       ? ["console.json"]
       : kind === "feel"
         ? ["feel.json"]
-        : ["screen-rects.json"];
+        : kind === "playability"
+          ? ["playability.json"]
+          : ["screen-rects.json"];
 }
 
 function printUsage(): void {
@@ -465,6 +503,12 @@ function printUsage(): void {
       "  tile-render.json               (+ console.json)",
       "  feel.json                   → feel recipe (drives the canonical feel",
       "                                 measurements; needs acceptance.harness.feelSeam)",
+      "  playability.json            → playability OBSERVER (opens a recorded play",
+      "                                 window, prints a machine-readable DRIVE NOW",
+      "                                 line and BLOCKS while you play the level from",
+      "                                 your own connection, then derives the verdict",
+      "                                 from the recording; needs harness.playability.",
+      "                                 Give up after harness.playability.driveTimeoutSeconds)",
       "  console.json (alone)        → console recipe (steady play-soak; e.g. parallax)",
       "A slice needing several of these runs several recipes.",
       "",

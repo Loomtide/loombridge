@@ -82,11 +82,29 @@ test("captureRecipesForFiles: a slice needing framing AND feel runs both, in run
   assert.deepEqual(d.unproduced, []);
 });
 
+test("captureRecipesForFiles: playability.json selects the observer (evidence arc stage 3)", () => {
+  const d = captureRecipesForFiles(["playability.json", "console.json"]);
+  assert.deepEqual(d.recipes, ["playability"]);
+  assert.deepEqual(d.unproduced, [], "playability.json is no longer agent-assembly-required");
+  // The observer holds play mode across the whole hand-driven completion, so its
+  // console snapshot is the one covering the session the verdict describes
+  // (ledger L106: console.json used to come from a soak BEFORE the played run).
+  assert.equal(d.files.find((f) => f.file === "console.json")?.recipe, "playability");
+});
+
+test("captureRecipesForFiles: the observer runs LAST, after every recipe the CLI can run alone", () => {
+  const d = captureRecipesForFiles(["screen-rects.json", "feel.json", "playability.json", "console.json"]);
+  assert.deepEqual(d.recipes, ["framing", "feel", "playability"]);
+  assert.deepEqual(d.unproduced, []);
+});
+
 test("recipeOutputs: every recipe writes console.json on its way past", () => {
   assert.ok(recipeOutputs("framing").includes("console.json"));
   assert.ok(recipeOutputs("tiles").includes("console.json"));
   assert.ok(recipeOutputs("feel").includes("console.json"));
   assert.ok(recipeOutputs("feel").includes("feel.json"));
+  assert.ok(recipeOutputs("playability").includes("console.json"));
+  assert.ok(recipeOutputs("playability").includes("playability.json"));
   assert.deepEqual(recipeOutputs("console"), ["console.json"]);
 });
 
@@ -250,6 +268,24 @@ function recordingDeps(options: { writeFiles?: boolean } = {}): RecordedDeps {
       }
       return { feelPath, consolePath, measured: ["runSpeed"], omitted: [], gaps: [], logCount: 0 };
     },
+    capturePlayability: async (a) => {
+      calls.push("playability");
+      runIds.push(a.runId);
+      const playabilityPath = path.join(a.outDir, "playability.json");
+      const consolePath = path.join(a.outDir, "console.json");
+      if (writeFiles) {
+        await writeJson(playabilityPath, { completable: true });
+        await writeJson(consolePath, { logs: [] });
+      }
+      return {
+        playabilityPath,
+        consolePath,
+        completionMethod: "played",
+        sampleCount: 120,
+        driveSeconds: 12,
+        logCount: 0,
+      };
+    },
     captureTiles: async (a) => {
       calls.push("tiles");
       runIds.push(a.runId);
@@ -319,6 +355,9 @@ test("runCapture: tile capture requires both expected gate files to be provenanc
     captureFeel: async () => {
       throw new Error("should not be called");
     },
+    capturePlayability: async () => {
+      throw new Error("should not be called");
+    },
     captureTiles: async (a) => {
       await writeJson(path.join(a.outDir, "platform-tiles.json"), { platforms: [] });
       return {
@@ -377,6 +416,10 @@ function projectRecordingDeps(): { deps: CaptureDeps; seen: Record<string, unkno
       seen.feel = a.project;
       return base.deps.captureFeel(a);
     },
+    capturePlayability: async (a) => {
+      seen.playability = a.project;
+      return base.deps.capturePlayability(a);
+    },
   };
   return { deps, seen };
 }
@@ -434,6 +477,9 @@ test("runCapture: a missing-GroundTiling bridge error surfaces as exit 1 (not a 
       throw new Error("should not be called");
     },
     captureFeel: async () => {
+      throw new Error("should not be called");
+    },
+    capturePlayability: async () => {
       throw new Error("should not be called");
     },
     captureTiles: async () => {

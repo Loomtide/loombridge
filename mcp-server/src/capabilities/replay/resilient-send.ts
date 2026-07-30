@@ -38,6 +38,13 @@ import type { BridgeSend } from "./unity-driver.js";
  * second time, so the returned frame would sit 2x the settle past the action while the
  * report labels it with the trace's single settle. That is exactly the phase skew the
  * aligned settle exists to remove, arriving through the retry path instead.
+ *
+ * `observe.drain` is here for a THIRD reason: it is DESTRUCTIVE. It hands back the
+ * whole recorded play window and releases the buffers with the session, so a retry
+ * after a lost response returns an empty window from a recorder that is already
+ * stopped, and the minutes of play it held are gone. Its sibling `observe.start` is
+ * deliberately NOT here: starting an active recorder returns the live session
+ * untouched, which is idempotence by construction, and `observe.status` is a read.
  */
 export const NON_IDEMPOTENT_OPS: ReadonlySet<string> = new Set([
   "ui.dispatch_pointer",
@@ -47,6 +54,7 @@ export const NON_IDEMPOTENT_OPS: ReadonlySet<string> = new Set([
   "input.key_tap",
   "input.key_down",
   "input.key_up",
+  "observe.drain",
 ]);
 
 /** The subset of `UnityClient` that `resilientSend` needs. */

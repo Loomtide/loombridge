@@ -537,6 +537,49 @@
               }
             }
           }
+        },
+        "playability": {
+          "description": "THE WIN BINDING (H7): which component carries the win/score/lives fields the play-mode recorder samples every Update, which objects the bridge counts as collectibles at window open, and the keys the observer's own post-win probes inject. Names the mechanical CHECK, never the verdict: the observer derives every headline field from the recorded buffer. Schema-optional; the playability recipe refuses at run time naming the JSON to add.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["playerLocator", "stateLocator", "stateComponent", "fields", "winRule", "keys"],
+          "properties": {
+            "playerLocator": { "type": "string", "minLength": 1 },
+            "stateLocator": { "type": "string", "minLength": 1 },
+            "stateComponent": { "type": "string", "minLength": 1 },
+            "fields": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["win", "score", "lives"],
+              "properties": {
+                "win": { "type": "string", "minLength": 1 },
+                "score": { "type": "string", "minLength": 1 },
+                "lives": { "type": "string", "minLength": 1 }
+              }
+            },
+            "winRule": { "enum": ["all-collectibles", "reach-goal"] },
+            "collectibles": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "namePattern": { "type": "string", "minLength": 1 },
+                "tag": { "type": "string", "minLength": 1 }
+              }
+            },
+            "goalLocator": { "type": "string", "minLength": 1 },
+            "goalRadiusU": { "type": "number", "exclusiveMinimum": 0 },
+            "respawnLocator": { "type": "string", "minLength": 1 },
+            "keys": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["moveRight"],
+              "properties": {
+                "moveRight": { "type": "string", "minLength": 1 },
+                "restart": { "type": "string", "minLength": 1 }
+              }
+            },
+            "driveTimeoutSeconds": { "type": "number", "exclusiveMinimum": 0 }
+          }
         }
       }
     }

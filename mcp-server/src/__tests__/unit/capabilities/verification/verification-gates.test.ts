@@ -55,6 +55,7 @@ import type { AcceptanceContract } from "../../../../capabilities/verification/t
 import { validateAcceptanceContract } from "../../../../capabilities/verification/validator.js";
 import { createDraftAssetManifest, type AssetManifest } from "../../../../capabilities/assets/asset-manifest.js";
 import { REPO_ROOT as REPO_ROOT_SUPPORT } from "../../../_support/paths.js";
+import { producedPlayabilityEvidence } from "../../../_support/playability-fixture.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -64,9 +65,31 @@ const acceptancePath = path.resolve(
 );
 
 let acceptance: AcceptanceContract;
+/**
+ * The same contract plus the stage-3 win binding, for the tests that grade PRODUCED
+ * playability evidence. `harness.playability` is intentionally absent from the
+ * golden seeded contract (a guessed seam is worse than an absent one: the
+ * observer's refusal names the exact JSON to add), so the tests that need it
+ * declare it.
+ */
+let acceptanceWithPlayabilityHarness: AcceptanceContract;
 test("load tiderunner acceptance contract", async () => {
   acceptance = JSON.parse(await fs.readFile(acceptancePath, "utf-8")) as AcceptanceContract;
   assert.equal(acceptance.game, "tiderunner");
+  acceptanceWithPlayabilityHarness = {
+    ...acceptance,
+    harness: {
+      playability: {
+        playerLocator: "/Player",
+        stateLocator: "/GameManager",
+        stateComponent: "GameManager",
+        fields: { win: "isWin", score: "score", lives: "lives" },
+        winRule: "all-collectibles",
+        collectibles: { namePattern: "Apple" },
+        keys: { moveRight: "D", restart: "R" },
+      },
+    },
+  } as AcceptanceContract;
 });
 
 function checkById(report: GateReport, id: string): GateCheck {
@@ -673,7 +696,11 @@ test("playability (live build): all-fruit is now the ACCEPTED rule -> PASS", () 
   assert.equal(c.expected, "all-fruit");
   assert.equal(c.actual, "all-fruit");
   assert.equal(checkById(r, "playability.completable").status, "pass");
-  assert.equal(r.verdict, "pass");
+  // Stage 3: an AGENT-ASSEMBLED playability.json is capped at warn however clean
+  // its fields are, because nothing binds them to a recorded session (ledger
+  // L97/L98). Every per-check status above is unchanged; only the roll-up is.
+  assert.equal(r.verdict, "warn");
+  assert.equal(checkById(r, "playability.evidenceOrigin").status, "warn");
 });
 
 test("playability: a divergent win rule (reach-flag) FAILs against accepted all-fruit", () => {
@@ -739,7 +766,8 @@ test("playability: completionMethod 'played' PASSes completable", () => {
   };
   const r = evaluatePlayability(results, acceptance);
   assert.equal(checkById(r, "playability.completable").status, "pass");
-  assert.equal(r.verdict, "pass");
+  // Stage 3: the check passes, the GATE is capped at warn (agent-assembled origin).
+  assert.equal(r.verdict, "warn");
 });
 
 test("playability: completable true but completionMethod absent -> WARN (capture it)", () => {
@@ -790,7 +818,9 @@ test("playability: continuous end-state contract skips modal freeze checks", () 
   });
   assert.equal(checkById(r, "playability.endStateMode").status, "pass");
   assert.equal(r.checks.some((c) => c.id === "playability.postWinInputLocked"), false);
-  assert.equal(r.verdict, "pass");
+  // Stage 3: capped at warn (agent-assembled origin); the modal-skip logic is
+  // exactly as before, which is what the two assertions above pin.
+  assert.equal(r.verdict, "warn");
 });
 
 // ---------------------------------------------------------------------------
@@ -2618,19 +2648,13 @@ test("aggregate: post-reconcile live run -> overall fail driven by the UI font/c
     { missing: [], placeholders: [], extras: [], all_ok: true },
     acceptance,
   );
-  // Phase F adopted all-fruit, so the observed all-fruit win now conforms.
+  // Phase F adopted all-fruit, so the observed all-fruit win now conforms. Stage 3:
+  // this aggregate uses the PRODUCED evidence shape, because an agent-assembled
+  // playability.json is now capped at warn and the point of this test is the UI
+  // findings driving the overall fail, not the evidence-origin cap.
   const playability = evaluatePlayability(
-    {
-      completable: true,
-      completionMethod: "played",
-      winRuleObserved: "all-fruit",
-      hazardKills: true,
-      collectibleIncrements: true,
-      postWinInputLocked: true,
-      postWinPlayerFrozen: true,
-      restartWorks: true,
-    },
-    acceptance,
+    producedPlayabilityEvidence({ contract: acceptanceWithPlayabilityHarness, contractWinRule: "all-fruit" }),
+    acceptanceWithPlayabilityHarness,
   );
   // The build's true dash is 18.75 × 0.15 = 2.8125u (the 3.0u capture was the slip).
   const feel = evaluateFeel(
@@ -2639,6 +2663,7 @@ test("aggregate: post-reconcile live run -> overall fail driven by the UI font/c
   );
 
   const verdict = aggregateVerdict([manifest, ui, framing, playability, feel]);
+
 
   assert.equal(verdict.status, "fail");
   assert.equal(verdict.gates["manifest"], "pass");

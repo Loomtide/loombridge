@@ -73,14 +73,23 @@ test("NON_IDEMPOTENT_OPS: exactly the side-effecting ops the replay driver sends
       "input.key_up",
       "input.pointer_tap",
       "input.pointer_tap_world",
+      "observe.drain",
       "replay.settle_and_capture",
       "ui.dispatch_pointer",
     ],
   );
   // The scope is "side-effecting", not "input": a read-only observe/query op retried across a
   // reconnect costs nothing, and pulling it in here would turn an ordinary recoverable drop
-  // into a failed run.
-  for (const readOnly of ["ui.get_screen_rects", "scene.get_screen_rects", "editor.console_logs"]) {
+  // into a failed run. `observe.drain` is the exception that proves the rule: it READS a buffer
+  // and DESTROYS it, so a retry returns an empty window and the minutes of play it held are gone.
+  // Its idempotent siblings stay retryable.
+  for (const readOnly of [
+    "ui.get_screen_rects",
+    "scene.get_screen_rects",
+    "editor.console_logs",
+    "observe.start",
+    "observe.status",
+  ]) {
     assert.equal(NON_IDEMPOTENT_OPS.has(readOnly), false, `${readOnly} is a read: it must stay retryable`);
   }
 });
