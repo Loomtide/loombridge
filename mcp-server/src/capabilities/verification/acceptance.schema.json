@@ -498,6 +498,47 @@
           }
         }
       }
+    },
+
+    "harness": {
+      "description": "HOW a measurement recipe reaches this game (M14): never what the game must feel like, which is `feel`. Optional: absent breaks no existing contract, and the feel capture recipe refuses at run time naming the JSON to add.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "feelSeam": {
+          "description": "The controller seam the feel recipe drives: the keys the KEYED captures inject, and the public drive fields plus the input-reader component the SEAM-DRIVEN captures write (the reader is disabled for those legs: ledger C1).",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["playerLocator", "controllerComponent", "inputReaderComponent", "fields", "keys"],
+          "properties": {
+            "playerLocator": { "type": "string", "minLength": 1 },
+            "controllerComponent": { "type": "string", "minLength": 1 },
+            "inputReaderComponent": { "type": "string", "minLength": 1 },
+            "fields": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["moveX"],
+              "properties": {
+                "moveX": { "type": "string", "minLength": 1 },
+                "jumpHeld": { "type": "string", "minLength": 1 },
+                "dashHeld": { "type": "string", "minLength": 1 }
+              }
+            },
+            "keys": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["jump", "moveRight"],
+              "properties": {
+                "jump": { "type": "string", "minLength": 1 },
+                "moveRight": { "type": "string", "minLength": 1 },
+                "moveLeft": { "type": "string", "minLength": 1 },
+                "jumpCut": { "type": "string", "minLength": 1 },
+                "dash": { "type": "string", "minLength": 1 }
+              }
+            }
+          }
+        }
+      }
     }
   },
 

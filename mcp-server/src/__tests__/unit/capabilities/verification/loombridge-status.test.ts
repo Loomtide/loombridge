@@ -106,10 +106,17 @@ test("status names the evidence NO capture recipe produces, per slice", async ()
         ...feel,
         dependsOn: [],
         state: "built",
+        // `manifest` is the gate whose evidence file no recipe writes; the feel
+        // gates' file IS produced now, so this is the slice's remaining gap.
+        acceptance: { ...feel.acceptance, gates: [...feel.acceptance.gates, "manifest"] },
         proof: {
           runId: "run-player-feel-test",
           startedAt: "2026-01-01T00:00:00.000Z",
-          captureManifest: ["player-feel/feel.json", "player-feel/console.json"],
+          captureManifest: [
+            "player-feel/feel.json",
+            "player-feel/console.json",
+            "player-feel/verify-manifest.json",
+          ],
         },
       },
     ];
@@ -117,11 +124,17 @@ test("status names the evidence NO capture recipe produces, per slice", async ()
 
     const model = await statusModel(root);
     const capture = model.captures.find((c) => c.sliceId === "player-feel")!;
-    assert.deepEqual(capture.recipes, ["console"]);
-    assert.deepEqual(capture.agentAssemblyRequired, ["feel.json"]);
+    // Stage 2: feel.json is PRODUCED now (the feel recipe), so the entry still left
+    // to the agent is the one nothing writes: which is exactly what status must name.
+    assert.deepEqual(capture.recipes, ["feel"]);
+    assert.deepEqual(capture.agentAssemblyRequired, ["verify-manifest.json"]);
     assert.ok(
-      model.warnings.some((w) => /player-feel: no CLI capture recipe produces feel\.json/.test(w)),
+      model.warnings.some((w) => /player-feel: no CLI capture recipe produces verify-manifest\.json/.test(w)),
       model.warnings.join("\n"),
+    );
+    assert.ok(
+      !model.warnings.some((w) => /produces feel\.json/.test(w)),
+      "feel.json has a producer now; status must not still route the developer to hand-author it",
     );
   } finally {
     await fs.rm(root, { recursive: true, force: true });

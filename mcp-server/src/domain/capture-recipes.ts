@@ -17,7 +17,7 @@
  */
 
 /** A deterministic capture recipe the CLI can run itself. */
-export type CaptureKind = "framing" | "tiles" | "console";
+export type CaptureKind = "framing" | "tiles" | "feel" | "console";
 
 /**
  * Files each recipe writes as its REASON FOR EXISTING. A manifest entry listed
@@ -27,6 +27,10 @@ const RECIPE_PRIMARY_OUTPUTS: Record<CaptureKind, readonly string[]> = {
   // Ordered by run precedence (see RECIPE_ORDER).
   tiles: ["platform-tiles.json", "tile-render.json"],
   framing: ["screen-rects.json"],
+  // Stage 2 (evidence arc E1): the feel producer. `feel.json` was the moat's worst
+  // case: 100 percent agent-authored, every provenance field a typed literal
+  // (ledger L45/L46/L75/L76/L77): and is now written from the bridge's own echoes.
+  feel: ["feel.json"],
   console: [],
 };
 
@@ -39,11 +43,18 @@ const RECIPE_PRIMARY_OUTPUTS: Record<CaptureKind, readonly string[]> = {
 const RECIPE_INCIDENTAL_OUTPUTS: Record<CaptureKind, readonly string[]> = {
   tiles: ["console.json"],
   framing: ["console.json"],
+  // The feel recipe holds play mode for a long, input-driven session, so its own
+  // console snapshot is the one that covers the run that produced the measurements.
+  feel: ["console.json"],
   console: ["console.json"],
 };
 
-/** Run order. Primary recipes first; the console-only recipe is the fallback. */
-const RECIPE_ORDER: readonly CaptureKind[] = ["tiles", "framing", "console"];
+/**
+ * Run order. Primary recipes first; the console-only recipe is the fallback. `feel`
+ * runs LAST of the primaries: it is by far the longest leg (a warm-up, four keyed
+ * captures and two tick sweeps), and its console snapshot then covers the whole run.
+ */
+const RECIPE_ORDER: readonly CaptureKind[] = ["tiles", "framing", "feel", "console"];
 
 /** Every file a recipe writes (primary + incidental). */
 export function recipeOutputs(kind: CaptureKind): string[] {

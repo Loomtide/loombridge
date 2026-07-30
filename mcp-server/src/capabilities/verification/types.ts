@@ -6,6 +6,10 @@
  * captured build against these targets and tolerances.
  */
 
+import type { HarnessSection } from "../../domain/harness-seam.js";
+
+export type { HarnessSection, FeelSeam } from "../../domain/harness-seam.js";
+
 export const ACCEPTANCE_SCHEMA_VERSION = "1" as const;
 
 /** A tolerance band on a numeric target. One of `percent` or `abs` is expected. */
@@ -726,6 +730,13 @@ export interface AcceptanceContract {
    *  per-run captureManifest from this; doneness (§3a) refuses to certify
    *  without every required capture present. */
   capturePack?: CapturePackSection;
+  /**
+   * Optional HARNESS wiring (review M14): how a measurement recipe REACHES this
+   * game, never what the game must feel like. Deliberately a sibling of `feel`,
+   * not a member of it: see `domain/harness-seam.ts`. Absent is legal; the feel
+   * recipe refuses at run time and names the JSON to add.
+   */
+  harness?: HarnessSection;
 }
 
 /** One state the build must capture from (e.g. spawn / hazard / movement / win). */

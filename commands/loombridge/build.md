@@ -284,6 +284,16 @@ The recipe is **dispatched by the slice's `acceptance.gates`** — no per-slice 
 - a `framing` gate → `screen-rects.json` + `console.json` (play-mode projection + camera).
 - a `platform-tiles`/`tile-render` gate → `platform-tiles.json` + `tile-render.json` (via
   the allowlisted `GroundTiling.WriteTileCaptures`) + `console.json`.
+- a `feel` / `feel-provenance` / `feel-rederive` / `physics-timestep` gate → `feel.json` +
+  `console.json`, via the **feel recipe**: it enters play, warms up, then drives
+  run / jump / the canonical short hop through `runtime.capture_input_motion`, sweeps
+  coyote-time and jump-buffer over tick-indexed trials (every trial's raw echo retained),
+  and measures the dash through the controller seam with the input reader disabled. It
+  requires a `harness.feelSeam` block in `ACCEPTANCE.json` (which component reads input,
+  which fields it writes, which keys drive it) and **refuses**, naming the exact JSON to
+  add, when the block is absent: it will not guess a seam. Do not hand-author
+  `feel.json`: every provenance field it carries comes from the op echoes, and the gates
+  now re-derive the headline numbers from the raw evidence in the same file.
 - a `console-clean` gate with **no** framing rects / no GroundTiling tiles (e.g. the
   `parallax` slice) → **`console.json` only**. This writes ONLY the `console-clean`
   evidence — the slice's other gates (`parallax-motion.json`, `coverage.json`,
@@ -315,8 +325,9 @@ For each state in the capturePack (spawn / hazard / movement / win), drive Unity
 state and save the per-op gate captures to `.loombridge/verify/<state>/` under the exact
 filenames the gates expect: `verify-manifest.json`, `ui-scan.json`, `screen-rects.json`,
 `placement.json`, `coverage.json`, `reachability.json`, `platform-tiles.json`,
-`objects.json`, `playability.json`, `feel.json` (use **`loombridge capture`** above for
-`screen-rects.json` + `console.json`). The **`verify-2d-game`** skill has the full
+`objects.json`, `playability.json` (use **`loombridge capture`** above for
+`screen-rects.json`, `console.json` and `feel.json`: those three have CLI producers and
+must NOT be hand-authored). The **`verify-2d-game`** skill has the full
 op→args→filename map. These captures satisfy `doneness`'s captureManifest *presence* check;
 quality is graded by `loombridge verify` on the primary state (next step).
 
