@@ -95,7 +95,7 @@ function cleanFeelCapture(): Record<string, unknown> {
     runSpeed: 7.0,
     jumpApex: 2.2,
     timeToApex: 320,
-    shortHopApex: 0.72,
+    shortHopApex: 1.41,
     dashDistance: 2.8125,
     coyoteTime: 0.1,
     jumpBuffer: 0.1,

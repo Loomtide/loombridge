@@ -182,12 +182,12 @@
       "note": "measured 325ms"
     },
     "shortHopApex": {
-      "target": 0.72,
+      "target": 1.41,
       "unit": "u",
       "band": {
         "percent": 10
       },
-      "note": "jumpCutMultiplier 0.5 -> short hop 0.72u"
+      "note": "realized plateau of the canonical 6-tick tap (SHORT_HOP_CANONICAL_TAP_TICKS; live diag 6t saturates at 1.405u). The old 0.72u derived from jumpCutMultiplier 0.5 alone and predates the tick canonicalization: it is unreachable under the canonical tap for any controller that also satisfies jumpApex and timeToApex."
     },
     "dashDistance": {
       "target": 2.8125,

@@ -172,7 +172,7 @@ test("tiderunner-mock-oracle: feel parsed from the feel doc (apex 2.2u, dash 2.8
   assert.equal(feel.runSpeed?.target, 7);
   assert.equal(feel.jumpApex?.target, 2.2);
   assert.equal(feel.timeToApex?.target, 325);
-  assert.equal(feel.shortHopApex?.target, 0.72);
+  assert.equal(feel.shortHopApex?.target, 1.41);
   // Phase F reconcile corrected the dash arithmetic slip: 18.75 × 0.15 = 2.8125u.
   assert.equal(feel.dashDistance?.target, 2.8125);
   assert.equal(feel.dashTime?.target, 0.15);

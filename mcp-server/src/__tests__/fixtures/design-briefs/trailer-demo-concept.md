@@ -54,7 +54,7 @@ Cohesive, professional pixel art (a clear jump from the seed stubs):
   and readable). Built + tuned in `d241e32` (branch `feature/PolishedPlatformer`).
 - **Proven feel params** (independently re-measured via runtime.probe / measure_motion):
   `moveSpeed 7` → run 7.0 u/s; `jumpSpeed 14.22` + `gravityScale 4.402` → apex **2.20u** @ **325ms**;
-  `jumpCutMultiplier 0.5` → short hop 0.72u; `dashSpeed 18.75`/`dashTime 0.15` → **2.8125u** dash (≈2.81u; the earlier 3.0u was an arithmetic slip — 18.75×0.15=2.8125);
+  `jumpCutMultiplier 0.5` → short hop 1.41u (realized plateau of the canonical 6-tick tap; the pre-canon 0.72u derivation ignored the pinned hold); `dashSpeed 18.75`/`dashTime 0.15` → **2.8125u** dash (≈2.81u; the earlier 3.0u was an arithmetic slip — 18.75×0.15=2.8125);
   `dashCooldown 0.4`, one dash per airtime.
 - **Look:** being mocked by the user in **Claude Design** (level slice + visual direction); implemented
   1:1 in Unity from the registered Pixel Adventure CC0 art.

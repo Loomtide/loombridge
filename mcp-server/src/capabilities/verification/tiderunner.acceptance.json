@@ -106,7 +106,7 @@
     "runSpeed": { "target": 7, "unit": "u/s", "band": { "percent": 5 }, "note": "moveSpeed 7" },
     "jumpApex": { "target": 2.2, "unit": "u", "band": { "percent": 5 }, "note": "jumpSpeed 14.22 + gravityScale 4.402 -> apex 2.20u" },
     "timeToApex": { "target": 325, "unit": "ms", "band": { "percent": 10 }, "note": "measured 325ms" },
-    "shortHopApex": { "target": 0.72, "unit": "u", "band": { "percent": 10 }, "note": "jumpCutMultiplier 0.5 -> short hop 0.72u" },
+    "shortHopApex": { "target": 1.41, "unit": "u", "band": { "percent": 10 }, "note": "realized plateau of the canonical 6-tick tap (SHORT_HOP_CANONICAL_TAP_TICKS; live diag 6t saturates at 1.405u). The old 0.72u derived from jumpCutMultiplier 0.5 alone and predates the tick canonicalization: it is unreachable under the canonical tap for any controller that also satisfies jumpApex and timeToApex." },
     "dashDistance": { "target": 2.8125, "unit": "u", "band": { "percent": 5 }, "note": "= dashSpeed 18.75 x dashTime 0.15; the 3.0u was an arithmetic slip." },
     "dashTime": { "target": 0.15, "unit": "s", "band": { "percent": 10 } },
     "dashCooldown": { "target": 0.4, "unit": "s", "band": { "percent": 10 }, "note": "one dash per airtime" },

@@ -412,7 +412,7 @@ export function parseFeelFromDoc(markdown: string): FeelSection {
   const runSpeed = grab(/run\s+([\d.]+)\s*u\/s/i) ?? grab(/moveSpeed\s+([\d.]+)/i) ?? 7;
   const jumpApex = grab(/apex\s+\**([\d.]+)u/i) ?? 2.2;
   const timeToApex = grab(/@\s*\**([\d.]+)\s*ms/i) ?? 325;
-  const shortHop = grab(/short hop\s+([\d.]+)u/i) ?? 0.72;
+  const shortHop = grab(/short hop\s+([\d.]+)u/i) ?? 1.41;
   const dashDist = grab(/\*\*([\d.]+)u\*\*\s*dash/i) ?? grab(/([\d.]+)u\s*dash/i) ?? 3.0;
   const dashTime = grab(/dashTime\s+([\d.]+)/i) ?? 0.15;
   const dashCooldown = grab(/dashCooldown\s+([\d.]+)/i) ?? 0.4;
@@ -423,7 +423,7 @@ export function parseFeelFromDoc(markdown: string): FeelSection {
     runSpeed: { target: runSpeed, unit: "u/s", band: { percent: 5 }, note: "moveSpeed 7" },
     jumpApex: { target: jumpApex, unit: "u", band: { percent: 5 }, note: "jumpSpeed 14.22 + gravityScale 4.402" },
     timeToApex: { target: timeToApex, unit: "ms", band: { percent: 10 } },
-    shortHopApex: { target: shortHop, unit: "u", band: { percent: 10 }, note: "jumpCutMultiplier 0.5" },
+    shortHopApex: { target: shortHop, unit: "u", band: { percent: 10 }, note: "canonical 6-tick tap plateau" },
     dashDistance: { target: dashDist, unit: "u", band: { percent: 5 }, note: "dashSpeed 18.75 / dashTime 0.15" },
     dashTime: { target: dashTime, unit: "s", band: { percent: 10 } },
     dashCooldown: { target: dashCooldown, unit: "s", band: { percent: 10 }, note: "one dash per airtime" },
