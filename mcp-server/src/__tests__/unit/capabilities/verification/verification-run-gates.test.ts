@@ -8,6 +8,7 @@
  */
 
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -18,6 +19,7 @@ import { gradedGates, runGates, isGateInStage, VERIFY_STAGES, type ReviewFinding
 import type { AcceptanceContract } from "../../../../capabilities/verification/types.js";
 import { createDraftAssetManifest, type AssetManifest } from "../../../../capabilities/assets/asset-manifest.js";
 import { REPO_ROOT as REPO_ROOT_SUPPORT } from "../../../_support/paths.js";
+import { producedPlayabilityEvidence } from "../../../_support/playability-fixture.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -30,12 +32,61 @@ const switchyardAcceptancePath = path.resolve(
   "mcp-server/src/capabilities/verification/switchyard-courier.acceptance.json",
 );
 
+/**
+ * The bundled TideRunner contract PLUS the stage-3 win binding.
+ *
+ * `harness.playability` is deliberately NOT part of the golden seeded contract (a
+ * guessed seam is worse than an absent one: the observer's refusal names the exact
+ * JSON to add, a wrong component name would fail silently at read time). The
+ * fixtures below grade PRODUCED playability evidence, which the gate re-checks
+ * against the contract's own win binding, so these tests declare it here.
+ */
+function withPlayabilityHarness(contract: AcceptanceContract): AcceptanceContract {
+  return {
+    ...contract,
+    harness: {
+      ...(contract as { harness?: Record<string, unknown> }).harness,
+      playability: {
+        playerLocator: "/Player",
+        stateLocator: "/GameManager",
+        stateComponent: "GameManager",
+        fields: { win: "isWin", score: "score", lives: "lives" },
+        winRule: "all-collectibles",
+        collectibles: { namePattern: "Apple" },
+        keys: { moveRight: "D", restart: "R" },
+      },
+    },
+  } as AcceptanceContract;
+}
+
+/**
+ * The same contract, read synchronously, so the module-level CAPTURES table can
+ * mint playability evidence bound to THIS contract's feel targets (the gate
+ * re-derives the kinematic bound from the contract and refuses a mismatch).
+ */
+const ACCEPTANCE_SYNC = withPlayabilityHarness(
+  JSON.parse(readFileSync(acceptancePath, "utf-8")) as AcceptanceContract,
+);
+
 async function loadAcceptance(): Promise<AcceptanceContract> {
-  return JSON.parse(await fs.readFile(acceptancePath, "utf-8")) as AcceptanceContract;
+  return withPlayabilityHarness(JSON.parse(await fs.readFile(acceptancePath, "utf-8")) as AcceptanceContract);
 }
 
 async function loadSwitchyardAcceptance(): Promise<AcceptanceContract> {
   return JSON.parse(await fs.readFile(switchyardAcceptancePath, "utf-8")) as AcceptanceContract;
+}
+
+
+/**
+ * The playability evidence every conformant fixture below uses.
+ *
+ * Stage 3 caps AGENT-ASSEMBLED playability.json at warn (an eight-line hand-typed
+ * file used to produce a full pass: ledger L97/L98), so a fixture that wants a
+ * green playability gate now has to carry a recording. This mints the produced
+ * shape, and its headline is whatever the derivation reads out of that recording.
+ */
+function cleanPlayabilityCapture(contract: unknown): Record<string, unknown> {
+  return producedPlayabilityEvidence({ contract, contractWinRule: "all-fruit" });
 }
 
 function cleanTileRenderCapture(): Record<string, unknown> {
@@ -154,16 +205,7 @@ const CAPTURES: Record<string, unknown> = {
       { name: "Flag", centerXFraction: 0.867, isPartiallyClipped: false },
     ],
   },
-  "playability.json": {
-    completable: true,
-    completionMethod: "played", // completed by movement, not a teleport
-    winRuleObserved: "all-fruit", // Phase F: now the ACCEPTED rule -> conforms
-    hazardKills: true,
-    collectibleIncrements: true,
-    postWinInputLocked: true,
-    postWinPlayerFrozen: true,
-    restartWorks: true,
-  },
+  "playability.json": cleanPlayabilityCapture(ACCEPTANCE_SYNC),
   "coverage.json": {
     cameraFrame: { minX: 0, maxX: 16, minY: 0, maxY: 9 },
     layers: [{ name: "Sky", minX: -1, maxX: 17, minY: -1, maxY: 10 }],
@@ -503,7 +545,7 @@ test("run-gates: --vlm with byte-identical key frames FAILs via frame-integrity 
           { name: "Flag", centerXFraction: 0.85, isPartiallyClipped: false },
         ],
       },
-      "playability.json": { completable: true, completionMethod: "played", winRuleObserved: "all-fruit", hazardKills: true, collectibleIncrements: true, postWinInputLocked: true, postWinPlayerFrozen: true, restartWorks: true },
+      "playability.json": cleanPlayabilityCapture(ACCEPTANCE_SYNC),
       "coverage.json": { cameraFrame: { minX: 0, maxX: 16, minY: 0, maxY: 9 }, layers: [{ name: "Sky", minX: -1, maxX: 17, minY: -1, maxY: 10 }], atSeconds: 8 },
       "parallax-motion.json": cleanParallaxMotionCapture(),
       "render-frame.json": { frames: [{ id: "spawn", width: 1920, height: 1080, edgeBlackFraction: { top: 0, right: 0, bottom: 0, left: 0 }, contentRect: { x: 0, y: 0, width: 1920, height: 1080 } }] },
@@ -576,7 +618,7 @@ test("run-gates: --vlm with DISTINCT key frames -> frame-integrity passes (no fo
           { name: "Flag", centerXFraction: 0.85, isPartiallyClipped: false },
         ],
       },
-      "playability.json": { completable: true, completionMethod: "played", winRuleObserved: "all-fruit", hazardKills: true, collectibleIncrements: true, postWinInputLocked: true, postWinPlayerFrozen: true, restartWorks: true },
+      "playability.json": cleanPlayabilityCapture(ACCEPTANCE_SYNC),
       "coverage.json": { cameraFrame: { minX: 0, maxX: 16, minY: 0, maxY: 9 }, layers: [{ name: "Sky", minX: -1, maxX: 17, minY: -1, maxY: 10 }, { name: "Hills", minX: -1, maxX: 17, minY: -1, maxY: 7 }], atSeconds: 8 },
       "parallax-motion.json": cleanParallaxMotionCapture(),
       "render-frame.json": { frames: [{ id: "spawn", width: 1920, height: 1080, edgeBlackFraction: { top: 0, right: 0, bottom: 0, left: 0 }, contentRect: { x: 0, y: 0, width: 1920, height: 1080 } }] },
@@ -650,7 +692,7 @@ function conformantCaptures(): Record<string, unknown> {
         { name: "Flag", centerXFraction: 0.85, isPartiallyClipped: false },
       ],
     },
-    "playability.json": { completable: true, completionMethod: "played", winRuleObserved: "all-fruit", hazardKills: true, collectibleIncrements: true, postWinInputLocked: true, postWinPlayerFrozen: true, restartWorks: true },
+    "playability.json": cleanPlayabilityCapture(ACCEPTANCE_SYNC),
     "coverage.json": { cameraFrame: { minX: 0, maxX: 16, minY: 0, maxY: 9 }, layers: [{ name: "Sky", minX: -1, maxX: 17, minY: -1, maxY: 10 }, { name: "Hills", minX: -1, maxX: 17, minY: -1, maxY: 7 }], atSeconds: 8 },
     "parallax-motion.json": cleanParallaxMotionCapture(),
     "render-frame.json": { frames: [{ id: "spawn", width: 1920, height: 1080, edgeBlackFraction: { top: 0, right: 0, bottom: 0, left: 0 }, contentRect: { x: 0, y: 0, width: 1920, height: 1080 } }] },
@@ -782,16 +824,7 @@ test("run-gates: conformant captures -> overall pass", async () => {
           { name: "Flag", centerXFraction: 0.85, isPartiallyClipped: false },
         ],
       },
-      "playability.json": {
-        completable: true,
-        completionMethod: "played", // completed by movement, not a teleport
-        winRuleObserved: "all-fruit", // Phase F accepted rule
-        hazardKills: true,
-        collectibleIncrements: true,
-        postWinInputLocked: true,
-        postWinPlayerFrozen: true,
-        restartWorks: true,
-      },
+      "playability.json": cleanPlayabilityCapture(ACCEPTANCE_SYNC),
       "coverage.json": {
         cameraFrame: { minX: 0, maxX: 16, minY: 0, maxY: 9 },
         // Sky covers the frame; Hills reaches below the floor (coversBottom passes).

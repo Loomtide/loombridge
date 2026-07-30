@@ -1096,6 +1096,14 @@ interface DashCapture {
   sampleCount: number | undefined;
   durationMs: number | undefined;
   requestedCaptureFps: number;
+  /**
+   * The three fields `runtime.probe` did NOT echo before stage 3 (ledger L75).
+   * Read from the response when present and left ABSENT when not: an older bridge
+   * still produces the honest gap below rather than a typed constant.
+   */
+  echoedCaptureFps: number | undefined;
+  projectFixedTimestepBeforeMeasurement: number | undefined;
+  measurementFixedTimestep: number | undefined;
 }
 
 /**
@@ -1132,24 +1140,32 @@ async function captureDash(
     sampleCount: num(data.sampleCount),
     durationMs: windowMsOf(data),
     requestedCaptureFps: captureFps,
+    echoedCaptureFps: num(data.captureFps),
+    projectFixedTimestepBeforeMeasurement: num(data.projectFixedTimestepBeforeMeasurement),
+    measurementFixedTimestep: num(data.measurementFixedTimestep),
   };
 }
 
 /**
- * THE PROVENANCE WALL, stated in the evidence rather than papered over.
+ * THE PROVENANCE WALL, now with a door in it (stage 3).
  *
- * `runtime.probe` echoes `phases`, `sampleCount`, `totalDurationMs` and `samples` :
- * and NOT `captureFps`, `projectFixedTimestepBeforeMeasurement` or
- * `measurementFixedTimestep`. `validMeasurementSource` requires the last two, so the
- * ONLY route to a green dash today is for the writer to type them, which is exactly
- * ledger L75 (the door-one run typed `captureFps: 60` and both timestep numbers as
- * module constants into three probe sources and disclosed it honestly). A producer
- * that did the same thing would be laundering with a nicer label.
+ * Stage 2 shipped this leg with a wall: `runtime.probe` echoed `phases`,
+ * `sampleCount`, `totalDurationMs` and `samples`, and NOT `captureFps`,
+ * `projectFixedTimestepBeforeMeasurement` or `measurementFixedTimestep`.
+ * `validMeasurementSource` requires the last two, so the only route to a green dash
+ * was for the writer to TYPE them, which is exactly ledger L75 (the door-one run
+ * typed `captureFps: 60` and both timestep numbers as module constants into three
+ * probe sources and disclosed it honestly). A producer doing the same would be
+ * laundering with a nicer label, so this recipe refused to.
  *
- * So the value is written (it is real and re-derivable from the retained samples)
- * and the missing echoes are NOT invented. feel-provenance will refuse to certify
- * this source, which is the correct outcome: the measurement happened, the
- * certification cannot, and the gap is named in `_provenance.gaps`.
+ * Stage 3 closed it at the source: `ComputeProbeResult` now echoes all three, the
+ * same values `capture_input_motion` reports through `MotionMetrics.AttachProvenance`.
+ * They are copied here from the RESPONSE, never from a constant.
+ *
+ * The absent path is kept, unchanged, for a project on an older bridge: the value is
+ * still written (it is real and re-derivable from the retained samples), the missing
+ * echoes are still NOT invented, feel-provenance still refuses to certify the source,
+ * and the gap is still named in `_provenance.gaps`.
  */
 function emitDash(
   dash: DashCapture,
@@ -1166,6 +1182,17 @@ function emitDash(
   const distance = Math.abs(dash.samples[dash.samples.length - 1].x - dash.samples[0].x);
   metrics.dashDistance = round4(distance);
   const effective = effectiveCaptureFps(dash.sampleCount, dash.durationMs);
+  // Which of the three the OP actually echoed. Absent stays absent.
+  const missing = (
+    [
+      ["captureFps", dash.echoedCaptureFps],
+      ["projectFixedTimestepBeforeMeasurement", dash.projectFixedTimestepBeforeMeasurement],
+      ["measurementFixedTimestep", dash.measurementFixedTimestep],
+    ] as const
+  )
+    .filter(([, value]) => value === undefined)
+    .map(([name]) => name);
+
   sources.push({
     source: "runtime.probe",
     producedBy: FEEL_PRODUCER,
@@ -1174,17 +1201,28 @@ function emitDash(
     sampleCount: dash.sampleCount,
     durationMs: dash.durationMs,
     requestedCaptureFps: dash.requestedCaptureFps,
+    // The ECHOED pin, when the bridge reports one. `captureFps` is the field the
+    // existing gates read, so it is only written when the op said it.
+    ...(dash.echoedCaptureFps === undefined ? {} : { captureFps: dash.echoedCaptureFps }),
     ...(effective === undefined ? {} : { effectiveCaptureFps: round4(effective) }),
     measuredAt,
     samples: dash.samples,
     phases: phasesOf(dash.raw),
-    notEchoedByOp: ["captureFps", "projectFixedTimestepBeforeMeasurement", "measurementFixedTimestep"],
+    ...(dash.projectFixedTimestepBeforeMeasurement === undefined
+      ? {}
+      : { projectFixedTimestepBeforeMeasurement: dash.projectFixedTimestepBeforeMeasurement }),
+    ...(dash.measurementFixedTimestep === undefined
+      ? {}
+      : { measurementFixedTimestep: dash.measurementFixedTimestep }),
+    ...(missing.length === 0 ? {} : { notEchoedByOp: missing }),
   });
-  gaps.push(
-    "runtime.probe echoes no captureFps and neither timestep field, so the dash source cannot satisfy validMeasurementSource without the writer TYPING them (ledger L75). " +
-      "They are left absent and feel-provenance will refuse to certify dashDistance. Closing this needs the bridge to echo the three fields from ComputeProbeResult; " +
-      "the measured value itself is real and re-derives from the retained whole-window samples.",
-  );
+  if (missing.length > 0) {
+    gaps.push(
+      `runtime.probe echoed no ${missing.join(", ")}, so the dash source cannot satisfy validMeasurementSource without the writer TYPING them (ledger L75). ` +
+        "They are left absent and feel-provenance will refuse to certify dashDistance. This bridge predates the stage-3 ComputeProbeResult echo: update the " +
+        "Loombridge package in this project. The measured value itself is real and re-derives from the retained whole-window samples.",
+    );
+  }
 }
 
 // ── the live wrapper ────────────────────────────────────────────────────────

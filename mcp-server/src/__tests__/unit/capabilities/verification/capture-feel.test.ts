@@ -142,6 +142,11 @@ interface FakeOptions {
   snapshotRefuses?: boolean;
   /** Drop `actualFixedTicks` from the echo (an off-canon tap the file must not launder). */
   tapTicksOverride?: number;
+  /**
+   * Stage 3: `runtime.probe` now echoes captureFps + both timestep fields
+   * (ComputeProbeResult). Off by default so the OLD-bridge path stays covered.
+   */
+  probeEchoesProvenance?: boolean;
 }
 
 interface FakeBridge {
@@ -257,13 +262,21 @@ function fakeBridge(options: FakeOptions = {}): FakeBridge {
       phaseEcho.push({ index, sampleCount: count, requestedDurationMs: phase.durationMs });
       dashHeld = false;
     }
-    // NOTE: probe echoes NO captureFps and NEITHER timestep field: the live gap
-    // (ledger L75) this fake reproduces on purpose.
+    // A PRE-STAGE-3 probe echoes NO captureFps and NEITHER timestep field: the live
+    // gap (ledger L75) this fake reproduces on purpose. `probeEchoesProvenance`
+    // switches it to the stage-3 bridge, whose ComputeProbeResult echoes all three.
     return {
       samples,
       phases: phaseEcho,
       sampleCount: samples.length,
       totalDurationMs: step * DT * 1000,
+      ...(options.probeEchoesProvenance
+        ? {
+            captureFps: 60,
+            projectFixedTimestepBeforeMeasurement: DT,
+            measurementFixedTimestep: DT,
+          }
+        : {}),
     };
   };
 
@@ -551,7 +564,27 @@ test("the dash is measured whole-window and its provenance gap is NAMED, not typ
     "projectFixedTimestepBeforeMeasurement",
     "measurementFixedTimestep",
   ]);
-  assert.ok(output.gaps.some((g) => /runtime\.probe echoes no captureFps/.test(g)));
+  assert.ok(output.gaps.some((g) => /runtime\.probe echoed no captureFps/.test(g)));
+  assert.ok(output.gaps.some((g) => /predates the stage-3 ComputeProbeResult echo/.test(g)));
+});
+
+test("stage 3: when the probe ECHOES its provenance, the dash source carries it and the gap is gone", async () => {
+  // The other half of the stage-3 echo fix: ComputeProbeResult now reports
+  // captureFps + both timestep fields, so the producer no longer has to leave the
+  // dash source uncertifiable. The values are COPIED from the response: the fake
+  // echoes captureFps 60, and a producer that typed its own requested pin instead
+  // would show that here.
+  const { output } = await run({ probeEchoesProvenance: true });
+  const source = sourceFor(output, "dashDistance")!;
+  assert.equal(source.captureFps, 60);
+  assert.equal(source.projectFixedTimestepBeforeMeasurement, DT);
+  assert.equal(source.measurementFixedTimestep, DT);
+  assert.equal(source.notEchoedByOp, undefined, "nothing is missing, so nothing is listed as missing");
+  assert.equal(
+    output.gaps.some((g) => /runtime\.probe echoed no/.test(g)),
+    false,
+    "the provenance gap closes when the bridge closes it",
+  );
 });
 
 test("the seam leg is skipped honestly when the contract declares no dash field", async () => {

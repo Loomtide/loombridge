@@ -2,7 +2,23 @@
 
 Catches the level-not-completable / win-by-wrong-rule / hazard-doesn't-kill / collectible-doesn't-score class — including the "YOU WIN fired on the left, away from the flag" bug.
 
-You assemble a `playability.json` of four observed facts by **driving the player and asserting on `GameManager`**, then `evaluatePlayability` checks them against `acceptance.win`.
+**STAGE 3 (the observer): you no longer assemble this file.** `loombridge capture --slice <playability slice>`
+opens an in-game-loop recording window (`observe.start`), prints a machine-readable `DRIVE NOW` line, and
+waits while YOU play the level from your own bridge connection. It then drains the recording, drives the
+post-win probes itself (freeze, input-lock, restart), and derives every headline field below from what was
+recorded. `completionMethod` is derived from CONTINUITY: any single-frame displacement beyond what the
+contract's own feel targets allow, that is not the game's own respawn, makes the completion `"assisted"`.
+The gate re-runs the same derivation over the buffers retained in the file and refuses any headline they do
+not reproduce.
+
+Requires `harness.playability` in the contract (the win binding: the component carrying win/score/lives, the
+collectible query, the keys the probes inject). The recipe refuses before entering play mode and prints the
+exact JSON to add.
+
+A HAND-ASSEMBLED `playability.json` (no producer marker) is still graded, but the gate is **CAPPED AT WARN**
+and can never pass: nothing binds its fields to a play session (ledger L97/L98).
+
+The historical shape below describes what the fields MEAN; it is no longer how they are produced.
 
 ```json
 {

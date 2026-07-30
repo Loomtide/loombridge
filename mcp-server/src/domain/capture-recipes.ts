@@ -17,7 +17,7 @@
  */
 
 /** A deterministic capture recipe the CLI can run itself. */
-export type CaptureKind = "framing" | "tiles" | "feel" | "console";
+export type CaptureKind = "framing" | "tiles" | "feel" | "playability" | "console";
 
 /**
  * Files each recipe writes as its REASON FOR EXISTING. A manifest entry listed
@@ -31,6 +31,11 @@ const RECIPE_PRIMARY_OUTPUTS: Record<CaptureKind, readonly string[]> = {
   // case: 100 percent agent-authored, every provenance field a typed literal
   // (ledger L45/L46/L75/L76/L77): and is now written from the bridge's own echoes.
   feel: ["feel.json"],
+  // Stage 3 (evidence arc E2): the playability observer. `playability.json` carried
+  // seven hard-coded literals and a self-declared `completionMethod`, the gate's own
+  // anti-teleport control (ledger L97/L98): and is now derived from a continuous
+  // in-game-loop recording of the play session plus CLI-driven post-win probes.
+  playability: ["playability.json"],
   console: [],
 };
 
@@ -46,15 +51,22 @@ const RECIPE_INCIDENTAL_OUTPUTS: Record<CaptureKind, readonly string[]> = {
   // The feel recipe holds play mode for a long, input-driven session, so its own
   // console snapshot is the one that covers the run that produced the measurements.
   feel: ["console.json"],
+  // The observer holds play mode for the whole hand-driven completion, so its
+  // console snapshot is the one that covers the session the verdict describes
+  // (ledger L106: console.json came from a play-enter soak BEFORE the played run,
+  // so console-clean certified a session in which the game was never played).
+  playability: ["console.json"],
   console: ["console.json"],
 };
 
 /**
- * Run order. Primary recipes first; the console-only recipe is the fallback. `feel`
- * runs LAST of the primaries: it is by far the longest leg (a warm-up, four keyed
- * captures and two tick sweeps), and its console snapshot then covers the whole run.
+ * Run order. Primary recipes first; the console-only recipe is the fallback.
+ * `playability` runs LAST of all: it is the only recipe that hands control to a
+ * human or agent for minutes at a time, so everything the CLI can do alone is
+ * already done when the drive-now line prints, and its console snapshot then
+ * covers the whole run including the played completion.
  */
-const RECIPE_ORDER: readonly CaptureKind[] = ["tiles", "framing", "feel", "console"];
+const RECIPE_ORDER: readonly CaptureKind[] = ["tiles", "framing", "feel", "playability", "console"];
 
 /** Every file a recipe writes (primary + incidental). */
 export function recipeOutputs(kind: CaptureKind): string[] {

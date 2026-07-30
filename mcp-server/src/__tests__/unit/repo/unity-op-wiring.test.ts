@@ -97,6 +97,69 @@ test("unity op wiring: the replay category's ops all appear in the handler the b
   }
 });
 
+test("unity op wiring: the observe category's ops all appear in the handler the bootstrap names", () => {
+  // The stage-3 recorder is a NEW category, which is the exact shape this guard
+  // exists for: three ops behind one string that no compiler in either language
+  // connects. A category registered as "observer", or a `drain` the handler spells
+  // `drain_and_stop`, is a NOT_FOUND against a live editor and a green suite here.
+  const registered = registeredCategories();
+  const handlerClass = registered.get("observe");
+  assert.ok(handlerClass, "the bootstrap must register the 'observe' category");
+
+  const handlerFile = path.join(BRIDGE_EDITOR, "Handlers", `${handlerClass}.cs`);
+  assert.ok(fs.existsSync(handlerFile), `the bootstrap names ${handlerClass}, which has no file at ${handlerFile}`);
+  const handler = read(handlerFile);
+
+  const registry = new OpRegistry();
+  const observeOps = registry
+    .getAll()
+    .filter((op) => op.command.startsWith("observe."))
+    .map((op) => op.command.slice("observe.".length));
+  assert.deepEqual(observeOps.sort(), ["drain", "start", "status"], "the recorder's three ops must all be published");
+
+  for (const op of observeOps) {
+    assert.ok(
+      handler.includes(`case "${op}":`),
+      `${handlerClass}.cs has no \`case "${op}":\`, so a call to observe.${op} answers NOT_FOUND`,
+    );
+  }
+
+  // The recorder itself lives in the RUNTIME observe assembly and is reached by
+  // reflection, so the type name is another string nothing checks. LITMUS: rename
+  // the class and this fails.
+  const pump = path.join(
+    REPO_ROOT,
+    "packages",
+    "com.loomtide.loombridge",
+    "Runtime",
+    "Observe",
+    "PlayStateRecorderPump.cs",
+  );
+  assert.ok(fs.existsSync(pump), "the play-mode state recorder must exist in the runtime observe assembly");
+  assert.match(read(pump), /class PlayStateRecorderPump/, "the reflected type name must match the handler's lookup");
+  assert.match(
+    handler,
+    /"UnityBridge\.Runtime\.PlayStateRecorderPump"/,
+    "the handler must reflect the recorder by its full type name",
+  );
+  for (const member of [
+    "BeginRecording",
+    "EndRecording",
+    "IsRecording",
+    "GetSampleCount",
+    "GetDroppedSamples",
+    "GetTimesMs",
+    "GetWin",
+  ]) {
+    assert.match(
+      read(pump),
+      new RegExp(`public static [\\w\\[\\]<>, ]+ ${member}\\(`),
+      `the handler invokes ${member} by reflection, so the pump must expose it as a public static`,
+    );
+    assert.ok(handler.includes(`"${member}"`), `${handlerClass}.cs must look up ${member}`);
+  }
+});
+
 test("unity op wiring: the aligned settle's pin recovery is wired into the bootstrap", () => {
   // BX7: the leaked-pin recovery is a call the bootstrap has to MAKE. Defining
   // ReplayCapturePin.RestoreLeakedPin() and never calling it would leave an editor pinned in

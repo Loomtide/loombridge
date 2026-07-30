@@ -3221,6 +3221,88 @@ function buildOps(): OpDef[] {
     },
   });
 
+  // ───── play-mode state observation (evidence arc stage 3) ─────
+  // A recorder that samples the player's position and the game's own win/score/lives
+  // fields EVERY Update, inside the game loop, into ring buffers a second client
+  // drains. Polling those values over the bridge cannot answer the question this
+  // evidence exists for (was the level PLAYED, or was the player moved onto the
+  // goal?), because a round trip is tens of ms and a single-frame teleport lands
+  // between two polls.
+
+  ops.push({
+    command: "observe.start",
+    toolName: "unity_observe_start",
+    description:
+      "Open a PLAY-MODE STATE RECORDING window: from now until observe.drain, a runtime pump samples the " +
+      "declared player's world position plus the declared component's win/score/lives fields EVERY Update, " +
+      "into a ring buffer inside the game. Requires Play Mode. IDEMPOTENT: starting an already-active " +
+      "recorder returns that live session untouched (started:false, alreadyRecording:true) instead of " +
+      "discarding a window someone is mid-drive through. Refuses up front when the player path, the state " +
+      "path, the component or any declared field does not resolve: the recorder never coerces an unreadable " +
+      "field to false/0, so a wrong name is an error here rather than a buffer of zeros. Also reads the " +
+      "scene ONCE at open and echoes what the derivation has to bind to: the player's spawn position, the " +
+      "goal and respawn positions (when named), and the COUNT of collectible objects matching the declared " +
+      "name pattern and/or tag. Returns sessionId, editorSessionId, capacity, fixedTimestep, spawn, initial " +
+      "(the opening sample, taken synchronously) and the collectible count. The recorder does not survive a " +
+      "domain reload or a play-mode exit, by design: a drain afterwards reports recording:false with an " +
+      "empty buffer, which the caller must refuse rather than read as a clean short session.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        playerPath: {
+          type: "string",
+          description: "Hierarchy path of the object whose transform.position is sampled every Update (accepts 'Scene:/Path' or '/Path').",
+        },
+        statePath: { type: "string", description: "Hierarchy path of the object carrying the win/score/lives component." },
+        stateComponent: { type: "string", description: "Component type name carrying the fields, e.g. 'GameManager'." },
+        winField: { type: "string", description: "Public bool field/property that flips when the level is won." },
+        scoreField: { type: "string", description: "Public numeric score field/property." },
+        livesField: { type: "string", description: "Public numeric lives field/property." },
+        collectibleNamePattern: {
+          type: "string",
+          description: "Case-insensitive name substring the bridge counts as a collectible at window open (the score increments are cross-checked against that count).",
+        },
+        collectibleTag: { type: "string", description: "Unity tag the bridge counts as a collectible at window open." },
+        goalPath: { type: "string", description: "Object whose position is the goal; its position is read at open for the reach-goal rule." },
+        respawnPath: {
+          type: "string",
+          description: "Object whose position is the game's own respawn point; a super-kinematic step landing there is classified as a respawn instead of an unexplained teleport.",
+        },
+        capacity: {
+          type: "integer",
+          minimum: 0,
+          description: "Ring size in SAMPLES (0 uses the default 36000, which is 10 minutes at 60Hz). Nothing is decimated: a wrap is counted and refuses downstream.",
+        },
+      },
+      required: ["playerPath", "statePath", "stateComponent", "winField", "scoreField", "livesField"],
+    },
+  });
+
+  ops.push({
+    command: "observe.status",
+    toolName: "unity_observe_status",
+    description:
+      "Counters for the live recording window: recording, sessionId, editorSessionId, sampleCount, " +
+      "totalSampled, droppedSamples (non-zero means the ring wrapped and the window has a hole in it), " +
+      "capacity, fixedTickCount, elapsedMs, effectiveSampleRateHz, and the LATEST sample only. Deliberately " +
+      "cheap: it is polled while an agent drives the game, so no buffer crosses the wire until observe.drain.",
+    inputSchema: { type: "object", properties: {} },
+  });
+
+  ops.push({
+    command: "observe.drain",
+    toolName: "unity_observe_drain",
+    description:
+      "Return the WHOLE recorded window and stop the recorder. DESTRUCTIVE: the buffers are released with " +
+      "the session, so a lost response loses the window (never auto-retry it). Returns the same counters as " +
+      "observe.status plus wasRecording (false means the recorder had already died: play exit or a domain " +
+      "reload, which must never read as a clean short window) and samples as PARALLEL ARRAYS " +
+      "{tMs, frame, fixedTick, x, y, z, win, score, lives}, oldest first, one entry per sampled Update with " +
+      "nothing decimated. A win/score/lives entry is JSON null when that read failed on that sample, and the " +
+      "failing field names are listed in unreadableFields: an unread field is never reported as false or 0.",
+    inputSchema: { type: "object", properties: {} },
+  });
+
   // ───── ops discovery (RCL-T07) ─────
   // Handled SERVER-SIDE (never routed to Unity): they read the op registry so an agent can
   // enumerate what exists instead of probing by firing deliberately-wrong ops.

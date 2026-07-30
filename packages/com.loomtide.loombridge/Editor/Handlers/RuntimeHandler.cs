@@ -2219,6 +2219,11 @@ namespace UnityBridge.Handlers
             for (int i = 0; i < phaseDurationsMs.Count; i++) { acc += phaseDurationsMs[i] / 1000.0; cumulativeEndSec[i] = acc; }
             double totalSec = acc;
 
+            // The project's physics timestep BEFORE this measurement, echoed in the
+            // result so a re-derivation can bind ticks to seconds without the writer
+            // typing the number (stage 3; see ComputeProbeResult).
+            float projectFixedTimestep = Time.fixedDeltaTime;
+
             // Force the sim to advance while backgrounded and pin the timestep, same as
             // measure_motion — this is what makes the run deterministic and focus-independent.
             bool restoreRunInBackground = Application.runInBackground;
@@ -2291,7 +2296,7 @@ namespace UnityBridge.Handlers
                     if (resetDriversOnEnd)
                         ResetDriverSetters(allDriverSetters);
                     cleanup();
-                    try { respond(ComputeProbeResult(samples, phaseValues, phaseDurationsMs, includeSamples)); }
+                    try { respond(ComputeProbeResult(samples, phaseValues, phaseDurationsMs, includeSamples, captureFps, projectFixedTimestep, Time.fixedDeltaTime)); }
                     catch (Exception ex)
                     {
                         onError(new BridgeException(ErrorCodes.INVALID_PARAMS, $"runtime.probe result computation failed: {ex.Message}", ex));
@@ -2353,6 +2358,8 @@ namespace UnityBridge.Handlers
             }
             bool includeSamples = parameters?.Value<bool?>("includeSamples") ?? false;
             bool resetDriversOnEnd = parameters?.Value<bool?>("resetDriversOnEnd") ?? true;
+            // Measurement provenance, same three fields as the probe (stage 3).
+            float projectFixedTimestep = Time.fixedDeltaTime;
 
             GameObject measureGo;
             var phaseValues = new List<JToken>();
@@ -2507,7 +2514,8 @@ namespace UnityBridge.Handlers
                     cleanup();
                     try
                     {
-                        JObject result = ComputeProbeResult(samples, phaseValues, phaseDurationsMs, includeSamples);
+                        JObject result = ComputeProbeResult(samples, phaseValues, phaseDurationsMs, includeSamples,
+                            captureFps, projectFixedTimestep, Time.fixedDeltaTime);
                         result["frames"] = capturedFrames;
                         result["captureCount"] = capturedFrames.Count;
                         result["requestedCaptureCount"] = captureSpecs.Count;
@@ -2753,11 +2761,30 @@ namespace UnityBridge.Handlers
             }
         }
 
+        /// <summary>
+        /// The probe/capture_sequence result, INCLUDING the measurement provenance the
+        /// re-derivation gates require (evidence arc stage 3, ledger L75).
+        ///
+        /// WHY THE THREE EXTRA FIELDS. `runtime.probe` used to echo phases, sampleCount,
+        /// totalDurationMs and samples, and nothing about HOW it sampled. Every feel
+        /// source built on a probe (the whole-window dash) therefore had no
+        /// `captureFps` and neither timestep field, and `validMeasurementSource`
+        /// requires the timesteps: so the only route to a green dash was for the WRITER
+        /// to type them, which is exactly what the door-one run did and disclosed
+        /// (three probe sources with `captureFps: 60` and both timesteps as module
+        /// constants). The measurement knows all three; echoing them removes the
+        /// incentive to invent them. `captureFps` is the REQUESTED pin (0 means the
+        /// capture rate was not pinned at all, which is honest to record as 0 rather
+        /// than as the live rate).
+        /// </summary>
         private static JObject ComputeProbeResult(
             List<(double t, Vector3 pos, int phase)> samples,
             List<JToken> phaseValues,
             List<double> phaseDurationsMs,
-            bool includeSamples)
+            bool includeSamples,
+            int captureFps,
+            double projectFixedTimestepBeforeMeasurement,
+            double measurementFixedTimestep)
         {
             var phasesArr = new JArray();
             for (int i = 0; i < phaseValues.Count; i++)
@@ -2799,7 +2826,14 @@ namespace UnityBridge.Handlers
             {
                 ["phases"] = phasesArr,
                 ["sampleCount"] = samples.Count,
-                ["totalDurationMs"] = Math.Round(total * 1000.0, 2)
+                ["totalDurationMs"] = Math.Round(total * 1000.0, 2),
+                // Measurement provenance, the same three fields capture_input_motion
+                // echoes through MotionMetrics.AttachProvenance. Emitted unconditionally
+                // so an absent field always means "an older bridge", never "this run did
+                // not pin anything".
+                ["captureFps"] = captureFps,
+                ["projectFixedTimestepBeforeMeasurement"] = Math.Round(projectFixedTimestepBeforeMeasurement, 6),
+                ["measurementFixedTimestep"] = Math.Round(measurementFixedTimestep, 6)
             };
 
             if (includeSamples && samples.Count > 0)

@@ -1,6 +1,6 @@
 # Loombridge Tools Reference
 
-> Auto-generated from OpRegistry. 122 tools across 13 categories.
+> Auto-generated from OpRegistry. 125 tools across 14 categories.
 >
 > Regenerate: \`npm run docs:tools\`
 
@@ -19,6 +19,7 @@
 - [Capture Operations](#capture-operations) (1 tools)
 - [Ops Operations](#ops-operations) (3 tools)
 - [Replay Operations](#replay-operations) (1 tools)
+- [Observe Operations](#observe-operations) (3 tools)
 
 ---
 
@@ -1962,3 +1963,49 @@ CAPTURE-ALIGNED SETTLE: advance the running game exactly 'settleFrames' player-l
 | `maxWidth` | integer | No | Max capture width in px (default 1024). |
 | `quality` | integer | No | JPEG quality (ignored for png). |
 | `timeoutMs` | integer | No | Wire timeout for THIS call, overriding defaultTimeoutMs (30000). Set it above the settle's own wall cost plus the bridge's 8s slack (the driver sends settleFrames/captureFps*1000 + 15000), so the BRIDGE's honest deadline decides the outcome instead of this timer turning a measurable harness fault into an anonymous transport timeout. |
+
+## Observe Operations
+
+| Tool | Description |
+|------|-------------|
+| `unity_observe_start` | Open a PLAY-MODE STATE RECORDING window: from now until observe.drain, a runtime pump samples the declared player's world position plus the declared component's win/score/lives fields EVERY Update, into a ring buffer inside the game. Requires Play Mode. IDEMPOTENT: starting an already-active recorder returns that live session untouched (started:false, alreadyRecording:true) instead of discarding a window someone is mid-drive through. Refuses up front when the player path, the state path, the component or any declared field does not resolve: the recorder never coerces an unreadable field to false/0, so a wrong name is an error here rather than a buffer of zeros. Also reads the scene ONCE at open and echoes what the derivation has to bind to: the player's spawn position, the goal and respawn positions (when named), and the COUNT of collectible objects matching the declared name pattern and/or tag. Returns sessionId, editorSessionId, capacity, fixedTimestep, spawn, initial (the opening sample, taken synchronously) and the collectible count. The recorder does not survive a domain reload or a play-mode exit, by design: a drain afterwards reports recording:false with an empty buffer, which the caller must refuse rather than read as a clean short session. |
+| `unity_observe_status` | Counters for the live recording window: recording, sessionId, editorSessionId, sampleCount, totalSampled, droppedSamples (non-zero means the ring wrapped and the window has a hole in it), capacity, fixedTickCount, elapsedMs, effectiveSampleRateHz, and the LATEST sample only. Deliberately cheap: it is polled while an agent drives the game, so no buffer crosses the wire until observe.drain. |
+| `unity_observe_drain` | Return the WHOLE recorded window and stop the recorder. DESTRUCTIVE: the buffers are released with the session, so a lost response loses the window (never auto-retry it). Returns the same counters as observe.status plus wasRecording (false means the recorder had already died: play exit or a domain reload, which must never read as a clean short window) and samples as PARALLEL ARRAYS {tMs, frame, fixedTick, x, y, z, win, score, lives}, oldest first, one entry per sampled Update with nothing decimated. A win/score/lives entry is JSON null when that read failed on that sample, and the failing field names are listed in unreadableFields: an unread field is never reported as false or 0. |
+
+### unity_observe_start
+
+Open a PLAY-MODE STATE RECORDING window: from now until observe.drain, a runtime pump samples the declared player's world position plus the declared component's win/score/lives fields EVERY Update, into a ring buffer inside the game. Requires Play Mode. IDEMPOTENT: starting an already-active recorder returns that live session untouched (started:false, alreadyRecording:true) instead of discarding a window someone is mid-drive through. Refuses up front when the player path, the state path, the component or any declared field does not resolve: the recorder never coerces an unreadable field to false/0, so a wrong name is an error here rather than a buffer of zeros. Also reads the scene ONCE at open and echoes what the derivation has to bind to: the player's spawn position, the goal and respawn positions (when named), and the COUNT of collectible objects matching the declared name pattern and/or tag. Returns sessionId, editorSessionId, capacity, fixedTimestep, spawn, initial (the opening sample, taken synchronously) and the collectible count. The recorder does not survive a domain reload or a play-mode exit, by design: a drain afterwards reports recording:false with an empty buffer, which the caller must refuse rather than read as a clean short session.
+
+**Wire command:** `observe.start`
+
+**Parameters:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `playerPath` | string | Yes | Hierarchy path of the object whose transform.position is sampled every Update (accepts 'Scene:/Path' or '/Path'). |
+| `statePath` | string | Yes | Hierarchy path of the object carrying the win/score/lives component. |
+| `stateComponent` | string | Yes | Component type name carrying the fields, e.g. 'GameManager'. |
+| `winField` | string | Yes | Public bool field/property that flips when the level is won. |
+| `scoreField` | string | Yes | Public numeric score field/property. |
+| `livesField` | string | Yes | Public numeric lives field/property. |
+| `collectibleNamePattern` | string | No | Case-insensitive name substring the bridge counts as a collectible at window open (the score increments are cross-checked against that count). |
+| `collectibleTag` | string | No | Unity tag the bridge counts as a collectible at window open. |
+| `goalPath` | string | No | Object whose position is the goal; its position is read at open for the reach-goal rule. |
+| `respawnPath` | string | No | Object whose position is the game's own respawn point; a super-kinematic step landing there is classified as a respawn instead of an unexplained teleport. |
+| `capacity` | integer | No | Ring size in SAMPLES (0 uses the default 36000, which is 10 minutes at 60Hz). Nothing is decimated: a wrap is counted and refuses downstream. |
+
+### unity_observe_status
+
+Counters for the live recording window: recording, sessionId, editorSessionId, sampleCount, totalSampled, droppedSamples (non-zero means the ring wrapped and the window has a hole in it), capacity, fixedTickCount, elapsedMs, effectiveSampleRateHz, and the LATEST sample only. Deliberately cheap: it is polled while an agent drives the game, so no buffer crosses the wire until observe.drain.
+
+**Wire command:** `observe.status`
+
+*No parameters.*
+
+### unity_observe_drain
+
+Return the WHOLE recorded window and stop the recorder. DESTRUCTIVE: the buffers are released with the session, so a lost response loses the window (never auto-retry it). Returns the same counters as observe.status plus wasRecording (false means the recorder had already died: play exit or a domain reload, which must never read as a clean short window) and samples as PARALLEL ARRAYS {tMs, frame, fixedTick, x, y, z, win, score, lives}, oldest first, one entry per sampled Update with nothing decimated. A win/score/lives entry is JSON null when that read failed on that sample, and the failing field names are listed in unreadableFields: an unread field is never reported as false or 0.
+
+**Wire command:** `observe.drain`
+
+*No parameters.*
