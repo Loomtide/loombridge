@@ -141,6 +141,26 @@ namespace UnityBridge.Handlers
             return new JObject { ["active"] = true, ["backend"] = "InputObserver" };
         }
 
+        /// <summary>
+        /// The focus-gate decision for a simulated pointer tap, as a pure predicate over the two
+        /// live facts, so the rule itself is testable without an editor: a tap may skip the
+        /// Game-View focus requirement ONLY when a focus-independent input session is live AND
+        /// the runtime pump reports the focus-independent InputSystem overrides as currently
+        /// applied.
+        ///
+        /// BOTH are required, and neither is inferred from the other. A session can exist on a
+        /// backend that never applied the overrides (or in a project with no Input System at
+        /// all), and the overrides can be reported applied by a stale pump after the session
+        /// that owned them ended. Either half alone would relax the gate on a tap the game
+        /// would never receive, which is precisely the silent no-op the refusal exists to
+        /// prevent.
+        /// </summary>
+        public static bool FocusIndependentTapAllowed(bool focusIndependentSessionActive,
+            bool focusIndependentSettingsApplied)
+        {
+            return focusIndependentSessionActive && focusIndependentSettingsApplied;
+        }
+
         // ── simulated Input System pointer tap (drives non-uGUI / world-space targets) ──
         private JObject HandlePointerTap(JObject parameters)
         {
@@ -152,13 +172,29 @@ namespace UnityBridge.Handlers
                 throw new BridgeException(ErrorCodes.INVALID_PARAMS,
                     "input.pointer_tap requires finite numeric x and y (Game-View screen px, origin bottom-left).");
 
-            // The simulated pointer is delivered to the FOCUSED Game View (we deliberately
-            // don't flip InputSystem.settings to focus-independent — that's a persistent
-            // editor-asset leak with no end_session to restore it). So refuse honestly when
-            // unfocused rather than report a tap that silently did nothing.
-            if (!GameViewFocus.EnsureGameViewFocused())
+            // A ONE-SHOT tap deliberately does NOT flip InputSystem.settings to
+            // focus-independent: that is a persistent editor-asset mutation and a one-shot has
+            // no end_session to restore it. So without a session the pointer is delivered to
+            // the FOCUSED Game View only, and an unfocused tap is refused honestly rather than
+            // reported as a tap that silently did nothing.
+            //
+            // WITH a live session the picture is different, and the gate reads the LIVE state
+            // rather than assuming: a session on a focus-independent backend has already
+            // applied the InputSystem overrides (IgnoreFocus +
+            // AllDeviceInputAlwaysGoesToGameView) and OWNS restoring them at end_session, so
+            // the tap really is delivered while unfocused. Both halves are queried for real:
+            // a session that ended, or a pump that never applied (or already restored) the
+            // overrides, puts the refusal straight back.
+            if (!FocusIndependentTapAllowed(
+                    InputService.AnyFocusIndependentSessionActive(),
+                    SimulatedPointerBridge.IsFocusIndependentInputApplied())
+                && !GameViewFocus.EnsureGameViewFocused())
+            {
                 throw new BridgeException(ErrorCodes.FOCUS_REQUIRED,
-                    "input.pointer_tap needs Game-View focus (the simulated pointer routes to the focused Game View).");
+                    "input.pointer_tap needs Game-View focus (the simulated pointer routes to the focused Game View). "
+                    + "Open an input session for focus-independent taps (input.begin_session { backend: \"InputSystem\" }; "
+                    + "replay does this automatically).");
+            }
 
             float x = parameters.Value<float>("x");
             float y = parameters.Value<float>("y");

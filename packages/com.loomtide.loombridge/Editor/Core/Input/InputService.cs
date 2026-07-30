@@ -304,6 +304,33 @@ namespace UnityBridge.Core.Input
 
         private bool IsSessionActive => !string.IsNullOrEmpty(_sessionId) && _activeBackend != null;
 
+        /// <summary>
+        /// TRUE when ANY registered service currently holds a live session on a backend that
+        /// does NOT require Game View focus (the InputSystem backend, whose BeginSession
+        /// applies the focus-independent overrides).
+        ///
+        /// A REAL QUERY OF LIVE STATE, deliberately: the simulated-pointer focus gate reads it
+        /// together with the pump's applied-settings flag, and both must be true before an
+        /// unfocused tap is allowed. Static because the op handlers do not hold the registered
+        /// InputService instance (same reason as the keep-alive lease). Answering from the
+        /// service list rather than from a cached boolean means a session torn down by the idle
+        /// watchdog, by a play-mode stop, or by a failed action stops relaxing the gate the
+        /// moment it ends.
+        /// </summary>
+        public static bool AnyFocusIndependentSessionActive()
+        {
+            lock (ActiveServicesLock)
+            {
+                foreach (InputService service in ActiveServices)
+                {
+                    if (service.IsSessionActive && !service._activeBackend.RequiresGameViewFocus)
+                        return true;
+                }
+            }
+
+            return false;
+        }
+
         /// <summary>True when the active backend currently holds injected keys down.</summary>
         public bool HasHeldKeys => _activeBackend?.HasHeldKeys ?? false;
 

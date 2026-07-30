@@ -199,6 +199,63 @@ namespace UnityBridge.Tests
             Assert.AreEqual(1, backend.PressedCount);
         }
 
+        // ── the simulated-pointer focus gate (world taps under an open session) ──
+
+        // Both halves are required, and neither is inferred from the other: a session with no
+        // applied overrides (a project with no Input System), or applied overrides with no live
+        // session (a stale pump after end_session), would each relax the gate on a tap the game
+        // never receives. Only the conjunction is a tap that is actually delivered unfocused.
+        [Test]
+        public void FocusIndependentTapAllowed_RequiresBothSessionAndAppliedSettings()
+        {
+            Assert.IsTrue(InputHandler.FocusIndependentTapAllowed(true, true),
+                "a live focus-independent session with the overrides applied may tap unfocused");
+            Assert.IsFalse(InputHandler.FocusIndependentTapAllowed(true, false),
+                "a session whose backend never applied the overrides must keep the focus refusal");
+            Assert.IsFalse(InputHandler.FocusIndependentTapAllowed(false, true),
+                "applied overrides with no live session must keep the focus refusal");
+            Assert.IsFalse(InputHandler.FocusIndependentTapAllowed(false, false),
+                "no session and no overrides is the one-shot case: focus is required");
+        }
+
+        // The session half is a REAL query of live state, not a flag somebody sets: opening a
+        // session on a focus-independent backend must make it true, and the query must read the
+        // backend's own focus requirement rather than the backend's NAME.
+        [Test]
+        public void AnyFocusIndependentSessionActive_ObservesALiveFocusIndependentSession()
+        {
+            var backend = new StubInputBackend
+            {
+                NameValue = "InputSystem",
+                IsAvailableValue = true,
+                RequiresFocusValue = false,
+                CanInjectGameplayKeysValue = true
+            };
+            var service = new InputService(
+                new IInputBackend[] { backend },
+                requirePlayMode: false,
+                ensureGameViewFocus: () => true,
+                isGameViewFocused: () => true,
+                isPlaying: () => true);
+            var handler = new InputHandler(service);
+
+            handler.HandleOp("begin_session", new JObject());
+            Assert.IsTrue(InputService.AnyFocusIndependentSessionActive(),
+                "a live session on a backend that does not require focus must be observable");
+
+            handler.HandleOp("end_session", new JObject());
+        }
+
+        // The pump half fails safe: with no Input System session having applied the overrides,
+        // the query answers false, so the focus refusal stands. (It is the only half that can
+        // relax a gate, so every failure to answer must land on false.)
+        [Test]
+        public void SimulatedPointerBridge_ReportsNoAppliedOverridesWithoutASession()
+        {
+            Assert.IsFalse(SimulatedPointerBridge.IsFocusIndependentInputApplied(),
+                "no EditMode session applies the focus-independent overrides; the query must say so");
+        }
+
         [Test]
         public void GetCapabilities_LegacyBackendOnly_ReportsGameplayKeyInjectionUnsupported()
         {

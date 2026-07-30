@@ -543,6 +543,16 @@ export function buildReloadReconnectHint(
  * Screenshots return image content; everything else returns JSON text.
  * An optional contextual hint is appended as a separate trailing content entry.
  */
+/**
+ * The ops whose successful payload is a PICTURE, returned as MCP image content rather than
+ * JSON text. Named as a set so a new capture op cannot be added without deciding this: the
+ * default text path would stringify a full-size base64 PNG into the transcript.
+ */
+const IMAGE_RESULT_COMMANDS: ReadonlySet<string> = new Set([
+  "editor.screenshot",
+  "replay.settle_and_capture",
+]);
+
 export function formatToolResult(
   command: string,
   data: unknown,
@@ -550,9 +560,14 @@ export function formatToolResult(
 ): ToolResult {
   const record = data as Record<string, unknown> | null;
 
-  // Screenshot handling: return base64 image if present
+  // Screenshot handling: return base64 image if present.
+  //
+  // `replay.settle_and_capture` rides the SAME branch, and must: it is a capture op whose
+  // payload is a full-size base64 PNG, and falling through to the JSON default would dump
+  // megabytes of base64 into the agent's context as text (unreadable, and expensive) instead
+  // of an image it can actually look at.
   if (
-    command === "editor.screenshot" &&
+    IMAGE_RESULT_COMMANDS.has(command) &&
     record &&
     typeof record.image_base64 === "string"
   ) {
@@ -572,6 +587,13 @@ export function formatToolResult(
         type: "text",
         text: JSON.stringify({ annotations: record.annotations }),
       });
+    }
+    // The aligned settle's EVIDENCE (framesElapsed, settledMs, realtimeDeadlineHit,
+    // fixedDeltaTime) travels beside the picture: it is the proof the frame was taken where
+    // it claims, and an image-only result would silently drop it.
+    if (command === "replay.settle_and_capture") {
+      const { image_base64: _image, ...evidence } = record;
+      content.push({ type: "text", text: JSON.stringify(evidence) });
     }
     return withHint({ content }, hint);
   }

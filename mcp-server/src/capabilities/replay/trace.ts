@@ -32,6 +32,13 @@ import {
 } from "./index.js";
 import { observeRecordLive } from "./observe-record-live.js";
 import {
+  ALIGNED_RESIDUAL_SENTENCE,
+  DEFAULT_ALIGNED_CAPTURE_FPS,
+  MAX_ALIGNED_CAPTURE_FPS,
+  MIN_ALIGNED_CAPTURE_FPS,
+  alignedCaptureFpsRefusal,
+} from "./aligned-capture.js";
+import {
   TRACE_BASELINE_MANIFEST,
   carryForward,
   isTraceBaselineManifestError,
@@ -121,6 +128,12 @@ interface TraceArgs {
   maskList: boolean;
   /** Replay pacing multiplier (replay only): divides recorded settles, floored. */
   speed?: number;
+  /**
+   * `--aligned` / `--aligned-fps <n>` (replay only): capture each settle through the
+   * bridge's pinned tick loop at this fps instead of sleeping here and screenshotting after.
+   * Absent = the legacy wall-clock settle, unchanged.
+   */
+  alignedCaptureFps?: number;
   // ── record --observe ──
   /** Scene to reset to + record from (record only; optional: absent resolves the editor's current scene). */
   scene?: string;
@@ -239,6 +252,7 @@ async function runReplay(args: TraceArgs): Promise<number> {
     html: args.html,
     projectPathCanonical: resolveCliProjectPin({ root: args.root }),
     speed: args.speed,
+    alignedCaptureFps: args.alignedCaptureFps,
   });
   printSummary(args.root, args.id, artifact, reportJson, htmlPath, args.strictVisual);
   // In the mini-game workspace flow (--flat), print the EXACT next command to run.
@@ -457,10 +471,53 @@ async function resolveReplaySpeed(
   return { speed: explicit ?? stamped ?? 1 };
 }
 
+/**
+ * The CLOCK DISCIPLINE a replay must run under, resolved exactly the way the pacing is: the
+ * EXPLICIT flag when given, else the discipline the baseline was approved under, else the
+ * legacy wall-clock settle. Frames captured under different disciplines sit at different
+ * animation phases, so a baseline stamped `alignedCaptureFps: 60` asks for its replays to be
+ * aligned at 60 and gets them without the operator having to remember.
+ *
+ * An explicit value that CONTRADICTS the stamp still RUNS (the replay is how a report under
+ * the new discipline comes to exist, and refusing here would make re-anchoring impossible
+ * without hand-deleting the baseline), but this run's pixel gate is a harness fault,
+ * announced up front and again by `applyVisualDiff`.
+ */
+async function resolveAlignedCaptureFps(
+  paths: ReplayLayout,
+  id: string,
+  explicit: number | undefined,
+): Promise<{ fps?: number; mismatchWith?: number | "wall-clock" }> {
+  const baselineDir = path.join(paths.replayBaselines, id);
+  const manifest = await loadTraceBaselineManifest(baselineDir);
+  const stamped = manifest !== null && !isTraceBaselineManifestError(manifest) ? manifest : null;
+  // A manifest that EXISTS pins a discipline even when the field is absent: absent means
+  // wall-clock, which is a real answer and not "no opinion".
+  const stampedFps = stamped === null ? undefined : (stamped.alignedCaptureFps ?? "wall-clock");
+  if (explicit === undefined) {
+    return typeof stampedFps === "number" ? { fps: stampedFps } : {};
+  }
+  if (stampedFps !== undefined && stampedFps !== explicit) {
+    const stampedText = stampedFps === "wall-clock" ? "wall-clock (unaligned)" : `aligned ${stampedFps} fps`;
+    console.error(
+      `[loombridge trace] capture clock differs from the baseline (approved ${stampedText}, running aligned ` +
+        `${explicit} fps): the pixel gate is NOT graded this run; approve from this report to re-anchor.`,
+    );
+    return { fps: explicit, mismatchWith: stampedFps };
+  }
+  return { fps: explicit };
+}
+
 async function replayOneTrace(
   paths: ReplayLayout,
   id: string,
-  opts: { tracePath?: string; html: boolean; projectPathCanonical?: string; speed?: number },
+  opts: {
+    tracePath?: string;
+    html: boolean;
+    projectPathCanonical?: string;
+    speed?: number;
+    alignedCaptureFps?: number;
+  },
 ): Promise<{ artifact: ReplayRunArtifact; reportJson: string; htmlPath?: string }> {
   await fs.mkdir(paths.replayTraces, { recursive: true });
   await fs.mkdir(paths.replayReports, { recursive: true });
@@ -480,14 +537,31 @@ async function replayOneTrace(
     console.error(`[loombridge trace] replaying at ${speed}x pacing (recorded settles scaled, floor ${MIN_SCALED_SETTLE_MS}ms).`);
   }
 
+  // AFTER scaleTraceSettles, never before: the frame count is derived from the settle the
+  // run will actually use, so `--speed` divides the milliseconds exactly once. Converting
+  // first and scaling after (or scaling both) would settle for a quarter of the stated time
+  // at 4x while the report claimed the trace's own settle.
+  const aligned = await resolveAlignedCaptureFps(paths, id, opts.alignedCaptureFps);
+  if (aligned.fps !== undefined) {
+    console.error(
+      `[loombridge trace] capture-aligned replay at ${aligned.fps} fps: each settle runs inside the bridge's ` +
+        "pinned tick loop and the frame is taken on the frame the settle completes.",
+    );
+  }
+
   const captureDir = path.join(paths.replayReports, id, "actual");
   const artifact = await runLiveReplay(trace, {
     captureDir,
     projectPathCanonical: opts.projectPathCanonical,
+    ...(aligned.fps !== undefined ? { alignedCaptureFps: aligned.fps } : {}),
   });
   // The pacing is part of the evidence: a baseline approved from this report inherits it,
   // and applyVisualDiff refuses a pacing mismatch instead of grading phase skew.
   artifact.replaySpeed = speed;
+  // The clock discipline is part of the evidence, exactly as the pacing is: a baseline
+  // approved from this report inherits it, and applyVisualDiff refuses a mismatch instead of
+  // grading frames captured under two different clocks.
+  if (aligned.fps !== undefined) artifact.alignedCaptureFps = aligned.fps;
   // Visual regression: compare each capture to its approved baseline (if any).
   await applyVisualDiff(paths, id, artifact);
 
@@ -807,6 +881,12 @@ async function runApprove(args: TraceArgs): Promise<number> {
   const promotedSpeed = (parsed as ReplayRunArtifact).replaySpeed ?? 1;
   if (promotedSpeed !== 1) manifest.replaySpeed = promotedSpeed;
   else delete manifest.replaySpeed;
+  // Same rule for the CLOCK the promoted frames were captured under, and the same reason:
+  // carrying the previous value forward would mislabel these frames and break the "approve
+  // from this report to re-anchor" escape hatch that a discipline change needs.
+  const promotedClock = (parsed as ReplayRunArtifact).alignedCaptureFps;
+  if (promotedClock !== undefined) manifest.alignedCaptureFps = promotedClock;
+  else delete manifest.alignedCaptureFps;
   await writeTraceBaselineManifest(baselineDir, manifest);
 
   console.error(
@@ -1243,6 +1323,18 @@ export async function replayTraceForVerify(
  * they grade at the default (the strictest tolerance there is), and the unified door
  * already refuses to treat them as anchors at all.
  */
+/**
+ * How a run's capture clock READS in a refusal sentence. `undefined` is the legacy
+ * wall-clock settle and is spelled out rather than printed as "undefined": an operator
+ * staring at a refusal needs to know which of the two disciplines each side used, and the
+ * absent one is the easiest to misread as "not recorded".
+ */
+export function clockDisciplineText(fps: number | undefined): string {
+  return fps === undefined
+    ? "a wall-clock settle (unaligned)"
+    : `a capture-aligned settle at ${fps} fps`;
+}
+
 export async function applyVisualDiff(
   paths: ReplayLayout,
   id: string,
@@ -1254,11 +1346,16 @@ export async function applyVisualDiff(
   let maskRects: MaskRect[] = [];
   let frameWidth = 0;
   let frameHeight = 0;
-  let baselineFault: string | null = null;
+  // ACCUMULATING (finding 20). The anchor can be untrustworthy in more than one way at
+  // once, and a single `baselineFault` slot meant the LAST check to run silently overwrote
+  // the earlier ones: a run whose masks pointed at a frame size that no longer exists AND
+  // whose pacing did not match printed only the pacing, so the operator fixed one fault,
+  // re-ran, and met the next. Every reason is collected and printed together.
+  const baselineFaults: string[] = [];
   if (integrity.unstamped) {
     // Legacy baseline (or none yet): default terms, no fault.
   } else if (!integrity.ok) {
-    baselineFault = integrity.failures.join("; ");
+    baselineFaults.push(integrity.failures.join("; "));
   } else {
     tolerance = resolveDriftTolerance(integrity.manifest!);
     maskRects = resolveMaskRects(integrity.manifest!);
@@ -1273,12 +1370,13 @@ export async function applyVisualDiff(
     if (maskRects.length > 0) {
       const dims = await baselineFrameDims(baselineDir, integrity.manifest!.pngs);
       if ("error" in dims) {
-        baselineFault = `masks are stamped but ${dims.error}`;
+        baselineFaults.push(`masks are stamped but ${dims.error}`);
       } else if (dims.width !== frameWidth || dims.height !== frameHeight) {
-        baselineFault =
+        baselineFaults.push(
           `the masks were approved against a ${frameWidth}x${frameHeight} frame but the approved frames are ` +
-          `${dims.width}x${dims.height}; re-state them with \`loombridge trace mask --id ${id} --set ...\`, ` +
-          `or drop them with \`--clear\``;
+            `${dims.width}x${dims.height}; re-state them with \`loombridge trace mask --id ${id} --set ...\`, ` +
+            `or drop them with \`--clear\``,
+        );
       }
     }
     // Pacing mismatch is a HARNESS refusal, not drift: frames captured at different
@@ -1287,11 +1385,29 @@ export async function applyVisualDiff(
     const stampedSpeed = integrity.manifest!.replaySpeed ?? 1;
     const runSpeed = artifact.replaySpeed ?? 1;
     if (stampedSpeed !== runSpeed) {
-      baselineFault =
+      baselineFaults.push(
         `the baseline was approved at ${stampedSpeed}x pacing but this run replayed at ` +
-        `${runSpeed}x; re-run at ${stampedSpeed}x, or approve from this run's report to re-anchor at ${runSpeed}x`;
+          `${runSpeed}x; re-run at ${stampedSpeed}x, or approve from this run's report to re-anchor at ${runSpeed}x`,
+      );
+    }
+    // THE CLOCK DISCIPLINE IS A COMPARISON TERM (S3), the pacing precedent exactly. Frames
+    // captured under a pinned settle clock and frames captured after a wall-clock sleep sit
+    // at different animation phases, so grading one against the other reads phase skew as
+    // drift (or hides real drift behind it). Absent on either side means WALL-CLOCK, which
+    // is a real value and not a missing one: the refusal fires on the MISMATCH of two known
+    // disciplines, never on an absence that would let an unaligned run grade against an
+    // aligned anchor.
+    const stampedClock = integrity.manifest!.alignedCaptureFps;
+    const runClock = artifact.alignedCaptureFps;
+    if (stampedClock !== runClock) {
+      baselineFaults.push(
+        `the baseline was approved under ${clockDisciplineText(stampedClock)} but this run captured under ` +
+          `${clockDisciplineText(runClock)}; frames taken under different capture clocks are phase-incomparable. ` +
+          `Re-run under ${clockDisciplineText(stampedClock)}, or approve from this run's report to re-anchor`,
+      );
     }
   }
+  const baselineFault = baselineFaults.length > 0 ? baselineFaults.join("; ") : null;
   if (baselineFault !== null) {
     console.error(
       `[loombridge trace] the approved baseline for "${id}" cannot be trusted at grade time ` +
@@ -1306,10 +1422,24 @@ export async function applyVisualDiff(
 
   let anyDrift = false;
   let anyUnreadable = false;
+  let anyCaptureFault = false;
   let anyCompared = false;
   const evidence: CaptureDriftEvidence[] = [];
   for (const segment of artifact.segments) {
     for (const capture of segment.captures) {
+      // THE CAPTURE STEP ITSELF FAILED IN THE HARNESS (the aligned settle could not be
+      // delivered), so there is no frame to grade and never a drift verdict. Checked BEFORE
+      // the `!capture.artifact` skip, which would otherwise drop the whole event from the
+      // run's tier: a starved editor would read as "one fewer comparison" and the run would
+      // come out green.
+      if (capture.harnessFault) {
+        anyCaptureFault = true;
+        console.error(
+          `[loombridge trace] capture "${capture.id}" is a HARNESS FAULT (no comparable frame, ` +
+            `not drift): ${capture.harnessFault}`,
+        );
+        continue;
+      }
       if (!capture.artifact) continue;
       const baselinePath = path.join(baselineDir, `${capture.id}.png`);
       if (baselineFault !== null) {
@@ -1384,7 +1514,7 @@ export async function applyVisualDiff(
     }
   }
   if (anyDrift) artifact.visualDrift = true;
-  if (anyUnreadable || baselineFault !== null) artifact.visualHarnessFault = true;
+  if (anyUnreadable || anyCaptureFault || baselineFault !== null) artifact.visualHarnessFault = true;
   if (anyCompared) artifact.toleranceUsed = tolerance;
   if (anyCompared && maskRects.length > 0) {
     artifact.maskRects = maskRects;
@@ -1691,6 +1821,14 @@ export function printSummary(
     console.error(
       `[loombridge trace] ${driftRegressionLine({ ...facts, exitTier: replayExitCode(artifact, strictVisual) })}`,
     );
+    // S6, THE HONEST RESIDUAL. Drift that survives an aligned run is the single most
+    // over-readable result this tool produces ("we pinned the clock and it still moved,
+    // so the game is nondeterministic"). It is not proof of that: the settle is aligned,
+    // the action round trips and the anchor polling are not. Say so, every time, right
+    // under the number that invites the conclusion.
+    if (artifact.alignedCaptureFps !== undefined) {
+      console.error(`[loombridge trace] ${ALIGNED_RESIDUAL_SENTENCE}`);
+    }
   }
   // P5: the terms this run graded on are never silent. With masks it is the ONE combined
   // sentence (a green run with 4% of every frame blanked is a different claim from a green
@@ -1764,6 +1902,7 @@ function parseArgs(args: string[]): TraceArgs | { help: true; usageError?: boole
   let maskClear = false;
   let maskList = false;
   let speed: number | undefined;
+  let alignedCaptureFps: number | undefined;
 
   /** Read a required string value for `flag`, rejecting a missing/flag-like value. */
   const value = (i: number, flag: string): string | undefined => {
@@ -1835,6 +1974,34 @@ function parseArgs(args: string[]): TraceArgs | { help: true; usageError?: boole
         return { help: true, usageError: true };
       }
       speed = n;
+    } else if (arg === "--aligned" || arg === "--aligned-fps") {
+      // Capture clock only, and only where a capture actually happens: record observes a
+      // human (whose own pacing IS the demonstration), and approve/tolerance/mask/report
+      // never drive the editor. replay-all deliberately takes neither: it runs each trace
+      // under the discipline its own baseline was approved under.
+      if (sub !== "replay") {
+        console.error(
+          `[loombridge trace] ${arg} is only valid on \`trace replay\` (got "${sub}"). ` +
+            "replay-all runs each trace under its baseline's stamped capture clock.",
+        );
+        return { help: true, usageError: true };
+      }
+      if (arg === "--aligned") {
+        alignedCaptureFps = DEFAULT_ALIGNED_CAPTURE_FPS;
+      } else {
+        const v = value((i += 1), "--aligned-fps");
+        if (v === undefined) return { help: true, usageError: true };
+        const n = Number(v);
+        // NON-COERCING at the boundary too: a value that is not a clean number is handed to
+        // the refusal as the raw string, so `--aligned-fps sixty` is refused by type rather
+        // than becoming NaN and slipping into a range check.
+        const bad = alignedCaptureFpsRefusal(Number.isFinite(n) ? n : v);
+        if (bad !== null) {
+          console.error(`[loombridge trace] ${bad}`);
+          return { help: true, usageError: true };
+        }
+        alignedCaptureFps = n;
+      }
     } else if (arg === "--set" || arg === "--drift-tolerance") {
       // A6, THE VERB GUARD. These flags belong to the two ANCHOR-TERM verbs and to
       // nothing else. The parse loop is SHARED across subcommands, so without this branch
@@ -1970,6 +2137,7 @@ function parseArgs(args: string[]): TraceArgs | { help: true; usageError?: boole
     maskClear,
     maskList,
     speed,
+    alignedCaptureFps,
   };
 }
 
@@ -2099,6 +2267,16 @@ function printUsage(): void {
       "  --strict-visual   Make a visual drift from baseline a failure.",
       "  --speed <n>       replay only: pacing multiplier, 1 to 8 (default: the baseline's",
       "                    stamped pacing, else 1).",
+      "  --aligned         replay only: CAPTURE-ALIGNED settles at 60 fps. Each settle runs",
+      "                    inside the bridge's pinned tick loop and the frame is taken on the",
+      "                    frame the settle completes, so the capture lands at the same GAME",
+      "                    TIME every run instead of wherever a wall-clock sleep left it.",
+      `  --aligned-fps <n> replay only: the same, at n fps (${MIN_ALIGNED_CAPTURE_FPS} to ${MAX_ALIGNED_CAPTURE_FPS}, integer).`,
+      "                    Default: the baseline's stamped capture clock, else wall-clock.",
+      "                    A run whose clock differs from the baseline's REFUSES the pixel",
+      "                    comparison (phase skew is not drift). Alignment covers the SETTLE",
+      "                    only: action round trips, anchor polling, unseeded randomness and",
+      "                    realtime-driven animation are all still unaligned.",
       `  --set <fraction>  tolerance: the approved pixel drift allowance, 0 to ${MAX_DRIFT_TOLERANCE}`,
       `                    (${driftPercentText(MAX_DRIFT_TOLERANCE)}% cap; default when never stamped is ` +
         `${driftPercentText(DEFAULT_DRIFT_FRACTION)}%). At N%, anything covering`,

@@ -1,6 +1,6 @@
 # Loombridge Tools Reference
 
-> Auto-generated from OpRegistry. 121 tools across 12 categories.
+> Auto-generated from OpRegistry. 122 tools across 13 categories.
 >
 > Regenerate: \`npm run docs:tools\`
 
@@ -18,6 +18,7 @@
 - [Package Operations](#package-operations) (4 tools)
 - [Capture Operations](#capture-operations) (1 tools)
 - [Ops Operations](#ops-operations) (3 tools)
+- [Replay Operations](#replay-operations) (1 tools)
 
 ---
 
@@ -1937,3 +1938,26 @@ Full input schema for one or more Loombridge ops WITHOUT touching Unity (RCL-T07
 | `command` | string | No | Exact op command to describe (e.g. 'runtime.measure_motion'). |
 | `toolName` | string | No | Exact MCP tool name to describe (e.g. 'unity_runtime_measure_motion'). |
 | `category` | string | No | Describe every op in this category (e.g. 'runtime'). |
+
+## Replay Operations
+
+| Tool | Description |
+|------|-------------|
+| `unity_replay_settle_and_capture` | CAPTURE-ALIGNED SETTLE: advance the running game exactly 'settleFrames' player-loop frames at a pinned 1/captureFps game-time step, then screenshot the Game View ON THAT FRAME, inside the same tick loop. Requires Play Mode. Use INSTEAD OF sleep-then-editor.screenshot whenever a frame is going to be pixel-compared: between a sleep and a separate screenshot the game free-runs for an unknown number of frames, so the capture lands at a different animation phase each run and the pixel gate cannot tell that phase skew from real drift. Forces Application.runInBackground=true and restores both it and Time.captureDeltaTime on every exit path (success, wall-deadline, play-exit, domain reload). Returns the editor.screenshot payload (image_base64, width, height, sizeBytes, format) plus framesElapsed, settleFrames, captureFps, settledMs, realtimeDeadlineHit (always false on success) and fixedDeltaTime (the project's real physics step, for the cadence note). A WALL-CLOCK DEADLINE (settleFrames/captureFps + 8s, checked every tick) is an ERROR, not a degraded frame: a capture at the wrong game time is not comparable evidence, so a starved editor is reported as a harness fault (capture tier) instead of being returned as pixel drift. TIMEOUT NOTE: the replay driver sends its OWN wire timeout (settleFrames/captureFps*1000 + 15000) rather than relying on defaultTimeoutMs, because a long settle at a low fps outlives any fixed default; a direct caller should do the same for settles beyond a couple of seconds. It does NOT align what happens OUTSIDE the settle (action round trips, anchor polling), and it cannot fix seed-driven (unseeded Random) or realtime-driven (realtimeSinceStartup, DateTime) nondeterminism. |
+
+### unity_replay_settle_and_capture
+
+CAPTURE-ALIGNED SETTLE: advance the running game exactly 'settleFrames' player-loop frames at a pinned 1/captureFps game-time step, then screenshot the Game View ON THAT FRAME, inside the same tick loop. Requires Play Mode. Use INSTEAD OF sleep-then-editor.screenshot whenever a frame is going to be pixel-compared: between a sleep and a separate screenshot the game free-runs for an unknown number of frames, so the capture lands at a different animation phase each run and the pixel gate cannot tell that phase skew from real drift. Forces Application.runInBackground=true and restores both it and Time.captureDeltaTime on every exit path (success, wall-deadline, play-exit, domain reload). Returns the editor.screenshot payload (image_base64, width, height, sizeBytes, format) plus framesElapsed, settleFrames, captureFps, settledMs, realtimeDeadlineHit (always false on success) and fixedDeltaTime (the project's real physics step, for the cadence note). A WALL-CLOCK DEADLINE (settleFrames/captureFps + 8s, checked every tick) is an ERROR, not a degraded frame: a capture at the wrong game time is not comparable evidence, so a starved editor is reported as a harness fault (capture tier) instead of being returned as pixel drift. TIMEOUT NOTE: the replay driver sends its OWN wire timeout (settleFrames/captureFps*1000 + 15000) rather than relying on defaultTimeoutMs, because a long settle at a low fps outlives any fixed default; a direct caller should do the same for settles beyond a couple of seconds. It does NOT align what happens OUTSIDE the settle (action round trips, anchor polling), and it cannot fix seed-driven (unseeded Random) or realtime-driven (realtimeSinceStartup, DateTime) nondeterminism.
+
+**Wire command:** `replay.settle_and_capture`
+
+**Parameters:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `settleFrames` | integer | Yes | Player-loop frames to advance before the capture (at 1/captureFps of game time each). |
+| `captureFps` | integer | No | Pin Time.captureDeltaTime to 1/captureFps for the settle (default 60). Unlike editor.tick, 0 is REFUSED: an unpinned settle is the nondeterminism this op removes. |
+| `format` | "png" \| "jpg" | No | Capture format (default png). |
+| `view` | "game" \| "scene" | No | View to capture (default game). |
+| `maxWidth` | integer | No | Max capture width in px (default 1024). |
+| `quality` | integer | No | JPEG quality (ignored for png). |

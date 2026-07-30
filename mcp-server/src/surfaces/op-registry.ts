@@ -3142,6 +3142,57 @@ function buildOps(): OpDef[] {
     },
   });
 
+  // ───── replay (capture-aligned settle) ─────
+
+  ops.push({
+    command: "replay.settle_and_capture",
+    toolName: "unity_replay_settle_and_capture",
+    description:
+      "CAPTURE-ALIGNED SETTLE: advance the running game exactly 'settleFrames' player-loop frames at a " +
+      "pinned 1/captureFps game-time step, then screenshot the Game View ON THAT FRAME, inside the same " +
+      "tick loop. Requires Play Mode. Use INSTEAD OF sleep-then-editor.screenshot whenever a frame is going " +
+      "to be pixel-compared: between a sleep and a separate screenshot the game free-runs for an unknown " +
+      "number of frames, so the capture lands at a different animation phase each run and the pixel gate " +
+      "cannot tell that phase skew from real drift. Forces Application.runInBackground=true and restores " +
+      "both it and Time.captureDeltaTime on every exit path (success, wall-deadline, play-exit, domain " +
+      "reload). Returns the editor.screenshot payload (image_base64, width, height, sizeBytes, format) plus " +
+      "framesElapsed, settleFrames, captureFps, settledMs, realtimeDeadlineHit (always false on success) and " +
+      "fixedDeltaTime (the project's real physics step, for the cadence note). " +
+      "A WALL-CLOCK DEADLINE (settleFrames/captureFps + 8s, checked every tick) is an ERROR, not a degraded " +
+      "frame: a capture at the wrong game time is not comparable evidence, so a starved editor is reported " +
+      "as a harness fault (capture tier) instead of being returned as pixel drift. " +
+      "TIMEOUT NOTE: the replay driver sends its OWN wire timeout (settleFrames/captureFps*1000 + 15000) " +
+      "rather than relying on defaultTimeoutMs, because a long settle at a low fps outlives any fixed " +
+      "default; a direct caller should do the same for settles beyond a couple of seconds. " +
+      "It does NOT align what happens OUTSIDE the settle (action round trips, anchor polling), and it " +
+      "cannot fix seed-driven (unseeded Random) or realtime-driven (realtimeSinceStartup, DateTime) " +
+      "nondeterminism.",
+    isAsync: true,
+    defaultTimeoutMs: 30000,
+    inputSchema: {
+      type: "object",
+      properties: {
+        settleFrames: {
+          type: "integer",
+          minimum: 1,
+          description: "Player-loop frames to advance before the capture (at 1/captureFps of game time each).",
+        },
+        captureFps: {
+          type: "integer",
+          minimum: 1,
+          description:
+            "Pin Time.captureDeltaTime to 1/captureFps for the settle (default 60). Unlike editor.tick, 0 is " +
+            "REFUSED: an unpinned settle is the nondeterminism this op removes.",
+        },
+        format: { type: "string", enum: ["png", "jpg"], description: "Capture format (default png)." },
+        view: { type: "string", enum: ["game", "scene"], description: "View to capture (default game)." },
+        maxWidth: { type: "integer", minimum: 1, description: "Max capture width in px (default 1024)." },
+        quality: { type: "integer", minimum: 0, maximum: 100, description: "JPEG quality (ignored for png)." },
+      },
+      required: ["settleFrames"],
+    },
+  });
+
   // ───── ops discovery (RCL-T07) ─────
   // Handled SERVER-SIDE (never routed to Unity): they read the op registry so an agent can
   // enumerate what exists instead of probing by firing deliberately-wrong ops.

@@ -35,6 +35,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 
 import { readPng } from "../verification/analyze-frames.js";
+import { alignedCaptureFpsRefusal } from "./aligned-capture.js";
 import {
   DEFAULT_DRIFT_FRACTION,
   MAX_DRIFT_TOLERANCE,
@@ -86,6 +87,18 @@ export interface TraceBaselineManifest {
    * directions.
    */
   replaySpeed?: number;
+  /**
+   * The CLOCK DISCIPLINE the approved frames were captured under: the fps an aligned settle
+   * pinned `Time.captureDeltaTime` to. ABSENT means the legacy wall-clock settle, so every
+   * manifest written before this field existed keeps meaning what it meant.
+   *
+   * A replay under a different discipline (aligned vs wall-clock, or a different fps)
+   * REFUSES the pixel comparison, exactly as a pacing mismatch does and for the same reason:
+   * the frames sit at different animation phases, and phase skew is indistinguishable from
+   * drift in both directions. Absence fails safe, because it can only mean the older, less
+   * deterministic discipline: it never claims an alignment nobody performed.
+   */
+  alignedCaptureFps?: number;
   /**
    * F6 LEDGER. How many approval events this baseline has seen, and what the previous
    * one said. A tolerance that ratchets upward one re-stamp at a time is the quiet
@@ -156,6 +169,7 @@ export const MANIFEST_KEY_DECISIONS = {
   pngs: "rewritten",
   driftTolerance: "carried",
   replaySpeed: "carried-rederived-by-approve",
+  alignedCaptureFps: "carried-rederived-by-approve",
   approvalCount: "ledger",
   previousApprovedAt: "ledger",
   previousDriftTolerance: "ledger",
@@ -187,11 +201,17 @@ export const CARRIED_MANIFEST_KEYS = Object.entries(MANIFEST_KEY_DECISIONS)
  */
 export function carryForward(
   previous: TraceBaselineManifest | null,
-): Pick<TraceBaselineManifest, "driftTolerance" | "replaySpeed" | "maskRects" | "frameWidth" | "frameHeight"> {
+): Pick<
+  TraceBaselineManifest,
+  "driftTolerance" | "replaySpeed" | "alignedCaptureFps" | "maskRects" | "frameWidth" | "frameHeight"
+> {
   if (previous === null) return {};
   return {
     ...(previous.driftTolerance !== undefined ? { driftTolerance: previous.driftTolerance } : {}),
     ...(previous.replaySpeed !== undefined ? { replaySpeed: previous.replaySpeed } : {}),
+    ...(previous.alignedCaptureFps !== undefined
+      ? { alignedCaptureFps: previous.alignedCaptureFps }
+      : {}),
     ...(previous.maskRects !== undefined ? { maskRects: previous.maskRects } : {}),
     ...(previous.frameWidth !== undefined ? { frameWidth: previous.frameWidth } : {}),
     ...(previous.frameHeight !== undefined ? { frameHeight: previous.frameHeight } : {}),
@@ -362,6 +382,14 @@ export async function loadTraceBaselineManifest(
   // out-of-range speed is a typed ERROR, never a silent fall back to 1x.
   {
     const bad = replaySpeedRefusal(parsed.replaySpeed);
+    if (bad !== null) return { error: `${TRACE_BASELINE_MANIFEST} ${bad}` };
+  }
+  // Same read-side discipline for the CLOCK the frames were captured under: a hand-edited or
+  // out-of-range aligned fps is a typed ERROR, never a silent fall back to "wall-clock". The
+  // stamp is a JSON file an operator can edit, and a manifest that claims an alignment nobody
+  // can read is a manifest whose comparison terms nobody can read.
+  {
+    const bad = alignedCaptureFpsRefusal(parsed.alignedCaptureFps);
     if (bad !== null) return { error: `${TRACE_BASELINE_MANIFEST} ${bad}` };
   }
   if (parsed.approvalCount !== undefined) {

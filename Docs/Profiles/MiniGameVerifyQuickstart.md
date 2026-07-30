@@ -289,6 +289,15 @@ During `trace record`, play the flow normally in Unity, then press Enter in the 
 confirms Loombridge can drive the recorded flow again. This is a sanity check before capture; it does not
 replace the capture pack.
 
+If you are going to APPROVE this trace's frames as a pixel baseline, add `--aligned` to the replay (or
+`--aligned-fps <n>`, 10 to 120). Each capture settle then runs inside the bridge's pinned tick loop and the
+frame is taken on the frame the settle completes, so the capture lands at the same game time every run
+instead of wherever a wall-clock sleep left it: that is what stops an animating game's phase skew from
+reading as pixel drift. The clock is stamped into the baseline, so later replays inherit it and a run under a
+different clock refuses the comparison rather than grading two different phases against each other. It
+aligns the SETTLE only: action round trips, anchor polling, unseeded randomness and realtime-driven
+animation are all still unaligned.
+
 ### 3. Capture the screens
 
 Drive your recorded happy-path trace through the live bridge and let Loombridge write the capture pack for you

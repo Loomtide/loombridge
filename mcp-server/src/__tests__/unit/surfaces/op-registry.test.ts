@@ -6,9 +6,10 @@ const registry = new OpRegistry();
 
 test("OpRegistry: has expected total op count", () => {
   const allOps = registry.getAll();
+  // replay: 1 (settle_and_capture)
   // scene: 26 (added duplicate_object, set_parent, set_sibling_index, set_active, create_primitive, set_layer, set_tag, get_render_settings, set_render_settings, find_references_to, validate_references, snapshot_gameplay_geometry, compare_gameplay_geometry), editor: 19 (added refresh_assets, set_show_work, show_work_pulse, set_game_view_size, focus_game_view, tick, execute_menu_item, get_project_diagnostics, audit_mobile_assets), input: 11 (added observe_start, observe_stop, pointer_tap, pointer_tap_world), runtime: 10 (added measure_motion, probe, capture_sequence, capture_input_motion, capture_pointer_motion, capture_pointer_hold_motion, sample_animator), component: 6, code: 4, animator: 9 (added set_state_motion), ui: 9 (added scan_text_components, get_screen_rects, dispatch_pointer, set_text_style), asset: 19 (added picker_open, picker_state, picker_close, browser_open, create_prefab_variant, replace_with_prefab, set_texture_import_settings, channel_pack, set_renderer_materials, list_sub_assets, inspect_model_importer, configure_model_importer, inspect_audio_importer, configure_audio_importer), package: 4 (add, list, remove, search), capture: 1 (invoke_static), ops: 3 (batch, list, describe)
-  // Total: 121
-  assert.equal(allOps.length, 121);
+  // Total: 122
+  assert.equal(allOps.length, 122);
 });
 
 test("OpRegistry: scene.create_primitive is registered (RCL-T01 gray-box blockout op)", () => {
@@ -85,6 +86,34 @@ test("OpRegistry: editor.tick is an async deterministic sim-advance (RCL-T09)", 
   assert.equal(schema.properties.durationMs?.type, "number");
   assert.equal(schema.properties.captureFps?.type, "integer");
   assert.match(op!.description, /PLAY_MODE_REQUIRED/);
+});
+
+test("OpRegistry: replay.settle_and_capture is the async capture-aligned settle", () => {
+  const op = registry.getByCommand("replay.settle_and_capture");
+  assert.ok(op, "Missing replay.settle_and_capture");
+  assert.equal(op!.toolName, "unity_replay_settle_and_capture");
+  assert.equal(op!.isAsync, true, "the settle spans editor ticks");
+  assert.equal(registry.getByToolName("unity_replay_settle_and_capture")!.command, "replay.settle_and_capture");
+
+  const schema = op!.inputSchema as {
+    properties: Record<string, { type?: string; minimum?: number; enum?: string[] }>;
+    required?: string[];
+  };
+  assert.deepEqual(schema.required, ["settleFrames"]);
+  assert.equal(schema.properties.settleFrames?.type, "integer");
+  assert.equal(schema.properties.settleFrames?.minimum, 1);
+  assert.equal(schema.properties.captureFps?.type, "integer");
+  // 0 means "do not pin" for editor.tick; here it must be refused, and the schema says so.
+  assert.equal(schema.properties.captureFps?.minimum, 1);
+  assert.deepEqual(schema.properties.format?.enum, ["png", "jpg"]);
+
+  // The three contract facts a caller cannot discover by trying: the deadline is an ERROR
+  // in the harness tier, the driver states its own wire timeout, and the residual is named.
+  assert.match(op!.description, /harness fault \(capture tier\)/i);
+  assert.match(op!.description, /TIMEOUT NOTE/);
+  assert.match(op!.description, /settleFrames\/captureFps\*1000 \+ 15000/);
+  assert.match(op!.description, /realtimeDeadlineHit/);
+  assert.match(op!.description, /seed-driven|unseeded Random/);
 });
 
 test("OpRegistry: scene.set_layer + scene.set_tag are registered (RCL-T05)", () => {

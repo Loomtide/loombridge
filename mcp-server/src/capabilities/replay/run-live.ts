@@ -33,6 +33,12 @@ export interface RunLiveReplayOptions {
    * pointer flapped between two projects.
    */
   projectPathCanonical?: string;
+  /**
+   * Aligned-capture fps for this run, or absent for the legacy wall-clock settle. Passed
+   * straight through to the driver: the ENGINE stays mode-blind, and the driver is the only
+   * layer that knows a settle can be a bridge-side tick loop instead of a sleep here.
+   */
+  alignedCaptureFps?: number;
 }
 
 /** Replay a trace against the running editor and return the stamped artifact. */
@@ -53,7 +59,12 @@ export async function runLiveReplay(
   await client.connect();
   const send = resilientSend(client);
   try {
-    const driver = new UnityDriver(send, { captureDir: options.captureDir });
+    const driver = new UnityDriver(send, {
+      captureDir: options.captureDir,
+      ...(options.alignedCaptureFps !== undefined
+        ? { alignedCaptureFps: options.alignedCaptureFps }
+        : {}),
+    });
     const report = await replay(trace, driver);
     return {
       ...report,

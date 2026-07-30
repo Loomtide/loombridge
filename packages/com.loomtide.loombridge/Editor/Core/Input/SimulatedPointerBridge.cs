@@ -13,6 +13,7 @@ namespace UnityBridge.Core.Input
     {
         private static Type _type;
         private static MethodInfo _tapAt;
+        private static MethodInfo _focusIndependentQuery;
 
         public static void TapAt(float x, float y)
         {
@@ -24,6 +25,40 @@ namespace UnityBridge.Core.Input
             catch (TargetInvocationException ex) when (ex.InnerException != null)
             {
                 throw ex.InnerException;
+            }
+        }
+
+        /// <summary>
+        /// Ask the runtime pump whether the focus-independent InputSystem overrides are
+        /// APPLIED right now (a session opened them and has not restored them).
+        ///
+        /// FAILS SAFE, and that direction matters: every failure to answer (no Input System,
+        /// an older runtime without the query, a reflection error) returns FALSE, so the
+        /// caller keeps its focus refusal. A true here is the only thing that relaxes a
+        /// gate, so it is only ever returned by a live pump that really did apply them.
+        /// Never throws: this is a predicate, not an action.
+        /// </summary>
+        public static bool IsFocusIndependentInputApplied()
+        {
+            try
+            {
+                if (_focusIndependentQuery == null)
+                {
+                    Type type = _type ?? ResolveType("UnityBridge.Runtime.InputSystemRuntimePump");
+                    if (type == null)
+                        return false;
+                    _type = type;
+                    _focusIndependentQuery = type.GetMethod(
+                        "IsFocusIndependentInputApplied", BindingFlags.Public | BindingFlags.Static,
+                        null, Type.EmptyTypes, null);
+                    if (_focusIndependentQuery == null)
+                        return false;
+                }
+                return _focusIndependentQuery.Invoke(null, null) as bool? ?? false;
+            }
+            catch
+            {
+                return false;
             }
         }
 

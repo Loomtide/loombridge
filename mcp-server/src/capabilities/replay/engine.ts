@@ -116,7 +116,10 @@ async function runReplay(
         // remaining actions, and keep running the rest of the trace. Never a
         // silent pass. The reason reflects which capability was missing.
         segmentBlocked = true;
-        if (!blockedReason) blockedReason = blockedReasonFor(action);
+        // The DRIVER's reason wins when it has one: it observed the real cause (a Game View
+        // that lost focus), where the engine can only infer a capability from the action's
+        // shape. Falling back to the shape keeps every existing blocked path unchanged.
+        if (!blockedReason) blockedReason = result.blockedReason ?? blockedReasonFor(action);
         break;
       }
       firstDivergence = {
@@ -154,8 +157,15 @@ async function runReplay(
     }
 
     // 3c. Captures (only once the segment's actions + anchors succeeded).
+    //
+    // A BLOCKED SEGMENT CAPTURES NOTHING, for the same reason a failed one does not: its
+    // actions did not all run, so the screen on display is not the state the capture id
+    // names. Grading that frame against the baseline would compare a half-driven screen to
+    // an approved one and report the gap as pixel drift, turning a missing capability into
+    // a game defect. (Blocked segments used to fall through this gate: only `segmentFailed`
+    // was checked.)
     const captures: SegmentResult["captures"] = [];
-    if (!segmentFailed) {
+    if (!segmentFailed && !segmentBlocked) {
       for (const capture of segment.captures ?? []) {
         if (capture.atAnchor && !anchorsReached.includes(capture.atAnchor)) {
           continue;
@@ -165,6 +175,11 @@ async function runReplay(
           id: capture.id,
           artifact: outcome.artifact,
           sha256: outcome.sha256,
+          // Pass-through evidence from the capture step itself: a harness fault (the aligned
+          // settle could not be delivered) must reach the report, never be swallowed into a
+          // capture that merely has no artifact.
+          ...(outcome.harnessFault !== undefined ? { harnessFault: outcome.harnessFault } : {}),
+          ...(outcome.framesElapsed !== undefined ? { framesElapsed: outcome.framesElapsed } : {}),
         });
       }
     }
