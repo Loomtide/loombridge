@@ -967,6 +967,7 @@ test("KEY-ENUMERATION LITMUS: every manifest key has a carry-forward DECISION, a
     pngs: [],
     driftTolerance: 0.015,
     replaySpeed: 2,
+    alignedCaptureFps: 60,
     maskRects: [{ x: 0, y: 0, w: 10, h: 10, reason: "hud" }],
     frameWidth: W,
     frameHeight: H,
@@ -975,6 +976,7 @@ test("KEY-ENUMERATION LITMUS: every manifest key has a carry-forward DECISION, a
   assert.deepEqual(Object.keys(carried).sort(), CARRIED_MANIFEST_KEYS);
   assert.deepEqual(carried.maskRects, previous.maskRects);
   assert.equal(carried.driftTolerance, 0.015);
+  assert.equal(carried.alignedCaptureFps, 60, "the capture clock is a comparison term and survives a re-stamp");
   assert.equal(carryForward(null).driftTolerance, undefined, "a first approval carries nothing forward");
 });
 

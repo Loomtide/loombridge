@@ -271,7 +271,15 @@ export type BlockedReason =
   /** A step needs a capability not yet built — e.g. a world-space (non-uGUI) tap. */
   | "world-input-unsupported"
   /** A keyboard action ran, but the Input System keyboard is unavailable (legacy-only project). */
-  | "keyboard-input-unsupported";
+  | "keyboard-input-unsupported"
+  /**
+   * The editor's Game View lost focus and the bridge refused to pretend the input landed
+   * (FOCUS_REQUIRED). A HARNESS condition, deliberately its own reason rather than folded
+   * into `world-input-unsupported`: the capability exists and the project supports it, the
+   * machine just was not in a state to deliver the tap. Reading it as an action failure
+   * would report a person clicking away from the editor as a game divergence.
+   */
+  | "focus-lost";
 
 /** The reset strategy actually used (see design "Reset Contract"). */
 export type ResetTier = "scene-load" | "hook" | "relaunch";
@@ -342,6 +350,23 @@ export interface CaptureResult {
    * something a pixel of jitter can undo.
    */
   driftGrid?: number[];
+  /**
+   * WHY THIS CAPTURE HAS NO FRAME (or has one nobody should grade): the capture step itself
+   * failed in the HARNESS, not in the game. The aligned settle raises this when the editor
+   * could not deliver the settle inside its wall-clock budget, which returns no frame at
+   * all rather than one taken at an unknown game time.
+   *
+   * Recorded rather than swallowed because the alternative is a capture that silently
+   * vanishes from the report: `applyVisualDiff` skips a capture with no artifact, so a
+   * starved editor would read as "nothing to compare" and the run would come out green.
+   * It sets `visualHarnessFault` on the run (exit tier 2), never drift.
+   */
+  harnessFault?: string;
+  /**
+   * The frames the aligned settle actually advanced before this capture. Present only for
+   * an aligned run; the evidence that the settle it claims really happened.
+   */
+  framesElapsed?: number;
 }
 
 export interface SegmentResult {
@@ -413,6 +438,14 @@ export interface ReplayReport {
    * a different pacing refuses the pixel comparison rather than grading phase skew.
    */
   replaySpeed?: number;
+  /**
+   * The capture-alignment discipline this run's frames were taken under: the fps the settle
+   * clock was pinned to (`replay.settle_and_capture`). ABSENT means the legacy WALL-CLOCK
+   * settle (sleep, then screenshot), so every report written before this field existed keeps
+   * meaning what it meant, and the absence FAILS SAFE: a comparison across the two
+   * disciplines refuses rather than grading frames captured under different clocks.
+   */
+  alignedCaptureFps?: number;
   segments: SegmentResult[];
   assertions: AssertionResult[];
   console: ConsoleResult;

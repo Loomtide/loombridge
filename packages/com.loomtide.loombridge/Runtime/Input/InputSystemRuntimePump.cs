@@ -51,6 +51,25 @@ namespace UnityBridge.Runtime
             ApplyFocusIndependentInput();
         }
 
+        /// <summary>
+        /// TRUE only while a session's focus-independent InputSystem overrides are actually
+        /// APPLIED (see ApplyFocusIndependentInput). This is the live state of the setting,
+        /// not a claim that a session exists: the editor-side focus gate for a simulated
+        /// pointer tap reads it to decide whether an unfocused tap can really be delivered,
+        /// so it must never report true after RestoreFocusIndependentInput has run.
+        ///
+        /// Always false outside the editor: the overrides are editor-only, and a player build
+        /// has no Game View focus concept to be independent of.
+        /// </summary>
+        public static bool IsFocusIndependentInputApplied()
+        {
+#if UNITY_EDITOR
+            return _focusSettingsApplied;
+#else
+            return false;
+#endif
+        }
+
         public static void EndSession()
         {
             _sessionActive = false;

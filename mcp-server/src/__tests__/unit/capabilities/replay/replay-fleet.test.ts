@@ -102,3 +102,45 @@ test("renderFleetReportHtml: an empty fleet renders without crashing", () => {
   const html = renderFleetReportHtml(summarizeFleet([], "t"));
   assert.match(html, /no traces/);
 });
+
+// BX2: THE COUNTS AGREE WITH THE TIER. A trace whose actuation passed while its captures could
+// not be compared exits 2 and rolls up as `blocked`, but it used to be COUNTED as a pass, so a
+// fleet printed "2/2 pass" one line above its own BLOCKED verdict and a non-zero exit. `blocked`
+// is this vocabulary's "no verdict was produced", which is exactly what an uncomparable capture
+// leaves behind.
+test("summarizeFleet: a harness fault counts under BLOCKED, never under pass", () => {
+  const report = summarizeFleet(
+    [result({ id: "clean" }), result({ id: "uncomparable", status: "pass", visualHarnessFault: true })],
+    "t",
+  );
+  assert.equal(report.status, "blocked");
+  assert.deepEqual(
+    report.counts,
+    { total: 2, pass: 1, fail: 0, blocked: 1, drift: 0 },
+    "the run with no comparable frame is not one of the passes",
+  );
+});
+
+test("summarizeFleet: a FAILING trace that also faulted stays counted once, as a fail", () => {
+  // fail > blocked in this vocabulary, and a trace must land in exactly one bucket or the
+  // counts stop summing to `total`.
+  const report = summarizeFleet([result({ status: "fail", visualHarnessFault: true })], "t");
+  assert.equal(report.status, "fail");
+  assert.deepEqual(report.counts, { total: 1, pass: 0, fail: 1, blocked: 0, drift: 0 });
+});
+
+test("summarizeFleet: the buckets always sum to total (no double-counted trace)", () => {
+  const report = summarizeFleet(
+    [
+      result({ id: "a" }),
+      result({ id: "b", status: "blocked" }),
+      result({ id: "c", status: "fail" }),
+      result({ id: "d", status: "pass", visualHarnessFault: true }),
+      result({ id: "e", status: "blocked", visualHarnessFault: true }),
+    ],
+    "t",
+  );
+  const { total, pass, fail, blocked } = report.counts;
+  assert.equal(pass + fail + blocked, total, JSON.stringify(report.counts));
+  assert.deepEqual(report.counts, { total: 5, pass: 1, fail: 1, blocked: 3, drift: 0 });
+});

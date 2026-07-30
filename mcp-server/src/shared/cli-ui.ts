@@ -71,3 +71,34 @@ export function unityConnectionHint(error: unknown): string[] | null {
   if (process.env.LOOMBRIDGE_DEBUG) lines.push("", String((error as Error).message ?? error));
   return lines;
 }
+
+/**
+ * The OTHER half of the same condition: the bridge was reachable, the run started, and the
+ * socket then DROPPED (a domain reload the editor never came back from, the editor closing,
+ * a crash). `unity-client` rejects every in-flight op with a plain `Error` whose message
+ * carries the `CONNECTION_LOST:` prefix, so it has no `UnityConnectionError` name for
+ * {@link unityConnectionHint} to key on and it looked, to a caller, like an ordinary failure.
+ *
+ * DETECTED BY MESSAGE SHAPE ON PURPOSE, and not by renaming the client's throw: the
+ * `UnityConnectionError` NAME is a contract two callers read for its `diagnostics`
+ * (bridge-preflight builds a connection blocker from it; `formatConnectionErrorMessage`
+ * formats it), and a mid-run socket drop has no such diagnostics to give. Reusing the name
+ * would hand those callers a fabricated port scan for a socket that had already connected.
+ * The message prefix is the shape `resilientSend.isConnectionLoss` already treats as the
+ * contract, so both doors read the same fact.
+ *
+ * Returns null for any other error, so callers keep their normal handling.
+ */
+export function unityConnectionLostHint(error: unknown): string[] | null {
+  const text = error instanceof Error ? error.message : typeof error === "string" ? error : "";
+  if (!/CONNECTION_LOST|Not connected|WebSocket is not open|Socket closed|Connection lost/i.test(text)) {
+    return null;
+  }
+  const lines = [
+    `${ICON.notReady} Lost the connection to Unity mid-run: the run produced no verdict about the game.`,
+    "   The editor closed, crashed, or entered a domain reload it did not come back from.",
+    "   Bring the editor back up, wait for the bridge to reconnect, and re-run this command.",
+  ];
+  if (process.env.LOOMBRIDGE_DEBUG) lines.push("", text);
+  return lines;
+}

@@ -58,6 +58,14 @@ export interface DispatchResult {
    */
   blocked?: boolean;
   /**
+   * WHICH capability was missing, when the driver knows better than the engine's
+   * action-shaped guess. The engine derives a reason from the ACTION (a world-tap that
+   * blocks is `world-input-unsupported`), which is right for a missing backend and wrong for
+   * a Game View that lost focus: the capability exists, the machine was not in a state to
+   * use it. A driver that observed the real cause names it here and the engine prefers it.
+   */
+  blockedReason?: BlockedReason;
+  /**
    * Verbatim actuation evidence from a uGUI `ui.dispatch_pointer` (tap/drag) — the
    * fields the interaction-flow gate's `flow.json` records (`actuated`/`handlerTarget`/
    * `raycastHit`/`handlersFired`). Populated only for EventSystem dispatches; absent
@@ -83,6 +91,16 @@ export interface AnchorResult {
 export interface CaptureOutcome {
   artifact?: string;
   sha256?: string;
+  /**
+   * The capture step failed in the HARNESS: no frame, or no frame worth grading. Set by the
+   * aligned settle when the editor missed the settle's wall-clock budget (the bridge returns
+   * an error rather than a frame at an unknown game time). The engine records it on the
+   * capture so the run is tiered as a harness fault instead of quietly reporting one fewer
+   * comparison.
+   */
+  harnessFault?: string;
+  /** Frames the aligned settle advanced before the capture (aligned mode only). */
+  framesElapsed?: number;
 }
 
 export interface AssertionOutcome {

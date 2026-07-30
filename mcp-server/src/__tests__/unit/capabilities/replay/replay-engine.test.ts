@@ -221,6 +221,67 @@ test("replay: reset unavailable → blocked", async () => {
   assert.equal(report.resetTier, null);
 });
 
+// ── S5/S1: what a blocked segment captures, and where a capture fault goes ──
+
+// LITMUS. Break the gate back to `if (!segmentFailed)` and this test fails with c1 present:
+// a segment whose tap never landed would still screenshot the half-driven screen and hand
+// it to the pixel gate, where the missing state reads as drift. A blocked segment is a
+// segment whose state was never reached, so it has nothing to capture.
+test("replay: a BLOCKED segment emits ZERO captures (a half-driven screen is not evidence)", async () => {
+  const driver = fakeDriver();
+  const captured: string[] = [];
+  driver.capture = async (id: string) => {
+    captured.push(id);
+    return { artifact: `${id}.png`, sha256: "d" };
+  };
+  // s2 is the discriminating segment: its capture `c2` has NO `atAnchor`, so nothing else
+  // would stop it. (A test that blocked s1 would be VACUOUS: `c1` is anchored on `a1`, and an
+  // anchored capture is already skipped when its anchor was never reached, and it passed with
+  // the gate deliberately reverted.)
+  driver.dispatch = async (action: Action) =>
+    action.do === "tap" && action.locator.path === "/Canvas/Apple"
+      ? { ok: false, blocked: true, detail: "no simulated pointer" }
+      : { ok: true };
+
+  const report = await replay(baseTrace(), driver);
+
+  assert.equal(report.segments[1].status, "blocked");
+  assert.deepEqual(report.segments[1].captures, [], "a blocked segment captures nothing");
+  assert.equal(captured.includes("c2"), false, "…and the driver is never even asked for c2");
+  // The run continues around it: the segment that DID drive still captures.
+  assert.deepEqual(report.segments[0].captures.map((c) => c.id), ["c1"]);
+  assert.equal(report.status, "blocked");
+});
+
+test("replay: the DRIVER's blocked reason wins over the engine's action-shaped guess", async () => {
+  const driver = fakeDriver();
+  driver.dispatch = async (action: Action) =>
+    action.do === "tap" && action.locator.path === "/Canvas/Start"
+      ? { ok: false, blocked: true, blockedReason: "focus-lost", detail: "needs Game-View focus" }
+      : { ok: true };
+
+  const report = await replay(baseTrace(), driver);
+  assert.equal(report.status, "blocked");
+  assert.equal(
+    report.blockedReason,
+    "focus-lost",
+    "a focus loss is a harness condition; the action's shape must not relabel it",
+  );
+});
+
+test("replay: a driver-reported capture HARNESS FAULT reaches the report (never swallowed)", async () => {
+  const driver = fakeDriver();
+  driver.capture = async (id: string) =>
+    id === "c1" ? { harnessFault: "aligned settle failed: budget" } : { artifact: `${id}.png`, sha256: "d", framesElapsed: 15 };
+
+  const report = await replay(baseTrace(), driver);
+  const c1 = report.segments[0].captures[0];
+  assert.equal(c1.id, "c1");
+  assert.equal(c1.artifact, undefined, "no frame is claimed");
+  assert.match(c1.harnessFault ?? "", /aligned settle failed/);
+  assert.equal(report.segments[1].captures[0].framesElapsed, 15, "aligned evidence rides through too");
+});
+
 // ───────────────────────────── parser ─────────────────────────────
 
 test("parseTrace: accepts a valid trace round-trip", () => {

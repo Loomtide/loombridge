@@ -552,13 +552,79 @@ comparison or the gate stays permanently red.
   ones. A `--set` that DROPS a rect names it (*2 mask(s) REMOVED: ...*) and the count line
   reads *2 to 2 mask(s) (2 removed, 2 added)* rather than as no-change.
 - **The honest limit is recorded.** Masks fix LOCALIZED nondeterminism only. Full-frame or
-  diffuse nondeterminism (particle storms, full-screen shaders) stays red, and game-time
-  (`timeScale`) alignment remains the recorded future path for it.
+  diffuse nondeterminism (particle storms, full-screen shaders) stays red, and clock
+  alignment (the wave below) is the path for the PHASE half of it.
+
+### Capture-aligned settle delivery notes (the clock wave)
+
+Shipped against the measurement the mask wave left behind: drift that GROWS monotonically
+across a run is a phase desync, not a regression, and no tolerance or mask can honestly
+absorb an unbounded one. This wave removes the largest source of that phase noise, and
+deliberately removes only that one.
+
+- **THE DRIFT TAXONOMY, which is what decides the lever.** *Phase* drift (the same content,
+  captured at a different animation time) is what clock alignment fixes. *Localized* drift (a
+  region that is genuinely nondeterministic) is what masks fix. *Diffuse seed- or
+  realtime-driven* drift (unseeded `Random`, `realtimeSinceStartup`, `DateTime`) is fixed by
+  neither: the levers there are a tolerance, or seeding the game. Naming the three is the
+  point of the taxonomy: each previous wave shipped one lever, and an operator reaching for
+  the wrong one either blinds a gate or leaves it permanently red.
+- **The settle is the aligned window, and ONLY the settle.** A new bridge op,
+  `replay.settle_and_capture`, advances exactly N player-loop frames with
+  `Time.captureDeltaTime` pinned to `1/fps` and takes the screenshot IN-LOOP on the frame the
+  settle completes (the `runtime.capture_sequence` precedent), with the `editor.tick` pin
+  idiom for restore and eager interrupts. The wall-clock pair it replaces (sleep here, then
+  `editor.screenshot`) let the game free-run for an unknown number of frames between the two
+  calls, which is exactly how a monotonic phase desync accumulates.
+- **A missed settle is an ERROR, never a degraded frame.** The op's wall budget
+  (`settleFrames/fps + 8s`, checked every tick) returns no image at all: a frame at an unknown
+  game time is not comparable evidence, and returning one would let a starved editor read as
+  pixel drift. The driver records it as a capture-tier harness fault (exit 2), and the run
+  never grades it. The driver also states its own wire timeout (`+15s`) so the BRIDGE's
+  deadline is the one that decides, not an anonymous transport timeout.
+- **The clock discipline is part of the ANCHOR**, the pacing precedent exactly:
+  `baseline-manifest.json` gained an OPTIONAL `alignedCaptureFps` (integer, [10, 120]),
+  carried by `tolerance`/`mask`, re-derived by `approve` from the report it freezes, and
+  range-checked by the one reader. Absent means the legacy wall-clock settle, so every
+  existing manifest keeps meaning what it meant, and a MISMATCH between the anchor's
+  discipline and the run's refuses the pixel comparison as a harness fault rather than
+  grading frames that sit at different phases.
+- **`baselineFault` accumulates.** It was a single slot, so the last check to run overwrote
+  the earlier ones and an operator fixed one fault, re-ran, and met the next. Every reason an
+  anchor cannot be trusted is now collected and printed together.
+- **The physics cadence is an ADVISORY, never a refusal.** When `1/fps` does not sit on a
+  whole number of physics steps, the run prints *physics steps N times every M frames at this
+  fps; feel-sensitive traces may differ from the recording*, computed from the project's real
+  `Time.fixedDeltaTime` (the op returns it), never from an assumed 0.02. Refusing would block
+  a trade-off the operator is entitled to make; silence would let a changed cadence read as
+  drift.
+- **THE HONEST RESIDUAL is printed with every aligned drift.** Alignment covers the settle;
+  the action round trips and the 150ms anchor polling are still wall-clock windows. So drift
+  that survives an aligned run is *consistent with* those windows or with seed/realtime
+  binding, and is never proof of either. The line says so, because "we pinned the clock and it
+  still moved" is the strongest available over-reading of this feature.
+- **Every side-effecting input op the replay driver sends is now non-idempotent.**
+  `input.pointer_tap`, `input.pointer_tap_world`, `key_tap`, `key_down`, `key_up` and
+  `replay.settle_and_capture` joined `ui.dispatch_pointer` in the set the resilient send
+  refuses to retry: a retried tap is a phantom second press, and a retried settle advances
+  game time twice while the report claims one settle. The scope is deliberate. It is not
+  "every input op" (a read-only `input.observe_start` is safely retryable and belongs
+  nowhere near this list), and it is not only the ops enumerated on the day: the world-space
+  tap is `pointer_tap` one camera projection earlier, so listing one and not the other left
+  the identical phantom press reachable through the other door.
+- **A focus loss is BLOCKED, not a game defect.** `FOCUS_REQUIRED` maps to a new blocked
+  reason, `focus-lost`, and the replay driver now opens the input SESSION before a world tap
+  (the session's backend applies, and owns restoring, the focus-independent InputSystem
+  settings that let an unfocused tap land at all). A blocked segment also captures nothing:
+  its state was never reached, so its screen is not the evidence its capture id names.
 
 ## Out of scope
 
-- Game-time (`timeScale`) alignment of replay pacing, the recorded future path for
-  full-frame or diffuse nondeterminism that masks cannot honestly cover.
+- Aligning the windows OUTSIDE the settle (action dispatch round trips, anchor polling), the
+  conditional next slice: built only if a measurement says those windows dominate what the
+  clock wave left behind.
+- Pausing the editor between segments, in-tick input dispatch, and a whole-segment
+  `run_segment` op (the same conditional slice).
 - Mask EDITING UI, and per-capture mask *authoring* beyond the `captureId:` prefix on a
   `--set` rect.
 - Changing any gate's semantics or exit tiering. (The ratchet wave added ONE tolerance, and

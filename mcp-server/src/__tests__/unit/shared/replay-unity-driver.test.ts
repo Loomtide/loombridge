@@ -305,7 +305,18 @@ test("UnityDriver.dispatch tap: extracts handlerTarget.path from the bridge's lo
   assert.equal(r.raw?.raycastHit, true);
 });
 
+/**
+ * S5: a world tap OPENS THE INPUT SESSION first. The session's backend applies the
+ * focus-independent InputSystem overrides (and owns restoring them), which is what lets the
+ * simulated pointer reach an unfocused Game View at all. Every world-tap fixture therefore
+ * has to answer begin_session, exactly as the keyboard fixtures already did.
+ */
+const inputSession = {
+  "input.begin_session": () => ({ data: { backend: "InputSystem", sessionId: "s-1", created: true } }),
+};
+
 const worldRect = (over: Record<string, unknown> = {}) => ({
+  ...inputSession,
   "scene.get_screen_rects": () => ({
     data: { objects: [{ screenRect: { x: 100, y: 200, width: 40, height: 40 }, isOffScreen: false, ...over }] },
   }),
@@ -326,6 +337,7 @@ test("UnityDriver.dispatch world-tap: resolves the screen center → input.point
 
 test("UnityDriver.dispatch world-tap: no screen bounds → fail (not blocked)", async () => {
   const { send } = fakeBridge({
+    ...inputSession,
     "scene.get_screen_rects": () => ({ data: { objects: [{ screenRect: null }] } }),
   });
   const driver = new UnityDriver(send, driverOpts);
@@ -365,7 +377,11 @@ test("UnityDriver.dispatch world-tap: blocked keyed on the CODE even if the mess
   assert.equal(result.blocked, true, "the stable code, not the prose, decides blocked");
 });
 
-test("UnityDriver.dispatch world-tap: a non-capability pointer error → fail (not blocked)", async () => {
+// S5: FOCUS_REQUIRED is a HARNESS condition, not a game divergence. It used to map to a
+// plain action failure, which reported "the game did not respond to a tap" when what really
+// happened is that the Game View lost focus and the bridge honestly refused to pretend the
+// tap landed. It is now BLOCKED with its own reason.
+test("UnityDriver.dispatch world-tap: FOCUS_REQUIRED → blocked with reason focus-lost", async () => {
   const { send } = fakeBridge({
     ...worldRect(),
     "input.pointer_tap": () => ({ error: "input.pointer_tap needs Game-View focus", code: "FOCUS_REQUIRED" }),
@@ -373,7 +389,51 @@ test("UnityDriver.dispatch world-tap: a non-capability pointer error → fail (n
   const driver = new UnityDriver(send, driverOpts);
   const result = await driver.dispatch({ do: "world-tap", locator: { path: "/Fruit" } });
   assert.equal(result.ok, false);
-  assert.equal(result.blocked, undefined);
+  assert.equal(result.blocked, true);
+  assert.equal(result.blockedReason, "focus-lost");
+  assert.match(result.detail ?? "", /Game-View focus/);
+});
+
+test("UnityDriver.dispatch world-tap: a genuine op error is still a FAILURE, not blocked", async () => {
+  const { send } = fakeBridge({
+    ...worldRect(),
+    "input.pointer_tap": () => ({ error: "NOT_FOUND: camera missing", code: "NOT_FOUND" }),
+  });
+  const driver = new UnityDriver(send, driverOpts);
+  const result = await driver.dispatch({ do: "world-tap", locator: { path: "/Fruit" } });
+  assert.equal(result.ok, false);
+  assert.equal(result.blocked, undefined, "only a focus loss or a missing capability blocks");
+});
+
+test("UnityDriver.dispatch world-tap: the input SESSION is opened BEFORE the tap (S5)", async () => {
+  const { send, calls } = fakeBridge({
+    ...worldRect(),
+    "input.pointer_tap": () => ({ data: { dispatched: true } }),
+  });
+  const driver = new UnityDriver(send, driverOpts);
+  const result = await driver.dispatch({ do: "world-tap", locator: { path: "/Fruit" } });
+  assert.equal(result.ok, true);
+  const order = calls.map((c) => c.command);
+  const sessionAt = order.indexOf("input.begin_session");
+  const tapAt = order.indexOf("input.pointer_tap");
+  assert.ok(sessionAt >= 0, "a world tap must open an input session");
+  assert.ok(sessionAt < tapAt, `session must precede the tap (got ${order.join(", ")})`);
+  assert.equal(lastCall(calls, "input.begin_session")!.params.backend, "InputSystem");
+});
+
+test("UnityDriver.dispatch world-tap: a legacy-only project blocks at the SESSION, and never taps", async () => {
+  const { send, calls } = fakeBridge({
+    ...worldRect(),
+    "input.begin_session": () => ({
+      error: "Input System backend requested but Unity Input System is not installed.",
+      code: "INPUT_SYSTEM_NOT_INSTALLED",
+    }),
+  });
+  const driver = new UnityDriver(send, driverOpts);
+  const result = await driver.dispatch({ do: "world-tap", locator: { path: "/Fruit" } });
+  assert.equal(result.ok, false);
+  assert.equal(result.blocked, true, "a missing Input System is a capability gap, not a game defect");
+  assert.equal(lastCall(calls, "input.pointer_tap"), undefined, "never tap through a session that failed to open");
 });
 
 test("UnityDriver.dispatch world-tap: pointer_tap not dispatched → fail (no silent success)", async () => {
@@ -394,6 +454,7 @@ test("UnityDriver.dispatch world-tap: a degenerate (0-size) rect → fail, never
 
 test("UnityDriver.dispatch world-tap: falls back to renderer bounds when there's no collider", async () => {
   const { send } = fakeBridge({
+    ...inputSession,
     "scene.get_screen_rects": (params) =>
       params.boundsMode === "renderer"
         ? { data: { objects: [{ screenRect: { x: 10, y: 10, width: 20, height: 20 }, isOffScreen: false }] } }
@@ -805,4 +866,73 @@ test("UnityDriver.readConsole: counts lowercase 'error' (the bridge's real contr
     errorCount: 2,
     errors: ["boom", "kaboom"],
   });
+});
+
+// ───────────────────────── AX1: EVERY focus-lost site, through the real driver ─────────────
+//
+// FOCUS_REQUIRED means the machine could not deliver the input, not that the game ignored it.
+// The driver maps it at FIVE separate call sites (the world tap, the key tap, the two edges
+// of a key HOLD, and the shared key-down/key-up path), and until this table only the world
+// tap was pinned: the other four were four independent copies of a rule with nothing walking
+// them, so any one could revert to a bare action failure with a green suite. Each row drives
+// the REAL driver against a bridge that refuses exactly one op, and asserts the harness tier.
+//
+// Reverting ANY single site must fail its named row here.
+const FOCUS_LOST = { error: "input op needs Game-View focus", code: "FOCUS_REQUIRED" };
+const focusLostSites: Array<{ site: string; action: Action; refuse: string; ok?: string[] }> = [
+  { site: "world-tap → input.pointer_tap", action: { do: "world-tap", locator: { path: "/Fruit" } }, refuse: "input.pointer_tap" },
+  { site: "key-tap → input.key_tap", action: { do: "key-tap", key: "Space" }, refuse: "input.key_tap" },
+  {
+    site: "key-hold press → input.key_down",
+    action: { do: "key-hold", key: "D", durationMs: 1 },
+    refuse: "input.key_down",
+  },
+  {
+    // The RELEASE edge of a hold: the press succeeded, so a driver that only mapped the press
+    // would report the focus loss as a game divergence half way through the hold.
+    site: "key-hold release → input.key_up",
+    action: { do: "key-hold", key: "D", durationMs: 1 },
+    refuse: "input.key_up",
+    ok: ["input.key_down"],
+  },
+  { site: "key-down edge → input.key_down", action: { do: "key-down", key: "A" }, refuse: "input.key_down" },
+  { site: "key-up edge → input.key_up", action: { do: "key-up", key: "A" }, refuse: "input.key_up" },
+];
+
+for (const { site, action, refuse, ok } of focusLostSites) {
+  test(`UnityDriver focus-lost mapping: ${site} → blocked (focus-lost), never an action failure`, async () => {
+    const handlers: Record<string, Handler> = {
+      ...worldRect(),
+      "input.pointer_tap": () => ({ data: { dispatched: true } }),
+    };
+    for (const command of ok ?? []) handlers[command] = () => ({ data: {} });
+    handlers[refuse] = () => ({ ...FOCUS_LOST });
+
+    const driver = new UnityDriver(fakeBridge(handlers).send, driverOpts);
+    const result = await driver.dispatch(action);
+
+    assert.equal(result.ok, false, `${site} must not report success`);
+    assert.equal(result.blocked, true, `${site} must be BLOCKED (harness), not an action failure`);
+    assert.equal(result.blockedReason, "focus-lost", `${site} must name the focus condition`);
+    assert.match(result.detail ?? "", /Game-View focus/);
+  });
+}
+
+test("UnityDriver focus-lost mapping: the SAME sites report a non-focus error as a plain failure", async () => {
+  // The control that keeps the rows above from passing on a driver that blocks everything:
+  // an ordinary op error at each site is still a game-tier action failure with no reason.
+  for (const { site, action, refuse, ok } of focusLostSites) {
+    const handlers: Record<string, Handler> = {
+      ...worldRect(),
+      "input.pointer_tap": () => ({ data: { dispatched: true } }),
+    };
+    for (const command of ok ?? []) handlers[command] = () => ({ data: {} });
+    handlers[refuse] = () => ({ error: "INVALID_KEY: no such key", code: "INVALID_KEY" });
+
+    const driver = new UnityDriver(fakeBridge(handlers).send, driverOpts);
+    const result = await driver.dispatch(action);
+    assert.equal(result.ok, false, site);
+    assert.equal(result.blocked, undefined, `${site}: only a focus loss (or a missing capability) blocks`);
+    assert.equal(result.blockedReason, undefined, site);
+  }
 });

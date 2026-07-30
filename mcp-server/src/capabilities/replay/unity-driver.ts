@@ -27,6 +27,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 
 import type { BridgeResponse } from "../../shared/types.js";
+import { alignedSettleFrames, physicsCadenceNote } from "./aligned-capture.js";
 import type {
   AnchorResult,
   AssertionOutcome,
@@ -75,6 +76,18 @@ export interface UnityDriverOptions {
    * under the 30s timeout.
    */
   keepaliveIntervalMs?: number;
+  /**
+   * ALIGNED CAPTURE MODE. When set, a capture's settle stops being a wall-clock sleep in
+   * this process and becomes ONE `replay.settle_and_capture` call: the bridge advances the
+   * settle inside a single tick loop with `Time.captureDeltaTime` pinned to 1/fps and takes
+   * the screenshot on the exact frame the settle completes.
+   *
+   * ABSENT = the legacy wall-clock path, byte for byte (sleep, then `editor.screenshot`).
+   * That default is deliberate: alignment changes which frame a capture lands on, so every
+   * baseline approved under the old discipline keeps grading exactly as it did until someone
+   * asks for the new one.
+   */
+  alignedCaptureFps?: number;
 }
 
 const DEFAULTS = {
@@ -95,6 +108,10 @@ export class UnityDriver implements ReplayDriver {
   private readonly pollIntervalMs: number;
   private readonly playSettleTimeoutMs: number;
   private readonly errorLogTypes: ReadonlySet<string>;
+  /** Aligned-capture fps, or undefined for the legacy wall-clock settle. */
+  private readonly alignedCaptureFps: number | undefined;
+  /** The physics-cadence advisory is printed at most once per drive, not once per capture. */
+  private cadenceNoticePrinted = false;
 
   /**
    * Input-session lifecycle for keyboard actions (opened lazily on the first
@@ -127,6 +144,7 @@ export class UnityDriver implements ReplayDriver {
       options.playSettleTimeoutMs ?? DEFAULTS.playSettleTimeoutMs;
     this.errorLogTypes = options.errorLogTypes ?? DEFAULTS.errorLogTypes;
     this.keepaliveIntervalMs = options.keepaliveIntervalMs ?? DEFAULTS.keepaliveIntervalMs;
+    this.alignedCaptureFps = options.alignedCaptureFps;
   }
 
   async capabilityCheck(backend: string): Promise<CapabilityResult> {
@@ -307,11 +325,25 @@ export class UnityDriver implements ReplayDriver {
       // A non-uGUI target the game resolves from `Pointer.current` + its own raycast
       // (the EventSystem dispatch can't actuate it). Resolve the target's CURRENT
       // screen-space center, then drive a simulated Input System pointer tap there.
+      //
+      // OPEN THE SESSION FIRST. A one-shot `input.pointer_tap` is delivered only to a
+      // FOCUSED Game View, because it has no end_session to restore the focus-independent
+      // InputSystem overrides it would otherwise have to leak. A session DOES own that
+      // restore, so opening one before the tap is what makes an unfocused world tap land at
+      // all, and a replay is precisely the case that runs while a human is looking at
+      // something else. A project with no Input System still blocked-degrades honestly here,
+      // exactly as it did when the tap itself was the thing that discovered it.
+      const session = await this.ensureInputSession();
+      if ("blocked" in session) return { ok: false, blocked: true, detail: session.detail };
+      if ("error" in session) return { ok: false, detail: session.error };
+
       const resolved = await this.resolveWorldScreenPoint(action.locator);
       if ("error" in resolved) return { ok: false, detail: resolved.error };
 
       const tap = await this.op("input.pointer_tap", { x: resolved.x, y: resolved.y });
       if ("error" in tap) {
+        const focusLost = isFocusLost(tap);
+        if (focusLost) return focusLostBlock(tap.error);
         // Simulated pointer unavailable (legacy-only project) → honest BLOCKED, keyed
         // on the stable error CODE (message as a fallback). Any other error is a fail.
         const unavailable =
@@ -342,17 +374,23 @@ export class UnityDriver implements ReplayDriver {
       // is a genuine drive — the outcome assertion, not this layer, catches that.)
       if (action.do === "key-tap") {
         const tap = await this.op("input.key_tap", { key: action.key });
-        if ("error" in tap) return { ok: false, detail: tap.error };
+        if ("error" in tap) {
+          return isFocusLost(tap) ? focusLostBlock(tap.error) : { ok: false, detail: tap.error };
+        }
         return { ok: true };
       }
       // key-hold: press, hold for the real wall-clock duration (so the game's
       // Update/FixedUpdate advance under the held key), then release. If the
       // release op fails, teardown's end_session still releases all held keys.
       const down = await this.op("input.key_down", { key: action.key });
-      if ("error" in down) return { ok: false, detail: down.error };
+      if ("error" in down) {
+        return isFocusLost(down) ? focusLostBlock(down.error) : { ok: false, detail: down.error };
+      }
       await delay(action.durationMs);
       const up = await this.op("input.key_up", { key: action.key });
-      if ("error" in up) return { ok: false, detail: up.error };
+      if ("error" in up) {
+        return isFocusLost(up) ? focusLostBlock(up.error) : { ok: false, detail: up.error };
+      }
       return { ok: true };
     }
 
@@ -367,7 +405,9 @@ export class UnityDriver implements ReplayDriver {
 
       const op = action.do === "key-down" ? "input.key_down" : "input.key_up";
       const result = await this.op(op, { key: action.key });
-      if ("error" in result) return { ok: false, detail: result.error };
+      if ("error" in result) {
+        return isFocusLost(result) ? focusLostBlock(result.error) : { ok: false, detail: result.error };
+      }
       return { ok: true };
     }
 
@@ -450,6 +490,9 @@ export class UnityDriver implements ReplayDriver {
   }
 
   async capture(id: string, settleMs?: number): Promise<CaptureOutcome> {
+    if (this.alignedCaptureFps !== undefined) {
+      return this.alignedCapture(id, settleMs, this.alignedCaptureFps);
+    }
     // Let the resulting screen settle (spawn/fall/transition animations) before the
     // screenshot, so the artifact isn't a mid-animation frame. Bounded by the trace.
     if (settleMs && settleMs > 0) await delay(settleMs);
@@ -461,13 +504,76 @@ export class UnityDriver implements ReplayDriver {
     if ("error" in result) return {};
     const base64 = result.data.image_base64;
     if (typeof base64 !== "string" || base64.length === 0) return {};
+    return this.writeCaptureBytes(id, base64);
+  }
 
+  /**
+   * THE ALIGNED SEAM. The wall-clock pair (sleep here, screenshot there) becomes ONE bridge
+   * call: the settle runs inside a single tick loop with the game-time step pinned, and the
+   * frame is taken on the exact frame the settle completes.
+   *
+   * The wire timeout is stated AT THE CALL rather than left to `defaultTimeoutMs`: this
+   * driver talks straight to the bridge and never passes through `resolveOpTimeoutMs`, so
+   * nothing else would widen the default for a long settle. It is the settle's own wall cost
+   * plus 15s, which sits comfortably above the bridge's own budget (the settle plus 8s).
+   * The DEADLINE that decides the outcome must be the bridge's honest one, never this timer
+   * firing first and turning a measurable harness fault into an anonymous timeout.
+   */
+  private async alignedCapture(
+    id: string,
+    settleMs: number | undefined,
+    fps: number,
+  ): Promise<CaptureOutcome> {
+    const settleFrames = alignedSettleFrames(settleMs, fps);
+    const timeoutMs = (settleFrames / fps) * 1000 + 15000;
+    const result = await this.op(
+      "replay.settle_and_capture",
+      { settleFrames, captureFps: fps, format: "png", view: "game" },
+      timeoutMs,
+    );
+    if ("error" in result) {
+      // NEVER A SILENT MISSING CAPTURE. The bridge refuses to return a frame it could not
+      // place in game time (a starved editor, an interrupted settle), and that refusal is
+      // harness evidence: it rides back so the run is tiered 2, not graded as drift and not
+      // dropped from the report.
+      return { harnessFault: `aligned settle failed for capture "${id}": ${result.error}` };
+    }
+    const base64 = result.data.image_base64;
+    if (typeof base64 !== "string" || base64.length === 0) {
+      return { harnessFault: `aligned settle for capture "${id}" returned no image` };
+    }
+    this.maybeWarnPhysicsCadence(fps, result.data.fixedDeltaTime);
+    const framesElapsed =
+      typeof result.data.framesElapsed === "number" ? result.data.framesElapsed : undefined;
+    return { ...(await this.writeCaptureBytes(id, base64)), ...(framesElapsed !== undefined ? { framesElapsed } : {}) };
+  }
+
+  /** Decode + write one capture's bytes and report the path it really wrote. */
+  private async writeCaptureBytes(id: string, base64: string): Promise<CaptureOutcome> {
     const bytes = Buffer.from(base64, "base64");
     const outputPath = `${this.captureDir}/${id}.png`;
     await fs.mkdir(path.dirname(outputPath), { recursive: true });
     await fs.writeFile(outputPath, bytes);
     const sha256 = createHash("sha256").update(bytes).digest("hex");
     return { artifact: outputPath, sha256 };
+  }
+
+  /**
+   * ADVISORY, NEVER A REFUSAL (S3). When 1/fps does not line up with the project's physics
+   * step, the game still runs: it just steps physics an uneven number of times per rendered
+   * frame, which a feel-sensitive trace can notice. Refusing here would block a legitimate
+   * replay over a cadence the operator may well accept; saying nothing would let a changed
+   * feel look like drift. So: print it once, from the project's REAL `fixedDeltaTime` as
+   * reported by the bridge, never from an assumed 0.02.
+   */
+  private maybeWarnPhysicsCadence(fps: number, fixedDeltaTime: unknown): void {
+    if (this.cadenceNoticePrinted) return;
+    if (typeof fixedDeltaTime !== "number" || !Number.isFinite(fixedDeltaTime) || fixedDeltaTime <= 0) {
+      return;
+    }
+    this.cadenceNoticePrinted = true;
+    const note = physicsCadenceNote(fps, fixedDeltaTime);
+    if (note) console.error(`[loombridge trace] ${note}`);
   }
 
   async evaluateAssertion(assertion: Assertion): Promise<AssertionOutcome> {
@@ -612,6 +718,12 @@ export class UnityDriver implements ReplayDriver {
    * existing session is on a non-gameplay backend, so keyboard actions degrade
    * honestly instead of silently injecting nothing. Result shapes mirror dispatch:
    * `{ ok }` | `{ blocked, detail }` | `{ error }`.
+   *
+   * WORLD TAPS OPEN IT TOO (S5), not just keys. The session's backend applies the
+   * focus-independent InputSystem overrides and owns restoring them at `end_session`, which
+   * is what lets a simulated pointer tap reach an UNFOCUSED Game View; a one-shot tap has no
+   * such owner and is refused when unfocused. Same session, same lifecycle, one open per
+   * drive.
    */
   private async ensureInputSession(): Promise<
     { ok: true } | { blocked: true; detail: string } | { error: string }
@@ -817,6 +929,30 @@ export class UnityDriver implements ReplayDriver {
       /* best-effort */
     }
   }
+}
+
+/**
+ * Is this op error the bridge refusing to deliver input to an UNFOCUSED Game View?
+ *
+ * Keyed on the stable error CODE, with the message only as a fallback for an older bridge.
+ * The distinction it carries is the whole point: the capability is present and the project
+ * supports it, so this is the MACHINE not being in a state to deliver the input.
+ */
+function isFocusLost(error: { error: string; code?: string }): boolean {
+  return error.code === "FOCUS_REQUIRED" || /Game[- ]View focus/i.test(error.error);
+}
+
+/**
+ * A focus loss is BLOCKED with its own reason, never an action failure (S5).
+ *
+ * As an action failure it read as a game divergence: the report would say the game did not
+ * respond to a tap, when what actually happened is that a human clicked away from the editor
+ * (or a modal stole focus) and the bridge honestly refused to pretend the tap landed. The
+ * blocked tier says "this run could not be driven", which is the true statement, and
+ * `focus-lost` says which harness condition caused it.
+ */
+function focusLostBlock(detail: string): DispatchResult {
+  return { ok: false, blocked: true, blockedReason: "focus-lost", detail };
 }
 
 function conditionParams(spec: ConditionSpec): Record<string, unknown> {

@@ -93,6 +93,30 @@ test("formatToolResult: non-screenshot op returns text/json content", () => {
   assert.deepEqual(parsed, { locator: { path: "/Cube" } });
 });
 
+test("formatToolResult: replay.settle_and_capture returns the IMAGE plus its settle evidence", () => {
+  // The aligned settle is a capture op: as JSON text its payload would be megabytes of
+  // base64 in the transcript. As an image it is readable, but the evidence that the frame
+  // was taken where it claims (framesElapsed, the deadline flag) must survive alongside it.
+  const result = formatToolResult("replay.settle_and_capture", {
+    image_base64: "AAAA",
+    format: "png",
+    framesElapsed: 15,
+    settleFrames: 15,
+    captureFps: 60,
+    realtimeDeadlineHit: false,
+    fixedDeltaTime: 0.02,
+  });
+
+  assert.equal(result.content.length, 2);
+  assert.equal(result.content[0]!.type, "image");
+  assert.equal((result.content[0] as { mimeType: string }).mimeType, "image/png");
+  const evidence = JSON.parse((result.content[1] as { text: string }).text);
+  assert.equal(evidence.framesElapsed, 15);
+  assert.equal(evidence.realtimeDeadlineHit, false);
+  assert.equal(evidence.fixedDeltaTime, 0.02);
+  assert.equal("image_base64" in evidence, false, "the blob is not repeated as text");
+});
+
 test("formatToolResult: screenshot op without image_base64 returns text/json", () => {
   // Edge case: screenshot response might not have image_base64 (e.g. error state)
   const result = formatToolResult(

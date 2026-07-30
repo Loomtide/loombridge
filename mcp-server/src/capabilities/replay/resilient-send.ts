@@ -15,8 +15,39 @@
 import type { BridgeResponse } from "../../shared/types.js";
 import type { BridgeSend } from "./unity-driver.js";
 
-/** Ops whose side effect may already have happened when the socket dropped. */
-export const NON_IDEMPOTENT_OPS: ReadonlySet<string> = new Set(["ui.dispatch_pointer"]);
+/**
+ * Ops whose side effect may already have happened when the socket dropped.
+ *
+ * Every INPUT op belongs here, not just the uGUI dispatch: a simulated pointer tap, a key
+ * tap, and the two key EDGES are all delivered to the game the moment the handler runs, so
+ * a retry after a lost response is a phantom SECOND press. For `input.key_down` /
+ * `input.key_up` the damage is worse than a double tap, because the edges are what the
+ * recorder replays: a re-sent `key_down` re-arms a hold the game already saw, and a re-sent
+ * `key_up` releases a key a later segment is still holding. A replay that quietly
+ * double-taps is not a replay of the demonstration.
+ *
+ * `input.pointer_tap_world` is the SAME op as `input.pointer_tap` one projection earlier: it
+ * converts a world point through a camera and then dispatches exactly that tap. Listing the
+ * screen-space form and not the world-space one would have left the identical phantom second
+ * press reachable through the other door, which is how a set like this rots: the rule is
+ * "every side-effecting input op the replay driver can send", not "the ops we happened to
+ * enumerate".
+ *
+ * `replay.settle_and_capture` is here for a different reason: it is not merely
+ * side-effecting, it ADVANCES GAME TIME. Re-sending it after a lost response would settle a
+ * second time, so the returned frame would sit 2x the settle past the action while the
+ * report labels it with the trace's single settle. That is exactly the phase skew the
+ * aligned settle exists to remove, arriving through the retry path instead.
+ */
+export const NON_IDEMPOTENT_OPS: ReadonlySet<string> = new Set([
+  "ui.dispatch_pointer",
+  "replay.settle_and_capture",
+  "input.pointer_tap",
+  "input.pointer_tap_world",
+  "input.key_tap",
+  "input.key_down",
+  "input.key_up",
+]);
 
 /** The subset of `UnityClient` that `resilientSend` needs. */
 export interface ReconnectableClient {

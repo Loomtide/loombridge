@@ -16,10 +16,20 @@
  * degrade gracefully around.
  */
 
-import type { UnityClient } from "../../bridge/unity-client.js";
 import type { BridgeSend } from "./unity-driver.js";
 
-export async function endLiveSession(send: BridgeSend, client: UnityClient): Promise<void> {
+/**
+ * The ONE thing this cleanup needs of a client: a disconnect it can call best-effort.
+ *
+ * Structural rather than the concrete `UnityClient` so an injected client (the replay
+ * composition test's scripted bridge) walks this same cleanup instead of routing around
+ * it. Every existing caller passes a `UnityClient`, which satisfies it unchanged.
+ */
+export interface LiveSessionClient {
+  disconnect(): Promise<void>;
+}
+
+export async function endLiveSession(send: BridgeSend, client: LiveSessionClient): Promise<void> {
   // This runs in a `finally`, so it must NEVER throw — a cleanup error must not
   // mask the real run result (the original body error or the returned report).
   try {
