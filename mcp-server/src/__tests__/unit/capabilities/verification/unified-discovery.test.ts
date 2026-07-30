@@ -37,6 +37,7 @@ import {
 } from "../../../../capabilities/feel/snapshot-manifest.js";
 import { BASELINE_MANIFEST } from "../../../../capabilities/minigame/minigame-baseline.js";
 import { loombridgePaths, standardReplayLayout, updateState } from "../../../../domain/state.js";
+import { writeSlicePlan } from "../../../../capabilities/verification/slices.js";
 import { REPO_ROOT } from "../../../_support/paths.js";
 import { greenNUnitXml, plantTestResults } from "../../../_support/test-results-fixture.js";
 import {
@@ -179,6 +180,36 @@ async function plantScreenContract(
   await fs.writeFile(path.join(dir, BASELINE_MANIFEST), JSON.stringify(manifest, null, 2), "utf-8");
 }
 
+/**
+ * A one-slice roadmap. `approved: true` also plants the human checkpoint stamp, which
+ * is what makes the row an ANCHOR (the roll-up has nothing frozen without it).
+ */
+async function plantSlicePlan(root: string, opts: { approved: boolean }): Promise<void> {
+  const paths = loombridgePaths(root);
+  await writeSlicePlan(paths, {
+    schemaVersion: "1",
+    genre: "platformer-2d",
+    slices: [
+      {
+        id: "hud",
+        title: "HUD slice",
+        dependsOn: [],
+        feelIntent: "crisp HUD readout",
+        acceptance: { gates: ["manifest"] },
+        state: opts.approved ? "approved" : "built",
+        proof: {
+          runId: "run-hud-1",
+          startedAt: "2026-07-29T00:00:00.000Z",
+          verdictPath: ".loombridge/reports/slices/hud.verdict.json",
+          captureManifest: [],
+          checkpointId: opts.approved ? "hud" : null,
+          approvedAt: opts.approved ? "2026-07-30T00:00:00.000Z" : null,
+        },
+      },
+    ],
+  });
+}
+
 // ── tests ────────────────────────────────────────────────────────────────────
 
 test("an empty project discovers NOTHING: no invented assets, no notes it cannot justify", async () => {
@@ -256,6 +287,7 @@ test("all five kinds are discovered, deterministically ordered, with their ancho
 
 test("ASSET_KINDS is the closed inventory: discovery emits no kind outside it", async () => {
   const root = await tmpDir("unified-closed-");
+  const sliced = await tmpDir("unified-closed-sliced-");
   const workspace = await tmpDir("unified-ws-");
   try {
     await runPlan({ root, genre: "platformer-2d", engine: "unity", force: false, allowMissingDesignTarget: true });
@@ -264,9 +296,85 @@ test("ASSET_KINDS is the closed inventory: discovery emits no kind outside it", 
     await plantScreenContract(workspace, { id: "sc", baseline: { projectRoot: root } });
     await plantTestResults(root);
     const { assets } = await discoverVerificationAssets({ root, workspace });
-    assert.equal(new Set(assets.map((a) => a.kind)).size, ASSET_KINDS.length, "every declared kind is reachable");
-    for (const a of assets) assert.ok((ASSET_KINDS as readonly string[]).includes(a.kind), `${a.kind} is declared`);
-    assert.equal(ASSET_KINDS[ASSET_KINDS.length - 1], "test-results", "G14: the new kind is APPENDED, never inserted");
+
+    // `contract` and `slice-plan` are MUTUALLY EXCLUSIVE by construction (E5: a
+    // slice-planned project grades its contract per slice, so the flat contract row is
+    // not emitted), so reachability is asserted over the UNION of two projects rather
+    // than by requiring one project to grow every kind. A single-project assertion here
+    // would have to be relaxed to a subset test, which is how a closed inventory quietly
+    // stops being closed.
+    await runPlan({ root: sliced, genre: "platformer-2d", engine: "unity", force: false, allowMissingDesignTarget: true });
+    await plantSlicePlan(sliced, { approved: true });
+    const slicedAssets = (await discoverVerificationAssets({ root: sliced, workspace: await tmpDir("unified-ws2-") })).assets;
+
+    const reachable = new Set([...assets, ...slicedAssets].map((a) => a.kind));
+    assert.equal(reachable.size, ASSET_KINDS.length, "every declared kind is reachable");
+    for (const a of [...assets, ...slicedAssets]) {
+      assert.ok((ASSET_KINDS as readonly string[]).includes(a.kind), `${a.kind} is declared`);
+    }
+    assert.equal(ASSET_KINDS[ASSET_KINDS.length - 1], "slice-plan", "the new kind is APPENDED, never inserted");
+    assert.equal(ASSET_KINDS[ASSET_KINDS.length - 2], "test-results", "G14's append is preserved");
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+    await fs.rm(sliced, { recursive: true, force: true });
+    await fs.rm(workspace, { recursive: true, force: true });
+  }
+});
+
+test("a slice-planned project: the roadmap is the runnable row and the contract is graded THROUGH it", async () => {
+  const root = await tmpDir("unified-sliceplan-");
+  const workspace = await tmpDir("unified-ws-");
+  try {
+    await runPlan({ root, genre: "platformer-2d", engine: "unity", force: false, allowMissingDesignTarget: true });
+    await plantSlicePlan(root, { approved: true });
+    const { assets, notes } = await discoverVerificationAssets({ root, workspace });
+
+    const row = rowFor(assets, "slice-plan");
+    assert.equal(row.runnable, "offline", "every input is on disk: the roll-up never launches an editor");
+    assert.equal(row.approvedAt, "2026-07-30T00:00:00.000Z", "the human checkpoint IS the frozen anchor");
+    assert.match(String(row.approvedBy), /1\/1 slice\(s\) approved/);
+    assert.equal(
+      assets.some((a) => a.kind === "contract"),
+      false,
+      "the flat contract row is the non-sliced flow's door; emitting it too would grade an empty dir and pin the run at tier 2",
+    );
+    assert.ok(notes.some((n) => n.includes("graded PER SLICE")), notes.join("; "));
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+    await fs.rm(workspace, { recursive: true, force: true });
+  }
+});
+
+test("a roadmap with NO approved slice is a non-anchor row: nothing human-approved to roll up", async () => {
+  const root = await tmpDir("unified-sliceplan-none-");
+  const workspace = await tmpDir("unified-ws-");
+  try {
+    await runPlan({ root, genre: "platformer-2d", engine: "unity", force: false, allowMissingDesignTarget: true });
+    await plantSlicePlan(root, { approved: false });
+    const { assets } = await discoverVerificationAssets({ root, workspace });
+    const row = rowFor(assets, "slice-plan");
+    assert.equal(row.runnable, "no");
+    assert.equal(row.notRunClass, "non-anchor");
+    assert.equal(row.approvedAt, undefined);
+    assert.match(String(row.reason), /none approved/);
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+    await fs.rm(workspace, { recursive: true, force: true });
+  }
+});
+
+test("a MALFORMED roadmap is BROKEN (tier 2), never a silently missing row", async () => {
+  const root = await tmpDir("unified-sliceplan-broken-");
+  const workspace = await tmpDir("unified-ws-");
+  try {
+    await runPlan({ root, genre: "platformer-2d", engine: "unity", force: false, allowMissingDesignTarget: true });
+    await fs.writeFile(loombridgePaths(root).slices, '{"schemaVersion":"1","slices":[]', "utf-8");
+    const { assets } = await discoverVerificationAssets({ root, workspace });
+    const row = rowFor(assets, "slice-plan");
+    assert.equal(row.runnable, "no");
+    assert.equal(row.notRunClass, "broken");
+    assert.ok(row.broken);
+    assert.equal(notRunFor(row).why, "broken");
   } finally {
     await fs.rm(root, { recursive: true, force: true });
     await fs.rm(workspace, { recursive: true, force: true });

@@ -55,6 +55,7 @@ import { findContract } from "../../minigame/minigame-next.js";
 import { isDraftContract } from "../../minigame/minigame-draft.js";
 import { loadBaselineManifest, BASELINE_MANIFEST } from "../../minigame/minigame-baseline.js";
 import { assertValidAcceptanceContract } from "../validator.js";
+import { assertValidSlicePlan, type SlicePlan } from "../slices.js";
 import { designStatus } from "../design.js";
 import { projectDeclaresTests } from "../../tests/test-declaration.js";
 import {
@@ -76,8 +77,18 @@ import {
  * - `test-results`    a stamped Unity EditMode test run (`loombridge tests run`), graded
  *                     offline from the stored bytes. APPENDED LAST (G14) so every existing
  *                     plan keeps its print order and only gains a row at the end.
+ * - `slice-plan`      the approved slice roadmap (`SLICES.json`) and the per-slice
+ *                     verdicts + evidence dirs it points at, rolled up OFFLINE (E5/L109).
+ *                     APPENDED LAST for the same reason `test-results` was.
  */
-export const ASSET_KINDS = ["contract", "trace", "feel-snapshot", "screen-contract", "test-results"] as const;
+export const ASSET_KINDS = [
+  "contract",
+  "trace",
+  "feel-snapshot",
+  "screen-contract",
+  "test-results",
+  "slice-plan",
+] as const;
 
 export type DiscoveredAssetKind = (typeof ASSET_KINDS)[number];
 
@@ -198,9 +209,27 @@ export async function discoverVerificationAssets(opts: DiscoveryOpts): Promise<D
   const assets: DiscoveredAsset[] = [];
   const notes: string[] = [];
 
-  assets.push(...(await discoverContractAsset(root, paths)));
+  // ONE ASSET, ONE GRADER (E5). A slice-planned project grades its acceptance contract
+  // PER SLICE: each slice's verdict runs that slice's gates over that slice's evidence
+  // dir, and the roll-up re-grades all of them. The flat `.loombridge/verify/` contract
+  // row is the NON-SLICED flow's door, and emitting it here as well would do two wrong
+  // things at once: grade the (empty) flat dir, refuse "nothing graded", and pin the run
+  // at the harness tier no matter what the roll-up found; and let `runVerify` write
+  // build-verdict.json + flip STATE for a project whose proof is per-slice. So when a
+  // roadmap exists, the contract is represented by the slice-plan row, and the note says
+  // so rather than leaving a reader to wonder where the contract went.
+  const slicePlanAssets = await discoverSlicePlanAsset(root, paths);
+  if (slicePlanAssets.length === 0) {
+    assets.push(...(await discoverContractAsset(root, paths)));
+  } else if (await fileExists(paths.acceptance)) {
+    notes.push(
+      "the acceptance contract is graded PER SLICE (each slice's own gates over its own evidence dir) and rolled up " +
+        "by the `slices` section; the flat .loombridge/verify/ contract row is the non-sliced flow's door and is not run here.",
+    );
+  }
   assets.push(...(await discoverTraceAssets(root)));
   assets.push(...(await discoverTestResultsAsset(root, paths)));
+  assets.push(...slicePlanAssets);
 
   const workspaceId = opts.workspaceId ?? sanitizeWorkspaceId(path.basename(root));
   const workspace = opts.workspace ?? (workspaceId ? projectWorkspace(workspaceId) : undefined);
@@ -471,6 +500,75 @@ async function discoverTestResultsAsset(root: string, paths: LoombridgePaths): P
   // human-approved anchor.
   row.reason =
     `stamped ${manifest.finishedAt} by ${manifest.resolvedEditorPath} (bound to the run, never human-approved)`;
+  return [row];
+}
+
+// ── slice plan (the approved roadmap + its per-slice verdicts) ───────────────
+
+/**
+ * The slice roadmap. OFFLINE by construction (E5): every input is already on disk :
+ * the per-slice verdicts, their evidence dirs, and the contract the gates re-run
+ * against. Nothing here launches an editor.
+ *
+ * THE HUMAN ANCHOR IS THE APPROVAL. `proof.approvedAt` is set at the human checkpoint,
+ * which makes an approved slice the one frozen thing this asset can be compared to.
+ * That is why a plan with NO approved slice is a NON-ANCHOR row rather than a runnable
+ * one: rolling up nine self-verified slices with no human sign-off anywhere would be
+ * the self-graded green the door exists to refuse.
+ *
+ * Dispositions:
+ *  - no SLICES.json                 -> no row (the whole-game flow has no roadmap);
+ *  - malformed SLICES.json          -> BROKEN (tier 2);
+ *  - no approved slice              -> NON-ANCHOR (nothing human-approved to roll up);
+ *  - at least one approved slice    -> runnable OFFLINE, approved <when> by <how many>.
+ */
+async function discoverSlicePlanAsset(root: string, paths: LoombridgePaths): Promise<DiscoveredAsset[]> {
+  if (!(await fileExists(paths.slices))) return [];
+  const row: DiscoveredAsset = {
+    kind: "slice-plan",
+    id: "roadmap",
+    runnable: "no",
+    paths: {
+      asset: paths.slices,
+      inputs: paths.verifyInputs,
+      report: path.join(paths.reports, "slices"),
+    },
+  };
+
+  let plan: SlicePlan;
+  try {
+    plan = assertValidSlicePlan(JSON.parse(await fs.readFile(paths.slices, "utf-8")));
+  } catch (error) {
+    row.notRunClass = "broken";
+    row.reason = "the slice roadmap cannot be read";
+    row.broken = `${path.relative(root, paths.slices)} is malformed: ${message(error)}`;
+    return [row];
+  }
+
+  row.id = plan.genre;
+  const approved = plan.slices.filter((s) => s.state === "approved");
+  if (approved.length === 0) {
+    row.notRunClass = "non-anchor";
+    row.reason =
+      `${plan.slices.length} slice(s) planned, none approved: a roll-up needs at least one human-approved slice ` +
+      "(build, verify, then approve it through `loombridge plan`)";
+    return [row];
+  }
+
+  row.runnable = "offline";
+  // The LATEST approval timestamp, so the plan line answers "when was this frozen"
+  // with the most recent human decision rather than the oldest one.
+  const stamps = approved
+    .map((s) => s.proof?.approvedAt)
+    .filter((s): s is string => typeof s === "string" && s.length > 0)
+    .sort();
+  if (stamps.length > 0) row.approvedAt = stamps[stamps.length - 1];
+  row.approvedBy = `${approved.length}/${plan.slices.length} slice(s) approved at the human checkpoint`;
+  if (stamps.length < approved.length) {
+    // An approved slice with no `approvedAt` is a proof block that lost its stamp. The
+    // roll-up's own `isSliceDone` delegation refuses it; the plan says so up front.
+    row.reason = `${approved.length - stamps.length} approved slice(s) carry no \`proof.approvedAt\` stamp`;
+  }
   return [row];
 }
 

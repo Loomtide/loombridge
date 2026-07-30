@@ -13,7 +13,15 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 
-import { gradedGates, runGates, VERIFY_STAGES, type VerifyStage } from "./run-gates.js";
+import {
+  ASSET_MANIFEST_INPUT_FILE,
+  gradedGates,
+  runGates,
+  sliceEvidenceFiles,
+  VERIFY_STAGES,
+  type VerifyStage,
+} from "./run-gates.js";
+import { buildEvidenceLedger, originSummary, runBindingRefusals } from "./evidence-ledger.js";
 import { deriveEvidenceClasses } from "./gates/evidence-classes.js";
 import { assertValidAcceptanceContract } from "./validator.js";
 import type { AcceptanceContract } from "./types.js";
@@ -69,7 +77,7 @@ async function stageAssetManifestInput(root: string, inputsDir: string): Promise
   } catch {
     return;
   }
-  const staged = path.join(inputsDir, "asset-manifest.json");
+  const staged = path.join(inputsDir, ASSET_MANIFEST_INPUT_FILE);
   try {
     await fs.access(staged);
     return; // a captured input is already there: never clobber evidence
@@ -505,10 +513,50 @@ async function runVerifySlice(args: VerifyArgs, acceptance: AcceptanceContract):
   const design = await designStatus(paths);
   const heroPng = designPaths(paths).heroPng;
   const prev = await readState(paths);
+
+  // ── THE EVIDENCE LEDGER (H3) + RUN BINDING AT GRADE TIME (E4/L106) ──────────
+  //
+  // The verdict records a sha256 per file the gates just read, so a later reader
+  // (the roll-up door) can ask "is this still the evidence that was approved?" :
+  // a question no previous verdict could answer, which is how an approved
+  // `parallax` verdict survived a later slice rewriting the exact quantities it
+  // had graded.
+  //
+  // THE RUN the verdict is minted under: `currentBuild.runId` when a build is in
+  // flight, else the slice's own proof runId. Producer-written evidence stamped
+  // with a DIFFERENT run is a measurement of another build, and grading it while
+  // stamping this run's id on the verdict is the mixed-vintage certificate L106
+  // recorded. That is a refusal, and NO verdict is written: an absent verdict
+  // reads as "not done" downstream, which is right.
+  const mintedRunId = prev?.currentBuild?.runId ?? slice.proof?.runId ?? null;
+  const ledger = await buildEvidenceLedger({
+    root: args.root,
+    inputsDir,
+    files: sliceEvidenceFiles(gates),
+    runId: prev?.currentBuild?.runId ?? null,
+  });
+  const binding = runBindingRefusals({ ledger, mintedRunId, label: `slice ${sliceId}` });
+  for (const note of binding.notes) console.error(`[loombridge verify] note: ${note}`);
+  if (binding.refusals.length > 0) {
+    console.error(
+      `[loombridge verify] slice ${sliceId} REFUSED: the evidence does not bind to this run (harness tier, not a game defect):`,
+    );
+    for (const refusal of binding.refusals) console.error(`  - ${refusal}`);
+    console.error(
+      `[loombridge verify] no verdict was written. Re-capture this slice in ONE session under the current run: ` +
+        `loombridge capture --root ${args.root} --slice ${sliceId}`,
+    );
+    return 2;
+  }
+
   const producedAt = nowIso();
   const reportOut = {
     ...report,
     evidenceClasses: deriveEvidenceClasses(report),
+    // H3: the bytes this verdict graded, per file, with the re-derived
+    // evidenceOrigin beside each (M18: reported, never wired into
+    // requiredEvidenceClasses).
+    evidence: ledger,
     producedAt,
     runId: prev?.currentBuild?.runId ?? null,
     designTarget: {
@@ -538,6 +586,13 @@ async function runVerifySlice(args: VerifyArgs, acceptance: AcceptanceContract):
     .map(([g, v]) => `${g}=${v}`)
     .join(" ");
   console.error(`[loombridge verify] slice ${sliceId} (gates: ${gates.join(", ")}) | ${gateLine}`);
+  // M18: the origin mix of the evidence behind that gate line, printed where the
+  // verdict is made. "Every gate green" and "every gate green over files the agent
+  // wrote itself" must not print identically.
+  console.error(
+    `[loombridge verify] slice ${sliceId} evidence: ${ledger.files.length} file(s) [${originSummary(ledger)}]` +
+      `${ledger.missing.length > 0 ? `; ${ledger.missing.length} declared input(s) absent: ${ledger.missing.join(", ")}` : ""}`,
+  );
   const relVerdict = path.relative(args.root, verdictPath);
   console.error(
     writesDiagnostic
@@ -1209,6 +1264,15 @@ function printUsage(): void {
       "It also grades a stamped Unity EditMode run from .loombridge/tests/ when",
       "`loombridge tests run` produced one: offline, never launching an editor, and never",
       "as a full pass (a suite has no human approval, so it is permanently unanchored).",
+      "",
+      "SLICE-PLANNED PROJECTS: when .loombridge/SLICES.json exists, the acceptance contract is",
+      "graded PER SLICE and this door grades the ROLL-UP (the `slices` section): it re-runs each",
+      "APPROVED slice's own gate list over that slice's evidence dir, refuses on any divergence",
+      "from the stored verdict, re-hashes every evidence file against the shas the verdict",
+      "recorded (a changed file is the stale-approval refusal, naming file and slice), and",
+      "refuses when a contract section declaring required content is walked by no gate in the",
+      "plan. A verdict minted without evidence shas is refused: re-verify that slice. All of it",
+      "is offline; a refused roll-up is exit 2 (harness tier), never a game verdict.",
       "",
       "  loombridge verify                     # offline assets, plan first",
       "  loombridge verify --live              # also replay traces + grade feel drift",

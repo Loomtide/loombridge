@@ -10,7 +10,7 @@ import { runBuild } from "../../../../capabilities/verification/build.js";
 import { runStatus } from "../../../../capabilities/verification/status.js";
 import { designStatus } from "../../../../capabilities/verification/design.js";
 import { loombridgePaths, readState } from "../../../../domain/state.js";
-import { computeStatusModel } from "../../../../capabilities/verification/status-model.js";
+import { computeStatusModel, developerNextAction } from "../../../../capabilities/verification/status-model.js";
 import { readSlicePlan, writeSlicePlan, type SlicePlan } from "../../../../capabilities/verification/slices.js";
 import { writeApprovedAssetManifestForDesign } from "../../../helpers/asset-manifest-fixture.js";
 
@@ -135,6 +135,61 @@ test("status names the evidence NO capture recipe produces, per slice", async ()
     assert.ok(
       !model.warnings.some((w) => /produces feel\.json/.test(w)),
       "feel.json has a producer now; status must not still route the developer to hand-author it",
+    );
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test("L32: after a FAILED slice verify, status names the failing gate instead of asking for evidence", async () => {
+  const root = await tmpRoot();
+  try {
+    await scaffoldApprovedRoadmap(root);
+    const paths = loombridgePaths(root);
+    const plan = (await readSlicePlan(paths)) as SlicePlan;
+    const sliceId = plan.slices[0]!.id;
+    plan.slices[0] = {
+      ...plan.slices[0]!,
+      state: "built",
+      proof: {
+        runId: "run-l32",
+        startedAt: "2026-01-01T00:00:00.000Z",
+        verdictPath: `.loombridge/reports/slices/${sliceId}.verdict.json`,
+        captureManifest: [],
+        checkpointId: null,
+        approvedAt: null,
+      },
+    };
+    await writeSlicePlan(paths, plan);
+
+    // CONTROL: with no verdict on disk, the old "needs evidence" routing is right and
+    // must be preserved: status has nothing better to say yet.
+    const before = await statusModel(root);
+    assert.match(developerNextAction(before), /needs capture\/verify evidence/);
+
+    // The verdict a failed `verify --slice` leaves behind.
+    await fs.mkdir(path.join(paths.reports, "slices"), { recursive: true });
+    await fs.writeFile(
+      path.join(paths.reports, "slices", `${sliceId}.verdict.json`),
+      JSON.stringify({ status: "fail", gates: { framing: "fail", "console-clean": "pass" }, checks: [] }, null, 2),
+      "utf-8",
+    );
+
+    const model = await statusModel(root);
+    assert.deepEqual(
+      model.gateFailures.map((f) => [f.sliceId, f.failing]),
+      [[sliceId, ["framing"]]],
+    );
+    const next = developerNextAction(model);
+    assert.match(next, /gate\(s\) framing FAILED/);
+    assert.match(next, /verify --slice/);
+    assert.ok(
+      !/needs capture\/verify evidence/.test(next),
+      "evidence exists and a gate failed: asking for evidence is the L32 defect",
+    );
+    assert.ok(
+      model.warnings.some((w) => w.includes("failing gate(s): framing")),
+      model.warnings.join("\n"),
     );
   } finally {
     await fs.rm(root, { recursive: true, force: true });

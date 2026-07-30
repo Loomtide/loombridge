@@ -90,6 +90,41 @@ import type {
 } from "../sfx/capture-shapes.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Contract sections (H1/L108: what a gate WALKS)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * The CLOSED set of acceptance-contract sections a gate can walk.
+ *
+ * L108, the repo's own "declared path nothing walks" failure lifted to the contract
+ * level: `manifest.elements` required a goal object and an `SfxPlayer`, `audio.cues`
+ * required six clips, and the `manifest` gate was in NO slice's gate list, so the
+ * project reached 9/9 approved with `manifest` reported `not_applicable` nine times.
+ * Nothing validated that the union of the plan's gates covers the contract's own
+ * required sections, because nothing had ever written down which sections each gate
+ * covers. This vocabulary is that missing half.
+ */
+export const CONTRACT_SECTIONS = [
+  "fonts",
+  "palette",
+  "hud",
+  "framing",
+  "physics",
+  "feel",
+  "juice",
+  "audio",
+  "manifest",
+  "win",
+  "props",
+  "placement",
+  "platformer",
+  "reachability",
+  "render",
+] as const;
+
+export type ContractSectionName = (typeof CONTRACT_SECTIONS)[number];
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Input-file → evaluator map (the captured-op-output contract)
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -106,6 +141,16 @@ interface GateSpec {
   file: string;
   /** Which MCP op produces it (for the degraded-warn message). */
   op: string;
+  /**
+   * H1/L108: which ACCEPTANCE CONTRACT SECTIONS this gate walks. Declared ON the
+   * registry entry so a new gate cannot be added without answering the question, and
+   * so the contract-coverage refusal reads the same table the runner dispatches from.
+   * `[]` is a legitimate answer (the gate grades a capture's internal consistency and
+   * binds no contract section), and it is an ANSWER, not an omission: the repo guard
+   * `contract-coverage.test.ts` fails when any supported gate id is missing from the
+   * declaration.
+   */
+  sections: readonly ContractSectionName[];
   /** Run the evaluator over the parsed op output. */
   run: (data: unknown, acceptance: AcceptanceContract) => GateReport;
 }
@@ -115,6 +160,7 @@ const GATE_SPECS: GateSpec[] = [
     gate: "manifest",
     file: "verify-manifest.json",
     op: "unity_scene_verify_manifest",
+    sections: ["manifest"],
     run: (data, acceptance) =>
       evaluateManifest(data as VerifyManifestResult, acceptance),
   },
@@ -122,6 +168,7 @@ const GATE_SPECS: GateSpec[] = [
     gate: "ui-conformance",
     file: "ui-scan.json",
     op: "unity_ui_scan_text_components",
+    sections: ["hud", "fonts", "palette"],
     run: (data, acceptance) =>
       evaluateUiConformance(data as ScanTextComponentsResult, acceptance),
   },
@@ -129,6 +176,7 @@ const GATE_SPECS: GateSpec[] = [
     gate: "framing",
     file: "screen-rects.json",
     op: "unity_scene_get_screen_rects",
+    sections: ["framing"],
     run: (data, acceptance) =>
       evaluateFraming(data as ScreenRectsResult, acceptance),
   },
@@ -136,6 +184,7 @@ const GATE_SPECS: GateSpec[] = [
     gate: "render-frame",
     file: "render-frame.json",
     op: "unity_editor_screenshot + screenshot pixel analysis",
+    sections: ["render"],
     run: (data, acceptance) =>
       evaluateRenderFrame(data as RenderFrameInput, acceptance),
   },
@@ -143,6 +192,7 @@ const GATE_SPECS: GateSpec[] = [
     gate: "coverage",
     file: "coverage.json",
     op: "scene.get_bounds of parallax layers at play soak",
+    sections: ["juice"],
     run: (data, acceptance) =>
       evaluateCoverage(data as CoverageInput, acceptance),
   },
@@ -150,6 +200,7 @@ const GATE_SPECS: GateSpec[] = [
     gate: "parallax-motion",
     file: "parallax-motion.json",
     op: "ParallaxLayer offset capture",
+    sections: ["platformer"],
     run: (data, acceptance) =>
       evaluateParallaxMotion(data as ParallaxMotionInput, acceptance),
   },
@@ -157,6 +208,7 @@ const GATE_SPECS: GateSpec[] = [
     gate: "visual-artifacts",
     file: "visual-artifacts.json",
     op: "stateful screenshot artifact analysis",
+    sections: ["render"],
     run: (data, acceptance) =>
       evaluateVisualArtifacts(data as VisualArtifactsInput, acceptance),
   },
@@ -164,6 +216,7 @@ const GATE_SPECS: GateSpec[] = [
     gate: "reachability",
     file: "reachability.json",
     op: "scene.get_bounds layout capture",
+    sections: ["feel", "reachability"],
     run: (data, acceptance) =>
       evaluateReachability(data as ReachabilityLayout, acceptance),
   },
@@ -171,6 +224,7 @@ const GATE_SPECS: GateSpec[] = [
     gate: "placement",
     file: "placement.json",
     op: "scene.get_bounds (grounds + grounded items) + camera frame",
+    sections: ["placement"],
     run: (data, acceptance) =>
       evaluatePlacement(data as PlacementInput, acceptance),
   },
@@ -178,6 +232,7 @@ const GATE_SPECS: GateSpec[] = [
     gate: "platform-tiles",
     file: "platform-tiles.json",
     op: "platform/tile construction capture",
+    sections: ["platformer", "placement"],
     run: (data, acceptance) =>
       evaluatePlatformTiles(data as PlatformTilesInput, acceptance),
   },
@@ -185,6 +240,7 @@ const GATE_SPECS: GateSpec[] = [
     gate: "tile-render",
     file: "tile-render.json",
     op: "platform/tile render capture (GroundTiling.WriteTileCaptures)",
+    sections: ["platformer"],
     run: (data, acceptance) =>
       evaluateTileRender(data as TileRenderInput, acceptance),
   },
@@ -192,6 +248,7 @@ const GATE_SPECS: GateSpec[] = [
     gate: "prop-purpose",
     file: "objects.json",
     op: "scene.get_bounds (player + props) + component listing (hasCollider, scripts)",
+    sections: ["props", "placement"],
     run: (data, acceptance) =>
       evaluatePropPurpose(data as PropPurposeInput, acceptance),
   },
@@ -199,6 +256,7 @@ const GATE_SPECS: GateSpec[] = [
     gate: "playability",
     file: "playability.json",
     op: "runtime.probe + runtime.assert_condition (assembled)",
+    sections: ["win"],
     run: (data, acceptance) =>
       evaluatePlayability(data as PlayabilityResults, acceptance),
   },
@@ -206,30 +264,40 @@ const GATE_SPECS: GateSpec[] = [
     gate: "feel",
     file: "feel.json",
     op: "FeelHarness + runtime.probe recipes (assembled)",
+    sections: ["feel"],
     run: (data, acceptance) => evaluateFeel(data as FeelMeasurements, acceptance),
   },
   {
     gate: "feel-provenance",
     file: "feel.json",
     op: "FeelHarness + runtime.probe measurement provenance",
+    sections: ["feel"],
     run: (data, acceptance) => evaluateFeelProvenance(data as FeelMeasurements, acceptance),
   },
   {
     gate: "physics-timestep",
     file: "feel.json",
     op: "FeelHarness + runtime.probe timestep provenance",
+    sections: ["physics"],
     run: (data, acceptance) => evaluatePhysicsTimestep(data as FeelMeasurements, acceptance),
   },
   {
     gate: "feel-rederive",
     file: "feel.json",
     op: "raw trajectory re-derivation (S5c)",
+    // Grades the feel capture's own internal consistency (headline vs raw trajectory),
+    // so it binds NO contract section: it can never stand in for the `feel` gate's
+    // coverage of the declared bands.
+    sections: [],
     run: (data, acceptance) => evaluateFeelRederive(data as FeelMeasurements, acceptance),
   },
   {
     gate: "console-clean",
     file: "console.json",
     op: "unity_editor_console_logs",
+    // The console is graded against an allowlist the gate owns, not against a contract
+    // section: a clean console covers nothing the contract declares.
+    sections: [],
     run: (data, acceptance) =>
       evaluateConsoleClean(data as ConsoleLogsResult, acceptance),
   },
@@ -278,6 +346,164 @@ export function gateInputFiles(gateIds: Iterable<string>): string[] {
     if (requested.has(spec.gate) && !out.includes(spec.file)) out.push(spec.file);
   }
   return out;
+}
+
+/**
+ * The staged project document `verify` copies into the inputs dir for the
+ * asset-source gate. Not a GATE_SPECS file (it is not an op capture), so
+ * `gateInputFiles` cannot know about it, but it IS read at grade time and therefore
+ * belongs in the evidence ledger when that gate is selected.
+ */
+export const ASSET_MANIFEST_INPUT_FILE = "asset-manifest.json";
+
+/**
+ * Every file a gate set READS from the inputs dir: the op captures plus the staged
+ * asset manifest when the asset-source gate is selected. This is the set
+ * `verify --slice` mints evidence shas over (H3), so "graded input file" has ONE
+ * definition rather than one per caller.
+ */
+export function sliceEvidenceFiles(gateIds: Iterable<string>): string[] {
+  const requested = new Set(gateIds);
+  const files = gateInputFiles(requested);
+  if (requested.has("asset-source-fidelity")) files.push(ASSET_MANIFEST_INPUT_FILE);
+  return files;
+}
+
+/**
+ * Which contract sections each SUPPORTED gate walks (H1). GATE_SPECS declare their own
+ * on the registry entry; the gates that live outside GATE_SPECS are declared here, in
+ * the same module, so the answer is never spread across the codebase.
+ *
+ * `asset-source-fidelity` and `frame-integrity` walk NO contract section: the first
+ * grades `ASSET_MANIFEST.json` (a separate document), the second hashes VLM frames.
+ * The SFX gates walk `audio`: they are the only gates that do, which is exactly why
+ * an `audio.cues` block with the SFX gates disabled is an uncovered section.
+ */
+const NON_SPEC_GATE_SECTIONS: Readonly<Record<string, readonly ContractSectionName[]>> = {
+  "asset-source-fidelity": [],
+  "frame-integrity": [],
+  "sfx-presence": ["audio"],
+  "sfx-runtime": ["audio"],
+  inputToSfxLatency: ["audio"],
+  "sfx-fatigue": ["audio"],
+};
+
+/**
+ * The declared section list for one gate id, or `undefined` when the id is not a
+ * supported gate. Exported so the repo guard can walk `SUPPORTED_GATE_IDS` and fail on
+ * any gate that declares nothing (LITMUS: unregister one and the guard reds).
+ */
+export function contractSectionsForGate(gate: string): readonly ContractSectionName[] | undefined {
+  const spec = GATE_SPECS.find((s) => s.gate === gate);
+  if (spec) return spec.sections;
+  return NON_SPEC_GATE_SECTIONS[gate];
+}
+
+/** The union of contract sections a set of gate ids walks. Unknown ids contribute nothing. */
+export function contractSectionsForGates(gateIds: Iterable<string>): ContractSectionName[] {
+  const covered = new Set<ContractSectionName>();
+  for (const gate of gateIds) {
+    for (const section of contractSectionsForGate(gate) ?? []) covered.add(section);
+  }
+  return CONTRACT_SECTIONS.filter((s) => covered.has(s));
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function nonEmptyArray(value: unknown): boolean {
+  return Array.isArray(value) && value.length > 0;
+}
+
+function nonEmptyRecord(value: unknown): boolean {
+  return isRecord(value) && Object.keys(value).length > 0;
+}
+
+/** One contract section that declares content a gate is supposed to walk. */
+export interface RequiredContentSection {
+  section: ContractSectionName;
+  /** What the contract declares there, in the words the refusal prints. */
+  declares: string;
+}
+
+/**
+ * Which contract sections DECLARE REQUIRED CONTENT for this contract.
+ *
+ * "Required content" is content a gate could walk: a non-empty element/cue/entry list,
+ * or a declared block. An ABSENT or EMPTY section declares nothing, so it is not in the
+ * answer: the refusal must fire on a contract that asks for something and never gets it
+ * checked, not on every optional block a genre does not use.
+ *
+ * The predicate reads the contract as loose JSON on purpose. It runs against documents
+ * on disk, and a section validation missed is not a reason to skip the coverage
+ * question.
+ */
+export function requiredContentSections(acceptance: unknown): RequiredContentSection[] {
+  const c = isRecord(acceptance) ? acceptance : {};
+  const out: RequiredContentSection[] = [];
+  const add = (section: ContractSectionName, when: boolean, declares: string): void => {
+    if (when) out.push({ section, declares });
+  };
+
+  const fonts = isRecord(c.fonts) ? c.fonts : {};
+  add(
+    "fonts",
+    isRecord(fonts.global) || nonEmptyRecord(fonts.byRole) || nonEmptyArray(fonts.forbidden),
+    "required font families",
+  );
+  add("palette", nonEmptyArray((isRecord(c.palette) ? c.palette : {}).entries), "palette entries");
+  const hudElements = (isRecord(c.hud) ? c.hud : {}).elements;
+  add("hud", nonEmptyArray(hudElements), `${Array.isArray(hudElements) ? hudElements.length : 0} HUD element(s)`);
+  add("framing", nonEmptyRecord(c.framing), "camera framing");
+  add("physics", nonEmptyRecord(c.physics), "project physics settings");
+  add("feel", nonEmptyRecord(c.feel), "feel targets");
+  add("juice", nonEmptyRecord(c.juice), "juice/parallax layers");
+  const cues = (isRecord(c.audio) ? c.audio : {}).cues;
+  add("audio", nonEmptyArray(cues), `${Array.isArray(cues) ? cues.length : 0} audio cue(s)`);
+  const elements = (isRecord(c.manifest) ? c.manifest : {}).elements;
+  add(
+    "manifest",
+    nonEmptyArray(elements),
+    `${Array.isArray(elements) ? elements.length : 0} required scene element(s)`,
+  );
+  add("win", nonEmptyRecord(c.win), "the win rule");
+  add("props", nonEmptyRecord((isRecord(c.props) ? c.props : {}).purposes), "prop purposes");
+  add("placement", nonEmptyRecord(c.placement), "placement tolerances");
+  add("platformer", nonEmptyRecord(c.platformer), "platformer/tile policy");
+  add("reachability", nonEmptyRecord(c.reachability), "reachability envelope");
+  add("render", nonEmptyRecord(c.render), "render-frame policy");
+  return out;
+}
+
+/**
+ * H1/L108: every contract section that declares required content must be walked by at
+ * least ONE gate in the union of the plan's gate lists.
+ *
+ * Returns one refusal per uncovered section, naming the section, what it declares, and
+ * every gate that WOULD cover it, so the fix ("add `manifest` to a slice's
+ * acceptance.gates, or empty the section with human consent") is in the message rather
+ * than in someone's head.
+ */
+export function contractCoverageRefusals(args: {
+  acceptance: unknown;
+  gates: Iterable<string>;
+}): string[] {
+  const covered = new Set(contractSectionsForGates(args.gates));
+  const refusals: string[] = [];
+  for (const required of requiredContentSections(args.acceptance)) {
+    if (covered.has(required.section)) continue;
+    const candidates = [...SUPPORTED_GATE_IDS].filter((gate) =>
+      (contractSectionsForGate(gate) ?? []).includes(required.section),
+    );
+    refusals.push(
+      `contract section \`${required.section}\` declares ${required.declares} and NO gate in the plan walks it ` +
+        `(gates that would: ${candidates.length > 0 ? candidates.join(", ") : "none exist"}). ` +
+        "A contract requirement nothing grades is a declared path nothing walks: add a covering gate to a " +
+        "slice's acceptance.gates, or amend the contract with explicit human consent.",
+    );
+  }
+  return refusals;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -515,10 +741,10 @@ function degradedAssetSourceFidelityReport(): GateReport {
       // `gradedGates` below recovers per-gate graded-ness from the flat check list and
       // must not have to special-case one gate's spelling.
       id: "asset-source-fidelity.input",
-      expected: "asset-manifest.json staged in verification inputs",
+      expected: `${ASSET_MANIFEST_INPUT_FILE} staged in verification inputs`,
       actual: "(missing)",
       status: "warn",
-      detail: "No asset-manifest.json in --inputs; asset-source fidelity was requested but could not be evaluated.",
+      detail: `No ${ASSET_MANIFEST_INPUT_FILE} in --inputs; asset-source fidelity was requested but could not be evaluated.`,
     },
   ]);
 }
@@ -837,7 +1063,7 @@ export async function runGates(args: {
   const assetSourceGate = "asset-source-fidelity";
   const assetSourceInScope = isGateInStage(args.stage, assetSourceGate) && isGateSelected(args.selectGates, assetSourceGate);
   const assetSourceExplicitlySelected = args.selectGates?.has(assetSourceGate) === true;
-  const assetManifestInput = await tryReadJson(resolve(args.inputsDir, "asset-manifest.json"));
+  const assetManifestInput = await tryReadJson(resolve(args.inputsDir, ASSET_MANIFEST_INPUT_FILE));
   // RCL-D02 review: artDeferred MUST come from the DISK-TRUTH acceptance contract, never from the
   // agent-staged asset-manifest.json input — otherwise an art:final build forges artDeferred:true in
   // the staged input to skip asset-source fidelity on unprovenanced primitiveFinal roles. Override any
