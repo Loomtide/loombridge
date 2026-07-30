@@ -75,14 +75,17 @@ export function unifiedScopedReportPath(reportsDir: string): string {
  * One section per asset family. `flow` covers trace replay (actuation + pixels); `tests`
  * grades a stamped Unity EditMode run offline.
  */
-export type UnifiedSectionName = "contract" | "flow" | "feel" | "screens" | "tests";
+export type UnifiedSectionName = "contract" | "flow" | "feel" | "screens" | "tests" | "slices";
 
 /**
  * The CLOSED list of section names, in plan order. It is the `--only` vocabulary AND the
  * report's own section vocabulary, spelled once: a selector the report cannot express
  * would be a selector nothing could grade.
+ *
+ * `slices` is APPENDED LAST (E5) for the same reason `tests` was: every existing plan
+ * keeps its order and only gains a row at the end.
  */
-export const UNIFIED_SECTION_NAMES = ["contract", "flow", "feel", "screens", "tests"] as const;
+export const UNIFIED_SECTION_NAMES = ["contract", "flow", "feel", "screens", "tests", "slices"] as const;
 
 /**
  * Which SECTION an asset kind is graded by. Single source of truth, because `--only`
@@ -96,6 +99,7 @@ export const SECTION_FOR_KIND: Readonly<Record<DiscoveredAssetKind, UnifiedSecti
   "feel-snapshot": "feel",
   "screen-contract": "screens",
   "test-results": "tests",
+  "slice-plan": "slices",
 };
 
 /**

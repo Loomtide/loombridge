@@ -67,12 +67,23 @@ plus the recipe to re-measure the live game against it:
 | screen contract | declared screens/objects/flow + approved layout baseline | capture pack + gates | `minigame/` |
 | acceptance contract | contract + design target | Tier-1 gate suite | `verification/` |
 | test results | a stamped Unity EditMode run (bound, never approved) | nothing: graded OFFLINE from the stored bytes | `tests/` |
+| slice roadmap | the APPROVED slices of `SLICES.json` + their per-slice verdicts | nothing: the gates are RE-RUN OFFLINE over each slice's own evidence dir | `verification/` |
 
 This table is a CLOSED inventory: discovery walks exactly these kinds, and adding a kind is
 an RFC-level change, never a quiet case in a switch. The reserved addition has now LANDED:
 **test results** is the FIRST new asset kind, which is how the roadmap's Test Runner gate
 arrives as a provider in this report instead of a sixth standalone mode. It is the one row
 whose anchor column reads differently on purpose, and the delivery notes below say why.
+The SECOND addition, **slice roadmap**, landed with the evidence arc's roll-up door (L109): a
+slice-planned project keeps its evidence in `.loombridge/verify/<slice>/`, so the flat contract
+row could only ever refuse "nothing was graded", leaving a 9/9 project with a permanently red
+front door and no legal route to green. The two rows are MUTUALLY EXCLUSIVE by construction: when
+`SLICES.json` exists, the acceptance contract is graded PER SLICE and rolled up by the `slices`
+section, and the flat contract row is the non-sliced flow's door. Its human anchor is the
+approval checkpoint (`proof.approvedAt`); its re-measurement is a RE-GRADE (each slice's gate list
+re-run over its own evidence dir, refused on any divergence from the stored verdict), plus a
+per-file sha binding minted into the verdict at verify time and a contract-coverage check that
+refuses when a contract section declaring required content is walked by no gate in the plan.
 Deliberately NOT assets:
 `sfx/` (its probe contract and latency checks are gate inputs inside other assets, not an
 anchor a human approves) and `scenario/` (a step runner, machinery rather than a frozen
@@ -89,11 +100,11 @@ anchor); if either ever grows a human-approved baseline, it enters through this 
 3. **Run every asset** into ONE report (per-asset sections, shared row shape), exit by worst
    tier. A discovered-but-broken asset (tampered manifest, missing baseline file) is exit 2,
    never skipped.
-4. `--only contract|flow|feel|screens|tests` selects subsets for CI granularity. (The
+4. `--only contract|flow|feel|screens|tests|slices` selects subsets for CI granularity. (The
    vocabulary is the REPORT's own section names, spelled once in `UNIFIED_SECTION_NAMES`.
    `pixels` folded into `flow` when the trace section landed in S1 (actuation and pixel
-   drift are one replay, not two selectable checks), and `tests` joined with the fifth asset
-   kind. A selector naming a section the report cannot express would be a selector nothing
+   drift are one replay, not two selectable checks), `tests` joined with the fifth asset
+   kind, and `slices` with the sixth. A selector naming a section the report cannot express would be a selector nothing
    could grade.)
 
 **The empty-project behavior is the on-ramp, not usage soup.** `verify` with no assets prints

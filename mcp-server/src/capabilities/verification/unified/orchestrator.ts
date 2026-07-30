@@ -356,6 +356,11 @@ export async function runUnifiedVerify(opts: UnifiedVerifyOpts): Promise<number>
     record("tests", await runSection("tests", () => testsSection(opts, root, paths)));
   }
 
+  const slicePlanAsset = runnable.find((a) => a.kind === "slice-plan");
+  if (slicePlanAsset) {
+    record("slices", await runSection("slices", () => slicesSection(root, paths)));
+  }
+
   const feelAsset = runnable.find((a) => a.kind === "feel-snapshot");
   if (feelAsset) {
     // A feel row cannot exist without a workspace: discovery only looks for one inside a
@@ -728,6 +733,99 @@ async function testsSection(
     runId: manifest.runId,
     note: `${headline}; bound to the run, never human-approved`,
     ...(assets.length > 0 ? { assets } : {}),
+  };
+}
+
+/**
+ * THE SLICE ROLL-UP (E5/L109), graded OFFLINE.
+ *
+ * Like `tests`, there is no editor to launch and no engine to delegate to: every input
+ * is on disk. Unlike `tests`, this section CAN be anchored, because an approved slice
+ * carries a human checkpoint (`proof.approvedAt`) and the roll-up re-grades the
+ * evidence that approval was made against.
+ *
+ * The whole decision lives in `evaluateSliceRollup` (pure of console output). This
+ * function prints it and shapes the section. It writes NOTHING: the per-slice verdicts
+ * are the approved record, and a door that rewrote them while grading them would be
+ * grading its own output.
+ */
+async function slicesSection(
+  root: string,
+  paths: ReturnType<typeof loombridgePaths>,
+): Promise<UnifiedVerifySection> {
+  const { readSlicePlan } = await import("../slices.js");
+  const { evaluateSliceRollup, reverifyCommand } = await import("../slice-rollup.js");
+  const { assertValidAcceptanceContract } = await import("../validator.js");
+
+  const plan = await readSlicePlan(paths);
+  if (!plan) {
+    // Discovery only produced a runnable row because the file was there and parsed;
+    // if it is gone by now, that is a harness fault, never a pass.
+    const note = "SLICES.json disappeared between the plan and the run";
+    console.error(`${TAG} slices: ${note}`);
+    return { status: "harness-fault", exit: 2, anchored: false, note };
+  }
+  let acceptance;
+  try {
+    acceptance = assertValidAcceptanceContract(
+      JSON.parse(await fs.readFile(paths.acceptance, "utf-8")),
+    );
+  } catch (error) {
+    const note = `the acceptance contract could not be read, so no slice can be re-graded: ${message(error)}`;
+    console.error(`${TAG} slices: ${note}`);
+    return { status: "harness-fault", exit: 2, anchored: false, note };
+  }
+
+  const rollup = await evaluateSliceRollup({ root, paths, acceptance, plan });
+  console.error(
+    `${TAG} slices: ${rollup.approvedSlices}/${rollup.totalSlices} approved, ` +
+      `${rollup.regradedGreen} re-graded green`,
+  );
+  for (const slice of rollup.slices) {
+    const sha = slice.verdictSha256 ? slice.verdictSha256.slice(0, 12) : "(unreadable)";
+    console.error(
+      `${TAG} slices:   ${slice.id}: ${slice.regradedGreen ? "re-graded green" : "NOT re-graded green"} ` +
+        `[evidence: ${slice.originSummary ?? "no ledger"}] verdict ${slice.verdictPath} sha ${sha}`,
+    );
+  }
+  for (const note of rollup.notes) console.error(`${TAG} slices:   note: ${note}`);
+  for (const refusal of rollup.refusals) console.error(`${TAG} slices:   REFUSED: ${refusal}`);
+  if (rollup.refusals.length > 0) {
+    // S4e: the refusal names the exact command, per slice, so "what do I run now" is
+    // answered by the output rather than by reading this file.
+    const failing = rollup.slices.filter((s) => s.refusals.length > 0).map((s) => s.id);
+    if (failing.length > 0) {
+      console.error(
+        `${TAG} slices:   re-verify: ${failing.map((id) => reverifyCommand(root, id)).join("  &&  ")}`,
+      );
+    }
+  }
+
+  return {
+    status: rollup.status,
+    exit: rollup.exit,
+    // M17, in the FXH terms: an approval whose evidence no longer re-grades is not an
+    // anchor that was COMPARED, so `anchored` requires a re-graded green AND full
+    // contract coverage. A refused roll-up contributes tier 2 and no anchor, which is
+    // why a project with per-slice dirs and an empty flat dir cannot improve its exit
+    // by this section merely existing.
+    anchored: rollup.anchored,
+    note:
+      `${rollup.regradedGreen}/${rollup.approvedSlices} approved slice(s) re-graded green` +
+      (rollup.coverageRefusals.length > 0
+        ? `; ${rollup.coverageRefusals.length} contract section(s) walked by no gate`
+        : ""),
+    assets: rollup.slices.map((slice) => ({
+      kind: "slice-plan" as const,
+      id: slice.id,
+      status: slice.regradedGreen ? "pass" : "refused",
+      exit: slice.regradedGreen ? 0 : 2,
+      reportPath: slice.verdictPath,
+      // The project verdict BINDS to the slice verdicts by sha: a later hand-edit of an
+      // approved slice verdict is detectable against this roll-up.
+      reportSha256: slice.verdictSha256,
+      ...(slice.refusals.length > 0 ? { note: slice.refusals[0] } : {}),
+    })),
   };
 }
 

@@ -1,3 +1,4 @@
+import { readFile } from "node:fs/promises";
 import path from "node:path";
 
 import { isSafeCapturePath, isWithin } from "../../domain/capture-paths.js";
@@ -9,6 +10,7 @@ import { gateInputFiles } from "./run-gates.js";
 import type { DesignStatusReport } from "./design.js";
 import {
   awaitingApprovalSlices,
+  getSliceVerdictPath,
   getSliceVerifyDir,
   nextUnblockedSlice,
   planDispatchMode,
@@ -36,6 +38,27 @@ export interface SliceCaptureStatus {
   unsafe: string[];
 }
 
+/**
+ * L32: WHICH GATE FAILED, read off the slice's own verdict.
+ *
+ * Observed live: after a `player-feel` verify wrote a FAIL verdict, `status` still said
+ * "player-feel needs capture/verify evidence; run /loombridge:build or say continue".
+ * Evidence existed, a gate had failed, and the summary line described neither, so the
+ * only way to learn what was wrong was to open the verdict by hand. The next action a
+ * developer is given must name the thing that is actually red.
+ */
+export interface SliceGateFailure {
+  sliceId: string;
+  /** The verdict's own status word (`fail` / `warn`). */
+  status: string;
+  /** Gate ids the verdict reports as `fail`. */
+  failing: string[];
+  /** Gate ids the verdict reports as `warn` (a partial capture, typically). */
+  warning: string[];
+  /** Root-relative verdict path, so the message can point at the detail. */
+  verdictPath: string;
+}
+
 export interface LoombridgeStatusModel {
   hasRoadmap: boolean;
   /** Whether `.loombridge/ACCEPTANCE.json` exists (RCL-P04 honesty). */
@@ -57,6 +80,8 @@ export interface LoombridgeStatusModel {
   nextCommand: string;
   warnings: string[];
   captures: SliceCaptureStatus[];
+  /** L32: per-slice verdicts that are not green, with the gate ids that are red. */
+  gateFailures: SliceGateFailure[];
 }
 
 export function developerNextAction(model: LoombridgeStatusModel): string {
@@ -67,6 +92,17 @@ export function developerNextAction(model: LoombridgeStatusModel): string {
   }
   if (model.nextCommand.startsWith("loombridge capture --slice ") || model.nextCommand.startsWith("loombridge verify --slice ")) {
     const name = model.currentSlice ? `${model.currentSlice.id}` : "the current slice";
+    // L32: a verdict exists and it is RED. Say which gate, and point at the file that
+    // holds the detail, instead of asking for evidence that is already on disk.
+    const failure = model.gateFailures.find((f) => f.sliceId === model.currentSlice?.id);
+    if (failure) {
+      const red = failure.failing.length > 0 ? failure.failing : failure.warning;
+      const word = failure.failing.length > 0 ? "FAILED" : "warned";
+      return (
+        `${name}: gate(s) ${red.join(", ")} ${word} in ${failure.verdictPath} (verdict status \`${failure.status}\`); ` +
+        `fix them, then re-run \`loombridge verify --slice ${failure.sliceId} --strict\`.`
+      );
+    }
     return `${name} needs capture/verify evidence; run /loombridge:build or say continue.`;
   }
   if (model.nextCommand === "loombridge build") return "run /loombridge:build or say continue.";
@@ -119,6 +155,43 @@ async function captureStatusForSlice(paths: LoombridgePaths, slice: SliceEntry):
   };
 }
 
+/**
+ * Resolve one slice's verdict path the same way every other reader does: the proof's
+ * own `verdictPath` when it is a safe in-root relative path, else the conventional
+ * per-slice location. Returns null when the slice has neither.
+ */
+function sliceVerdictPathFor(paths: LoombridgePaths, slice: SliceEntry): string | null {
+  const declared = slice.proof?.verdictPath;
+  if (declared) {
+    if (!isSafeCapturePath(declared)) return null;
+    const abs = path.resolve(paths.root, declared);
+    return isWithin(paths.root, abs) ? abs : null;
+  }
+  return getSliceVerdictPath(paths, slice.id);
+}
+
+/** L32: read a slice verdict and report the gates that are not green. Null when green/absent. */
+async function gateFailureFor(paths: LoombridgePaths, slice: SliceEntry): Promise<SliceGateFailure | null> {
+  const abs = sliceVerdictPathFor(paths, slice);
+  if (!abs) return null;
+  let verdict: { status?: unknown; gates?: unknown };
+  try {
+    verdict = JSON.parse(await readFile(abs, "utf-8")) as { status?: unknown; gates?: unknown };
+  } catch {
+    return null;
+  }
+  const status = typeof verdict.status === "string" ? verdict.status : "(absent)";
+  const gates =
+    typeof verdict.gates === "object" && verdict.gates !== null && !Array.isArray(verdict.gates)
+      ? (verdict.gates as Record<string, unknown>)
+      : {};
+  const failing = Object.entries(gates).filter(([, v]) => v === "fail").map(([g]) => g);
+  const warning = Object.entries(gates).filter(([, v]) => v === "warn").map(([g]) => g);
+  if (status === "pass" && failing.length === 0 && warning.length === 0) return null;
+  if (failing.length === 0 && warning.length === 0) return null;
+  return { sliceId: slice.id, status, failing, warning, verdictPath: path.relative(paths.root, abs) };
+}
+
 function nextCommandFor(args: {
   plan: SlicePlan | null;
   designApproved: boolean;
@@ -167,7 +240,20 @@ export async function computeStatusModel(args: {
     ? args.plan.slices.filter((slice) => ["built", "verified", "approved"].includes(slice.state))
     : [];
   const captures = await Promise.all(relevant.map((slice) => captureStatusForSlice(args.paths, slice)));
+  const gateFailures = (
+    await Promise.all(relevant.map((slice) => gateFailureFor(args.paths, slice)))
+  ).filter((f): f is SliceGateFailure => f !== null);
   const warnings: string[] = [];
+
+  // L32, in the warnings list as well as in the next action: a red gate is the most
+  // actionable fact `status` has, and it must not be reachable only by opening the
+  // verdict file.
+  for (const failure of gateFailures) {
+    const red = failure.failing.length > 0 ? `failing gate(s): ${failure.failing.join(", ")}` : `warned gate(s): ${failure.warning.join(", ")}`;
+    warnings.push(
+      `${failure.sliceId}: verdict status \`${failure.status}\`: ${red} (see ${failure.verdictPath}).`,
+    );
+  }
 
   // RCL-P04 honesty: capture files present but NO acceptance contract is the
   // false-green shape — surface it loudly. Captures are not a verification.
@@ -268,6 +354,7 @@ export async function computeStatusModel(args: {
     nextCommand: "",
     warnings,
     captures,
+    gateFailures,
   };
   model.nextCommand = nextCommandFor({ plan: args.plan, designApproved, mode, currentSlice, captures });
   return model;

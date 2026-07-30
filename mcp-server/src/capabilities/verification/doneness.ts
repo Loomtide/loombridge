@@ -26,11 +26,13 @@ import {
 import { designStatus } from "./design.js";
 import { checkCaptureManifest } from "../../domain/capture-manifest.js";
 import {
+  getSliceVerdictPath,
   getSliceVerifyDir,
   readSlicePlan,
   type SliceEntry,
   type SlicePlan,
 } from "./slices.js";
+import { originSummary, readEvidenceLedger } from "./evidence-ledger.js";
 import { readAssetManifest } from "../assets/asset-manifest.js";
 import { resolveAllSliceAssetBindings } from "../assets/asset-bindings.js";
 import { genreFidelityCriteria, knownGenreIds } from "../genre/genre-registry.js";
@@ -1763,6 +1765,36 @@ interface SliceRollupLine {
   approved: boolean;
   passed: boolean;
   reasons: string[];
+  /**
+   * M18: the evidence-ORIGIN mix behind this slice's verdict (`produced N, observed N,
+   * agent-assembled N`), or the honest word when the verdict carries no ledger.
+   *
+   * REPORTED, NEVER GATED here. Doneness's refusals are unchanged by this line; it
+   * exists so a green roll-up cannot read identically whether the evidence was written
+   * by the CLI or by the agent being graded. The origin axis is deliberately NOT wired
+   * into `requiredEvidenceClasses`.
+   */
+  originSummary: string;
+}
+
+/**
+ * The evidence-origin mix recorded in one slice's verdict, for the doneness roll-up
+ * line (M18). Read-only and refusal-free: the LEDGER's absence is refused at the
+ * roll-up door (`slice-rollup.ts`), and duplicating that refusal here would put two
+ * answers on one question. An unreadable verdict simply has nothing to summarise.
+ */
+async function sliceEvidenceOriginSummary(slice: SliceEntry, paths: LoombridgePaths): Promise<string> {
+  const verdictPath = slice.proof?.verdictPath
+    ? path.resolve(paths.root, slice.proof.verdictPath)
+    : getSliceVerdictPath(paths, slice.id);
+  let verdict: unknown;
+  try {
+    verdict = JSON.parse(await fs.readFile(verdictPath, "utf-8"));
+  } catch {
+    return "no verdict to read";
+  }
+  const read = readEvidenceLedger(verdict, "loombridge verify --slice <id>");
+  return read.ok ? originSummary(read.ledger) : "no evidence ledger (re-verify the slice)";
 }
 
 /** The slice roll-up evaluation, PURE of console output. Exported for tests. */
@@ -1820,7 +1852,14 @@ export async function evaluateSliceDoneness(
     const approved = slice.state === "approved";
     const passed = approved && result.ok;
     if (!approved || !result.ok) ok = false;
-    slices.push({ id: slice.id, state: slice.state, approved, passed, reasons: result.reasons });
+    slices.push({
+      id: slice.id,
+      state: slice.state,
+      approved,
+      passed,
+      reasons: result.reasons,
+      originSummary: await sliceEvidenceOriginSummary(slice, paths),
+    });
   }
 
   const byId = new Map(plan.slices.map((s) => [s.id, s]));
@@ -2028,9 +2067,9 @@ async function runSliceDoneness(plan: SlicePlan, paths: LoombridgePaths): Promis
       console.error(`  - ${slice.id}: REFUSE — state is \`${slice.state}\`, not \`approved\``);
       for (const reason of slice.reasons) console.error(`      - ${reason}`);
     } else if (slice.passed) {
-      console.error(`  - ${slice.id}: PASS`);
+      console.error(`  - ${slice.id}: PASS [evidence: ${slice.originSummary}]`);
     } else {
-      console.error(`  - ${slice.id}: REFUSE`);
+      console.error(`  - ${slice.id}: REFUSE [evidence: ${slice.originSummary}]`);
       for (const reason of slice.reasons) console.error(`      - ${reason}`);
     }
   }
