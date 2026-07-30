@@ -1936,7 +1936,7 @@ test("feel (conformant): on-target measurements PASS", () => {
     runSpeed: 7.0,
     jumpApex: 2.2,
     timeToApex: 320,
-    shortHopApex: 0.72,
+    shortHopApex: 1.41,
     dashDistance: 2.8125, // Phase F: corrected dash target (18.75 × 0.15)
     coyoteTime: 0.1,
     jumpBuffer: 0.1,
@@ -1973,7 +1973,7 @@ function feelWithProvenance(overrides: Partial<FeelMeasurements> = {}): FeelMeas
     runSpeed: 7.0,
     jumpApex: 2.2,
     timeToApex: 320,
-    shortHopApex: 0.72,
+    shortHopApex: 1.41,
     dashDistance: 2.8125,
     coyoteTime: 0.1,
     jumpBuffer: 0.1,
@@ -2471,7 +2471,7 @@ test("aggregate: post-reconcile live run -> overall fail driven by the UI font/c
   );
   // The build's true dash is 18.75 × 0.15 = 2.8125u (the 3.0u capture was the slip).
   const feel = evaluateFeel(
-    { runSpeed: 7.0, jumpApex: 2.2, timeToApex: 320, shortHopApex: 0.72, dashDistance: 2.8125, coyoteTime: 0.1, jumpBuffer: 0.1 },
+    { runSpeed: 7.0, jumpApex: 2.2, timeToApex: 320, shortHopApex: 1.41, dashDistance: 2.8125, coyoteTime: 0.1, jumpBuffer: 0.1 },
     acceptance,
   );
 
