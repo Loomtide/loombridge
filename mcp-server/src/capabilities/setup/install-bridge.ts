@@ -17,7 +17,8 @@
  * `Packages/com.loomtide.loombridge/`, EXCLUDING Tests/ (the legacy RUN-1 #62
  * shape), for air-gapped consumers who refuse a manifest dependency.
  *
- * Exit codes: 0 installed · 1 filesystem/runtime failure · 2 usage/validation.
+ * Exit codes: 0 installed · 1 filesystem/runtime failure · 2 usage/validation, which
+ * includes REFUSING a bundle that does not match this CLI's packaged sources.
  */
 
 import {
@@ -37,11 +38,14 @@ import path from "node:path";
 import { REQUIRED_PROTOCOL_VERSION } from "../../bridge/preflight/prerequisite-checks.js";
 import { resolveBuildStamp } from "../../shared/build-stamp.js";
 import {
+  ALLOW_STALE_FLAG,
   BridgeInstallError as RuntimeFailure,
   InstallMetadata,
   METADATA_RELPATH,
   PKG_ID,
+  type ResolvedBridgeTarball,
   SUPERSEDED_PKG_IDS,
+  gateBridgeFreshness,
   looksLikeUnityProject,
   readTarballVersion,
   resolveBundledTarball as resolveBundledTarballShared,
@@ -61,13 +65,35 @@ import {
 // --- exit-code discipline: usage/validation = 2, runtime failure = 1 ---
 class UsageError extends Error {}
 
-/** install-bridge cannot proceed without a tarball, so treat "none found" as fatal. */
-function resolveBundledTarball(override?: string): string {
+/** A refused delivery is a precondition failure (exit 2), not a filesystem failure. */
+class StaleBridgeRefusal extends Error {}
+
+/**
+ * install-bridge cannot proceed without a tarball, so treat "none found" as fatal, and it
+ * must not proceed with a bundle that cannot be shown to match this CLI's sources, so the
+ * freshness gate runs HERE, at the single point where every install route obtains its
+ * tarball. Both install routes call this, so neither can acquire a path without a grade.
+ */
+function resolveBundledTarball(override: string | undefined, allowStaleBridge: boolean): ResolvedBridgeTarball {
   const tgz = resolveBundledTarballShared(override);
   if (!tgz) {
     throw new RuntimeFailure(
       "no bundled bridge tarball found. In the dev repo, run scripts/loombridge-pack-bridge.sh first.",
     );
+  }
+  const gate = gateBridgeFreshness("install-bridge", tgz, allowStaleBridge);
+  switch (gate.kind) {
+    case "proceed":
+      break;
+    case "warn":
+      console.warn(gate.message);
+      break;
+    case "refuse":
+      throw new StaleBridgeRefusal(gate.message);
+    default: {
+      const exhaustive: never = gate;
+      throw new RuntimeFailure(`unhandled freshness gate outcome: ${JSON.stringify(exhaustive)}`);
+    }
   }
   return tgz;
 }
@@ -76,6 +102,8 @@ export interface InstallArgs {
   project: string;
   mode: "tarball" | "embedded";
   tarball?: string; // explicit tarball path override
+  /** Deliver even when the bundle does not match this CLI's packaged sources. */
+  allowStaleBridge?: boolean;
   dryRun: boolean;
 }
 
@@ -85,12 +113,14 @@ function parseArgs(args: string[]): InstallArgs | ParseHelp {
   let project = "";
   let mode: "tarball" | "embedded" = "tarball";
   let tarball: string | undefined;
+  let allowStaleBridge = false;
   let dryRun = false;
   for (let i = 0; i < args.length; i += 1) {
     const arg = args[i];
     if (arg === "--project" || arg === "-p") project = args[(i += 1)] ?? "";
     else if (arg === "--tarball") tarball = args[(i += 1)] ?? "";
     else if (arg === "--embedded") mode = "embedded";
+    else if (arg === ALLOW_STALE_FLAG) allowStaleBridge = true;
     else if (arg === "--dry-run") dryRun = true;
     else if (arg === "--help" || arg === "-h") return { help: true };
     else {
@@ -102,7 +132,7 @@ function parseArgs(args: string[]): InstallArgs | ParseHelp {
     console.error("[loombridge install-bridge] --project <unity-project-dir> is required.");
     return { help: true, usageError: true };
   }
-  return { project: path.resolve(project), mode, tarball, dryRun };
+  return { project: path.resolve(project), mode, tarball, allowStaleBridge, dryRun };
 }
 
 /** A Unity project must exist and look like a project. */
@@ -234,7 +264,8 @@ function writeMetadata(project: string, meta: InstallMetadata, dryRun: boolean):
 }
 
 async function installTarball(a: InstallArgs): Promise<number> {
-  const tgz = resolveBundledTarball(a.tarball);
+  const resolved = resolveBundledTarball(a.tarball, a.allowStaleBridge ?? false);
+  const tgz = resolved.path;
   const version = readTarballVersion(tgz);
   const sha = sha256File(tgz);
   const tarballName = `${PKG_ID}-${version}.tgz`;
@@ -310,7 +341,8 @@ async function installTarball(a: InstallArgs): Promise<number> {
 }
 
 async function installEmbedded(a: InstallArgs): Promise<number> {
-  const tgz = resolveBundledTarball(a.tarball);
+  const resolved = resolveBundledTarball(a.tarball, a.allowStaleBridge ?? false);
+  const tgz = resolved.path;
   const version = readTarballVersion(tgz);
   console.log(`==> Installing ${PKG_ID}@${version} (EMBEDDED fallback, Tests/ excluded) into ${a.project}`);
   if (a.dryRun) console.log("    (--dry-run: no files will be written)");
@@ -388,10 +420,12 @@ function printUsage(): void {
       "  --embedded            Fallback: physically copy the package (Tests/ stripped)",
       "  --tarball <path>      Use this bridge .tgz instead of the CLI-bundled one",
       "                        (also honors $LOOMBRIDGE_BRIDGE_TARBALL)",
+      `  ${ALLOW_STALE_FLAG}  Install a bundle that does not match this CLI's sources`,
       "  --dry-run             Print the plan without writing any files",
       "  -h, --help            Show this help",
       "",
-      "Exit codes: 0 installed · 1 filesystem/runtime failure · 2 usage/validation.",
+      "Exit codes: 0 installed · 1 filesystem/runtime failure · 2 usage/validation or a",
+      "refused stale bridge.",
     ].join("\n"),
   );
 }
@@ -408,6 +442,12 @@ export async function installBridge(parsed: InstallArgs): Promise<number> {
   } catch (error) {
     if (error instanceof UsageError) {
       console.error(`[loombridge install-bridge] ${error.message}`);
+      return 2;
+    }
+    // The refusal message is already fully formed (state, consequence, fix), so it is
+    // printed verbatim rather than re-wrapped in the verb prefix a second time.
+    if (error instanceof StaleBridgeRefusal) {
+      console.error(error.message);
       return 2;
     }
     const message = error instanceof Error ? error.message : String(error);

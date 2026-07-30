@@ -84,6 +84,33 @@ test("package entrypoints: test scripts avoid runner features CI's Node lacks", 
   }
 });
 
+/**
+ * `dist/shared/bridge-source-digest.js` is a declared path with NO importer: only
+ * `scripts/loombridge-pack-bridge.sh` names it, by shelling to it. Nothing in the suite
+ * would notice it moving, and the failure would land on whoever next packs a bridge
+ * tarball, which is the release path. Read the declaration out of the script rather than
+ * restating it here, so the two cannot drift.
+ */
+const PACK_SCRIPT = path.join(path.dirname(PKG_ROOT), "scripts", "loombridge-pack-bridge.sh");
+
+test("package entrypoints: the digest builder the pack script shells to exists in dist", () => {
+  const script = fs.readFileSync(PACK_SCRIPT, "utf-8");
+  const declared = script.match(/^DIGEST_BUILDER_REL="([^"]+)"$/m);
+  assert.ok(declared, "loombridge-pack-bridge.sh must declare DIGEST_BUILDER_REL for this guard to walk");
+  const rel = declared![1]!;
+  assert.ok(
+    fs.existsSync(path.join(path.dirname(PKG_ROOT), rel)),
+    `the pack script shells to ${rel}, which does not exist in the build output`,
+  );
+});
+
+test("package entrypoints LITMUS: the digest-builder check fires on a bogus declared path", () => {
+  const bogus = "mcp-server/dist/shared/definitely-not-here.js";
+  const declared = `DIGEST_BUILDER_REL="${bogus}"\n`.match(/^DIGEST_BUILDER_REL="([^"]+)"$/m);
+  assert.ok(declared, "the extractor must find the declaration the check would test");
+  assert.equal(fs.existsSync(path.join(path.dirname(PKG_ROOT), declared![1]!)), false);
+});
+
 test("package entrypoints LITMUS: the npm-script path check fires on a bogus path", () => {
   const bogus = "dist/definitely/not/here.js";
   assert.ok(!fs.existsSync(path.join(PKG_ROOT, bogus)), "fixture path must not exist");

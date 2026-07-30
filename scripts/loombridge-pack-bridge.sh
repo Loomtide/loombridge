@@ -33,6 +33,14 @@
 #
 # Output: <out-dir>/com.loomtide.loombridge-<version>.tgz
 #         plus <out-dir>/com.loomtide.loombridge-<version>.tgz.sha256
+#
+# The tarball also carries `package/.loombridge-source-digest`: a record binding it to the
+# SOURCE bytes it was packed from, so a CLI can later tell whether its bundled tarball
+# still corresponds to the sources it ships. The `.tgz.sha256` sidecar cannot answer that
+# (it hashes the tarball itself), which is how a bundle packed months earlier stayed
+# invisible to every check while `doctor` reported healthy. No `.source-digest` sidecar is
+# written: the EMBEDDED record is the one truth, because that is the copy that travels
+# with the tarball into a consumer project.
 
 set -euo pipefail
 
@@ -42,7 +50,13 @@ SRC="$REPO/packages/$PKG_NAME"
 OUT_DIR="$REPO/dist/bridge"
 VERSION_OVERRIDE=""
 
-usage() { sed -n '2,36p' "$0" | sed 's/^# \{0,1\}//'; }
+# The ONE digest implementation, shelled from here exactly as the version stamp below
+# shells to node. A bash-side reimplementation would be a second source of truth that
+# drifts silently from the TypeScript one the freshness check uses.
+DIGEST_BUILDER_REL="mcp-server/dist/shared/bridge-source-digest.js"
+DIGEST_ENTRY_NAME=".loombridge-source-digest"
+
+usage() { sed -n '2,43p' "$0" | sed 's/^# \{0,1\}//'; }
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -62,8 +76,33 @@ src_version="$(grep -m1 '"version"' "$SRC/package.json" | sed 's/[^0-9A-Za-z.+-]
 VERSION="${VERSION_OVERRIDE:-$src_version}"
 [ -n "$VERSION" ] || { echo "loombridge-pack-bridge: could not resolve a version." >&2; exit 1; }
 
+# Bind the tarball to the SOURCE bytes it is packed from.
+#
+# Computed over $SRC, the UNSTAMPED tree, NOT over the staged copy: a `--version` override
+# rewrites the staged package.json, so digesting the stage would make every override-packed
+# tarball read as stale against the very sources it came from.
+DIGEST_BUILDER="$REPO/$DIGEST_BUILDER_REL"
+[ -f "$DIGEST_BUILDER" ] || {
+  echo "loombridge-pack-bridge: REFUSING to pack without the source digest." >&2
+  echo "    missing $DIGEST_BUILDER_REL (build it first: cd mcp-server && npm run build)." >&2
+  echo "    An undigested tarball cannot be bound to any source tree, so every later" >&2
+  echo "    freshness check would have to fail it. Packing one is never the right move." >&2
+  exit 1; }
+SRC_DIGEST="$(node "$DIGEST_BUILDER" "$SRC")"
+[ -n "$SRC_DIGEST" ] || { echo "loombridge-pack-bridge: source digest came back empty." >&2; exit 1; }
+
+# Provenance for the layouts that cannot recompute the digest (an npm-installed CLI has no
+# source tree next to it): which CLI build packed this, from which commit.
+CLI_VERSION="$(node -e '
+  const fs = require("fs");
+  try { process.stdout.write(String(JSON.parse(fs.readFileSync(process.argv[1], "utf8")).version || "unknown")); }
+  catch { process.stdout.write("unknown"); }
+' "$REPO/mcp-server/package.json")"
+COMMIT="$(git -C "$REPO" rev-parse HEAD 2>/dev/null || echo unknown)"
+
 echo "==> Packing $PKG_NAME@$VERSION"
 echo "    source: $SRC"
+echo "    source digest: $SRC_DIGEST"
 
 STAGE="$(mktemp -d)"
 trap 'rm -rf "$STAGE"' EXIT
@@ -95,6 +134,17 @@ node -e '
   fs.writeFileSync(p, JSON.stringify(j, null, 2) + "\n");
 ' "$PKG_ROOT/package.json" "$VERSION"
 
+# Embed the digest record. Written through node so the JSON is escaped correctly, and
+# written AFTER the prune so nothing can remove it. The leading dot keeps Unity's asset
+# pipeline from importing it (hidden files need no .meta sibling).
+node -e '
+  const fs = require("fs");
+  fs.writeFileSync(
+    process.argv[1],
+    JSON.stringify({ digest: process.argv[2], cliVersion: process.argv[3], commit: process.argv[4] }, null, 2) + "\n",
+  );
+' "$PKG_ROOT/$DIGEST_ENTRY_NAME" "$SRC_DIGEST" "$CLI_VERSION" "$COMMIT"
+
 # Sanity: the load-bearing assemblies and the (gated) tests must all be present.
 [ -d "$PKG_ROOT/Editor" ]   || { echo "loombridge-pack-bridge: FAILED — Editor/ missing." >&2; exit 1; }
 [ -d "$PKG_ROOT/Runtime" ]  || { echo "loombridge-pack-bridge: FAILED — Runtime/ missing." >&2; exit 1; }
@@ -116,7 +166,13 @@ OUT_TGZ="$OUT_DIR/$PKG_NAME-$VERSION.tgz"
 # .tgz is (today) harmless but a latent trap; leaving two also bloats the CLI
 # artifact and can confuse doctor's bundled-version read. Only OUR versioned
 # tarballs/sha files are touched — nothing else in the out-dir.
-for stale in "$OUT_DIR"/"$PKG_NAME"-*.tgz "$OUT_DIR"/"$PKG_NAME"-*.tgz.sha256; do
+#
+# `*.source-digest` is in the glob although this script never writes one: an earlier
+# iteration of the freshness work did, and an orphaned sidecar left in an out-dir is a
+# second, unauthoritative answer to "what sources is this bundle from" sitting next to the
+# tarball whose EMBEDDED record is the real one. Pack-output is asserted exact by
+# bridge-freshness.test.ts.
+for stale in "$OUT_DIR"/"$PKG_NAME"-*.tgz "$OUT_DIR"/"$PKG_NAME"-*.tgz.sha256 "$OUT_DIR"/"$PKG_NAME"-*.source-digest; do
   [ -e "$stale" ] || continue          # no match → glob stays literal; skip
   [ "$stale" = "$OUT_TGZ" ] && continue # never delete the one we're about to write
   rm -f "$stale"

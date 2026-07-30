@@ -16,7 +16,8 @@
  * the release's `install.sh` and not a get.loomtide.ai one-liner.
  *
  * Exit codes: 0 up-to-date/updated + healthy · 1 update or health problem ·
- * 2 usage/precondition (e.g. bridge was never installed).
+ * 2 usage/precondition (bridge never installed here, or a bundle that does not match
+ * this CLI's packaged sources and was therefore refused).
  */
 
 import { copyFileSync, existsSync, mkdirSync, rmSync } from "node:fs";
@@ -26,8 +27,10 @@ import { installBridge } from "./install-bridge.js";
 import { reconcileAgentSurfaceForUpdate } from "./install-agent.js";
 import { run as doctorRun } from "./doctor.js";
 import {
+  ALLOW_STALE_FLAG,
   METADATA_RELPATH,
   PKG_ID,
+  gateBridgeFreshness,
   looksLikeUnityProject,
   readInstallMetadata,
   readTarballVersion,
@@ -39,6 +42,7 @@ interface UpdateArgs {
   project: string;
   tarball?: string;
   forceBridge: boolean;
+  allowStaleBridge: boolean;
   dryRun: boolean;
   channel?: string;
   version?: string;
@@ -50,6 +54,7 @@ function parseArgs(args: string[]): UpdateArgs | ParseHelp {
   let project = "";
   let tarball: string | undefined;
   let forceBridge = false;
+  let allowStaleBridge = false;
   let dryRun = false;
   let channel: string | undefined;
   let version: string | undefined;
@@ -58,6 +63,7 @@ function parseArgs(args: string[]): UpdateArgs | ParseHelp {
     if (arg === "--project" || arg === "-p") project = args[(i += 1)] ?? "";
     else if (arg === "--tarball") tarball = args[(i += 1)] ?? "";
     else if (arg === "--force-bridge") forceBridge = true;
+    else if (arg === ALLOW_STALE_FLAG) allowStaleBridge = true;
     else if (arg === "--dry-run") dryRun = true;
     else if (arg === "--channel") channel = args[(i += 1)] ?? "";
     else if (arg === "--version") version = args[(i += 1)] ?? "";
@@ -71,7 +77,7 @@ function parseArgs(args: string[]): UpdateArgs | ParseHelp {
     console.error("[loombridge update] --project <unity-project-dir> is required.");
     return { help: true, usageError: true };
   }
-  return { project: path.resolve(project), tarball, forceBridge, dryRun, channel, version };
+  return { project: path.resolve(project), tarball, forceBridge, allowStaleBridge, dryRun, channel, version };
 }
 
 function printUsage(): void {
@@ -85,6 +91,7 @@ function printUsage(): void {
       "Options:",
       "  --project, -p <dir>   Target Unity project (required)",
       "  --force-bridge        Overwrite an --embedded copy even if it may be edited",
+      `  ${ALLOW_STALE_FLAG}  Deliver a bundle that does not match this CLI's sources`,
       "  --tarball <path>      Update to this bridge .tgz instead of the CLI-bundled one",
       "  --dry-run             Print the plan without writing any files",
       "  --channel <name>      (advisory) shown in the CLI self-update instruction",
@@ -155,13 +162,42 @@ export async function run(args: string[]): Promise<number> {
     return 2;
   }
 
-  const tgz = resolveBundledTarball(parsed.tarball);
+  let tgz;
+  try {
+    tgz = resolveBundledTarball(parsed.tarball);
+  } catch (error) {
+    // A corrupt archive or an unreadable source tree makes the grade impossible. That is a
+    // runtime failure, never a silent proceed: an ungraded bundle is exactly what this
+    // guard exists to stop.
+    console.error(`[loombridge update] could not read the bridge tarball: ${error instanceof Error ? error.message : String(error)}`);
+    return 1;
+  }
   if (!tgz) {
     console.error("[loombridge update] no bundled bridge tarball found (run scripts/loombridge-pack-bridge.sh in dev).");
     return 1;
   }
-  const bundledVersion = readTarballVersion(tgz);
-  const bundledSha = sha256File(tgz);
+  const bundledVersion = readTarballVersion(tgz.path);
+  const bundledSha = sha256File(tgz.path);
+
+  // THE FRESHNESS GATE, deliberately here: ABOVE reconcileAgentSurfaceForUpdate (which
+  // writes files) and ABOVE the alreadyCurrent short-circuit. A project already holding
+  // the stale bridge must hear "stale", never "already up to date". That message is what
+  // made the original failure look healthy end to end.
+  const gate = gateBridgeFreshness("update", tgz, parsed.allowStaleBridge);
+  switch (gate.kind) {
+    case "proceed":
+      break;
+    case "warn":
+      console.warn(gate.message);
+      break;
+    case "refuse":
+      console.error(gate.message);
+      return 2;
+    default: {
+      const exhaustive: never = gate;
+      throw new Error(`unhandled freshness gate outcome: ${JSON.stringify(exhaustive)}`);
+    }
+  }
 
   console.log(`==> Updating ${PKG_ID} in ${project}`);
   console.log(`    installed: ${meta.bridgeVersion} (${meta.installMode})`);
@@ -215,10 +251,14 @@ export async function run(args: string[]): Promise<number> {
   }
 
   // Reuse the exact installer file operations (tarball swap / embedded refresh).
+  // The tarball is handed on as an EXPLICIT path: update has already run the gate above,
+  // and re-deriving the grade inside the installer would either duplicate the refusal or
+  // (worse) reach a different verdict for the same bytes.
   const installCode = await installBridge({
     project,
     mode: isEmbedded ? "embedded" : "tarball",
-    tarball: tgz,
+    tarball: tgz.path,
+    allowStaleBridge: parsed.allowStaleBridge,
     dryRun: parsed.dryRun,
   });
   if (installCode !== 0) return installCode;
