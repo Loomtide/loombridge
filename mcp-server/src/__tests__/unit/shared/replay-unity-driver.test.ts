@@ -867,3 +867,72 @@ test("UnityDriver.readConsole: counts lowercase 'error' (the bridge's real contr
     errors: ["boom", "kaboom"],
   });
 });
+
+// ───────────────────────── AX1: EVERY focus-lost site, through the real driver ─────────────
+//
+// FOCUS_REQUIRED means the machine could not deliver the input, not that the game ignored it.
+// The driver maps it at FIVE separate call sites (the world tap, the key tap, the two edges
+// of a key HOLD, and the shared key-down/key-up path), and until this table only the world
+// tap was pinned: the other four were four independent copies of a rule with nothing walking
+// them, so any one could revert to a bare action failure with a green suite. Each row drives
+// the REAL driver against a bridge that refuses exactly one op, and asserts the harness tier.
+//
+// Reverting ANY single site must fail its named row here.
+const FOCUS_LOST = { error: "input op needs Game-View focus", code: "FOCUS_REQUIRED" };
+const focusLostSites: Array<{ site: string; action: Action; refuse: string; ok?: string[] }> = [
+  { site: "world-tap → input.pointer_tap", action: { do: "world-tap", locator: { path: "/Fruit" } }, refuse: "input.pointer_tap" },
+  { site: "key-tap → input.key_tap", action: { do: "key-tap", key: "Space" }, refuse: "input.key_tap" },
+  {
+    site: "key-hold press → input.key_down",
+    action: { do: "key-hold", key: "D", durationMs: 1 },
+    refuse: "input.key_down",
+  },
+  {
+    // The RELEASE edge of a hold: the press succeeded, so a driver that only mapped the press
+    // would report the focus loss as a game divergence half way through the hold.
+    site: "key-hold release → input.key_up",
+    action: { do: "key-hold", key: "D", durationMs: 1 },
+    refuse: "input.key_up",
+    ok: ["input.key_down"],
+  },
+  { site: "key-down edge → input.key_down", action: { do: "key-down", key: "A" }, refuse: "input.key_down" },
+  { site: "key-up edge → input.key_up", action: { do: "key-up", key: "A" }, refuse: "input.key_up" },
+];
+
+for (const { site, action, refuse, ok } of focusLostSites) {
+  test(`UnityDriver focus-lost mapping: ${site} → blocked (focus-lost), never an action failure`, async () => {
+    const handlers: Record<string, Handler> = {
+      ...worldRect(),
+      "input.pointer_tap": () => ({ data: { dispatched: true } }),
+    };
+    for (const command of ok ?? []) handlers[command] = () => ({ data: {} });
+    handlers[refuse] = () => ({ ...FOCUS_LOST });
+
+    const driver = new UnityDriver(fakeBridge(handlers).send, driverOpts);
+    const result = await driver.dispatch(action);
+
+    assert.equal(result.ok, false, `${site} must not report success`);
+    assert.equal(result.blocked, true, `${site} must be BLOCKED (harness), not an action failure`);
+    assert.equal(result.blockedReason, "focus-lost", `${site} must name the focus condition`);
+    assert.match(result.detail ?? "", /Game-View focus/);
+  });
+}
+
+test("UnityDriver focus-lost mapping: the SAME sites report a non-focus error as a plain failure", async () => {
+  // The control that keeps the rows above from passing on a driver that blocks everything:
+  // an ordinary op error at each site is still a game-tier action failure with no reason.
+  for (const { site, action, refuse, ok } of focusLostSites) {
+    const handlers: Record<string, Handler> = {
+      ...worldRect(),
+      "input.pointer_tap": () => ({ data: { dispatched: true } }),
+    };
+    for (const command of ok ?? []) handlers[command] = () => ({ data: {} });
+    handlers[refuse] = () => ({ error: "INVALID_KEY: no such key", code: "INVALID_KEY" });
+
+    const driver = new UnityDriver(fakeBridge(handlers).send, driverOpts);
+    const result = await driver.dispatch(action);
+    assert.equal(result.ok, false, site);
+    assert.equal(result.blocked, undefined, `${site}: only a focus loss (or a missing capability) blocks`);
+    assert.equal(result.blockedReason, undefined, site);
+  }
+});

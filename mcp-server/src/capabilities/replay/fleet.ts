@@ -57,15 +57,22 @@ export function summarizeFleet(
   traces: FleetTraceResult[],
   generatedAt: string,
 ): FleetReport {
+  // A HARNESS FAULT COUNTS AS BLOCKED, NOT AS PASS (BX2). The roll-up's `status` already
+  // said so, but its COUNTS did not: a trace whose actuation passed while its captures could
+  // not be compared landed in `pass`, so a fleet could print "3/3 pass" one line above a
+  // `BLOCKED` verdict and a non-zero exit. The tier a trace earns is one thing, and both
+  // numbers have to agree with it: `blocked` is this vocabulary's "no verdict was produced",
+  // which is exactly what an uncomparable capture leaves behind.
+  const noVerdict = (t: FleetTraceResult): boolean =>
+    t.status === "blocked" || t.visualHarnessFault === true;
   const counts: FleetCounts = {
     total: traces.length,
-    pass: traces.filter((t) => t.status === "pass").length,
+    pass: traces.filter((t) => t.status === "pass" && !noVerdict(t)).length,
     fail: traces.filter((t) => t.status === "fail").length,
-    blocked: traces.filter((t) => t.status === "blocked").length,
+    blocked: traces.filter((t) => t.status !== "fail" && noVerdict(t)).length,
     drift: traces.filter((t) => t.visualDrift).length,
   };
-  const harnessFaults = traces.filter((t) => t.visualHarnessFault).length;
   const status: ReplayStatus =
-    counts.fail > 0 ? "fail" : counts.blocked > 0 || harnessFaults > 0 ? "blocked" : "pass";
+    counts.fail > 0 ? "fail" : counts.blocked > 0 ? "blocked" : "pass";
   return { generatedAt, status, counts, traces };
 }

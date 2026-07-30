@@ -3157,13 +3157,17 @@ function buildOps(): OpDef[] {
       "both it and Time.captureDeltaTime on every exit path (success, wall-deadline, play-exit, domain " +
       "reload). Returns the editor.screenshot payload (image_base64, width, height, sizeBytes, format) plus " +
       "framesElapsed, settleFrames, captureFps, settledMs, realtimeDeadlineHit (always false on success) and " +
-      "fixedDeltaTime (the project's real physics step, for the cadence note). " +
+      "fixedDeltaTime (the project's real physics step, for the cadence note). framesElapsed is the count of " +
+      "EDITOR UPDATE ticks the settle consumed (one player-loop frame each in Play Mode: the editor.tick " +
+      "advancedFrames precedent), and settledMs is the game time it advanced, measured from BEFORE the first " +
+      "frame so it spans all settleFrames. " +
       "A WALL-CLOCK DEADLINE (settleFrames/captureFps + 8s, checked every tick) is an ERROR, not a degraded " +
       "frame: a capture at the wrong game time is not comparable evidence, so a starved editor is reported " +
       "as a harness fault (capture tier) instead of being returned as pixel drift. " +
       "TIMEOUT NOTE: the replay driver sends its OWN wire timeout (settleFrames/captureFps*1000 + 15000) " +
       "rather than relying on defaultTimeoutMs, because a long settle at a low fps outlives any fixed " +
-      "default; a direct caller should do the same for settles beyond a couple of seconds. " +
+      "default; a direct caller should do the same for settles beyond a couple of seconds, through the " +
+      "'timeoutMs' parameter below. " +
       "It does NOT align what happens OUTSIDE the settle (action round trips, anchor polling), and it " +
       "cannot fix seed-driven (unseeded Random) or realtime-driven (realtimeSinceStartup, DateTime) " +
       "nondeterminism.",
@@ -3175,19 +3179,43 @@ function buildOps(): OpDef[] {
         settleFrames: {
           type: "integer",
           minimum: 1,
-          description: "Player-loop frames to advance before the capture (at 1/captureFps of game time each).",
+          // 7200 is two minutes of game time at 60 fps: past any settle a trace can justify,
+          // and short of the point where the schema stops being a door. The C# cap stays
+          // wider (100000) on purpose: it is the last-resort guard against a typo pinning the
+          // editor, not the contract a caller is held to.
+          maximum: 7200,
+          description:
+            "Player-loop frames to advance before the capture (at 1/captureFps of game time each), 1 to 7200 " +
+            "(7200 = 2 minutes of game time at 60 fps). The editor is pinned for the whole settle, so a " +
+            "mistyped frame count is a stalled editor, not a slow call.",
         },
         captureFps: {
           type: "integer",
-          minimum: 1,
+          // The SAME range the replay anchor validates ([10, 120]); a settle outside it is
+          // either a coarse bucket of game time (below) or more ticks than a backgrounded
+          // editor delivers inside the wall budget (above, where the deadline starts firing
+          // on healthy games and reporting a harness fault).
+          minimum: 10,
+          maximum: 120,
           description:
-            "Pin Time.captureDeltaTime to 1/captureFps for the settle (default 60). Unlike editor.tick, 0 is " +
-            "REFUSED: an unpinned settle is the nondeterminism this op removes.",
+            "Pin Time.captureDeltaTime to 1/captureFps for the settle (default 60), 10 to 120. Unlike " +
+            "editor.tick, 0 is REFUSED: an unpinned settle is the nondeterminism this op removes. Below 10 a " +
+            "single frame is over 100ms of game time; above 120 a backgrounded editor cannot reliably deliver " +
+            "the ticks inside the wall budget.",
         },
         format: { type: "string", enum: ["png", "jpg"], description: "Capture format (default png)." },
         view: { type: "string", enum: ["game", "scene"], description: "View to capture (default game)." },
         maxWidth: { type: "integer", minimum: 1, description: "Max capture width in px (default 1024)." },
         quality: { type: "integer", minimum: 0, maximum: 100, description: "JPEG quality (ignored for png)." },
+        timeoutMs: {
+          type: "integer",
+          minimum: 1000,
+          description:
+            "Wire timeout for THIS call, overriding defaultTimeoutMs (30000). Set it above the settle's own " +
+            "wall cost plus the bridge's 8s slack (the driver sends settleFrames/captureFps*1000 + 15000), so " +
+            "the BRIDGE's honest deadline decides the outcome instead of this timer turning a measurable " +
+            "harness fault into an anonymous transport timeout.",
+        },
       },
       required: ["settleFrames"],
     },

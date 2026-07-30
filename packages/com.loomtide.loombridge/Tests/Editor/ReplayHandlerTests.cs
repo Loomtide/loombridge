@@ -30,11 +30,16 @@ namespace UnityBridge.Tests
             _handler = new ReplayHandler();
             _restoreCaptureDeltaTime = Time.captureDeltaTime;
             _restoreRunInBackground = Application.runInBackground;
+            // SessionState is editor-session state shared with every other test in the run:
+            // start each case from "no settle owns the pin" so one leaked marker cannot make
+            // the next test pass (or fail) for a reason it never set up.
+            ReplayCapturePin.Release();
         }
 
         [TearDown]
         public void TearDown()
         {
+            ReplayCapturePin.Release();
             Time.captureDeltaTime = _restoreCaptureDeltaTime;
             Application.runInBackground = _restoreRunInBackground;
         }
@@ -159,6 +164,97 @@ namespace UnityBridge.Tests
                 "a refused settle must leave Time.captureDeltaTime unpinned");
             Assert.IsFalse(Application.runInBackground,
                 "a refused settle must leave Application.runInBackground as it found it");
+        }
+
+        // A refusal must not claim ownership either: the marker is what entitles the bootstrap
+        // (and the next settle) to write global Time state on this op's behalf, so a call that
+        // never pinned anything must leave nothing to recover.
+        [Test]
+        public void Refusals_DoNotClaimThePin()
+        {
+            RunSync(new JObject());
+            RunSync(new JObject { ["settleFrames"] = 10, ["captureFps"] = 0 });
+            RunSync(new JObject { ["settleFrames"] = 10 }); // PLAY_MODE_REQUIRED
+            Assert.IsFalse(ReplayCapturePin.IsOwned,
+                "a settle that never pinned must not leave an ownership marker behind");
+        }
+
+        // ───────────────── BX7: pin ownership against a never-ticking editor ─────────────────
+        //
+        // These drive ReplayCapturePin directly rather than through the op, and that IS the
+        // seam: the leak they defend against happens when the editor stops ticking, so the tick
+        // callback that would restore never runs and no EditMode test can produce the state by
+        // driving the op (the same constraint EditorHandlerTests records for editor.tick's
+        // in-loop behaviour). The pure state machine is drivable headless, so it is pinned here
+        // and the op's use of it is one call at the top of the settle.
+
+        [Test]
+        public void Pin_RememberThenRestore_RoundTripsTheOriginals()
+        {
+            Time.captureDeltaTime = 0f;
+            Application.runInBackground = false;
+
+            ReplayCapturePin.Pinned original = ReplayCapturePin.Remember();
+            Assert.AreEqual(0f, original.CaptureDeltaTime);
+            Assert.IsFalse(original.RunInBackground);
+            Assert.IsTrue(ReplayCapturePin.IsOwned, "Remember claims ownership");
+
+            // The settle pins.
+            Time.captureDeltaTime = 1f / 60f;
+            Application.runInBackground = true;
+
+            // Its cleanup restores from the values Remember handed back, then releases.
+            Time.captureDeltaTime = original.CaptureDeltaTime;
+            Application.runInBackground = original.RunInBackground;
+            ReplayCapturePin.Release();
+
+            Assert.AreEqual(0f, Time.captureDeltaTime);
+            Assert.IsFalse(Application.runInBackground);
+            Assert.IsFalse(ReplayCapturePin.IsOwned, "Release drops the marker");
+        }
+
+        // THE POLLUTED-CLOCK-BECOMES-ORIGINAL BUG. A previous settle pinned 1/60 and never
+        // reached its cleanup. Reading the LIVE value here would record 1/60 as "the original"
+        // and write it back forever; Remember instead restores the leaked pin first and returns
+        // the true pre-pin value.
+        [Test]
+        public void Pin_LeakedPin_IsRestoredFirstAndNeverBecomesTheOriginal()
+        {
+            Time.captureDeltaTime = 0f;
+            Application.runInBackground = false;
+            ReplayCapturePin.Remember();          // settle #1 claims the pin
+            Time.captureDeltaTime = 1f / 60f;     // ... pins ...
+            Application.runInBackground = true;
+            // ... and the editor stops ticking: no cleanup, marker still set.
+
+            ReplayCapturePin.Pinned original = ReplayCapturePin.Remember(); // settle #2
+
+            Assert.AreEqual(0f, original.CaptureDeltaTime,
+                "the true pre-pin value, not the leaked 1/60");
+            Assert.IsFalse(original.RunInBackground);
+            Assert.AreEqual(0f, Time.captureDeltaTime,
+                "the leaked pin is restored BEFORE the next settle pins over it");
+            Assert.IsFalse(Application.runInBackground);
+            Assert.IsTrue(ReplayCapturePin.IsOwned, "settle #2 now owns the pin");
+        }
+
+        [Test]
+        public void Pin_RestoreLeakedPin_RecoversOnceAndThenReportsNothingToDo()
+        {
+            Time.captureDeltaTime = 0f;
+            Application.runInBackground = false;
+            ReplayCapturePin.Remember();
+            Time.captureDeltaTime = 1f / 120f;
+            Application.runInBackground = true;
+
+            Assert.IsTrue(ReplayCapturePin.RestoreLeakedPin(),
+                "a leaked pin is reported so the bootstrap logs exactly one line");
+            Assert.AreEqual(0f, Time.captureDeltaTime);
+            Assert.IsFalse(Application.runInBackground);
+            Assert.IsFalse(ReplayCapturePin.IsOwned);
+
+            Assert.IsFalse(ReplayCapturePin.RestoreLeakedPin(),
+                "a clean boot restores nothing and announces nothing");
         }
     }
 }

@@ -96,16 +96,28 @@ test("OpRegistry: replay.settle_and_capture is the async capture-aligned settle"
   assert.equal(registry.getByToolName("unity_replay_settle_and_capture")!.command, "replay.settle_and_capture");
 
   const schema = op!.inputSchema as {
-    properties: Record<string, { type?: string; minimum?: number; enum?: string[] }>;
+    properties: Record<string, { type?: string; minimum?: number; maximum?: number; enum?: string[] }>;
     required?: string[];
   };
   assert.deepEqual(schema.required, ["settleFrames"]);
   assert.equal(schema.properties.settleFrames?.type, "integer");
   assert.equal(schema.properties.settleFrames?.minimum, 1);
+  // BX6: THE SCHEMA IS THE DOOR, and it was open at both ends. A settle is time the editor
+  // spends PINNED, so an unbounded frame count is a tool call that stalls the editor for as
+  // long as the caller mistyped; 7200 is two minutes of game time at 60 fps, past any settle a
+  // trace can justify. The C# caps stay wider on purpose (they are the last-resort guard, not
+  // the contract), so the door and the backstop are two independent numbers.
+  assert.equal(schema.properties.settleFrames?.maximum, 7200);
   assert.equal(schema.properties.captureFps?.type, "integer");
   // 0 means "do not pin" for editor.tick; here it must be refused, and the schema says so.
-  assert.equal(schema.properties.captureFps?.minimum, 1);
+  // The range is the SAME [10, 120] the replay anchor validates: outside it the settle is
+  // either a coarse bucket of game time or more ticks than a backgrounded editor can deliver.
+  assert.equal(schema.properties.captureFps?.minimum, 10);
+  assert.equal(schema.properties.captureFps?.maximum, 120);
   assert.deepEqual(schema.properties.format?.enum, ["png", "jpg"]);
+  // The description told callers to raise the timeout for a long settle; the parameter that
+  // does it has to EXIST, or the advice names nothing (`resolveOpTimeoutMs` reads it).
+  assert.equal(schema.properties.timeoutMs?.type, "integer");
 
   // The three contract facts a caller cannot discover by trying: the deadline is an ERROR
   // in the harness tier, the driver states its own wire timeout, and the residual is named.

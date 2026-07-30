@@ -14,7 +14,14 @@
  *     one that decides the outcome;
  *  5. a settle the editor could not deliver is a HARNESS FAULT with no frame, never drift;
  *  6. frames captured under different clock disciplines REFUSE comparison at grade time, and
- *     every reason an anchor is untrustworthy is printed, not just the last one found.
+ *     every reason an anchor is untrustworthy is printed, not just the last one found;
+ *  7. the WHOLE door composes: the trace verb, the manifest read, the live runner and the real
+ *     driver, driven against a scripted bridge, actually SEND the aligned op (a pass-through
+ *     nobody walks is how a report comes to stamp an aligned clock over wall-clock frames);
+ *  8. the approve boundary refuses a run the harness could not complete, refuses an aligned
+ *     report with no frame evidence, refuses anchor terms its own reader would refuse, and
+ *     announces a capture-clock change in both directions;
+ *  9. the printed verdict states the worst tier, never the engine's word for one layer of it.
  */
 
 import assert from "node:assert/strict";
@@ -30,12 +37,14 @@ import {
   MAX_ALIGNED_CAPTURE_FPS,
   MIN_ALIGNED_CAPTURE_FPS,
   alignedCaptureFpsRefusal,
+  alignedFloorMs,
   alignedSettleFrames,
   physicsCadenceNote,
 } from "../../../../capabilities/replay/aligned-capture.js";
 import {
   applyVisualDiff,
   printSummary,
+  replayExitCode,
   run as runTrace,
   scaleTraceSettles,
 } from "../../../../capabilities/replay/trace.js";
@@ -171,7 +180,11 @@ function artifactWith(actual: string, png: Buffer, over: Partial<ReplayRunArtifa
         id: "s1",
         status: "pass",
         anchorsReached: [],
-        captures: [{ id: "cap", artifact: actual, sha256: sha256(png) }],
+        // `framesElapsed` rides on every fixture capture because an ALIGNED artifact without
+        // it is now a harness fault by itself (BX5): the aligned stamp has to be bound to the
+        // bridge's own frame count. The wall-clock fixtures carry it harmlessly (nothing reads
+        // it there), so one fixture serves both and the BX5 rule gets its own dedicated tests.
+        captures: [{ id: "cap", artifact: actual, sha256: sha256(png), framesElapsed: 15 }],
       },
     ],
     assertions: [],
@@ -598,6 +611,12 @@ test("the help states what alignment covers AND what it does not", async () => {
   // The honest residual is in the help, not only in the failure path.
   assert.match(out, /Alignment covers the SETTLE/);
   assert.match(out, /action round trips, anchor polling, unseeded randomness/);
+  // AX3: the help makes a BEHAVIOURAL claim about inheritance, and a claim in help text with
+  // nothing walking it is a promise the tool can quietly stop keeping. The walker is the
+  // COMPOSITION test above ("a baseline stamped with a capture clock makes the real driver
+  // send the aligned op"), which stamps 30 fps into a manifest, types no flag, and asserts the
+  // op really went out at 30. This assertion pins the sentence those two have to agree on.
+  assert.match(out, /Default: the baseline's stamped capture clock, else wall-clock\./);
 });
 
 test("the residual sentence names the two unaligned windows and refuses to call drift proof", () => {
@@ -605,4 +624,491 @@ test("the residual sentence names the two unaligned windows and refuses to call 
   assert.match(ALIGNED_RESIDUAL_SENTENCE, /anchor polling/);
   assert.match(ALIGNED_RESIDUAL_SENTENCE, /NOT proof/);
   assert.match(ALIGNED_RESIDUAL_SENTENCE, /realtime|unseeded/);
+});
+
+// ═════════════ AX2/AX3: the COMPOSITION, driven end to end against a scripted bridge ═══════
+//
+// Everything above tests a layer. This drives the WHOLE door an operator uses:
+//
+//   trace run(argv) → replayOneTrace → resolveAlignedCaptureFps (reads the manifest on disk)
+//                   → runLiveReplay → the REAL UnityDriver → a scripted bridge
+//
+// It exists because the aligned fps reached the driver through a pass-through nothing walked.
+// Delete `alignedCaptureFps` from the object `run-live` builds and every layer test above
+// still passes: the driver would take the wall-clock path on every real replay while the
+// report kept stamping `alignedCaptureFps`, minting a FALSE ALIGNED ANCHOR from unaligned
+// frames. The only way to catch that is to assert the op is really sent.
+
+interface ScriptedClient {
+  readonly isConnected: boolean;
+  waitForReconnect(timeoutMs?: number): Promise<boolean>;
+  connect(): Promise<unknown>;
+  send(command: string, params: Record<string, unknown>, timeoutMs?: number): Promise<BridgeResponse>;
+  disconnect(): Promise<void>;
+}
+
+/** A `UnityClient`-shaped fake over the same scripted-handler fixture used above. */
+function scriptedClient(handlers: Record<string, Handler>): {
+  factory: () => ScriptedClient;
+  calls: Recorded[];
+} {
+  const { send, calls } = fakeBridge(handlers);
+  const factory = (): ScriptedClient => ({
+    isConnected: true,
+    waitForReconnect: async () => true,
+    connect: async () => ({}),
+    send: (command, params, timeoutMs) => send(command, params, timeoutMs),
+    disconnect: async () => {},
+  });
+  return { factory, calls };
+}
+
+/** A minimal replayable trace with ONE capture, written where the verb expects it. */
+async function writeTrace(paths: ReturnType<typeof standardReplayLayout>, settleMs: number): Promise<string> {
+  await fs.mkdir(paths.replayTraces, { recursive: true });
+  const body = JSON.stringify({
+    schemaVersion: "0.1",
+    id: "demo",
+    start: { scene: "Assets/Scenes/Game.unity", reset: "scene-load" },
+    input: { backend: "ui-events" },
+    segments: [{ id: "s1", actions: [], captures: [{ id: "cap", settleMs }] }],
+    outcome: { expected: "success" },
+  });
+  await fs.writeFile(path.join(paths.replayTraces, "demo.trace.json"), body);
+  return body;
+}
+
+/** The bridge answers a whole drive: reset, the capture, console health, teardown. */
+function driveHandlers(png: Buffer, over: Record<string, unknown> = {}): Record<string, Handler> {
+  return {
+    "editor.wait_for": () => ({ data: { waited_ms: 1 } }),
+    "editor.play": () => ({ data: { play_mode: "playing" } }),
+    "editor.console_logs": () => ({ data: { logs: [] } }),
+    "editor.screenshot": () => ({ data: { image_base64: png.toString("base64"), format: "png" } }),
+    "replay.settle_and_capture": () => ({
+      data: {
+        image_base64: png.toString("base64"),
+        format: "png",
+        framesElapsed: 8,
+        settledMs: 266.667,
+        realtimeDeadlineHit: false,
+        fixedDeltaTime: 0.02,
+        ...over,
+      },
+    }),
+  };
+}
+
+test("COMPOSITION: a baseline stamped with a capture clock makes the real driver send the aligned op", async () => {
+  const root = await tmpRoot();
+  try {
+    const paths = standardReplayLayout(root);
+    const png = tinyPng(10);
+    const traceBody = await writeTrace(paths, 300);
+
+    // The anchor carries BOTH terms this run has to inherit with no flag typed: 4x pacing and
+    // a 30 fps capture clock. 300ms scaled by 4 is 75ms, floored to 250ms, which is 8 frames
+    // at 30 fps (266.7ms of game time). Every one of those numbers is a different rule, and
+    // the op the driver sends is where they all have to agree.
+    const baselineDir = path.join(paths.replayBaselines, "demo");
+    await fs.mkdir(baselineDir, { recursive: true });
+    await fs.writeFile(path.join(baselineDir, "cap.png"), png);
+    await writeTraceBaselineManifest(baselineDir, {
+      kind: "trace-baseline",
+      schemaVersion: "1",
+      traceId: "demo",
+      traceSha256: sha256(Buffer.from(traceBody)),
+      approvedAt: "2026-07-29T00:00:00.000Z",
+      sourceReportSha256: "0".repeat(64),
+      pngs: [{ captureId: "cap", sha256: sha256(png) }],
+      replaySpeed: 4,
+      alignedCaptureFps: 30,
+    });
+
+    const { factory, calls } = scriptedClient(driveHandlers(png));
+    const { value: exit, out } = await captured(() =>
+      runTrace(["replay", "--id", "demo", "--root", root, "--no-html"], { clientFactory: factory }),
+    );
+    assert.equal(exit, 0, out);
+
+    const settle = calls.find((c) => c.command === "replay.settle_and_capture");
+    assert.ok(settle, `the aligned op was never sent (calls: ${calls.map((c) => c.command).join(", ")})`);
+    assert.equal(settle!.params.captureFps, 30, "the STAMPED clock, inherited with no flag typed (AX3)");
+    assert.equal(settle!.params.settleFrames, 8, "250ms floor at 30 fps, converted ONCE after --speed scaling");
+    assert.equal(
+      calls.some((c) => c.command === "editor.screenshot"),
+      false,
+      "an aligned run must never fall back to the wall-clock screenshot",
+    );
+
+    // BX8: the floor is printed as the run EXPERIENCES it, not as the wall-clock constant.
+    assert.match(out, /floor 8 frame\(s\) = 266\.7ms of game time at 30 fps/);
+
+    // The report stamps what really happened, and the frames graded against the anchor.
+    const report = JSON.parse(
+      await fs.readFile(path.join(paths.replayReports, "demo.report.json"), "utf-8"),
+    ) as ReplayRunArtifact;
+    assert.equal(report.alignedCaptureFps, 30);
+    assert.equal(report.replaySpeed, 4);
+    assert.equal(report.segments[0]!.captures[0]!.framesElapsed, 8, "the bridge's own frame count rides into the report");
+    assert.equal(report.segments[0]!.captures[0]!.visualStatus, "match");
+    assert.notEqual(report.visualHarnessFault, true);
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test("COMPOSITION: with no stamped clock the same door takes the WALL-CLOCK path, byte for byte", async () => {
+  const root = await tmpRoot();
+  try {
+    const paths = standardReplayLayout(root);
+    const png = tinyPng(10);
+    await writeTrace(paths, 5);
+
+    const { factory, calls } = scriptedClient(driveHandlers(png));
+    const { value: exit, out } = await captured(() =>
+      runTrace(["replay", "--id", "demo", "--root", root, "--no-html"], { clientFactory: factory }),
+    );
+    assert.equal(exit, 0, out);
+
+    assert.equal(
+      calls.some((c) => c.command === "replay.settle_and_capture"),
+      false,
+      "an unaligned replay must never reach the aligned op",
+    );
+    assert.ok(calls.some((c) => c.command === "editor.screenshot"), "the legacy capture path stays the default");
+    const report = JSON.parse(
+      await fs.readFile(path.join(paths.replayReports, "demo.report.json"), "utf-8"),
+    ) as ReplayRunArtifact;
+    assert.equal(report.alignedCaptureFps, undefined, "absence is the wall-clock discipline, and stays absent");
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test("COMPOSITION: --aligned-fps on the command line reaches the op too", async () => {
+  const root = await tmpRoot();
+  try {
+    const paths = standardReplayLayout(root);
+    const png = tinyPng(10);
+    await writeTrace(paths, 1000);
+
+    const { factory, calls } = scriptedClient(driveHandlers(png));
+    const { value: exit, out } = await captured(() =>
+      runTrace(["replay", "--id", "demo", "--root", root, "--no-html", "--aligned-fps", "120"], {
+        clientFactory: factory,
+      }),
+    );
+    assert.equal(exit, 0, out);
+    const settle = calls.find((c) => c.command === "replay.settle_and_capture");
+    assert.ok(settle, "the explicit flag must reach the driver");
+    assert.equal(settle!.params.captureFps, 120);
+    assert.equal(settle!.params.settleFrames, 120, "1000ms at 120 fps");
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+// ═════════════ BX3: a lost connection is a HARNESS fault at this verb, never exit 1 ════════
+
+test("a connection lost MID-RUN exits 2 with the connection hint, never the game-defect path", async () => {
+  const root = await tmpRoot();
+  try {
+    const paths = standardReplayLayout(root);
+    await writeTrace(paths, 100);
+    // The exact shape `unity-client` throws when the socket drops with ops in flight: a plain
+    // Error with no `UnityConnectionError` name, which is why it used to fall through to
+    // `fatal` and exit 1 (a harness fault reported as a game defect).
+    const factory = () => ({
+      isConnected: true,
+      waitForReconnect: async () => true,
+      connect: async (): Promise<unknown> => {
+        throw new Error("CONNECTION_LOST: code=1006 reason=");
+      },
+      send: async (): Promise<BridgeResponse> => {
+        throw new Error("CONNECTION_LOST: code=1006 reason=");
+      },
+      disconnect: async () => {},
+    });
+
+    const { value: exit, out } = await captured(() =>
+      runTrace(["replay", "--id", "demo", "--root", root, "--no-html"], { clientFactory: factory }),
+    );
+    assert.equal(exit, 2, `a lost connection is the harness tier (got ${exit}): ${out}`);
+    assert.match(out, /Lost the connection to Unity mid-run/);
+    assert.doesNotMatch(out, /fatal:/, "it must not reach the generic fatal path");
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+// ═════════════ BX1: the approve boundary refuses a run the harness could not complete ══════
+
+/** A workspace with an approved baseline plus a report on disk, ready for `approve`. */
+async function approvable(
+  root: string,
+  reportOver: Partial<ReplayRunArtifact>,
+  captureOver: Record<string, unknown> = {},
+): Promise<{ paths: ReturnType<typeof standardReplayLayout>; baselineDir: string }> {
+  const paths = standardReplayLayout(root);
+  const png = tinyPng(10);
+  const actual = path.join(paths.replayReports, "demo", "actual", "cap.png");
+  await fs.mkdir(path.dirname(actual), { recursive: true });
+  await fs.writeFile(actual, png);
+  await writeTrace(paths, 100);
+  const artifact = artifactWith(actual, png, reportOver);
+  Object.assign(artifact.segments[0]!.captures[0]!, captureOver);
+  await fs.mkdir(paths.replayReports, { recursive: true });
+  await fs.writeFile(
+    path.join(paths.replayReports, "demo.report.json"),
+    `${JSON.stringify(artifact, null, 2)}\n`,
+  );
+  return { paths, baselineDir: path.join(paths.replayBaselines, "demo") };
+}
+
+test("approve REFUSES a run with a capture-level harness fault, and prunes nothing (BX1)", async () => {
+  const root = await tmpRoot();
+  try {
+    const { paths, baselineDir } = await approvable(root, {}, {
+      artifact: undefined,
+      harnessFault: "aligned settle failed for capture \"cap\": wall-clock budget",
+    });
+    // A previously approved frame for the SAME capture id. The refusal has to leave it alone:
+    // the whole failure this closes is approve dropping the faulted capture, pruning its
+    // baseline, and leaving the trace permanently green over a frame nobody grades.
+    await fs.mkdir(baselineDir, { recursive: true });
+    await fs.writeFile(path.join(baselineDir, "cap.png"), tinyPng(7));
+
+    const { value: exit, out } = await captured(() => runTrace(["approve", "--id", "demo", "--root", root]));
+
+    assert.equal(exit, 2, "a harness fault is the harness tier, never a promotion");
+    assert.match(out, /cannot approve "demo": the latest run carries a HARNESS FAULT/);
+    assert.match(out, /cap \(aligned settle failed/, "the faulted capture and its cause are named");
+    assert.deepEqual(
+      (await fs.readdir(baselineDir)).sort(),
+      ["cap.png"],
+      "the previously approved frame survives an approve that refused",
+    );
+    assert.deepEqual(await fs.readFile(path.join(baselineDir, "cap.png")), tinyPng(7), "…unchanged");
+    assert.equal(
+      await fs.access(path.join(baselineDir, "baseline-manifest.json")).then(() => true, () => false),
+      false,
+      "a refused approve writes no manifest",
+    );
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test("approve REFUSES a report whose pixel gate was refused at grade time (BX1)", async () => {
+  const root = await tmpRoot();
+  try {
+    // `visualHarnessFault` with no per-capture fault: the anchor could not be trusted, so
+    // NOTHING in this run was graded. Freezing its frames would promote evidence the tool
+    // itself declined to read (the clock-refused-report laundering path).
+    await approvable(root, { visualHarnessFault: true });
+    const { value: exit, out } = await captured(() => runTrace(["approve", "--id", "demo", "--root", root]));
+    assert.equal(exit, 2);
+    assert.match(out, /HARNESS FAULT/);
+    assert.match(out, /refused at grade time/);
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test("approve ANNOUNCES a capture-clock change in BOTH directions (BX1)", async () => {
+  const root = await tmpRoot();
+  try {
+    const { paths } = await approvable(root, { alignedCaptureFps: 60 });
+    const reportPath = path.join(paths.replayReports, "demo.report.json");
+    const rewrite = async (fps?: number): Promise<void> => {
+      const doc = JSON.parse(await fs.readFile(reportPath, "utf-8")) as ReplayRunArtifact;
+      if (fps === undefined) delete doc.alignedCaptureFps;
+      else doc.alignedCaptureFps = fps;
+      await fs.writeFile(reportPath, `${JSON.stringify(doc, null, 2)}\n`);
+    };
+
+    // First approval: there was no anchor, so there is no CHANGE to consent to.
+    const first = await captured(() => runTrace(["approve", "--id", "demo", "--root", root]));
+    assert.equal(first.value, 0, first.out);
+    assert.doesNotMatch(first.out, /capture clock changes/, "the first stamp is not a change");
+
+    // Aligned → wall-clock: the anchor stops asking for a pinned settle, which silently
+    // changes what every later replay must do. Never silent.
+    await rewrite(undefined);
+    const dropped = await captured(() => runTrace(["approve", "--id", "demo", "--root", root]));
+    assert.equal(dropped.value, 0, dropped.out);
+    assert.match(dropped.out, /the anchor's capture clock changes: a capture-aligned settle at 60 fps to a wall-clock settle/);
+
+    // Wall-clock → aligned: the other direction says so too.
+    await rewrite(30);
+    const gained = await captured(() => runTrace(["approve", "--id", "demo", "--root", root]));
+    assert.equal(gained.value, 0, gained.out);
+    assert.match(gained.out, /the anchor's capture clock changes: a wall-clock settle \(unaligned\) to a capture-aligned settle at 30 fps/);
+
+    // And an UNCHANGED clock says nothing: a consent line printed every time is noise, and
+    // noise is what a reader learns to skip.
+    const same = await captured(() => runTrace(["approve", "--id", "demo", "--root", root]));
+    assert.equal(same.value, 0, same.out);
+    assert.doesNotMatch(same.out, /capture clock changes/);
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+// ═════════════ BX4: the WRITE side refuses what the read side would ════════════════════════
+
+test("approve REFUSES a report carrying an anchor term the reader would refuse (BX4)", async () => {
+  for (const [field, value, pattern] of [
+    ["alignedCaptureFps", 999, /alignedCaptureFps/],
+    ["alignedCaptureFps", 59.94, /alignedCaptureFps/],
+    ["replaySpeed", 99, /replaySpeed/],
+  ] as const) {
+    const root = await tmpRoot();
+    try {
+      const { paths } = await approvable(root, {});
+      const reportPath = path.join(paths.replayReports, "demo.report.json");
+      const doc = JSON.parse(await fs.readFile(reportPath, "utf-8")) as Record<string, unknown>;
+      doc[field] = value;
+      await fs.writeFile(reportPath, JSON.stringify(doc, null, 2));
+
+      const { value: exit, out } = await captured(() => runTrace(["approve", "--id", "demo", "--root", root]));
+      assert.equal(exit, 2, `${field}=${value} must refuse the approval, not mint the anchor`);
+      assert.match(out, /not a value an anchor can hold/);
+      assert.match(out, pattern);
+      assert.equal(
+        await fs.access(path.join(paths.replayBaselines, "demo", "baseline-manifest.json")).then(() => true, () => false),
+        false,
+        "nothing is written when the terms are refused",
+      );
+    } finally {
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  }
+});
+
+test("the unreadable-manifest re-stamp note names EVERY dropped term, not just the tolerance (BX4)", async () => {
+  const root = await tmpRoot();
+  try {
+    const { baselineDir } = await approvable(root, {});
+    await fs.mkdir(baselineDir, { recursive: true });
+    await fs.writeFile(path.join(baselineDir, "baseline-manifest.json"), "{ not json");
+
+    const { value: exit, out } = await captured(() => runTrace(["approve", "--id", "demo", "--root", root]));
+    assert.equal(exit, 0, out);
+    assert.match(out, /is unreadable/);
+    assert.match(out, /NOTHING is carried forward/);
+    for (const term of [/drift\s+tolerance/, /mask/, /pacing/, /capture\s+clock/]) {
+      assert.match(out, term, `the note must name what is being lost: ${term}`);
+    }
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+// ═════════════ BX5: the aligned stamp is bound to frame evidence ═══════════════════════════
+
+test("an ALIGNED capture with no framesElapsed is a HARNESS FAULT at grade time, never graded (BX5)", async () => {
+  const root = await tmpRoot();
+  try {
+    const { paths, actual, png } = await approvedTrace(root, { alignedCaptureFps: 60 });
+    const artifact = artifactWith(actual, png, { alignedCaptureFps: 60 });
+    delete artifact.segments[0]!.captures[0]!.framesElapsed;
+
+    const { out } = await captured(() => applyVisualDiff(paths, "demo", artifact));
+    assert.equal(artifact.visualHarnessFault, true, "an unevidenced aligned stamp is tier 2");
+    assert.notEqual(artifact.visualDrift, true, "…and never drift");
+    assert.equal(artifact.segments[0]!.captures[0]!.visualStatus, undefined, "it is not graded at all");
+    assert.match(out, /carries no framesElapsed/);
+
+    // Non-positive is the same absence wearing a number.
+    const zero = artifactWith(actual, png, { alignedCaptureFps: 60 });
+    zero.segments[0]!.captures[0]!.framesElapsed = 0;
+    await captured(() => applyVisualDiff(paths, "demo", zero));
+    assert.equal(zero.visualHarnessFault, true);
+
+    // Control: a WALL-CLOCK run has no aligned claim to evidence, and grades exactly as before.
+    const wall = await approvedTrace(root, {});
+    const unaligned = artifactWith(wall.actual, wall.png, {});
+    delete unaligned.segments[0]!.captures[0]!.framesElapsed;
+    await captured(() => applyVisualDiff(wall.paths, "demo", unaligned));
+    assert.notEqual(unaligned.visualHarnessFault, true);
+    assert.equal(unaligned.segments[0]!.captures[0]!.visualStatus, "match");
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test("approve REFUSES an aligned report whose captures carry no frame evidence (BX5)", async () => {
+  const root = await tmpRoot();
+  try {
+    const { paths } = await approvable(root, { alignedCaptureFps: 60 }, { framesElapsed: undefined });
+    const { value: exit, out } = await captured(() => runTrace(["approve", "--id", "demo", "--root", root]));
+    assert.equal(exit, 2);
+    assert.match(out, /claims a capture-aligned clock \(60 fps\) but 1 capture\(s\) carry no frame evidence/);
+    assert.equal(
+      await fs.access(path.join(paths.replayBaselines, "demo", "baseline-manifest.json")).then(() => true, () => false),
+      false,
+    );
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+// ═════════════ BX2: the printed verdict reflects the worst tier ════════════════════════════
+
+test("printSummary headlines a HARNESS FAULT instead of the engine's PASS (BX2)", async () => {
+  const root = await tmpRoot();
+  try {
+    const { actual, png } = await approvedTrace(root, {});
+    const artifact = artifactWith(actual, png, { visualHarnessFault: true });
+
+    const { out } = await captured(() => {
+      printSummary(root, "demo", artifact, path.join(root, "r.json"), undefined, false);
+      return 0;
+    });
+    assert.match(out, /demo: HARNESS FAULT \(exit 2\): actuation pass/);
+    assert.doesNotMatch(out, /demo: PASS/, "a bare PASS above a non-zero exit teaches the reader to trust the word");
+    // The exit the headline claims is the one the tiering function really returns.
+    assert.equal(replayExitCode(artifact, false), 2);
+
+    // Control: a clean run reads exactly as it always did.
+    const clean = artifactWith(actual, png, {});
+    const plain = await captured(() => {
+      printSummary(root, "demo", clean, path.join(root, "r.json"), undefined, false);
+      return 0;
+    });
+    assert.match(plain.out, /demo: PASS/);
+    assert.doesNotMatch(plain.out, /HARNESS FAULT/);
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+// ═════════════ BX8: the cadence note stops contradicting itself ════════════════════════════
+
+test("physicsCadenceNote: a hand-typed fixedDeltaTime reads as the whole step it plainly is (BX8)", () => {
+  // 0.0166667 is what a human types for 1/60. At an absolute 1e-6 epsilon this was 0.999998
+  // steps per frame: "uneven", no whole multiple inside 120 frames, and the note printed
+  // "physics steps 1.000 times per frame ... which never lands on a whole frame".
+  assert.equal(physicsCadenceNote(60, 0.0166667), null, "1.000 steps per frame is a whole step");
+  assert.equal(physicsCadenceNote(30, 0.0333333), null);
+  assert.equal(physicsCadenceNote(120, 0.00833333), null);
+
+  // And the tolerance stays a tolerance: the real uneven case is three orders of magnitude
+  // outside it and still reports its exact cadence.
+  const note = physicsCadenceNote(60, 0.02);
+  assert.match(note ?? "", /physics steps 5 times every 6 frame/);
+  // Nothing may reach the self-contradicting fallback while claiming a whole rate.
+  for (const [fps, step] of [[60, 0.0166667], [50, 0.02], [30, 0.0333333]] as const) {
+    const text = physicsCadenceNote(fps, step);
+    assert.doesNotMatch(text ?? "", /1\.000 times per frame.*never lands/);
+  }
+});
+
+test("alignedFloorMs: the floor is quantized to the frame, and equals the constant when it divides (BX8)", () => {
+  assert.equal(alignedFloorMs(250, 60), 250, "250ms is exactly 15 frames at 60 fps");
+  assert.equal(alignedFloorMs(250, 24), 250, "…and exactly 6 frames at 24 fps");
+  assert.equal(Math.round(alignedFloorMs(250, 30) * 10) / 10, 266.7, "8 frames at 30 fps is 266.7ms, not 250");
+  assert.equal(Math.round(alignedFloorMs(250, 90) * 10) / 10, 255.6);
 });

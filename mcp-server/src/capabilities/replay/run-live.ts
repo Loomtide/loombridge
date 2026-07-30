@@ -14,16 +14,33 @@
 
 import { UnityClient } from "../../bridge/unity-client.js";
 import { replay } from "./engine.js";
-import { resilientSend } from "./resilient-send.js";
-import { endLiveSession } from "./session.js";
+import { resilientSend, type ReconnectableClient } from "./resilient-send.js";
+import { endLiveSession, type LiveSessionClient } from "./session.js";
 import { UnityDriver } from "./unity-driver.js";
 import type { ReplayRunArtifact, ReplayTrace } from "./types.js";
+
+/**
+ * Everything a live replay asks of its transport: reconnect-aware sending plus a
+ * disconnect. Stated structurally so the composition above it (trace verb → this runner →
+ * the real `UnityDriver` → a scripted bridge) can be driven end to end without a Unity
+ * editor. `UnityClient` satisfies it; nothing else in production implements it.
+ */
+export interface ReplayLiveClient extends ReconnectableClient, LiveSessionClient {}
 
 export interface RunLiveReplayOptions {
   /** Directory the bridge screenshots are written to (under an allowed root). */
   captureDir: string;
   /** Inject a client (tests); defaults to a fresh auto-discovering `UnityClient`. */
   client?: UnityClient;
+  /**
+   * Inject the client FACTORY (the `feel` snapshot-verify precedent). The seam exists so a
+   * test can walk this whole composition against a scripted bridge: without it, the only
+   * thing that could prove the aligned fps reaches the driver was reading the code, and a
+   * deleted pass-through below would leave every replay silently wall-clock while the
+   * report kept stamping `alignedCaptureFps` (a false aligned stamp on unaligned frames).
+   * Ignored when `client` is given.
+   */
+  clientFactory?: () => ReplayLiveClient;
   /**
    * The Unity project this replay belongs to. REQUIRED for correctness whenever more than
    * one editor is running: an unpinned client resolves through the shared
@@ -46,8 +63,9 @@ export async function runLiveReplay(
   trace: ReplayTrace,
   options: RunLiveReplayOptions,
 ): Promise<ReplayRunArtifact> {
-  const client =
+  const client: ReplayLiveClient =
     options.client
+    ?? options.clientFactory?.()
     ?? new UnityClient(
       options.projectPathCanonical
         ? { targetIdentity: { projectPathCanonical: options.projectPathCanonical } }

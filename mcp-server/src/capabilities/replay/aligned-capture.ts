@@ -80,6 +80,42 @@ export function alignedSettleFrames(settleMs: number | undefined, fps: number): 
 }
 
 /**
+ * How close to a whole number of physics steps still counts as "whole", RELATIVE to the
+ * count itself.
+ *
+ * It has to be relative, and 1e-6 (an absolute epsilon) was the bug: a project whose
+ * `fixedDeltaTime` was typed by hand as `0.0166667` puts 60 fps at 0.999998 steps per frame,
+ * which is 2e-6 away from 1 and therefore "uneven", and no multiple of it lands on a whole
+ * number inside 120 frames either. The note then printed "physics steps 1.000 times per
+ * frame ... which never lands on a whole frame", contradicting itself in one sentence. A
+ * 0.1% relative window reads the hand-typed value as the whole step it plainly is, while
+ * still catching the real case this exists for (60 fps against a 0.02 step is 0.833 steps
+ * per frame: 17% off, three orders of magnitude outside the window).
+ */
+const WHOLE_STEP_RELATIVE_TOLERANCE = 1e-3;
+
+/** Is `value` a whole number within {@link WHOLE_STEP_RELATIVE_TOLERANCE} of itself? */
+function isWholeStepCount(value: number): boolean {
+  const nearest = Math.round(value);
+  if (nearest < 1) return false;
+  return Math.abs(value - nearest) <= WHOLE_STEP_RELATIVE_TOLERANCE * nearest;
+}
+
+/**
+ * The settle floor AS THE GAME ACTUALLY EXPERIENCES IT under an aligned clock, in ms.
+ *
+ * A wall-clock floor is a millisecond count the driver sleeps for. An aligned floor is a
+ * FRAME COUNT, so the game time it buys is quantized to 1/fps and only equals the stated
+ * floor when the floor divides evenly by the frame: 250ms at 60 fps is exactly 15 frames
+ * (250ms), but at 30 fps it rounds to 8 frames, which is 266.7ms of game time. Printing the
+ * wall-clock constant in an aligned run would state a number the run never used, and the
+ * frame count is the reproducible fact.
+ */
+export function alignedFloorMs(floorMs: number, fps: number): number {
+  return (alignedSettleFrames(floorMs, fps) / fps) * 1000;
+}
+
+/**
  * ADVISORY, NEVER A REFUSAL. Returns the physics-cadence note when a pinned 1/fps step does
  * not sit on a whole number of physics steps, and null when it does.
  *
@@ -98,14 +134,14 @@ export function physicsCadenceNote(fps: number, fixedDeltaTime: number): string 
   if (!Number.isFinite(fixedDeltaTime) || fixedDeltaTime <= 0) return null;
   const frameSec = 1 / fps;
   const stepsPerFrame = frameSec / fixedDeltaTime;
-  if (Math.abs(stepsPerFrame - Math.round(stepsPerFrame)) <= 1e-6 && Math.round(stepsPerFrame) >= 1) {
+  if (isWholeStepCount(stepsPerFrame)) {
     return null;
   }
   // Express the cadence as the smallest whole "N steps every M frames" that lands on an
   // integer, so the note is a fact a reader can check rather than a rounded rate.
   for (let frames = 1; frames <= MAX_ALIGNED_CAPTURE_FPS; frames++) {
     const steps = (frames * frameSec) / fixedDeltaTime;
-    if (Math.abs(steps - Math.round(steps)) <= 1e-6) {
+    if (isWholeStepCount(steps)) {
       return (
         `physics steps ${Math.round(steps)} times every ${frames} frame(s) at ${fps} fps ` +
         `(fixedDeltaTime ${fixedDeltaTime}); feel-sensitive traces may differ from the recording`

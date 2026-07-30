@@ -289,14 +289,14 @@ During `trace record`, play the flow normally in Unity, then press Enter in the 
 confirms Loombridge can drive the recorded flow again. This is a sanity check before capture; it does not
 replace the capture pack.
 
-If you are going to APPROVE this trace's frames as a pixel baseline, add `--aligned` to the replay (or
-`--aligned-fps <n>`, 10 to 120). Each capture settle then runs inside the bridge's pinned tick loop and the
-frame is taken on the frame the settle completes, so the capture lands at the same game time every run
-instead of wherever a wall-clock sleep left it: that is what stops an animating game's phase skew from
-reading as pixel drift. The clock is stamped into the baseline, so later replays inherit it and a run under a
-different clock refuses the comparison rather than grading two different phases against each other. It
-aligns the SETTLE only: action round trips, anchor polling, unseeded randomness and realtime-driven
-animation are all still unaligned.
+`--aligned` belongs to the OTHER pipeline, not to this one. If you go on to freeze this trace's frames as a
+pixel baseline with `trace approve` (the ratchet loop: `trace replay` → `trace approve` → re-replay against
+the frozen frames), add `--aligned` to the replay so each capture settle runs inside the bridge's pinned tick
+loop and lands at the same game time every run. The capture pack this quickstart builds is a different
+artifact: `minigame capture` drives the screens for the SCREEN CONTRACT, which grades layout and text, not
+pixels, so an aligned settle changes nothing it measures. The full rules for the flag (what it stamps into
+the baseline, what a clock mismatch refuses, and the residual it does not cover) are in the ratchet section
+of the `verify` command doc.
 
 ### 3. Capture the screens
 

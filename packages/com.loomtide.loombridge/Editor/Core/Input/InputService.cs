@@ -316,6 +316,13 @@ namespace UnityBridge.Core.Input
         /// service list rather than from a cached boolean means a session torn down by the idle
         /// watchdog, by a play-mode stop, or by a failed action stops relaxing the gate the
         /// moment it ends.
+        ///
+        /// FAIL-CLOSED AND UNGUARDABLE HEADLESS, RECORDED AS SUCH (AX7/V8). An empty service
+        /// list, a session on a focus-REQUIRING backend, and a project with no Input System all
+        /// answer FALSE, which leaves the focus refusal exactly where it was. Driving a TRUE
+        /// here needs a live InputSystem session, so no EditMode test reaches it without an
+        /// injection seam built solely to be tested; the decision it feeds is pinned instead as
+        /// a pure predicate (InputHandler.FocusIndependentTapAllowed).
         /// </summary>
         public static bool AnyFocusIndependentSessionActive()
         {

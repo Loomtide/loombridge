@@ -33,6 +33,19 @@ namespace UnityBridge
             try
             {
                 Debug.Log("[Loombridge] Bootstrap initializing");
+
+                // PIN RECOVERY BEFORE ANYTHING ELSE. A replay.settle_and_capture that never
+                // reached its cleanup (an editor that stopped ticking, a killed process) leaves
+                // Time.captureDeltaTime pinned, and that is a NATIVE global no reload resets:
+                // the editor renders as fast as it can until someone notices. This runs on the
+                // first load after the leak and logs exactly one line, so the recovery is
+                // visible without adding noise to every clean boot.
+                if (ReplayCapturePin.RestoreLeakedPin())
+                {
+                    Debug.Log(
+                        "[Loombridge] Restored a leaked capture pin from an interrupted replay.settle_and_capture "
+                        + "(Time.captureDeltaTime and Application.runInBackground are back to their pre-settle values)");
+                }
                 Debug.Log(
                     "[Loombridge] Transport compatibility target: Unity 6000.x LTS (primary), 2022.3 LTS (compatibility)");
 

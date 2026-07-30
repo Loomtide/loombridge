@@ -37,6 +37,8 @@ import {
   MAX_ALIGNED_CAPTURE_FPS,
   MIN_ALIGNED_CAPTURE_FPS,
   alignedCaptureFpsRefusal,
+  alignedFloorMs,
+  alignedSettleFrames,
 } from "./aligned-capture.js";
 import {
   TRACE_BASELINE_MANIFEST,
@@ -80,14 +82,14 @@ import {
   type MaskSuggestion,
 } from "./visual-diff.js";
 import { isScenePath } from "../minigame/profiles/types.js";
-import { runLiveReplay } from "./run-live.js";
+import { runLiveReplay, type RunLiveReplayOptions } from "./run-live.js";
 import { resolveCliProjectPin } from "../setup/cli-project-pin.js";
 import {
   flatReplayLayout,
   standardReplayLayout,
   type ReplayLayout,
 } from "../../domain/state.js";
-import { unityConnectionHint } from "../../shared/cli-ui.js";
+import { unityConnectionHint, unityConnectionLostHint } from "../../shared/cli-ui.js";
 import { printNextStep } from "../minigame/minigame-next.js";
 import { readPng } from "../verification/analyze-frames.js";
 
@@ -217,14 +219,24 @@ function layoutFor(args: TraceArgs): ReplayLayout {
   return args.flat ? flatReplayLayout(args.root) : standardReplayLayout(args.root);
 }
 
-export async function run(args: string[]): Promise<number> {
+/**
+ * Non-argv dependencies of the `trace` verb (the `feel snapshot` / `assets` precedent for a
+ * `run(args, opts)` door). Empty in production; a test uses it to drive the WHOLE verb,
+ * including this function's own error tiering, against a scripted bridge. Nothing here can
+ * be typed on a command line, so the argv shape stays the one contract users have.
+ */
+export interface TraceRunOpts {
+  clientFactory?: RunLiveReplayOptions["clientFactory"];
+}
+
+export async function run(args: string[], opts: TraceRunOpts = {}): Promise<number> {
   const parsed = parseArgs(args);
   if ("help" in parsed) {
     printUsage();
     return parsed.usageError ? 2 : 0;
   }
   try {
-    if (parsed.sub === "replay") return await runReplay(parsed);
+    if (parsed.sub === "replay") return await runReplay(parsed, opts);
     if (parsed.sub === "replay-all") return await runReplayAll(parsed);
     if (parsed.sub === "approve") return await runApprove(parsed);
     if (parsed.sub === "tolerance") return await runTolerance(parsed);
@@ -232,11 +244,18 @@ export async function run(args: string[]): Promise<number> {
     if (parsed.sub === "record") return await runRecord(parsed);
     return await runReport(parsed);
   } catch (error) {
-    const hint = unityConnectionHint(error);
+    const hint = unityConnectionHint(error) ?? unityConnectionLostHint(error);
     if (hint) {
       // An unreachable editor is a HARNESS fault, never a game verdict: exit 2, the same
       // tier a blocked replay reports. (S1 final test flagged this verb as the one trace
       // door still mapping the condition to 1.)
+      //
+      // A CONNECTION LOST MID-RUN IS THE SAME TIER, and used to miss this branch entirely:
+      // `unity-client` rejects every in-flight op with a plain `Error("CONNECTION_LOST: …")`
+      // that carries no `UnityConnectionError` name, so a domain reload or a closed editor
+      // fell through to `fatal` and exited 1: a harness fault reported as a game defect,
+      // which is the one mapping this product refuses to make. The message shape is the
+      // contract `resilientSend` already matches on, so both doors read one predicate.
       console.error(hint.join("\n"));
       return 2;
     }
@@ -245,7 +264,7 @@ export async function run(args: string[]): Promise<number> {
   }
 }
 
-async function runReplay(args: TraceArgs): Promise<number> {
+async function runReplay(args: TraceArgs, opts: TraceRunOpts = {}): Promise<number> {
   const paths = layoutFor(args);
   const { artifact, reportJson, htmlPath } = await replayOneTrace(paths, args.id, {
     tracePath: args.tracePath,
@@ -253,6 +272,7 @@ async function runReplay(args: TraceArgs): Promise<number> {
     projectPathCanonical: resolveCliProjectPin({ root: args.root }),
     speed: args.speed,
     alignedCaptureFps: args.alignedCaptureFps,
+    ...(opts.clientFactory ? { clientFactory: opts.clientFactory } : {}),
   });
   printSummary(args.root, args.id, artifact, reportJson, htmlPath, args.strictVisual);
   // In the mini-game workspace flow (--flat), print the EXACT next command to run.
@@ -452,7 +472,7 @@ async function resolveReplaySpeed(
   paths: ReplayLayout,
   id: string,
   explicit: number | undefined,
-): Promise<{ speed: number; mismatchWith?: number }> {
+): Promise<{ speed: number }> {
   const baselineDir = path.join(paths.replayBaselines, id);
   const manifest = await loadTraceBaselineManifest(baselineDir);
   const stamped =
@@ -462,11 +482,15 @@ async function resolveReplaySpeed(
     // how a report at the new pacing comes to exist, and refusing here would make
     // re-pacing impossible without hand-deleting the baseline), but the pixel gate for
     // this run is a harness fault, announced up front and again by applyVisualDiff.
+    // The mismatch is ANNOUNCED HERE and nowhere else: `applyVisualDiff` re-derives it from
+    // the manifest and the artifact at grade time, so a `mismatchWith` field on the way out
+    // would be a second copy of the same fact that no caller reads. (It was exactly that: a
+    // returned field nothing consumed, which reads to the next author like a wired signal.)
     console.error(
       `[loombridge trace] pacing differs from the baseline (approved ${stamped}x, running ${explicit}x): ` +
         `the pixel gate is NOT graded this run; approve from this report to re-anchor at ${explicit}x.`,
     );
-    return { speed: explicit, mismatchWith: stamped };
+    return { speed: explicit };
   }
   return { speed: explicit ?? stamped ?? 1 };
 }
@@ -482,12 +506,16 @@ async function resolveReplaySpeed(
  * the new discipline comes to exist, and refusing here would make re-anchoring impossible
  * without hand-deleting the baseline), but this run's pixel gate is a harness fault,
  * announced up front and again by `applyVisualDiff`.
+ *
+ * EXPORTED FOR TESTS. The inheritance rule ("default: the baseline's stamped capture clock")
+ * is a claim the `--aligned` help makes to operators, and the only other way to reach it is a
+ * live replay against a running editor.
  */
-async function resolveAlignedCaptureFps(
+export async function resolveAlignedCaptureFps(
   paths: ReplayLayout,
   id: string,
   explicit: number | undefined,
-): Promise<{ fps?: number; mismatchWith?: number | "wall-clock" }> {
+): Promise<{ fps?: number }> {
   const baselineDir = path.join(paths.replayBaselines, id);
   const manifest = await loadTraceBaselineManifest(baselineDir);
   const stamped = manifest !== null && !isTraceBaselineManifestError(manifest) ? manifest : null;
@@ -498,12 +526,15 @@ async function resolveAlignedCaptureFps(
     return typeof stampedFps === "number" ? { fps: stampedFps } : {};
   }
   if (stampedFps !== undefined && stampedFps !== explicit) {
+    // Announced here, re-derived at grade time from the manifest and the artifact. The
+    // mismatch is deliberately NOT returned: a second copy of a fact `applyVisualDiff`
+    // computes for itself would be a field nothing reads, dressed as a wired signal.
     const stampedText = stampedFps === "wall-clock" ? "wall-clock (unaligned)" : `aligned ${stampedFps} fps`;
     console.error(
       `[loombridge trace] capture clock differs from the baseline (approved ${stampedText}, running aligned ` +
         `${explicit} fps): the pixel gate is NOT graded this run; approve from this report to re-anchor.`,
     );
-    return { fps: explicit, mismatchWith: stampedFps };
+    return { fps: explicit };
   }
   return { fps: explicit };
 }
@@ -517,6 +548,8 @@ async function replayOneTrace(
     projectPathCanonical?: string;
     speed?: number;
     alignedCaptureFps?: number;
+    /** Test seam: the live client this replay drives (see `RunLiveReplayOptions`). */
+    clientFactory?: RunLiveReplayOptions["clientFactory"];
   },
 ): Promise<{ artifact: ReplayRunArtifact; reportJson: string; htmlPath?: string }> {
   await fs.mkdir(paths.replayTraces, { recursive: true });
@@ -532,16 +565,27 @@ async function replayOneTrace(
 
   const resolved = await resolveReplaySpeed(paths, id, opts.speed);
   const speed = resolved.speed;
-  if (speed > 1) {
-    scaleTraceSettles(trace, speed);
-    console.error(`[loombridge trace] replaying at ${speed}x pacing (recorded settles scaled, floor ${MIN_SCALED_SETTLE_MS}ms).`);
-  }
-
-  // AFTER scaleTraceSettles, never before: the frame count is derived from the settle the
-  // run will actually use, so `--speed` divides the milliseconds exactly once. Converting
+  // RESOLVED BEFORE THE PACING LINE PRINTS, applied after: the clock decides what the floor
+  // in that line actually means, and the CONVERSION to frames still happens in the driver,
+  // AFTER scaleTraceSettles. So `--speed` divides the milliseconds exactly once. Converting
   // first and scaling after (or scaling both) would settle for a quarter of the stated time
   // at 4x while the report claimed the trace's own settle.
   const aligned = await resolveAlignedCaptureFps(paths, id, opts.alignedCaptureFps);
+  if (speed > 1) {
+    scaleTraceSettles(trace, speed);
+    // THE FLOOR IS PRINTED AS THE RUN WILL EXPERIENCE IT. Under an aligned clock the floor
+    // is a frame count, so its game-time cost is quantized to 1/fps and only equals the
+    // wall-clock constant when the constant divides evenly by a frame (250ms is exactly 15
+    // frames at 60 fps, but 8 frames at 30 fps: 266.7ms). Printing the constant there would
+    // state a number this run never used.
+    const floorText =
+      aligned.fps === undefined
+        ? `floor ${MIN_SCALED_SETTLE_MS}ms`
+        : `floor ${alignedSettleFrames(MIN_SCALED_SETTLE_MS, aligned.fps)} frame(s) = ` +
+          `${round1(alignedFloorMs(MIN_SCALED_SETTLE_MS, aligned.fps))}ms of game time at ${aligned.fps} fps`;
+    console.error(`[loombridge trace] replaying at ${speed}x pacing (recorded settles scaled, ${floorText}).`);
+  }
+
   if (aligned.fps !== undefined) {
     console.error(
       `[loombridge trace] capture-aligned replay at ${aligned.fps} fps: each settle runs inside the bridge's ` +
@@ -553,6 +597,7 @@ async function replayOneTrace(
   const artifact = await runLiveReplay(trace, {
     captureDir,
     projectPathCanonical: opts.projectPathCanonical,
+    ...(opts.clientFactory ? { clientFactory: opts.clientFactory } : {}),
     ...(aligned.fps !== undefined ? { alignedCaptureFps: aligned.fps } : {}),
   });
   // The pacing is part of the evidence: a baseline approved from this report inherits it,
@@ -735,9 +780,16 @@ async function runApprove(args: TraceArgs): Promise<number> {
   const previousLoaded = await loadTraceBaselineManifest(baselineDir);
   let previous: TraceBaselineManifest | null = null;
   if (isTraceBaselineManifestError(previousLoaded)) {
+    // NAME EVERY TERM THAT IS BEING DROPPED, not just the tolerance (BX4). An unreadable
+    // manifest carries NOTHING forward, and the note used to mention one of the four things
+    // being lost, which reads as "only the tolerance resets". A mask set an operator
+    // approved, a pacing, and a capture clock all vanish in the same breath, and the next
+    // replay will grade (or refuse) on terms nobody restated.
     console.error(
       `[loombridge trace] note: the existing ${TRACE_BASELINE_MANIFEST} is unreadable ` +
-        `(${previousLoaded.error}); re-stamping from scratch at the default tolerance.`,
+        `(${previousLoaded.error}); re-stamping from scratch. NOTHING is carried forward: the drift ` +
+        "tolerance resets to the default, every approved mask is dropped, and the pacing and capture " +
+        "clock are re-derived from this report alone. Re-state any of them you still want.",
     );
   } else {
     previous = previousLoaded;
@@ -762,6 +814,84 @@ async function runApprove(args: TraceArgs): Promise<number> {
         `unreadable half (the replay output names which), remove ${path.relative(args.root, baselineDir)} and approve again.`,
     );
     return 2;
+  }
+
+  // BX1: A RUN CARRYING ANY HARNESS FAULT IS NOT AN ANCHOR, whole-run, the F13 shape.
+  //
+  // Two laundering paths close on this one rule. (1) THE PRUNE-TO-PERMANENT-GREEN path: a
+  // capture whose settle never completed has no artifact, so the copy loop below skips it and
+  // `pruneUndeclaredBaselines` then DELETES its approved baseline. The next replay finds no
+  // anchor for that capture, reports `no-baseline`, and the trace is green forever over a
+  // frame nobody grades. (2) THE REFUSED-REPORT path: a run whose pixel gate was refused at
+  // grade time (a clock or pacing mismatch, an untrustworthy anchor) graded NOTHING, and
+  // freezing its frames would promote evidence the tool declined to read.
+  //
+  // Whole-run, never per-capture: promoting the healthy subset is exactly how a baseline
+  // quietly shrinks while the word "approved" stays the same.
+  const faultedCaptures = parsed.segments
+    .flatMap((s) => s.captures)
+    .filter((c) => c.harnessFault !== undefined);
+  if (faultedCaptures.length > 0 || parsed.visualHarnessFault === true) {
+    const named =
+      faultedCaptures.length > 0
+        ? faultedCaptures.map((c) => `${c.id} (${c.harnessFault})`).join("; ")
+        : "the run's pixel comparison was refused at grade time (see the replay output for which term)";
+    console.error(
+      `[loombridge trace] cannot approve "${args.id}": the latest run carries a HARNESS FAULT, so its evidence ` +
+        `includes frames nothing could compare: ${named}. A run the harness could not complete is never an anchor.`,
+    );
+    console.error(
+      `[loombridge trace]   fix the harness condition and re-run \`loombridge trace replay --id ${args.id}\`. ` +
+        "Approving here would freeze a partial run: the captures with no frame are pruned from the baseline, " +
+        "so the trace would go permanently green over the very frames that failed.",
+    );
+    return 2;
+  }
+
+  // BX5: AN ALIGNED STAMP HAS TO CARRY FRAME EVIDENCE. `alignedCaptureFps` on a report is a
+  // claim that every capture's settle ran inside the bridge's pinned tick loop, and
+  // `framesElapsed` is the bridge's own count of the frames it advanced: the only thing in
+  // the report that distinguishes a real aligned run from a hand-typed field on a wall-clock
+  // one. The bound field is checked for PRESENCE and refused when absent, never skipped.
+  if (parsed.alignedCaptureFps !== undefined) {
+    const unevidenced = parsed.segments
+      .flatMap((s) => s.captures)
+      .filter((c) => c.artifact !== undefined)
+      .filter((c) => typeof c.framesElapsed !== "number" || !(c.framesElapsed > 0))
+      .map((c) => c.id);
+    if (unevidenced.length > 0) {
+      console.error(
+        `[loombridge trace] cannot approve "${args.id}": the report claims a capture-aligned clock ` +
+          `(${parsed.alignedCaptureFps} fps) but ${unevidenced.length} capture(s) carry no frame evidence ` +
+          `(${unevidenced.join(", ")}). The aligned stamp is the anchor's promise that these frames were ` +
+          "taken inside the pinned tick loop; without the bridge's own frame count nothing binds it to a run.",
+      );
+      console.error(
+        `[loombridge trace]   re-run \`loombridge trace replay --id ${args.id} --aligned-fps ${parsed.alignedCaptureFps}\` ` +
+          "against a bridge that reports framesElapsed, or approve a wall-clock run instead.",
+      );
+      return 2;
+    }
+  }
+
+  // BX4: THE WRITE SIDE REFUSES WHAT THE READ SIDE WOULD. `approve` re-derives the pacing and
+  // the capture clock from the report, and report.json is semi-trusted (hand-edited, or
+  // written by an older/newer tool). Minting an anchor holding a value the ONE reader will
+  // refuse produces a baseline that is permanently a harness fault: every later replay
+  // reports a broken anchor and nothing in the approve output ever said why. Same predicates,
+  // same message, at the door where the value enters.
+  for (const [field, value, refusal] of [
+    ["replaySpeed", (parsed as ReplayRunArtifact).replaySpeed, replaySpeedRefusal],
+    ["alignedCaptureFps", (parsed as ReplayRunArtifact).alignedCaptureFps, alignedCaptureFpsRefusal],
+  ] as const) {
+    const bad = refusal(value);
+    if (bad !== null) {
+      console.error(
+        `[loombridge trace] cannot approve "${args.id}": the report's ${field} is not a value an anchor can hold: ` +
+          `${bad}. Approving it would mint a baseline the grade-time reader refuses on every later run.`,
+      );
+      return 2;
+    }
   }
 
   // MASKS ARE RE-VALIDATED AGAINST THE FRAMES THIS APPROVE IS FREEZING (Q1), BEFORE a
@@ -911,6 +1041,20 @@ async function runApprove(args: TraceArgs): Promise<number> {
     console.error(
       `[loombridge trace] ${manifest.maskRects!.length} mask(s) preserved and re-validated against the new frames: ` +
         `${anchorTermsSentence(manifestAnchorTerms(manifest))}.`,
+    );
+  }
+  // BX1: THE CAPTURE CLOCK IS ANNOUNCED WHEN IT CHANGES, exactly as a tolerance and a mask
+  // set are. It is a term of every future comparison: after this approval, a replay under the
+  // OLD discipline stops grading and reports a harness fault instead. That is the right
+  // behaviour and a surprising one, so the change is never silent. Both directions, including
+  // the drop back to wall-clock, because losing alignment is as consequential as gaining it.
+  if (previous !== null && previous.alignedCaptureFps !== manifest.alignedCaptureFps) {
+    const from = clockDisciplineText(previous.alignedCaptureFps);
+    const to = clockDisciplineText(manifest.alignedCaptureFps);
+    console.error(
+      `[loombridge trace] the anchor's capture clock changes: ${from} to ${to}. Every later replay of ` +
+        `"${args.id}" must run under ${to}; one under the old clock refuses the pixel comparison as a ` +
+        "harness fault rather than grading two different animation phases against each other.",
     );
   }
   return pngs.length > 0 ? 0 : 1;
@@ -1279,7 +1423,18 @@ async function pruneUndeclaredBaselines(dir: string, pngs: TraceBaselinePng[]): 
 export async function replayTraceForVerify(
   layout: ReplayLayout,
   id: string,
-  opts: { strictVisual: boolean; projectPathCanonical?: string },
+  opts: {
+    strictVisual: boolean;
+    projectPathCanonical?: string;
+    /**
+     * The live client this replay drives (see `RunLiveReplayOptions.clientFactory`). Absent
+     * in production, where a real `UnityClient` is discovered. It is threaded through THIS
+     * seam rather than a private one so a test walks the whole composition an operator gets:
+     * the manifest read that resolves the clock, the driver that turns a settle into an op,
+     * and the report that stamps what happened.
+     */
+    clientFactory?: RunLiveReplayOptions["clientFactory"];
+  },
 ): Promise<{
   artifact: ReplayRunArtifact;
   reportJson: string;
@@ -1295,6 +1450,7 @@ export async function replayTraceForVerify(
   const { artifact, reportJson } = await replayOneTrace(layout, id, {
     html: false,
     projectPathCanonical: opts.projectPathCanonical,
+    ...(opts.clientFactory ? { clientFactory: opts.clientFactory } : {}),
   });
   return {
     artifact,
@@ -1441,6 +1597,24 @@ export async function applyVisualDiff(
         continue;
       }
       if (!capture.artifact) continue;
+      // BX5: THE ALIGNED STAMP IS BOUND TO EVIDENCE, OR IT IS A HARNESS FAULT. `framesElapsed`
+      // is the bridge's own count of the frames it advanced inside the pinned loop, and it is
+      // the only thing in the report that separates a frame really taken under an aligned
+      // settle from one that merely carries the label (an older bridge that never reported it,
+      // a hand-edited report, a capture path that fell back to the wall-clock screenshot).
+      // Grading such a frame against an aligned anchor would compare two disciplines while
+      // both sides claimed one. Refuse the comparison; never guess, and never grade.
+      if (artifact.alignedCaptureFps !== undefined && !(typeof capture.framesElapsed === "number" && capture.framesElapsed > 0)) {
+        anyCaptureFault = true;
+        capture.harnessFault ??=
+          `the aligned stamp carries no frame evidence (framesElapsed ${capture.framesElapsed ?? "absent"})`;
+        console.error(
+          `[loombridge trace] capture "${capture.id}" is a HARNESS FAULT (no comparable frame, not drift): ` +
+            `the run claims a capture-aligned clock at ${artifact.alignedCaptureFps} fps, but this capture ` +
+            "carries no framesElapsed, so nothing binds the frame to the settle the report claims for it.",
+        );
+        continue;
+      }
       const baselinePath = path.join(baselineDir, `${capture.id}.png`);
       if (baselineFault !== null) {
         // The anchor as a whole is untrusted, so no capture under it is GRADED. The
@@ -1790,7 +1964,21 @@ export function printSummary(
   strictVisual: boolean,
 ): void {
   const blocked = artifact.blockedReason ? ` (${artifact.blockedReason})` : "";
-  console.error(`[loombridge trace] ${id}: ${artifact.status.toUpperCase()}${blocked}`);
+  // BX2: THE HEADLINE REFLECTS THE WORST TIER, not the engine's word for one layer of it.
+  // `artifact.status` answers "did the actuation diverge?", and it is honestly PASS for a run
+  // whose captures could not be compared at all: the game did everything the trace asked. But
+  // that run exits 2, and a summary reading "PASS" above a non-zero exit teaches a reader to
+  // trust the word over the code. The JSON keeps the engine's word (that layer's answer is
+  // still true and other tools read it); the human line states the tier the run earned and
+  // names the actuation result inside it, in that order.
+  if (artifact.visualHarnessFault) {
+    console.error(
+      `[loombridge trace] ${id}: HARNESS FAULT (exit 2): actuation ${artifact.status}${blocked}. ` +
+        "No comparable frames, so this run holds NO opinion about the pixels: never a pass, never drift.",
+    );
+  } else {
+    console.error(`[loombridge trace] ${id}: ${artifact.status.toUpperCase()}${blocked}`);
+  }
   if (artifact.blockedDetail) {
     console.error(`[loombridge trace]   cause: ${artifact.blockedDetail}`);
   }
@@ -2336,4 +2524,9 @@ function printUsage(): void {
 
 function message(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+/** One decimal place, with a whole number printed whole (250, not 250.0). */
+function round1(ms: number): number {
+  return Math.round(ms * 10) / 10;
 }

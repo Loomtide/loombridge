@@ -9,7 +9,13 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import { ICON, nextStepLines, tildify, unityConnectionHint } from "../../../shared/cli-ui.js";
+import {
+  ICON,
+  nextStepLines,
+  tildify,
+  unityConnectionHint,
+  unityConnectionLostHint,
+} from "../../../shared/cli-ui.js";
 
 test("tildify: shortens a $HOME path to ~/…, leaves others untouched", () => {
   assert.equal(tildify(path.join(os.homedir(), ".loombridge", "x", "y.png")), "~/.loombridge/x/y.png");
@@ -63,4 +69,35 @@ test("nextStepLines: '👉 Next — <summary>' + the indented command", () => {
   assert.equal(lines[1], "   loombridge do-thing");
   // No command → just the summary line.
   assert.equal(nextStepLines("Done.").length, 1);
+});
+
+// BX3: the OTHER half of the same condition. `unity-client` rejects in-flight ops with a plain
+// `Error("CONNECTION_LOST: …")` that carries no `UnityConnectionError` name, so a socket that
+// dropped MID-RUN did not match `unityConnectionHint` and every caller keyed on it fell through
+// to its generic failure path: a harness fault reported as a game defect.
+test("unityConnectionLostHint: the CONNECTION_LOST message shape is recognised", () => {
+  for (const message of [
+    "CONNECTION_LOST: code=1006 reason=",
+    "editor.screenshot failed: CONNECTION_LOST: socket closed",
+    "Not connected to Unity",
+    "WebSocket is not open",
+  ]) {
+    const lines = unityConnectionLostHint(new Error(message));
+    assert.ok(lines, `must recognise: ${message}`);
+    assert.match(lines!.join("\n"), /Lost the connection to Unity mid-run/);
+    assert.match(lines!.join("\n"), /no verdict about the game/);
+  }
+});
+
+test("unityConnectionLostHint: any OTHER error → null, and it never claims the port-scan hint", () => {
+  assert.equal(unityConnectionLostHint(new Error("NOT_FOUND: locator")), null);
+  assert.equal(unityConnectionLostHint(new Error("disk full")), null);
+  assert.equal(unityConnectionLostHint(null), null);
+  // The two hints stay distinct: a mid-run drop has no attempted-port diagnostics to quote,
+  // which is exactly why the client's throw is NOT renamed to UnityConnectionError.
+  assert.equal(unityConnectionHint(new Error("CONNECTION_LOST: code=1006")), null);
+  assert.doesNotMatch(
+    unityConnectionLostHint(new Error("CONNECTION_LOST: code=1006"))!.join("\n"),
+    /tried ports/,
+  );
 });

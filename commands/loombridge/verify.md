@@ -61,6 +61,26 @@ loombridge verify --root . --only screens # ONE section (CI granularity); never 
   and tolerance are disclosed together on the plan's `anchor terms:` line, which states the
   **sum** (*together, up to N% of the frame can change while the gate stays green*), and a
   green trace graded with masks reads `id=pass (8% masked)` in the summary detail.
+- **Phase skew is ALIGNED, not tolerated: `trace replay --aligned`.** A wall-clock settle
+  (sleep here, screenshot there) lets the game free-run for however many frames the editor
+  happens to tick, so every run captures a different animation phase and the pixel gate reads
+  that skew as drift. `--aligned` (or `--aligned-fps <n>`, integer 10 to 120, default 60)
+  replaces the pair with ONE bridge op that advances a fixed frame count at a pinned game-time
+  step and captures on the exact frame the settle completes. Reach for it BEFORE a tolerance
+  or a mask: it removes the drift instead of consenting to it. The clock is **part of the
+  anchor**: `approve` stamps the run's clock into the baseline, later replays inherit it with
+  no flag, and a run under a *different* clock (including an unaligned one against an aligned
+  anchor, since absence is a value and not a gap) **refuses** the pixel comparison as a harness
+  fault rather than grading two animation phases against each other. Re-anchor by approving
+  from a report captured under the new clock; the change prints its own consent line. A settle
+  the editor cannot deliver inside its wall budget returns **no frame at all** and is a
+  capture-tier harness fault (exit `2`), never a degraded frame and never drift. When `1/fps`
+  does not sit on a whole number of physics steps the run prints an **advisory** cadence note
+  and continues: an uneven cadence is a trade-off the operator is entitled to make. And the
+  residual is stated every time drift survives an aligned run: alignment covers the **settle
+  only**, so the action round trips and the 150ms anchor polling are still wall-clock windows,
+  and surviving drift is *consistent with* those windows or with seed/realtime binding
+  (unseeded `Random`, `realtimeSinceStartup`) without being proof of either.
 - **A mask is never suggested from one run, and one pixel cannot buy you one.** A drift-only
   failure prints a mask suggestion only when a PREVIOUS report exists, both runs drifted in
   the same **grid cells**, and the drift does NOT reproduce between them. Reproduction is

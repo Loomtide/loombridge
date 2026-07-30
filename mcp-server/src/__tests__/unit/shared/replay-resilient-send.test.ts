@@ -47,6 +47,10 @@ test("resilientSend: non-idempotent click is NOT re-sent on connection loss (no 
 for (const command of [
   "replay.settle_and_capture",
   "input.pointer_tap",
+  // AX9: the WORLD-space tap is `pointer_tap` one camera projection earlier and delivers the
+  // identical press. Listing the screen-space form alone left the same phantom double-tap
+  // reachable through the other door, which is how a hand-enumerated set rots.
+  "input.pointer_tap_world",
   "input.key_tap",
   "input.key_down",
   "input.key_up",
@@ -60,7 +64,7 @@ for (const command of [
   });
 }
 
-test("NON_IDEMPOTENT_OPS: the set is exactly the six side-effecting replay ops", () => {
+test("NON_IDEMPOTENT_OPS: exactly the side-effecting ops the replay driver sends, and no reader", () => {
   assert.deepEqual(
     [...NON_IDEMPOTENT_OPS].sort(),
     [
@@ -68,10 +72,17 @@ test("NON_IDEMPOTENT_OPS: the set is exactly the six side-effecting replay ops",
       "input.key_tap",
       "input.key_up",
       "input.pointer_tap",
+      "input.pointer_tap_world",
       "replay.settle_and_capture",
       "ui.dispatch_pointer",
     ],
   );
+  // The scope is "side-effecting", not "input": a read-only observe/query op retried across a
+  // reconnect costs nothing, and pulling it in here would turn an ordinary recoverable drop
+  // into a failed run.
+  for (const readOnly of ["ui.get_screen_rects", "scene.get_screen_rects", "editor.console_logs"]) {
+    assert.equal(NON_IDEMPOTENT_OPS.has(readOnly), false, `${readOnly} is a read: it must stay retryable`);
+  }
 });
 
 test("resilientSend: a non-connection error rethrows immediately (no retry)", async () => {

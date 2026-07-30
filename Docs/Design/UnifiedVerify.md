@@ -603,10 +603,15 @@ deliberately removes only that one.
   that survives an aligned run is *consistent with* those windows or with seed/realtime
   binding, and is never proof of either. The line says so, because "we pinned the clock and it
   still moved" is the strongest available over-reading of this feature.
-- **Every input op is now non-idempotent.** `input.pointer_tap`, `key_tap`, `key_down`,
-  `key_up` and `replay.settle_and_capture` joined `ui.dispatch_pointer` in the set the
-  resilient send refuses to retry: a retried tap is a phantom second press, and a retried
-  settle advances game time twice while the report claims one settle.
+- **Every side-effecting input op the replay driver sends is now non-idempotent.**
+  `input.pointer_tap`, `input.pointer_tap_world`, `key_tap`, `key_down`, `key_up` and
+  `replay.settle_and_capture` joined `ui.dispatch_pointer` in the set the resilient send
+  refuses to retry: a retried tap is a phantom second press, and a retried settle advances
+  game time twice while the report claims one settle. The scope is deliberate. It is not
+  "every input op" (a read-only `input.observe_start` is safely retryable and belongs
+  nowhere near this list), and it is not only the ops enumerated on the day: the world-space
+  tap is `pointer_tap` one camera projection earlier, so listing one and not the other left
+  the identical phantom press reachable through the other door.
 - **A focus loss is BLOCKED, not a game defect.** `FOCUS_REQUIRED` maps to a new blocked
   reason, `focus-lost`, and the replay driver now opens the input SESSION before a world tap
   (the session's backend applies, and owns restoring, the focus-independent InputSystem
