@@ -958,6 +958,118 @@ test("--live: a pixel-only failure prints the SAME suggestion here as at the tra
   }
 });
 
+test("MX8: --live prints the MASK verdict too, in the trace verb's exact words", async () => {
+  // V1. Every mask sentence was pinned by calling `maskSuggestionLines` directly, so the
+  // unified door's own print block was a five-line `if` that no test entered: deleting it
+  // left the suite green and left an operator who only ever runs `verify --live` with a
+  // drift-only failure and no mask verdict at all. Both branches (a rect offered, and the
+  // deterministic-change refusal that is the safety property) are driven here.
+  const root = await unityLikeProject("unified-cli-masksuggest-");
+  const workspace = await tmpDir("unified-cli-ws-");
+  try {
+    await plantApprovedTrace(root, "happy-path-2");
+
+    const suggested = await captured(() =>
+      runUnifiedVerify({
+        root,
+        strict: false,
+        live: true,
+        workspace,
+        deps: {
+          async runFlowTrace() {
+            return {
+              ...driftedFlow({ driftCaptures: 2 }),
+              maskSuggestion: {
+                kind: "suggest",
+                rects: [{ x: 10, y: 10, w: 20, h: 20, captureId: "cap", reason: "ambient-animation" }],
+                captures: 2,
+                fraction: 0.04,
+              },
+            };
+          },
+        },
+      }),
+    );
+    const offered = suggested.lines.join("\n");
+    assert.match(
+      offered,
+      /flow: drift concentrates in 10,10,20x20 across 2 capture\(s\); if this region is ambient animation, mask it: loombridge trace mask --id happy-path-2 --set cap:10,10,20x20@ambient-animation/,
+    );
+    assert.match(offered, /flow: that masks 4% of the frame \(cap 10%\) and is NEVER applied for you/);
+
+    const refused = await captured(() =>
+      runUnifiedVerify({
+        root,
+        strict: false,
+        live: true,
+        workspace,
+        deps: {
+          async runFlowTrace() {
+            return {
+              ...driftedFlow({ driftCaptures: 2 }),
+              maskSuggestion: { kind: "identical", captures: ["cap"], exact: true },
+            };
+          },
+        },
+      }),
+    );
+    assert.match(
+      refused.lines.join("\n"),
+      /flow: the drift is IDENTICAL across two runs: that is a deterministic change, not ambient noise; investigate before masking\./,
+    );
+    assert.doesNotMatch(refused.lines.join("\n"), /trace mask --id happy-path-2 --set/);
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+    await fs.rm(workspace, { recursive: true, force: true });
+  }
+});
+
+test("MX10: a GREEN trace graded with masks says so in the per-asset detail", async () => {
+  // V4/M7. `demo=pass` is the string an agent quotes as proof, and a pass measured with 8%
+  // of every frame blanked is a materially weaker claim than a pass. The drifted branch
+  // disclosed the mask and the green branch did not, so the disclosure disappeared at
+  // exactly the point where somebody was about to act on the word "pass".
+  const root = await unityLikeProject("unified-cli-greenmask-");
+  const workspace = await tmpDir("unified-cli-ws-");
+  try {
+    await plantApprovedTrace(root, "happy-path-2");
+    const { lines } = await captured(() =>
+      runUnifiedVerify({
+        root,
+        strict: false,
+        live: true,
+        workspace,
+        deps: {
+          async runFlowTrace() {
+            return { ...cleanFlow(), maskedFraction: 0.08 };
+          },
+        },
+      }),
+    );
+    assert.match(lines.join("\n"), /\[happy-path-2=pass \(8% masked\)\]/);
+
+    // Silent at 0: an unmasked row reads byte-for-byte as it always did.
+    const unmasked = await captured(() =>
+      runUnifiedVerify({
+        root,
+        strict: false,
+        live: true,
+        workspace,
+        deps: {
+          async runFlowTrace() {
+            return cleanFlow();
+          },
+        },
+      }),
+    );
+    assert.match(unmasked.lines.join("\n"), /\[happy-path-2=pass\]/);
+    assert.doesNotMatch(unmasked.lines.join("\n"), /masked/);
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+    await fs.rm(workspace, { recursive: true, force: true });
+  }
+});
+
 test("--live: NO suggestion is printed when the trace is a harness fault, only when it is drift-only", async () => {
   // The one case the suggestion must never fire on: an unreadable capture is not drift,
   // and "widen the tolerance" would be advice to paper over a broken capture with a

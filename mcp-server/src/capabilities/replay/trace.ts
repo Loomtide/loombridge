@@ -53,6 +53,7 @@ import {
   DEFAULT_DRIFT_FRACTION,
   MAX_DRIFT_TOLERANCE,
   MAX_MASKED_FRACTION,
+  REPRODUCED_DRIFT_SIMILARITY,
   anchorTermsSentence,
   deriveMaskSuggestion,
   driftPercentText,
@@ -63,6 +64,7 @@ import {
   maskRefusal,
   maskSuggestionLines,
   masksForCapture,
+  rectKey,
   toleranceConsentSentence,
   type AnchorTerms,
   type CaptureDriftEvidence,
@@ -696,6 +698,11 @@ async function runApprove(args: TraceArgs): Promise<number> {
   // while keeping them re-interprets a human decision against a frame they never saw.
   // Refuse instead, and name the verb that owns the decision.
   const carried = carryForward(previous);
+  // The masked fraction this approve is re-affirming, appended to the ledger below so the
+  // history has one entry PER APPROVAL EVENT (MX2). A history that only mask stamps wrote
+  // reads as "nothing happened to the masks between stamp #1 and stamp #7", when in fact
+  // five re-freezes each re-consented to the same blindness against new frames.
+  let approvedMaskedFraction: number | undefined;
   if ((carried.maskRects?.length ?? 0) > 0) {
     const dims = await captureFrameDims(parsed, paths);
     if ("error" in dims) {
@@ -705,21 +712,50 @@ async function runApprove(args: TraceArgs): Promise<number> {
       );
       return 2;
     }
-    const refusal = maskRefusal(carried.maskRects, dims.width, dims.height);
-    if (refusal !== null) {
+    // A RESOLUTION CHANGE REFUSES, IT NEVER REINTERPRETS (M2/M3, MX2). The rects still
+    // "fit" a bigger frame, and that is exactly the trap: the same 20x20 rect hides 4% of a
+    // 100x100 frame and 1% of a 200x200 one, so a silent re-freeze at a new resolution
+    // would move a human's stated blindness AND every number printed about it, with no
+    // event anywhere saying so. The bound field is checked for presence first and refused
+    // when absent, never skipped: masks with no stamped dimensions were never measurable.
+    if (
+      typeof carried.frameWidth !== "number" ||
+      typeof carried.frameHeight !== "number" ||
+      carried.frameWidth !== dims.width ||
+      carried.frameHeight !== dims.height
+    ) {
+      const stamped =
+        typeof carried.frameWidth === "number" && typeof carried.frameHeight === "number"
+          ? `${carried.frameWidth}x${carried.frameHeight}`
+          : "an unrecorded size";
       console.error(
-        `[loombridge trace] cannot approve "${args.id}": the ${carried.maskRects!.length} approved mask(s) no longer ` +
-          `fit the frames being frozen (${dims.width}x${dims.height}): ${refusal}.`,
+        `[loombridge trace] cannot approve "${args.id}": the game's resolution changed ` +
+          `(${stamped} to ${dims.width}x${dims.height}): masks were approved against the old frames; ` +
+          `re-stamp with \`loombridge trace mask --id ${args.id} --set ...\` against the new frames (or --clear).`,
       );
       console.error(
-        `[loombridge trace]   re-state them for the new frames with \`loombridge trace mask --id ${args.id} --set ...\`, ` +
-          `or drop them with \`--clear\`. A re-freeze never reinterprets a mask a human approved.`,
+        `[loombridge trace]   the ${carried.maskRects!.length} rect(s) would hide a different share of the new ` +
+          "frame than the one their approver consented to, so a re-freeze never reinterprets them.",
       );
       return 2;
     }
-    // The dims travel with the frames: the masks were just proven against THESE.
+    // NO SECOND `maskRefusal` CALL HERE, and that is deliberate rather than an omission.
+    // It would be unreachable: `loadTraceBaselineManifest` already ran the SAME predicate
+    // over these rects against these stamped dims (a manifest that failed it never becomes
+    // `previous` at all, so nothing is carried), and the branch above has just proven the
+    // new frames are that same size. An unreachable guard is a vacuous guard, and this repo
+    // has paid for those. The dims equality IS the check.
+    //
+    // The dims travel with the frames: the masks were just proven against THESE, and the
+    // fraction is unchanged BY CONSTRUCTION (same rects, same dims) rather than by luck.
     carried.frameWidth = dims.width;
     carried.frameHeight = dims.height;
+    approvedMaskedFraction = maskAnchorTerms(
+      carried.maskRects!,
+      dims.width,
+      dims.height,
+      previous === null ? DEFAULT_DRIFT_FRACTION : resolveDriftTolerance(previous),
+    ).maskedFraction;
   }
 
   await fs.mkdir(baselineDir, { recursive: true });
@@ -759,7 +795,10 @@ async function runApprove(args: TraceArgs): Promise<number> {
     pngs,
     // Q6: ONE helper names every preserved field, for all three writers.
     ...carried,
-    ...nextApprovalLedger(previous),
+    ...nextApprovalLedger(
+      previous,
+      approvedMaskedFraction !== undefined ? { maskedFraction: approvedMaskedFraction } : {},
+    ),
   };
   // The pacing the promoted frames were captured at rides the REPORT into the anchor, so
   // approve re-derives it rather than carrying the old value: these frames really were
@@ -977,6 +1016,25 @@ async function runMask(args: TraceArgs): Promise<number> {
     // READ-ONLY, and it touches nothing: no re-stamp, no ledger entry, no approvedAt. A
     // verb that mutated the anchor just to show it would make "look before you trust"
     // impossible to do safely.
+    //
+    // THE VERIFIER RUNS FIRST (MX3). Everything below is a fraction, and every fraction is
+    // computed against the manifest's own `frameWidth`/`frameHeight`. Until the integrity
+    // check decodes a real frame and cross-checks those two numbers, "4% masked" is the
+    // manifest quoting itself: inflate the stamped dims by hand and 40% of the frame prints
+    // as 4%. This surface exists to be LOOKED at before trusting an anchor, so it is the
+    // last place that may print a number it has not checked.
+    const integrity = await verifyTraceBaseline(baselineDir);
+    if (!integrity.unstamped && !integrity.ok) {
+      console.error(
+        `[loombridge trace] the approved baseline for "${args.id}" cannot be trusted: ` +
+          `${integrity.failures.join("; ")}.`,
+      );
+      console.error(
+        "[loombridge trace] refusing to quote this anchor's terms: a masked fraction measured against a " +
+          "denominator nothing checked is not a disclosure.",
+      );
+      return 2;
+    }
     console.error(`[loombridge trace] ${manifestRel}: ${current.length} approved mask(s).`);
     for (const rect of current) {
       console.error(
@@ -986,9 +1044,21 @@ async function runMask(args: TraceArgs): Promise<number> {
     console.error(
       `[loombridge trace] ${anchorTermsSentence(manifestAnchorTerms(loaded)) ?? NO_MASKS_DEFAULT_TERMS}.`,
     );
+    // THE LEDGER'S OTHER HALF (MX13). `previousMaskRects` was written and never read back
+    // by anything a human sees, which makes it a record kept for nobody: the question
+    // "what did this anchor hide BEFORE the last stamp" is exactly the one an auditor
+    // arrives with, and the fraction history alone answers "how much", never "where".
+    if (loaded.previousMaskRects?.length) {
+      console.error(
+        `[loombridge trace] previously: ${loaded.previousMaskRects
+          .map((r) => `${r.captureId ?? "(every capture)"} ${formatRectGeometry(r)}@${r.reason}`)
+          .join(", ")} at ${loaded.previousApprovedAt ?? "an unrecorded time"}.`,
+      );
+    }
     if (loaded.maskedFractionHistory?.length) {
       console.error(
-        `[loombridge trace] mask history: ${loaded.maskedFractionHistory.map((f) => `${driftPercentText(f)}%`).join(" → ")}.`,
+        `[loombridge trace] mask history: ${loaded.maskedFractionHistory.map((f) => `${driftPercentText(f)}%`).join(" → ")} ` +
+          `(one entry per approval event, mask stamps and mask-bearing re-freezes alike).`,
       );
     }
     return 0;
@@ -1034,11 +1104,33 @@ async function runMask(args: TraceArgs): Promise<number> {
   if (rects.length === 0) delete stamped.maskRects;
   await writeTraceBaselineManifest(baselineDir, stamped);
 
+  // WHAT THIS STAMP TOOK AWAY, BY NAME (M6/MX5). `--set` restates the whole list, so a
+  // stamp that swaps one rect for another is a REMOVAL and an addition, and the counts
+  // alone hide it perfectly: "2 to 2 mask(s)" reads as "nothing happened" while a region a
+  // human approved has silently gone back to being graded (or, in the other direction, a
+  // typo'd re-stamp has quietly un-masked the thing the operator was protecting). The
+  // removed rects are printed with their reasons, because the reason is the only record of
+  // what that region was, and it is about to stop existing.
+  const kept = new Set(rects.map(rectKey));
+  const removed = current.filter((r) => !kept.has(rectKey(r)));
+  const previouslyStamped = new Set(current.map(rectKey));
+  const added = rects.filter((r) => !previouslyStamped.has(rectKey(r)));
+  const churn =
+    removed.length > 0 || added.length > 0
+      ? ` (${removed.length} removed, ${added.length} added)`
+      : " (unchanged)";
   console.error(
-    `[loombridge trace] stamped ${manifestRel}: ${current.length} → ${rects.length} mask(s), masked ` +
+    `[loombridge trace] stamped ${manifestRel}: ${current.length} to ${rects.length} mask(s)${churn}, masked ` +
       `${driftPercentText(before)}% to ${driftPercentText(after)}% of the frame ` +
       `(approval #${stamped.approvalCount}, ${stamped.pngs.length} frame(s) untouched).`,
   );
+  if (removed.length > 0) {
+    console.error(
+      `[loombridge trace] ${removed.length} mask(s) REMOVED: ${removed
+        .map((r) => `${r.captureId === undefined ? "" : `${r.captureId}:`}${formatRectGeometry(r)}@${r.reason}`)
+        .join(", ")}. Those regions are GRADED again.`,
+    );
+  }
   for (const rect of rects) {
     console.error(
       `[loombridge trace]   ${rect.captureId ?? "(every capture)"} ${formatRectGeometry(rect)} reason: ${rect.reason}`,
@@ -1259,12 +1351,21 @@ export async function applyVisualDiff(
         if (diff.maskedFraction > 0) capture.maskedFraction = diff.maskedFraction;
         if (diff.driftDiffSha !== undefined) capture.driftDiffSha = diff.driftDiffSha;
         if (diff.driftBounds !== undefined) capture.driftBounds = diff.driftBounds;
+        // MX1: THE STRUCTURAL FINGERPRINT GOES ON DISK. The discriminator's bar is measured
+        // between two RUNS, and the only place run one still exists when run two grades is
+        // this report. A grid that lived only in memory would leave the next run with the
+        // sha alone, which one flipped pixel defeats.
+        if (diff.driftGrid !== undefined) capture.driftGrid = diff.driftGrid;
         evidence.push({
           captureId: capture.id,
           drifted: diff.status === "drift",
           ...(diff.driftDiffSha !== undefined ? { driftDiffSha: diff.driftDiffSha } : {}),
           ...(diff.driftBounds !== undefined ? { driftBounds: diff.driftBounds } : {}),
+          ...(diff.driftGrid !== undefined ? { driftGrid: diff.driftGrid } : {}),
           ...(diff.driftClusters !== undefined ? { driftClusters: diff.driftClusters } : {}),
+          ...(diff.driftClusterRefusal !== undefined
+            ? { driftClusterRefusal: diff.driftClusterRefusal }
+            : {}),
         });
         anyCompared = true;
         if (diff.status === "drift") anyDrift = true;
@@ -1295,7 +1396,16 @@ export async function applyVisualDiff(
   // denominator, and an anchor with no masks has no stamped one.
   if (anyDrift) {
     const dims = frameWidth > 0 && frameHeight > 0 ? { frameWidth, frameHeight } : await comparedFrameDims(artifact);
-    const suggestion = deriveMaskSuggestion(evidence, previousEvidence, dims.frameWidth, dims.frameHeight);
+    // MX5: the ALREADY STAMPED rects go in, so the command the suggestion prints restates
+    // them. `--set` replaces the whole list, so a suggestion naming only the new rects
+    // would be an instruction to delete every mask the operator previously approved.
+    const suggestion = deriveMaskSuggestion(
+      evidence,
+      previousEvidence,
+      dims.frameWidth,
+      dims.frameHeight,
+      maskRects,
+    );
     if (suggestion) artifact.maskSuggestion = suggestion;
   }
 }
@@ -1343,6 +1453,10 @@ async function readPreviousDriftEvidence(
         drifted: true,
         ...(capture.driftDiffSha !== undefined ? { driftDiffSha: capture.driftDiffSha } : {}),
         ...(capture.driftBounds !== undefined ? { driftBounds: capture.driftBounds } : {}),
+        // Semi-trusted, and deliberately NOT validated here: `deriveMaskSuggestion` runs
+        // every grid through `asDriftGrid`, so one validator decides what a fingerprint is,
+        // and a malformed one lands on "ask for another run" rather than on a rect.
+        ...(capture.driftGrid !== undefined ? { driftGrid: capture.driftGrid } : {}),
       })),
   );
 }
@@ -1476,7 +1590,14 @@ async function writeHtmlReport(
           maskRects,
           anchor?.frameWidth ?? 0,
           anchor?.frameHeight ?? 0,
-          artifact.toleranceUsed ?? DEFAULT_DRIFT_FRACTION,
+          // THE TOLERANCE FALLS BACK TO THE ANCHOR, EXACTLY AS THE MASKS DO (V3/MX9).
+          // `toleranceUsed` is stamped only where a comparison actually HAPPENED, so a run
+          // whose captures were left ungraded (a pacing mismatch, a dims fault: the harness
+          // tier) carries none, and defaulting to 0.5% there would print a STRICTER anchor
+          // than the one on disk. The report of a refused run is exactly when a reader needs
+          // the real terms, and the report must not be the surface that flatters them.
+          artifact.toleranceUsed ??
+            (anchor ? resolveDriftTolerance(anchor) : DEFAULT_DRIFT_FRACTION),
         ),
       ),
     }),
@@ -1519,7 +1640,18 @@ function isReplayArtifact(child: string, paths: ReplayLayout): boolean {
   return isUnderDir(child, paths.replayReports) || isUnderDir(child, paths.replayBaselines);
 }
 
-function printSummary(
+/**
+ * The `trace replay` verb's own summary block: the tier, the terms it graded on, and the
+ * suggestion loop.
+ *
+ * EXPORTED FOR TESTS, and for a specific reason (V1/MX8): the only other way to reach it
+ * is a live replay against a running editor, so every rule enforced here (above all, that
+ * the mask suggestion is gated behind {@link shouldSuggestTolerance} and therefore never
+ * answers a capture gap with "mask this region") was pinned only through the pure helpers
+ * it calls. A gate that no test drives through the code that applies it is a gate that can
+ * be hoisted out of its `if` by a refactor, with a green suite.
+ */
+export function printSummary(
   root: string,
   id: string,
   artifact: ReplayRunArtifact,
@@ -2003,17 +2135,23 @@ function printUsage(): void {
       "        a baseline manifest that cannot be trusted at grade time (including one",
       "        carrying an over-cap drift tolerance), an unreachable editor, or a usage",
       "        error. A harness fault is never reported as a game defect.",
-      "      tolerance/mask: 0 stamped · 1 no approved baseline to stamp (approve frames",
-      "        first) · 2 the baseline manifest exists but cannot be trusted, the approved",
-      "        frames cannot be decoded, or the rects are refused (out of bounds, no reason,",
-      `        or over the ${driftPercentText(MAX_MASKED_FRACTION)}% masked-area cap). A refused stamp writes nothing.`,
+      "      tolerance/mask: 0 stamped, or (for the read-only `mask --list`) printed: it",
+      "        stamps nothing and still exits 0 · 1 no approved baseline to stamp (approve",
+      "        frames first) · 2 the baseline manifest exists but cannot be trusted, the",
+      "        approved frames cannot be decoded, or the rects are refused (out of bounds,",
+      `        no reason, or over the ${driftPercentText(MAX_MASKED_FRACTION)}% masked-area cap). A refused stamp writes`,
+      "        nothing, and `--list` refuses to quote the terms of an untrusted anchor.",
       "      A run that failed ONLY on pixel drift prints the observed max drift and the",
       "      exact `trace tolerance` command to consent to it. That suggestion never",
       "      appears for an unreadable capture: a harness fault is not drift.",
       "      The same run may also print a MASK suggestion, but only after TWO runs whose",
-      "      drift bitmaps DIFFER in the same region (nondeterministic ambient animation).",
-      "      An identical drift twice is a deterministic change and says so instead; a",
-      "      diffuse drift says masks cannot cover it honestly. Nothing is ever applied.",
+      "      drift lands in the same region and does NOT reproduce between them",
+      "      (nondeterministic ambient animation). Reproduction is structural, not byte",
+      `      equality: at or above ${driftPercentText(REPRODUCED_DRIFT_SIMILARITY)}% of the drifted pixels landing in the same cells`,
+      "      of a 16x16 grid, the drift is called deterministic and the tool says so instead",
+      "      of naming a rect, so re-running until the bitmaps differ buys nothing. A",
+      "      diffuse drift says masks cannot cover it honestly, naming which of the three",
+      "      bounds it broke. Nothing is ever applied.",
     ].join("\n"),
   );
 }

@@ -488,27 +488,69 @@ comparison or the gate stays permanently red.
   which is how a mask grows to cover the frame one reasonable-looking rect at a time. The
   ledger records `previousMaskRects` and an append-only `maskedFractionHistory`, and the
   stamp prints the transition (*masked 0% to 4%*).
-- **`approve` preserves masks and REFUSES the re-freeze when they no longer fit.** Dropping
-  them would un-blind a region a human excused (and the next replay would suggest masking it
-  again); keeping them would re-interpret a human decision against frames they never saw.
-  Neither is a choice a tool may make silently, so it refuses and names `trace mask`. A dims
-  mismatch at GRADE time is the same shape: a manifest-level `baselineFault` on the pacing
-  precedent, captures left ungraded, never a per-capture `unreadable`.
-- **A mask is never suggested from ONE run (the two-run discriminator).** Each drifted
-  capture records `driftDiffSha` (sha256 of the drift bitmap) and `driftBounds`. The
-  suggestion fires only when a previous report exists, both runs drifted in overlapping
-  regions, and the shas DIFFER. Identical shas print *the drift is IDENTICAL across two
-  runs: that is a deterministic change, not ambient noise; investigate before masking* --
-  the line that stops the feature from erasing the regressions it was built next to. A
-  first run asks for a second. Rects come from connected components clustered to at most 3
-  boxes, each tight (drifted pixels / covered area >= 0.5) and under the cap; anything else
-  prints *drift is diffuse; masks cannot cover it honestly*. Nothing is ever auto-applied,
+- **`approve` preserves masks and REFUSES the re-freeze at a CHANGED RESOLUTION.** Dropping
+  the masks would un-blind a region a human excused (and the next replay would suggest
+  masking it again); keeping them would re-interpret a human decision against frames they
+  never saw, and the re-interpretation is silent even when the rects still LAND on the new
+  frame: the same 20x20 rect hides 4% of a 100x100 frame and 1% of a 200x200 one, so a
+  re-freeze at a new resolution would move both the blindness and every number printed about
+  it with no event anywhere saying so. Any difference from the stamped
+  `frameWidth`/`frameHeight` therefore refuses and names `trace mask`. At UNCHANGED
+  dimensions the approve appends the (unchanged) fraction to `maskedFractionHistory`, so the
+  history is one entry per approval EVENT rather than only per mask stamp. A dims mismatch at
+  GRADE time is the same shape: a manifest-level `baselineFault` on the pacing precedent,
+  captures left ungraded, never a per-capture `unreadable`.
+- **The stamped denominator is checked against a real frame.** `verifyTraceBaseline` decodes
+  ONE declared PNG and cross-checks `frameWidth`/`frameHeight` whenever masks are stamped, so
+  every PRE-RUN surface (the plan's `anchor terms:` line, `mask --list`, discovery's typed
+  `maskedFraction`) quotes a fraction measured against a denominator something verified.
+  Without it the dimensions were self-asserted until grade time, and inflating them by hand
+  printed a 40% mask as 4%. `mask --list` runs the verifier first and REFUSES to quote the
+  terms of an anchor that fails it.
+- **A mask is never suggested from ONE run, and reproduction is STRUCTURAL.** Each drifted
+  capture records `driftDiffSha` (sha256 of the drift bitmap), `driftBounds` and `driftGrid`
+  (a 16x16 grid of drifted-pixel counts). Sha equality alone was the wrong bar: flipping ONE
+  extra pixel between two runs defeats it, so a real regression could be re-run until the
+  shas differed and the tool would start recommending a mask for the bug. The bar is now
+  `sum(min(a,b)) / max(sum a, sum b) >= 0.95` on the two runs' grids, which one pixel of
+  jitter cannot move, and it fails SAFE (over-refusing withholds a suggestion; the operator
+  can still stamp a mask by hand). The suggestion fires only when a previous report exists,
+  both runs drifted in SHARED GRID CELLS (not merely overlapping bounding boxes, which one
+  distant speck could stretch across the frame), and the drift does not reproduce. A
+  reproduced drift prints *the drift is IDENTICAL across two runs: that is a deterministic
+  change, not ambient noise; investigate before masking* (or, for the sub-exact case, *at
+  least 95% of the drifted pixels reproduce across two runs:* + the same warning) -- the line
+  that stops the feature from erasing the regressions it was built next to. A first run asks
+  for a second. Rects come from connected components clustered to at most 3 boxes, refused
+  unless the AGGREGATE UNION of the surviving boxes is tight (drifted pixels / union area
+  >= 0.6, measured on the SET rather than per rect: three individually-dense rects say
+  nothing about the empty space a merge swallowed, and the union is what a mask actually
+  spends) and under the cap. The refusal NAMES which bound broke, in three distinct
+  sentences: *one region of X%, above the 10% cap*, *more than 64 separate components*, or
+  *only X% drifted pixels, under the 60% tightness bar*. The suggested command RESTATES the
+  currently stamped rects first, because `--set` replaces the whole list and a command naming
+  only the new rect would delete every mask already approved. Nothing is ever auto-applied,
   and the suggested reason is a placeholder the human must replace.
-- **One combined consent sentence.** `anchorTermsSentence` prints masks and tolerance
-  together (*N mask(s) hide X% of every frame outright; the rest grades at Z%, ...*) at both
+- **One combined consent sentence, with the arithmetic done.** `anchorTermsSentence` prints
+  masks and tolerance together (*N mask(s) hide X% of every frame outright; the rest grades at
+  Z%, ...; together, up to (X+Z)% of the frame can change while the gate stays green*) at both
   stamp verbs, on the plan's own `anchor terms:` line, in the replay summary and in the HTML
   report header, which also draws the rects on the thumbnails. Two allowances described in
-  two places are two allowances nobody adds up.
+  two places are two allowances nobody adds up, and stating both halves without the sum is
+  the truth twice and the answer zero times. The per-asset detail in the unified summary
+  carries the qualifier on the GREEN branch too (*demo=pass (8% masked)*): a pass measured
+  with 8% of every frame blanked is a weaker claim than a pass, and that is the branch a
+  reader acts on. The HTML header's tolerance falls back to the ANCHOR's stamped value
+  exactly as the masks do, so an ungraded run (a pacing refusal) states the real terms rather
+  than the stricter default.
+- **The ledger has a reader.** `mask --list` prints the rect list, the combined consent
+  sentence, `previousMaskRects` (*previously: `<rects>` at `<ts>`*) and the fraction history.
+  `maskedFractionHistory` is validated against `[0, 1]` and deliberately NOT against the live
+  cap: it is history, never enforcement, and binding it to `MAX_MASKED_FRACTION` would mean
+  that lowering the cap later retroactively bricked every anchor whose past stamps were legal
+  when they were made. A cap change must refuse the next stamp, never un-read the previous
+  ones. A `--set` that DROPS a rect names it (*2 mask(s) REMOVED: ...*) and the count line
+  reads *2 to 2 mask(s) (2 removed, 2 added)* rather than as no-change.
 - **The honest limit is recorded.** Masks fix LOCALIZED nondeterminism only. Full-frame or
   diffuse nondeterminism (particle storms, full-screen shaders) stays red, and game-time
   (`timeScale`) alignment remains the recorded future path for it.

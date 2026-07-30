@@ -986,6 +986,7 @@ export function summaryLines(report: UnifiedVerifyReport, live: boolean): string
  * `pass` next to a section that exited 1 is the same dishonesty at a smaller scale.
  */
 function assetDetail(asset: UnifiedAssetOutcome): string {
+  const masked = asset.drift?.maskedFraction ?? 0;
   if (asset.drift && asset.drift.driftCaptures > 0) {
     return (
       `${asset.id}=pixel drift ${driftPercentText(asset.drift.maxDiffFraction)}% ` +
@@ -993,13 +994,19 @@ function assetDetail(asset: UnifiedAssetOutcome): string {
       `${driftPercentText(asset.drift.toleranceUsed)}%` +
       // Q7: the number is qualified ONLY when masks exist, so an unmasked section reads
       // exactly as it always did and a masked one never claims more coverage than it had.
-      ((asset.drift.maskedFraction ?? 0) > 0
-        ? `, ${driftPercentText(asset.drift.maskedFraction!)}% of the frame masked`
-        : "") +
+      (masked > 0 ? `, ${driftPercentText(masked)}% of the frame masked` : "") +
       ")"
     );
   }
-  return `${asset.id}=${asset.status}`;
+  // M7/MX6: THE GREEN BRANCH CARRIES THE QUALIFIER TOO, and it is the branch that needs it
+  // most. `demo=pass` is the line an agent quotes as proof, and a pass measured with 8% of
+  // every frame blanked is a materially weaker claim than a pass: the red branch disclosing
+  // the mask while the green branch hid it meant the disclosure vanished at exactly the
+  // moment it started to matter. Silent at 0, so an unmasked row is byte-identical to what
+  // it always printed.
+  return masked > 0
+    ? `${asset.id}=${asset.status} (${driftPercentText(masked)}% masked)`
+    : `${asset.id}=${asset.status}`;
 }
 
 // ── helpers ──────────────────────────────────────────────────────────────────

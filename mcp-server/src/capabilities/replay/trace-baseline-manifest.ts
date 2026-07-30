@@ -34,10 +34,10 @@ import { createHash } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 
+import { readPng } from "../verification/analyze-frames.js";
 import {
   DEFAULT_DRIFT_FRACTION,
   MAX_DRIFT_TOLERANCE,
-  MAX_MASKED_FRACTION,
   maskRefusal,
   type MaskRect,
 } from "./visual-diff.js";
@@ -94,6 +94,14 @@ export interface TraceBaselineManifest {
    */
   approvalCount?: number;
   previousApprovedAt?: string;
+  /**
+   * WRITE-ONLY TODAY, and recorded as such (MX13). `previousMaskRects` had the same
+   * problem and now has a reader (`mask --list` prints it), because "what did this anchor
+   * hide before the last stamp" is the question an auditor arrives with. The tolerance's
+   * previous value is deliberately left as it is for now: `mask --list` is the masks'
+   * surface, `tolerance` has no `--list`, and inventing one here would be scope this fix
+   * pass did not judge. It is a known gap, not an oversight.
+   */
   previousDriftTolerance?: number;
   /**
    * THE MASK IS PART OF THE ANCHOR (P1). Frame rects excluded from the pixel comparison,
@@ -213,10 +221,18 @@ export function nextApprovalLedger(
   previous: TraceBaselineManifest | null,
   opts: {
     /**
-     * The masked fraction this stamp is establishing. Present ONLY for a `trace mask`
-     * stamp, which is the only event that changes the mask list; every other writer
-     * carries the history forward untouched, because an append-only record that other
-     * verbs also appended to would stop being a record of mask decisions.
+     * The masked fraction this approval event is establishing, appended to
+     * `maskedFractionHistory`.
+     *
+     * Present for a `trace mask` stamp (the only event that CHANGES the list) and for a
+     * MASK-BEARING `approve` (MX2), which re-affirms the same rects against newly frozen
+     * frames and is therefore an approval of that blindness too. `tolerance` and an
+     * unmasked `approve` pass nothing and carry the history forward untouched.
+     *
+     * WHY approve appends an UNCHANGED number rather than staying silent: the history is
+     * read as "the record of how blind this anchor has been made, one entry per event". If
+     * only mask stamps wrote to it, six re-freezes between two stamps would be invisible,
+     * and 4% -> 4% would read as one decision instead of the seven it took.
      */
     maskedFraction?: number;
   } = {},
@@ -384,17 +400,23 @@ export async function loadTraceBaselineManifest(
   if (parsed.previousMaskRects !== undefined && !Array.isArray(parsed.previousMaskRects)) {
     return { error: `${TRACE_BASELINE_MANIFEST} 'previousMaskRects' must be an array` };
   }
+  // THE HISTORY IS RANGE-CHECKED AGAINST [0, 1], NOT AGAINST THE LIVE CAP (MX14). A
+  // hand-written 1.5 in it would be a fake consent record, so the shape is checked; but the
+  // history is HISTORY and never enforcement (nothing reads it back into a comparison), and
+  // binding it to `MAX_MASKED_FRACTION` would mean that LOWERING the cap later retroactively
+  // bricked every anchor whose past stamps were legal when they were made. A cap change must
+  // refuse the next stamp, never un-read the record of the previous ones.
   if (parsed.maskedFractionHistory !== undefined) {
     const history = parsed.maskedFractionHistory;
     if (!Array.isArray(history)) {
       return { error: `${TRACE_BASELINE_MANIFEST} 'maskedFractionHistory' must be an array` };
     }
     for (const entry of history) {
-      if (typeof entry !== "number" || !Number.isFinite(entry) || entry < 0 || entry > MAX_MASKED_FRACTION) {
+      if (typeof entry !== "number" || !Number.isFinite(entry) || entry < 0 || entry > 1) {
         return {
           error:
             `${TRACE_BASELINE_MANIFEST} 'maskedFractionHistory' has an entry outside ` +
-            `[0, ${MAX_MASKED_FRACTION}] (${JSON.stringify(entry)})`,
+            `[0, 1] (${JSON.stringify(entry)})`,
         };
       }
     }
@@ -493,6 +515,14 @@ export interface TraceBaselineIntegrityResult {
  *  - no baseline PNG in the dir is UNDECLARED (an out-of-band frame would
  *    otherwise become the comparison anchor for a capture id the manifest never
  *    approved);
+ *  - when `maskRects` are stamped, ONE declared PNG is DECODED and its real size is
+ *    cross-checked against the stamped `frameWidth`/`frameHeight` (MX3). Without this the
+ *    dimensions were self-asserted right up until grade time, so every PRE-RUN surface
+ *    (the plan's `anchor terms:` line, `mask --list`, discovery's typed `maskedFraction`)
+ *    could quote a masked fraction computed against a denominator nothing had checked:
+ *    inflate the stamped dims and a 40% mask reads as 4%. It is one decode, not one per
+ *    frame, because the sha check above already proves the other frames are the approved
+ *    bytes and `trace mask` refuses a mixed-size baseline;
  *  - with `tracePath`, the trace file still hashes to `traceSha256` (the baseline
  *    belongs to the demonstration it was approved for).
  *
@@ -537,6 +567,32 @@ export async function verifyTraceBaseline(
   for (const entry of entries.filter((e) => e.endsWith(".png")).sort()) {
     if (!declared.has(entry)) {
       failures.push(`baseline PNG '${entry}' is not declared in ${TRACE_BASELINE_MANIFEST} (re-approve to stamp it)`);
+    }
+  }
+
+  // THE STAMPED DENOMINATOR IS CHECKED AGAINST A REAL FRAME (MX3). Everything downstream
+  // divides by these two numbers, and until here they were the manifest's own word.
+  if ((loaded.maskRects?.length ?? 0) > 0) {
+    const first = loaded.pngs[0];
+    if (first === undefined) {
+      failures.push("masks are stamped but the manifest declares no frame to measure them against");
+    } else {
+      try {
+        const image = await readPng(path.join(dir, `${first.captureId}.png`));
+        if (image.width !== loaded.frameWidth || image.height !== loaded.frameHeight) {
+          failures.push(
+            `the stamped frame size ${loaded.frameWidth}x${loaded.frameHeight} is not the size of the approved ` +
+              `frames (${first.captureId}.png is ${image.width}x${image.height}): every masked fraction on ` +
+              "every surface was computed against a denominator that does not exist. Re-stamp with " +
+              "`loombridge trace mask --set` against the real frames, or `--clear`",
+          );
+        }
+      } catch (error) {
+        failures.push(
+          `masks are stamped but the approved frame '${first.captureId}.png' could not be decoded ` +
+            `(${message(error)}), so the masked fraction cannot be measured`,
+        );
+      }
     }
   }
 

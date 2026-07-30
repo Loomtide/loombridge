@@ -331,6 +331,17 @@ export interface CaptureResult {
   driftDiffSha?: string;
   /** Bounding box of the drifted pixels, present only when this capture drifted. */
   driftBounds?: RectGeometry;
+  /**
+   * MX1: the STRUCTURAL fingerprint of this capture's drift, a 16x16 grid of
+   * drifted-pixel counts, present only when this capture drifted.
+   *
+   * This is what the next run's discriminator actually measures against, and why it is in
+   * the report rather than only in memory: `driftDiffSha` alone is defeated by one flipped
+   * pixel, so a regression could be re-run until the shas differed and the tool would start
+   * recommending a mask for it. 95% of the drifted pixels landing in the same cells is not
+   * something a pixel of jitter can undo.
+   */
+  driftGrid?: number[];
 }
 
 export interface SegmentResult {

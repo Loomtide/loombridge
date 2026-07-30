@@ -198,8 +198,11 @@ When only one REGION animates under its own clock, `trace mask --id <id> --set
 <captureId?>:<x>,<y>,<w>x<h>@<reason>` excludes it and leaves the rest of the frame graded
 at full strictness. The rects are blanked in both images, capped at 10% of any one frame on
 both sides, and each one carries the reason a human typed. The tool suggests a mask only
-after two runs whose drift differs in the same region: an identical drift twice is a
-deterministic change, and it says so instead of offering to hide it.
+after two runs whose drift lands in the same region and does not REPRODUCE between them:
+reproduction is measured structurally (95% of the drifted pixels in the same cells of a
+16x16 grid), not by byte equality, so a real regression cannot be re-run until the bitmaps
+differ and then masked. A drift that reproduces is a deterministic change, and the tool
+says so instead of offering to hide it.
 
 ### Feel is measured, not vibed
 

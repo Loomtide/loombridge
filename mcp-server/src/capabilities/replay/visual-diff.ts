@@ -117,12 +117,35 @@ export interface VisualDiff {
   /** Bounding box of every drifted pixel, present only when something drifted. */
   driftBounds?: RectGeometry;
   /**
+   * THE STRUCTURAL FINGERPRINT of this frame's drift: a {@link DRIFT_GRID_SIDE}x
+   * {@link DRIFT_GRID_SIDE} grid of drifted-pixel COUNTS, row-major, present only when
+   * something drifted. See {@link driftGridSimilarity} for what it is for.
+   */
+  driftGrid?: number[];
+  /**
    * At most {@link MAX_SUGGESTED_RECTS} TIGHT rects covering every drifted pixel, present
    * only when the drift is concentrated enough for masks to cover it honestly (see
    * {@link clusterDriftRects}). Absent means diffuse.
    */
   driftClusters?: RectGeometry[];
+  /**
+   * WHY no rects were produced, present exactly when `driftClusters` is absent and
+   * something drifted. Three distinct reasons, because "diffuse" alone tells an operator
+   * nothing about what to do next (M8/M9).
+   */
+  driftClusterRefusal?: DriftClusterRefusal;
 }
+
+/**
+ * The three ways a drift can fail to be maskable, each with the number that decided it.
+ * Separate cases rather than one word, because they call for different actions: an
+ * over-cap region is too BIG to mask, a component storm is not a region at all, and a
+ * loose set would blind mostly-unchanged frame to hide a sparse drift.
+ */
+export type DriftClusterRefusal =
+  | { kind: "over-cap"; fraction: number }
+  | { kind: "too-many-components"; components: number }
+  | { kind: "too-loose"; tightness: number };
 
 const DEFAULT_PIXEL_THRESHOLD = 0.1;
 
@@ -173,11 +196,44 @@ export const MAX_MASKED_FRACTION = 0.1;
 export const MAX_SUGGESTED_RECTS = 3;
 
 /**
- * A suggested rect set must be this TIGHT: drifted pixels / suggested rect area. Below
- * it the rects are mostly empty space, so masking them would blind far more of the frame
- * than the drift actually occupies, and the honest answer is that masks do not fit.
+ * A suggested rect set must be this TIGHT, measured on the AGGREGATE UNION of the rects:
+ * drifted pixels / total covered area, NOT per rect. A per-rect rule is the weaker one and
+ * the wrong one here: three rects that are each 90% drifted still say nothing about the
+ * empty space between them once a merge has happened, and the number a mask actually
+ * spends is the union.
+ *
+ * Below this bar the rects are mostly unchanged frame, so masking them would blind far
+ * more of the picture than the drift occupies, and the honest answer is that masks do not
+ * fit. 0.6 rather than 0.5: at 0.5 a suggested rect set is allowed to be HALF unchanged
+ * pixels, which is a coin flip dressed as a recommendation, and the suggestion is the one
+ * surface that hands an operator a command to type.
  */
-export const MIN_CLUSTER_TIGHTNESS = 0.5;
+export const MIN_CLUSTER_TIGHTNESS = 0.6;
+
+/** The side of the drift grid: {@link DRIFT_GRID_SIDE}^2 cells per drifted frame. */
+export const DRIFT_GRID_SIDE = 16;
+
+/** How many counts a well-formed {@link VisualDiff.driftGrid} carries. */
+export const DRIFT_GRID_CELLS = DRIFT_GRID_SIDE * DRIFT_GRID_SIDE;
+
+/**
+ * THE REPRODUCTION BAR (the two-run discriminator's real threshold).
+ *
+ * At or above this structural similarity between two runs' drift grids, the drift is
+ * PREDOMINANTLY reproduced and the tool refuses to suggest a mask for it.
+ *
+ * WHY A THRESHOLD AND NOT SHA EQUALITY. Byte equality of the drift bitmap is trivially
+ * defeated: flip ONE extra pixel between the two runs and a real regression stops looking
+ * "identical", so an operator (or an agent) who wants a mask can simply re-run until the
+ * shas differ. 95% of the drifted pixels landing in the same cells cannot be produced by
+ * a stray pixel of jitter, so the retry loop stops working, while genuine ambient
+ * animation (which redraws a region differently every frame) stays well below the bar.
+ *
+ * IT FAILS SAFE IN ONE DIRECTION ONLY: over-refusing withholds a suggestion (the operator
+ * can still stamp a mask by hand, with their own reason on it); under-refusing would mint
+ * a recommendation to mask a real regression. There is no symmetric cost here.
+ */
+export const REPRODUCED_DRIFT_SIMILARITY = 0.95;
 
 /**
  * Beyond this many connected components the drift is diffuse BY DEFINITION: sub-pixel
@@ -478,13 +534,13 @@ export function maskRefusal(
 
 // ── drift analysis: bounds, the two-run sha, and the cluster suggestion ──────
 
-/** Bounding box, diff sha and (when it fits) the tight rects, for one drifted frame. */
+/** Bounding box, diff sha, drift grid and (when it fits) the tight rects, for one frame. */
 function analyzeDrift(
   bitmap: Uint8Array,
   W: number,
   H: number,
   diffPixels: number,
-): Pick<VisualDiff, "driftDiffSha" | "driftBounds" | "driftClusters"> {
+): Pick<VisualDiff, "driftDiffSha" | "driftBounds" | "driftGrid" | "driftClusters" | "driftClusterRefusal"> {
   let minX = W;
   let minY = H;
   let maxX = -1;
@@ -500,34 +556,121 @@ function analyzeDrift(
   }
   const clusters = clusterDriftRects(bitmap, W, H, diffPixels);
   return {
-    // THE TWO-RUN DISCRIMINATOR'S EVIDENCE (Q3). Hashing the drift BITMAP rather than the
-    // frame answers one question exactly: did the same pixels move, or different ones? A
-    // deterministic change (the game really did change) reproduces byte for byte; ambient
-    // nondeterminism does not.
+    // THE TWO-RUN DISCRIMINATOR'S EVIDENCE (Q3, as MX1 hardened it). Two records, and the
+    // second is the load-bearing one:
+    //  - `driftDiffSha` hashes the drift BITMAP, which answers "byte for byte, did exactly
+    //    the same pixels move?". It is the exact fast path, and nothing more: one flipped
+    //    pixel defeats it, so it cannot be the bar on its own.
+    //  - `driftGrid` is the STRUCTURAL fingerprint the bar is actually measured on, cheap
+    //    (256 small ints), deterministic, and immune to a pixel of jitter.
     driftDiffSha: createHash("sha256").update(bitmap).digest("hex"),
     ...(maxX >= 0 ? { driftBounds: { x: minX, y: minY, w: maxX - minX + 1, h: maxY - minY + 1 } } : {}),
-    ...(clusters ? { driftClusters: clusters } : {}),
+    driftGrid: driftGridOf(bitmap, W, H),
+    ...(Array.isArray(clusters) ? { driftClusters: clusters } : { driftClusterRefusal: clusters }),
   };
 }
 
 /**
+ * The {@link DRIFT_GRID_SIDE}x{@link DRIFT_GRID_SIDE} grid of drifted-pixel counts,
+ * row-major. Purely a coarsening of the bitmap: every drifted pixel lands in exactly one
+ * cell, so the cell sums always total `diffPixels`.
+ */
+export function driftGridOf(bitmap: Uint8Array, W: number, H: number): number[] {
+  const grid = new Array<number>(DRIFT_GRID_CELLS).fill(0);
+  if (!(W > 0) || !(H > 0)) return grid;
+  const last = DRIFT_GRID_SIDE - 1;
+  for (let y = 0; y < H; y += 1) {
+    const gy = Math.min(last, Math.floor((y * DRIFT_GRID_SIDE) / H));
+    for (let x = 0; x < W; x += 1) {
+      if (bitmap[y * W + x] !== 1) continue;
+      const gx = Math.min(last, Math.floor((x * DRIFT_GRID_SIDE) / W));
+      grid[gy * DRIFT_GRID_SIDE + gx] += 1;
+    }
+  }
+  return grid;
+}
+
+/**
+ * A grid off a semi-trusted on-disk report, or null when it is not one.
+ *
+ * The previous run's grid arrives through a `report.json` an operator can edit, so a
+ * malformed value must never be coerced into agreement. Null lands the caller on the
+ * branch that asks for another run rather than on one that names a rect: an unreadable
+ * fingerprint is the absence of evidence, and absence never invents a suggestion.
+ */
+export function asDriftGrid(value: unknown): number[] | null {
+  if (!Array.isArray(value) || value.length !== DRIFT_GRID_CELLS) return null;
+  for (const entry of value) {
+    if (typeof entry !== "number" || !Number.isInteger(entry) || entry < 0) return null;
+  }
+  return value as number[];
+}
+
+/**
+ * How much of two runs' drift lands in the SAME cells:
+ * `sum(min(a_i, b_i)) / max(sum(a), sum(b))`, in [0,1].
+ *
+ * The denominator is the LARGER run's total on purpose. Dividing by the smaller one (or
+ * by the intersection) would let a second run that drifted in ten extra places still score
+ * 1.0 against the first, which is the direction that mints suggestions.
+ *
+ * Returns 0 when either grid is empty or malformed: no evidence, no reproduction claim.
+ */
+export function driftGridSimilarity(a: readonly number[], b: readonly number[]): number {
+  if (a.length !== DRIFT_GRID_CELLS || b.length !== DRIFT_GRID_CELLS) return 0;
+  let shared = 0;
+  let sumA = 0;
+  let sumB = 0;
+  for (let i = 0; i < DRIFT_GRID_CELLS; i += 1) {
+    const x = a[i] ?? 0;
+    const y = b[i] ?? 0;
+    shared += x < y ? x : y;
+    sumA += x;
+    sumB += y;
+  }
+  const total = Math.max(sumA, sumB);
+  return total === 0 ? 0 : shared / total;
+}
+
+/**
+ * Do two runs' drifts touch the same part of the frame? (MX1)
+ *
+ * This REPLACES the bounding-box overlap that gated the suggestion before. A bounding box
+ * is the convex hull of everything that moved, so a single distant speck stretched it
+ * across half the frame and made two unrelated drifts "overlap"; a shared non-zero CELL is
+ * a claim about where the pixels actually are.
+ */
+export function driftGridsShareCell(a: readonly number[], b: readonly number[]): boolean {
+  if (a.length !== DRIFT_GRID_CELLS || b.length !== DRIFT_GRID_CELLS) return false;
+  for (let i = 0; i < DRIFT_GRID_CELLS; i += 1) {
+    if ((a[i] ?? 0) > 0 && (b[i] ?? 0) > 0) return true;
+  }
+  return false;
+}
+
+/**
  * Cluster the drifted pixels into at most {@link MAX_SUGGESTED_RECTS} rects that a human
- * could honestly mask, or null when the drift is DIFFUSE.
+ * could honestly mask, or a NAMED refusal when the drift is not maskable.
  *
  * Connected components (8-connectivity), then greedy agglomeration of the pair of boxes
  * whose merged bounding box is smallest, until three remain. The result is refused unless
- * it is TIGHT (drifted pixels / covered area >= {@link MIN_CLUSTER_TIGHTNESS}) and fits
- * under {@link MAX_MASKED_FRACTION}. Both refusals matter: a loose cluster set would blind
- * a large region to hide a sparse drift, which is the laundering the cap exists to stop,
- * and it would be wearing a tool recommendation as cover.
+ * the AGGREGATE UNION of the surviving rects is TIGHT (drifted pixels / union area >=
+ * {@link MIN_CLUSTER_TIGHTNESS}) and fits under {@link MAX_MASKED_FRACTION}. Both refusals
+ * matter: a loose cluster set would blind a large region to hide a sparse drift, which is
+ * the laundering the cap exists to stop, and it would be wearing a tool recommendation as
+ * cover.
+ *
+ * The refusal is a typed reason rather than a bare null, because "diffuse" alone does not
+ * tell the operator whether the region is too big, too scattered, or too empty, and those
+ * three call for different next steps.
  */
 export function clusterDriftRects(
   bitmap: Uint8Array,
   W: number,
   H: number,
   diffPixels: number,
-): RectGeometry[] | null {
-  if (diffPixels === 0) return null;
+): RectGeometry[] | DriftClusterRefusal {
+  if (diffPixels === 0) return { kind: "too-loose", tightness: 0 };
   const seen = new Uint8Array(W * H);
   let boxes: PixelBox[] = [];
   const stack: number[] = [];
@@ -563,7 +706,9 @@ export function clusterDriftRects(
     boxes.push({ x0, y0, x1, y1 });
     // Scattered sub-pixel noise produces components without end; past the bound no set of
     // three rects covers them without covering the frame, so stop and say diffuse.
-    if (boxes.length > MAX_DRIFT_COMPONENTS) return null;
+    if (boxes.length > MAX_DRIFT_COMPONENTS) {
+      return { kind: "too-many-components", components: boxes.length };
+    }
   }
 
   while (boxes.length > MAX_SUGGESTED_RECTS) {
@@ -583,9 +728,11 @@ export function clusterDriftRects(
   }
 
   const area = unionArea(boxes);
-  if (area === 0) return null;
-  if (diffPixels / area < MIN_CLUSTER_TIGHTNESS) return null;
-  if (area / (W * H) > MAX_MASKED_FRACTION) return null;
+  if (area === 0) return { kind: "too-loose", tightness: 0 };
+  const tightness = diffPixels / area;
+  if (tightness < MIN_CLUSTER_TIGHTNESS) return { kind: "too-loose", tightness };
+  const fraction = W * H > 0 ? area / (W * H) : 1;
+  if (fraction > MAX_MASKED_FRACTION) return { kind: "over-cap", fraction };
   return boxes
     .map((b) => ({ x: b.x0, y: b.y0, w: b.x1 - b.x0, h: b.y1 - b.y0 }))
     .sort((p, q) => p.y - q.y || p.x - q.x);
@@ -668,8 +815,26 @@ export function anchorTermsSentence(terms: AnchorTerms): string | null {
       : `a frame (${terms.scopedCount} of them scoped to one capture)`;
   return (
     `${terms.maskCount} mask(s) hide ${driftPercentText(terms.maskedFraction)}% of ${scope} outright; ` +
-    `the rest grades ${toleranceConsentSentence(terms.tolerance)}`
+    `the rest grades ${toleranceConsentSentence(terms.tolerance)}; ` +
+    combinedBlindnessClause(terms)
   );
+}
+
+/**
+ * THE COMPOSED NUMBER (M5/MX4): the two allowances ADDED UP, stated as one number.
+ *
+ * A reader told "4% is masked" and "the rest grades at 1.5%" has been told the truth twice
+ * and the answer zero times: the question a gate has to answer is how much of the frame can
+ * change while it stays green, and that is the SUM. Leaving the addition to the reader is
+ * how two individually-reasonable stamps become a gate nobody has measured.
+ *
+ * The masked fraction is exact (those pixels are blanked, so they always "pass"); the
+ * tolerance is a fraction of the FULL frame (M11 keeps that denominator), so the two are
+ * in the same unit and simply add.
+ */
+export function combinedBlindnessClause(terms: AnchorTerms): string {
+  const total = Math.min(1, terms.maskedFraction + terms.tolerance);
+  return `together, up to ${driftPercentText(total)}% of the frame can change while the gate stays green`;
 }
 
 /**
@@ -792,11 +957,19 @@ export function driftSuggestionLines(input: DriftFacts & { traceId: string }): s
 export interface CaptureDriftEvidence {
   captureId: string;
   drifted: boolean;
-  /** sha256 of the drift bitmap, when this capture drifted. */
+  /** sha256 of the drift bitmap, when this capture drifted. The EXACT fast path only. */
   driftDiffSha?: string;
   driftBounds?: RectGeometry;
+  /**
+   * The structural fingerprint the reproduction bar is measured on. Absent for a report
+   * written before this field existed, which lands on `first-run`: no fingerprint, no
+   * suggestion.
+   */
+  driftGrid?: number[];
   /** The tight rects that would cover this capture's drift, absent when diffuse. */
   driftClusters?: RectGeometry[];
+  /** Why there are no rects, when there are none. */
+  driftClusterRefusal?: DriftClusterRefusal;
 }
 
 /**
@@ -807,15 +980,24 @@ export interface CaptureDriftEvidence {
  */
 export type MaskSuggestion =
   | { kind: "first-run" }
-  | { kind: "identical"; captures: string[] }
-  | { kind: "diffuse" }
+  | {
+      kind: "identical";
+      captures: string[];
+      /**
+       * True when EVERY reproducing capture matched byte for byte; false when at least one
+       * only cleared the {@link REPRODUCED_DRIFT_SIMILARITY} bar. The weaker claim is
+       * printed whenever it is the one the evidence supports.
+       */
+      exact: boolean;
+    }
+  | { kind: "diffuse"; refusal?: DriftClusterRefusal }
   | { kind: "suggest"; rects: MaskRect[]; captures: number; fraction: number };
 
 /** The placeholder reason a suggested command carries until a human replaces it. */
 export const SUGGESTED_MASK_REASON = "ambient-animation";
 
 /**
- * THE TWO-RUN DISCRIMINATOR (Q3).
+ * THE TWO-RUN DISCRIMINATOR (Q3, hardened by MX1).
  *
  * A mask is permanent blindness in a region of the frame, so the bar for suggesting one
  * is not "something moved" but "something moves DIFFERENTLY every run". One run cannot
@@ -823,11 +1005,22 @@ export const SUGGESTED_MASK_REASON = "ambient-animation";
  * single report. So:
  *
  *  - no previous evidence at all -> say so and ask for a second run. Never a rect.
- *  - the SAME drift bitmap twice -> that is deterministic. The game changed, and masking
- *    it would erase the finding. This is the case that makes the whole feature safe, and
- *    it wins over every other branch when any capture exhibits it.
- *  - drift in overlapping regions with DIFFERENT bitmaps -> nondeterministic, and the
+ *  - the drift REPRODUCES across the two runs -> that is deterministic. The game changed,
+ *    and masking it would erase the finding. This is the case that makes the whole feature
+ *    safe, and it wins over every other branch when any capture exhibits it.
+ *  - drift in the same GRID CELLS that does NOT reproduce -> nondeterministic, and the
  *    rects are offered (still only when they cluster tightly enough to be honest).
+ *
+ * "REPRODUCES" IS STRUCTURAL, NOT BYTE EQUALITY, and that is the whole of MX1. The
+ * previous rule was `beforeSha === currentSha`, which a regression defeats by flipping one
+ * extra pixel: re-run until the shas differ and the tool starts recommending a mask for the
+ * bug. The bar is now {@link REPRODUCED_DRIFT_SIMILARITY} on the drift GRID, which one
+ * stray pixel cannot move, so the retry loop stops working. The sha stays as the exact fast
+ * path (and as the report's record), never as the bar.
+ *
+ * `existing` is the mask list ALREADY STAMPED on the anchor: the suggested command restates
+ * it first, so an operator who follows the suggestion verbatim never un-masks a region they
+ * previously approved (M6/MX5).
  *
  * Pure, so both doors derive the same suggestion from the same two reports.
  */
@@ -836,50 +1029,84 @@ export function deriveMaskSuggestion(
   previous: readonly CaptureDriftEvidence[],
   frameWidth: number,
   frameHeight: number,
+  existing: readonly MaskRect[] = [],
 ): MaskSuggestion | null {
   const drifted = current.filter((c) => c.drifted);
   if (drifted.length === 0) return null;
   const previousById = new Map(previous.map((p) => [p.captureId, p]));
 
-  const identical: string[] = [];
+  const reproduced: string[] = [];
+  let everyReproductionExact = true;
   const nondeterministic: CaptureDriftEvidence[] = [];
   for (const capture of drifted) {
     const before = previousById.get(capture.captureId);
-    if (!before?.drifted || before.driftDiffSha === undefined || capture.driftDiffSha === undefined) {
+    if (!before?.drifted) continue;
+    // The exact fast path: the same bytes moved, so there is nothing to measure.
+    if (
+      before.driftDiffSha !== undefined &&
+      capture.driftDiffSha !== undefined &&
+      before.driftDiffSha === capture.driftDiffSha
+    ) {
+      reproduced.push(capture.captureId);
       continue;
     }
-    if (before.driftDiffSha === capture.driftDiffSha) {
-      identical.push(capture.captureId);
+    // NO FINGERPRINT, NO CLAIM. A previous report written before the grid existed (or one
+    // whose grid was edited into nonsense) cannot support "these are different drifts", so
+    // the capture falls through to `first-run`: ask for another run rather than name a rect.
+    const beforeGrid = asDriftGrid(before.driftGrid);
+    const nowGrid = asDriftGrid(capture.driftGrid);
+    if (beforeGrid === null || nowGrid === null) continue;
+    if (driftGridSimilarity(beforeGrid, nowGrid) >= REPRODUCED_DRIFT_SIMILARITY) {
+      reproduced.push(capture.captureId);
+      everyReproductionExact = false;
       continue;
     }
-    // Different bitmaps, but in the SAME part of the frame: an ambient layer redrawing
-    // itself. Two drifts in unrelated regions are two findings, not one mask.
-    if (before.driftBounds && capture.driftBounds && overlaps(before.driftBounds, capture.driftBounds)) {
-      nondeterministic.push(capture);
-    }
+    // Different drifts, but in the SAME cells of the frame: an ambient layer redrawing
+    // itself. Two drifts in unrelated regions are two findings, not one mask. Shared CELLS
+    // rather than overlapping bounding boxes: a box is the hull of everything that moved,
+    // so one distant speck could stretch it across the frame and manufacture an overlap.
+    if (driftGridsShareCell(beforeGrid, nowGrid)) nondeterministic.push(capture);
   }
-  if (identical.length > 0) return { kind: "identical", captures: identical.sort() };
+  if (reproduced.length > 0) {
+    return { kind: "identical", captures: reproduced.sort(), exact: everyReproductionExact };
+  }
   if (nondeterministic.length === 0) return { kind: "first-run" };
-  if (nondeterministic.some((c) => c.driftClusters === undefined)) return { kind: "diffuse" };
+  const unclustered = nondeterministic.find((c) => c.driftClusters === undefined);
+  if (unclustered) {
+    return {
+      kind: "diffuse",
+      ...(unclustered.driftClusterRefusal ? { refusal: unclustered.driftClusterRefusal } : {}),
+    };
+  }
 
-  const rects: MaskRect[] = [];
+  // THE STAMPED RECTS COME FIRST (MX5). `--set` restates the whole list, so a suggestion
+  // that named only the new rects would be a command to DELETE every mask already
+  // approved, handed to the operator as the remedy for a drift.
+  const rects: MaskRect[] = [...existing];
+  const seen = new Set(rects.map(rectKey));
   for (const capture of nondeterministic) {
     for (const rect of capture.driftClusters ?? []) {
-      rects.push({ ...rect, captureId: capture.captureId, reason: SUGGESTED_MASK_REASON });
+      const suggested: MaskRect = { ...rect, captureId: capture.captureId, reason: SUGGESTED_MASK_REASON };
+      if (seen.has(rectKey(suggested))) continue;
+      seen.add(rectKey(suggested));
+      rects.push(suggested);
     }
   }
   // The cap has the last word even here: a per-capture cluster set that fits individually
-  // must still fit as the list that would be stamped.
-  if (maskRefusal(rects, frameWidth, frameHeight) !== null) return { kind: "diffuse" };
+  // must still fit as the list that would be stamped, ALONGSIDE what is already stamped.
   let worst = 0;
   for (const capture of nondeterministic) {
     worst = Math.max(worst, maskedFractionFor(rects, capture.captureId, frameWidth, frameHeight));
   }
+  if (maskRefusal(rects, frameWidth, frameHeight) !== null) {
+    return { kind: "diffuse", refusal: { kind: "over-cap", fraction: worst } };
+  }
   return { kind: "suggest", rects, captures: nondeterministic.length, fraction: worst };
 }
 
-function overlaps(a: RectGeometry, b: RectGeometry): boolean {
-  return a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+/** Scope + geometry, the identity a rect keeps across a re-stamp (the reason may be edited). */
+export function rectKey(rect: MaskRect): string {
+  return `${rect.captureId ?? "*"}:${formatRectGeometry(rect)}`;
 }
 
 /** `x,y,wxh`, the geometry spelling the `--set` flag parses back. One formatter. */
@@ -894,11 +1121,49 @@ export function formatMaskSetFlag(rect: MaskRect): string {
 }
 
 /**
+ * The DETERMINISTIC-CHANGE WARNING, verbatim and load-bearing: it is the one line that
+ * stands between an operator and masking a real regression they were about to be told was
+ * ambient noise. Both reproduction branches end in exactly this clause, so a test (and a
+ * reader) can pin one string for the whole family.
+ */
+export const DETERMINISTIC_DRIFT_WARNING =
+  "that is a deterministic change, not ambient noise; investigate before masking.";
+
+/** The honest-refusal tail every "masks do not fit" sentence ends with. */
+const DIFFUSE_TAIL = "investigate it, or record the game-time alignment limit (see the RFC).";
+
+/** The three named ways masks cannot cover a drift (M8/M9), each with its own remedy. */
+function diffuseLine(refusal: DriftClusterRefusal | undefined): string {
+  switch (refusal?.kind) {
+    case "over-cap":
+      return (
+        `drift is diffuse; masks cannot cover it honestly: one region of ${driftPercentText(refusal.fraction)}%, ` +
+        `above the ${driftPercentText(MAX_MASKED_FRACTION)}% cap. Masking it would hide more of the frame than ` +
+        `the gate may concede: ${DIFFUSE_TAIL}`
+      );
+    case "too-many-components":
+      return (
+        `drift is diffuse; masks cannot cover it honestly: it breaks into more than ${MAX_DRIFT_COMPONENTS} ` +
+        `separate components, and no ${MAX_SUGGESTED_RECTS} rects cover those without covering the frame: ` +
+        DIFFUSE_TAIL
+      );
+    case "too-loose":
+      return (
+        `drift is diffuse; masks cannot cover it honestly: the rects that would cover it are only ` +
+        `${driftPercentText(refusal.tightness)}% drifted pixels, under the ` +
+        `${driftPercentText(MIN_CLUSTER_TIGHTNESS)}% tightness bar, so they are mostly unchanged frame: ` +
+        DIFFUSE_TAIL
+      );
+    default:
+      return (
+        "drift is diffuse; masks cannot cover it honestly. A mask is a region, and this drift is not one: " +
+        DIFFUSE_TAIL
+      );
+  }
+}
+
+/**
  * The human-facing lines for a mask suggestion, identical at both doors.
- *
- * The `identical` wording is VERBATIM and load-bearing: it is the one line that stands
- * between an operator and masking a real regression they were about to be told was
- * ambient noise.
  */
 export function maskSuggestionLines(suggestion: MaskSuggestion, traceId: string): string[] {
   switch (suggestion.kind) {
@@ -906,14 +1171,13 @@ export function maskSuggestionLines(suggestion: MaskSuggestion, traceId: string)
       return ["re-run replay once more to characterize the drift before masking."];
     case "identical":
       return [
-        "the drift is IDENTICAL across two runs: that is a deterministic change, not ambient noise; " +
-          "investigate before masking.",
+        suggestion.exact
+          ? `the drift is IDENTICAL across two runs: ${DETERMINISTIC_DRIFT_WARNING}`
+          : `at least ${driftPercentText(REPRODUCED_DRIFT_SIMILARITY)}% of the drifted pixels reproduce across ` +
+            `two runs: ${DETERMINISTIC_DRIFT_WARNING}`,
       ];
     case "diffuse":
-      return [
-        "drift is diffuse; masks cannot cover it honestly. A mask is a region, and this drift is not one: " +
-          "investigate it, or record the game-time alignment limit (see the RFC).",
-      ];
+      return [diffuseLine(suggestion.refusal)];
     case "suggest": {
       const bounds = boundingRect(suggestion.rects);
       const command = `loombridge trace mask --id ${traceId} ${suggestion.rects.map(formatMaskSetFlag).join(" ")}`;
