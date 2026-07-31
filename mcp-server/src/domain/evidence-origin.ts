@@ -50,6 +50,18 @@ export interface EvidenceProvenanceFacts {
   runId: string | null;
   /** `_provenance.editorSessionId`, else `_provenance.unityRouting.editorSessionId`, else null. */
   editorSessionId: string | null;
+  /**
+   * `_provenance.observation.recorderEditorSessionId`, or null.
+   *
+   * THE STRONG BINDER (E15). `editorSessionId` is a bridge SERVER-GENERATION id, minted
+   * when the bridge server starts and re-minted by every domain reload (which entering
+   * play mode causes), and read by each connection from its own handshake or its cached
+   * discovery record. Two files from ONE editor sitting therefore legitimately carry two
+   * ids. This field is different in kind: the recorder reports it from INSIDE the running
+   * editor at the moment it opened the observation window, so two files that disagree on
+   * it were recorded by two genuinely different bridge sittings.
+   */
+  recorderEditorSessionId: string | null;
   /** One sentence saying WHY this origin was derived. Always set (absent is stated). */
   note: string;
 }
@@ -74,6 +86,7 @@ export function deriveEvidenceOrigin(parsed: unknown): EvidenceProvenanceFacts {
     writer: null,
     runId: null,
     editorSessionId: null,
+    recorderEditorSessionId: null,
     note,
   });
 
@@ -87,6 +100,10 @@ export function deriveEvidenceOrigin(parsed: unknown): EvidenceProvenanceFacts {
   const routing = asRecord(provenance.unityRouting);
   const editorSessionId =
     asString(provenance.editorSessionId) ?? (routing ? asString(routing.editorSessionId) : null);
+  const observationBlock = asRecord(provenance.observation);
+  const recorderEditorSessionId = observationBlock
+    ? asString(observationBlock.recorderEditorSessionId)
+    : null;
 
   if (!writer) {
     return {
@@ -94,6 +111,7 @@ export function deriveEvidenceOrigin(parsed: unknown): EvidenceProvenanceFacts {
       writer: null,
       runId,
       editorSessionId,
+      recorderEditorSessionId,
       note: "`_provenance` carries no `writer`, so no CLI producer claims this file",
     };
   }
@@ -103,6 +121,7 @@ export function deriveEvidenceOrigin(parsed: unknown): EvidenceProvenanceFacts {
       writer,
       runId,
       editorSessionId,
+      recorderEditorSessionId,
       note: `\`_provenance.writer\` is "${writer}", which is not a Loombridge capture producer`,
     };
   }
@@ -110,12 +129,13 @@ export function deriveEvidenceOrigin(parsed: unknown): EvidenceProvenanceFacts {
   // playability file from `_provenance.observation`, and the gate re-derives the headline
   // from exactly that block. Keying on the recording rather than on the recipe string means
   // a renamed recipe cannot quietly demote an observed file to a produced one.
-  if (asRecord(provenance.observation)) {
+  if (observationBlock) {
     return {
       origin: "observed",
       writer,
       runId,
       editorSessionId,
+      recorderEditorSessionId,
       note: "written by the CLI observer from its own `_provenance.observation` recording",
     };
   }
@@ -124,6 +144,7 @@ export function deriveEvidenceOrigin(parsed: unknown): EvidenceProvenanceFacts {
     writer,
     runId,
     editorSessionId,
+    recorderEditorSessionId,
     note: `written by the CLI capture producer "${writer}"`,
   };
 }

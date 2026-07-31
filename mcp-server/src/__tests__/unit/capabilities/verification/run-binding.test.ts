@@ -77,7 +77,15 @@ test("CLI-written evidence from another run refuses (stage-4 rule, now pinned di
   assert.match(result.refusals[0]!, /produced under run `run-other`/);
 });
 
-test("two editor sessions in one slice refuse (L106, pinned directly)", () => {
+// ── E15: which session field can refuse, and which can only note ─────────────
+//
+// `editorSessionId` is a bridge SERVER-GENERATION id, re-minted by every domain reload
+// (so by every play-mode entry). The E6 sessions proved one editor sitting hands out two
+// of them across a slice's CLI + agent evidence, which made the old check refuse honest
+// runs. `observation.recorderEditorSessionId` is read inside the running editor and is
+// the field that can still prove two sittings.
+
+test("E15: two different editorSessionIds alone are a NOTE naming the limitation, not a refusal", () => {
   const result = runBindingRefusals({
     ledger: ledgerWith([
       cli({ editorSessionId: "session-1" }),
@@ -86,5 +94,69 @@ test("two editor sessions in one slice refuse (L106, pinned directly)", () => {
     mintedRunId: "run-minted",
     label: "slice demo",
   });
-  assert.ok(result.refusals.some((r: string) => r.includes("DIFFERENT editor sessions")), JSON.stringify(result.refusals));
+  assert.deepEqual(result.refusals, [], "a bridge restart is not proof of two sittings");
+  assert.ok(
+    result.notes.some((n: string) => /different `editorSessionId`s/.test(n) && /SERVER GENERATION/.test(n)),
+    JSON.stringify(result.notes),
+  );
+});
+
+test("E15: differing editorSessionIds with AGREEING recorder ids say so, and still do not refuse", () => {
+  const result = runBindingRefusals({
+    ledger: ledgerWith([
+      cli({ editorSessionId: "session-1", recorderEditorSessionId: "sitting-A" }),
+      cli({ file: "playability.json", editorSessionId: "session-2", recorderEditorSessionId: "sitting-A" }),
+    ] as EvidenceLedger["files"]),
+    mintedRunId: "run-minted",
+    label: "slice demo",
+  });
+  assert.deepEqual(result.refusals, []);
+  assert.ok(
+    result.notes.some((n: string) => /agrees on recorder sitting `sitting-A`/.test(n)),
+    JSON.stringify(result.notes),
+  );
+});
+
+test("E15 LITMUS: a genuinely DIFFERENT sitting, proven by differing recorder ids, still REFUSES", () => {
+  // The same two files as the note case above, with only the strong binder changed.
+  const result = runBindingRefusals({
+    ledger: ledgerWith([
+      cli({ editorSessionId: "session-1", recorderEditorSessionId: "sitting-A" }),
+      cli({ file: "playability.json", editorSessionId: "session-2", recorderEditorSessionId: "sitting-B" }),
+    ] as EvidenceLedger["files"]),
+    mintedRunId: "run-minted",
+    label: "slice demo",
+  });
+  assert.ok(
+    result.refusals.some((r: string) => /RECORDED IN 2 DIFFERENT editor sittings/.test(r)),
+    JSON.stringify(result.refusals),
+  );
+});
+
+test("E15: differing recorder ids refuse even when the weak editorSessionIds agree", () => {
+  // The reverse smuggle: one cached connection id over two real sittings.
+  const result = runBindingRefusals({
+    ledger: ledgerWith([
+      cli({ editorSessionId: "session-1", recorderEditorSessionId: "sitting-A" }),
+      cli({ file: "playability.json", editorSessionId: "session-1", recorderEditorSessionId: "sitting-B" }),
+    ] as EvidenceLedger["files"]),
+    mintedRunId: "run-minted",
+    label: "slice demo",
+  });
+  assert.ok(
+    result.refusals.some((r: string) => /RECORDED IN 2 DIFFERENT editor sittings/.test(r)),
+    JSON.stringify(result.refusals),
+  );
+});
+
+test("L106 unchanged: a CLI-written file with NO editorSessionId at all still refuses (absent is not a skip)", () => {
+  const result = runBindingRefusals({
+    ledger: ledgerWith([cli({ editorSessionId: null })] as EvidenceLedger["files"]),
+    mintedRunId: "run-minted",
+    label: "slice demo",
+  });
+  assert.ok(
+    result.refusals.some((r: string) => /carries no `editorSessionId`/.test(r)),
+    JSON.stringify(result.refusals),
+  );
 });

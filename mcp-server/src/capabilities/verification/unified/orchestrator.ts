@@ -35,8 +35,11 @@ import {
   nowIso,
   readState,
   standardReplayLayout,
+  writeState,
+  type LoombridgeState,
   type ReplayLayout,
 } from "../../../domain/state.js";
+import { phaseForStatus } from "../verify.js";
 import { isInside, projectWorkspace, sanitizeWorkspaceId } from "../../../domain/workspace-paths.js";
 import {
   DEFAULT_DRIFT_FRACTION,
@@ -391,12 +394,79 @@ export async function runUnifiedVerify(opts: UnifiedVerifyOpts): Promise<number>
     notes,
   };
   await writeUnifiedVerifyReport(reportPath, report);
+  await recordRollupInState({ root, paths, report, reportPath, scoped: only !== null });
 
   for (const line of summaryLines(report, opts.live)) console.error(line);
   console.error(
     `${TAG} status=${report.status} exit=${report.exit} report=${path.relative(root, reportPath)}`,
   );
   return report.exit;
+}
+
+/**
+ * E16: RECORD THE SLICES ROLL-UP IN STATE, the way the flat door already records its own
+ * verdict.
+ *
+ * Observed live: nine slices re-graded green through the roll-up and `STATE.md` still
+ * read `built-unverified` / `lastVerdict: null`, because the only writer of that block
+ * is `runVerify`, and on a slice-planned project `runVerify` grades the FLAT inputs dir,
+ * finds nothing there, and takes its nothing-graded refusal (which correctly leaves STATE
+ * untouched). So the one path that did the grading was the one path that never said so,
+ * and every reader of STATE saw an unverified build.
+ *
+ * The rules mirror `runVerify`'s exactly:
+ *
+ *  - only a FULL run may record: a `--only` run is scoped by construction and never
+ *    writes the full-run report (`UNIFIED_VERIFY_REPORT`), so it must not write the
+ *    single-slot state either;
+ *  - only a run whose slices section EXECUTED may record. A project with no slice plan
+ *    keeps today's behaviour byte for byte: `runVerify` owns its STATE write and nothing
+ *    here overwrites it;
+ *  - only a real game verdict (`pass`/`fail`) may record. `harness-fault`,
+ *    `nothing-checked` and `partial` are not verdicts about the game, and mapping them
+ *    onto a `verified-*` phase would be the "verify passed" artefact the flat door's
+ *    nothing-graded refusal exists to prevent. They leave STATE untouched, and say so.
+ *
+ * `currentBuild`, `genre`, `engine` and `designTarget` are carried through unchanged:
+ * this records a verdict, it does not re-mint a run.
+ */
+async function recordRollupInState(args: {
+  root: string;
+  paths: ReturnType<typeof loombridgePaths>;
+  report: UnifiedVerifyReport;
+  reportPath: string;
+  scoped: boolean;
+}): Promise<void> {
+  if (args.scoped) return;
+  if (args.report.sections.slices === undefined) return;
+
+  const status = args.report.status;
+  if (status !== "pass" && status !== "fail") {
+    console.error(
+      `${TAG} slices: STATE not updated: the run is \`${status}\`, which is not a verdict about the game. ` +
+        "Only pass/fail is recorded as a phase.",
+    );
+    return;
+  }
+
+  const prev = await readState(args.paths);
+  const state: LoombridgeState = {
+    genre: prev?.genre ?? "unknown",
+    engine: prev?.engine ?? "unity",
+    phase: phaseForStatus(status),
+    designTarget: prev?.designTarget,
+    currentBuild: prev?.currentBuild,
+    lastVerdict: {
+      status,
+      at: args.report.producedAt,
+      verdictPath: path.relative(args.root, args.reportPath),
+    },
+    updatedAt: args.report.producedAt,
+  };
+  await writeState(args.paths, state);
+  console.error(
+    `${TAG} slices: STATE.md phase=${state.phase} lastVerdict=${status} → ${state.lastVerdict!.verdictPath}`,
+  );
 }
 
 // ── sections ─────────────────────────────────────────────────────────────────

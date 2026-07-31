@@ -399,13 +399,36 @@ export async function runPlayabilitySession(
     );
   }
 
+  // E15: THE TOP-LEVEL SESSION STAMP MUST BE THE ONE THAT RECORDED THE EVIDENCE.
+  //
+  // `options.editorSessionId` comes from the handshake this connection made BEFORE
+  // `editor.play`, and `editor.play` ROLLS the bridge session id: the recorder that
+  // actually observed the drive reports a different one from `observe.start`
+  // (`observation.recorderEditorSessionId`). Stamping the pre-play id made one play
+  // session show two ids across a slice's files and pointed the co-temporality check at
+  // a session that no longer existed by the time anything was recorded.
+  //
+  // The recorder's own id wins. The pre-play handshake id is KEPT (never dropped) as
+  // `handshakeEditorSessionId`, because the difference between the two is the fact that
+  // explains the rest, and a stamp that quietly replaces a value teaches nothing.
+  const recorderEditorSessionId = typeof open.editorSessionId === "string" && open.editorSessionId.length > 0
+    ? open.editorSessionId
+    : undefined;
   const provenance = {
     writer: PLAYABILITY_PRODUCER,
     recipe: PLAYABILITY_RECIPE,
     capturedAt,
     capturedInPlayMode: true,
     runId: options.runId,
-    editorSessionId: options.editorSessionId,
+    editorSessionId: recorderEditorSessionId ?? options.editorSessionId,
+    handshakeEditorSessionId: options.editorSessionId,
+    ...(recorderEditorSessionId === undefined
+      ? {
+          editorSessionIdNote:
+            "observe.start reported no editorSessionId, so this stamp is the PRE-play handshake id; " +
+            "editor.play rolls the session, so it may not name the session that recorded the drive.",
+        }
+      : {}),
     ...(options.unityRouting ? { unityRouting: options.unityRouting } : {}),
     seam,
     /**

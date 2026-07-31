@@ -860,6 +860,185 @@ namespace UnityBridge.Tests
                 "a single-name resolve must not produce a dotted path");
         }
 
+        // ─────────────────────────────────────────────
+        // E20 / L117: the WRITE-ONLY introspection class closes
+        //
+        // set_property has long accepted `m_Enabled` and `m_SortingOrder`; get_properties
+        // could not read either back, because the SerializedObject iterator NextVisible()
+        // walks skips them. An agent could therefore set a value and had no way to confirm
+        // it landed: three Canvas scrim-sorting fixes were abandoned as unverifiable for
+        // exactly this reason.
+        // ─────────────────────────────────────────────
+
+        [Test]
+        public void GetProperties_ReadsBackAnEnabledFlagSetThroughSetProperty()
+        {
+            var behaviour = _testGo.AddComponent<ObjectReferenceTestComponent>();
+            behaviour.enabled = true;
+            JObject locator = LocatorResolver.BuildLocator(_testGo);
+
+            // Control: the read reports the live TRUE before anything is written.
+            JObject before = _handler.HandleOp("get_properties", new JObject
+            {
+                ["locator"] = locator,
+                ["type_name"] = "ObjectReferenceTestComponent",
+                ["include_paths"] = new JArray { "m_Enabled" }
+            });
+            JObject beforeProp = FindProperty(before, "m_Enabled");
+            Assert.IsNotNull(beforeProp, "m_Enabled must be readable at all (it was omitted entirely)");
+            Assert.IsTrue(beforeProp.Value<bool>("currentValue"));
+
+            _handler.HandleOp("set_property", new JObject
+            {
+                ["locator"] = locator,
+                ["type_name"] = "ObjectReferenceTestComponent",
+                ["property_path"] = "enabled",
+                ["value"] = false
+            });
+            Assert.IsFalse(behaviour.enabled, "precondition: the write really landed on the component");
+
+            JObject after = _handler.HandleOp("get_properties", new JObject
+            {
+                ["locator"] = locator,
+                ["type_name"] = "ObjectReferenceTestComponent",
+                ["include_paths"] = new JArray { "m_Enabled" }
+            });
+            JObject afterProp = FindProperty(after, "m_Enabled");
+            Assert.IsNotNull(afterProp);
+            Assert.IsFalse(afterProp.Value<bool>("currentValue"),
+                "the read-back must follow the write, or set_property is unverifiable");
+        }
+
+        [Test]
+        public void GetProperties_ReadsBackASpriteRendererSortingOrder()
+        {
+            SpriteRenderer sr = _testGo.AddComponent<SpriteRenderer>();
+            JObject locator = LocatorResolver.BuildLocator(_testGo);
+
+            _handler.HandleOp("set_property", new JObject
+            {
+                ["locator"] = locator,
+                ["type_name"] = "SpriteRenderer",
+                ["property_path"] = "m_SortingOrder",
+                ["value"] = 42
+            });
+            Assert.AreEqual(42, sr.sortingOrder, "precondition: the write really landed");
+
+            JObject result = _handler.HandleOp("get_properties", new JObject
+            {
+                ["locator"] = locator,
+                ["type_name"] = "SpriteRenderer",
+                ["include_paths"] = new JArray { "m_SortingOrder" }
+            });
+            JObject prop = FindProperty(result, "m_SortingOrder");
+            Assert.IsNotNull(prop, "the SERIALIZED spelling set_property takes must also be readable");
+            Assert.AreEqual(42, prop.Value<int>("currentValue"));
+        }
+
+        [Test]
+        public void GetProperties_ReadsBackACanvasSortingOrderAndOverrideFlag()
+        {
+            // Canvas is NOT a Renderer, so the existing Renderer-sorting fallback never
+            // covered it: this was the fully unverifiable case.
+            //
+            // The canvas under test is NESTED under a root canvas, because overrideSorting is
+            // only meaningful on a child canvas (Unity ignores the flag on a root one), and a
+            // nested scrim canvas over a HUD is the exact shape that went unverifiable live.
+            var rootGo = new GameObject("RootCanvasForNesting");
+            var canvasGo = new GameObject("CanvasUnderTest");
+            try
+            {
+                rootGo.AddComponent<Canvas>().renderMode = RenderMode.ScreenSpaceOverlay;
+                canvasGo.transform.SetParent(rootGo.transform, false);
+                Canvas canvas = canvasGo.AddComponent<Canvas>();
+                JObject locator = LocatorResolver.BuildLocator(canvasGo);
+
+                _handler.HandleOp("set_property", new JObject
+                {
+                    ["locator"] = locator,
+                    ["type_name"] = "Canvas",
+                    ["property_path"] = "overrideSorting",
+                    ["value"] = true
+                });
+                _handler.HandleOp("set_property", new JObject
+                {
+                    ["locator"] = locator,
+                    ["type_name"] = "Canvas",
+                    ["property_path"] = "sortingOrder",
+                    ["value"] = 7
+                });
+                Assert.AreEqual(7, canvas.sortingOrder, "precondition: the write really landed");
+
+                JObject result = _handler.HandleOp("get_properties", new JObject
+                {
+                    ["locator"] = locator,
+                    ["type_name"] = "Canvas"
+                });
+                JObject order = FindProperty(result, "m_SortingOrder");
+                Assert.IsNotNull(order, "Canvas sorting order had NO read path at all before this");
+                Assert.AreEqual(7, order.Value<int>("currentValue"));
+
+                JObject over = FindProperty(result, "m_OverrideSorting");
+                Assert.IsNotNull(over,
+                    "sortingOrder does nothing on a nested Canvas without overrideSorting: reading one without the other answers half the question");
+                Assert.AreEqual(canvas.overrideSorting, over.Value<bool>("currentValue"),
+                    "the read-back must agree with the live component, never with what the caller asked for");
+                Assert.IsTrue(over.Value<bool>("currentValue"),
+                    "a nested canvas accepts overrideSorting, so the write landed and the read must show it");
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(canvasGo);
+                UnityEngine.Object.DestroyImmediate(rootGo);
+            }
+        }
+
+        [Test]
+        public void GetProperties_DoesNotFabricateWellKnownFieldsOnAComponentThatLacksThem()
+        {
+            // POSITIVE CONTROL for the honest-or-omit half. Transform is not a Behaviour and
+            // not a Renderer: it has no m_Enabled and no sorting, and the appender must emit
+            // NOTHING rather than inventing a plausible default.
+            JObject result = _handler.HandleOp("get_properties", new JObject
+            {
+                ["locator"] = LocatorResolver.BuildLocator(_testGo),
+                ["type_name"] = "Transform"
+            });
+            Assert.IsNull(FindProperty(result, "m_Enabled"),
+                "Transform has no enabled flag; a fabricated one would be worse than an absent one");
+            Assert.IsNull(FindProperty(result, "m_SortingOrder"));
+        }
+
+        [Test]
+        public void GetProperties_WellKnownFieldsRespectTheSearchFilter()
+        {
+            _testGo.AddComponent<SpriteRenderer>();
+            JObject result = _handler.HandleOp("get_properties", new JObject
+            {
+                ["locator"] = LocatorResolver.BuildLocator(_testGo),
+                ["type_name"] = "SpriteRenderer",
+                ["search"] = "sorting"
+            });
+            Assert.IsNotNull(FindProperty(result, "m_SortingOrder"));
+            Assert.IsNull(FindProperty(result, "m_Enabled"),
+                "the appended fields must honour search exactly like the iterator's own do");
+        }
+
+        /// <summary>The descriptor for a serializedPath in a get_properties response, or null.</summary>
+        private static JObject FindProperty(JObject getPropertiesResult, string serializedPath)
+        {
+            JArray props = getPropertiesResult.Value<JArray>("properties");
+            if (props == null)
+                return null;
+            foreach (JToken token in props)
+            {
+                JObject o = token as JObject;
+                if (o != null && o.Value<string>("serializedPath") == serializedPath)
+                    return o;
+            }
+            return null;
+        }
+
         public class DummyObjectAsset : ScriptableObject
         {
         }

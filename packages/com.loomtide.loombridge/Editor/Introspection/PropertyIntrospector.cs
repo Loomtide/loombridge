@@ -107,6 +107,7 @@ namespace UnityBridge.Introspection
             SerializedObject so = new SerializedObject(component);
             SerializedProperty iterator = so.GetIterator();
             bool enterChildren = true;
+            var emitted = new HashSet<string>();
 
             while (iterator.NextVisible(enterChildren))
             {
@@ -171,8 +172,13 @@ namespace UnityBridge.Introspection
                 FieldInfo backingField = FindField(component.GetType(), serializedPath);
                 descriptor["publicField"] = backingField != null && backingField.IsPublic;
 
+                emitted.Add(serializedPath);
                 result.Add(descriptor);
             }
+
+            // The WRITE-ONLY class (E20 / L117): fields set_property accepts and get_properties
+            // could not read back. Must run BEFORE the SerializedObject is disposed.
+            AppendWellKnownSerializedFields(result, so, component, search, includeSet, emitted);
 
             so.Dispose();
 
@@ -187,6 +193,82 @@ namespace UnityBridge.Introspection
             }
 
             return result;
+        }
+
+        /// <summary>
+        /// Well-known serialized fields the <c>NextVisible</c> iterator SKIPS, read straight off
+        /// the SerializedObject with <c>FindProperty</c> and appended as ordinary descriptors.
+        ///
+        /// THE DEFECT CLASS THIS CLOSES: write-only introspection. <c>component.set_property</c>
+        /// accepts <c>m_Enabled</c> and <c>m_SortingOrder</c> (see TrySetKnownRuntimeProperty) and
+        /// <c>get_properties</c> could not read either of them back, so an agent could set a value
+        /// and had no way to confirm it landed. Three scrim-sorting fix attempts on a Canvas were
+        /// unverifiable for exactly this reason and were abandoned as a written-justification known
+        /// issue; the m_Enabled half is the same shape (L117).
+        ///
+        /// The fields are emitted under their SERIALIZED names, which are the names
+        /// <c>set_property</c> takes, so a read and the write that follows it spell the same thing.
+        /// A field the component does not carry is simply absent (Behaviour has m_Enabled, a bare
+        /// Component does not); nothing is fabricated, and a path the iterator already emitted is
+        /// never duplicated.
+        /// </summary>
+        private static void AppendWellKnownSerializedFields(JArray result, SerializedObject so,
+            Component component, string search, HashSet<string> includeSet, HashSet<string> emitted)
+        {
+            void Append(string path, string display)
+            {
+                if (emitted.Contains(path))
+                    return;
+                if (includeSet != null && !includeSet.Contains(path))
+                    return;
+                if (!string.IsNullOrEmpty(search))
+                {
+                    string searchLower = search.ToLowerInvariant();
+                    if (!display.ToLowerInvariant().Contains(searchLower) &&
+                        !path.ToLowerInvariant().Contains(searchLower))
+                        return;
+                }
+
+                SerializedProperty prop = so.FindProperty(path);
+                if (prop == null)
+                    return;
+
+                JToken value = ExtractValue(prop);
+                if (value == null)
+                    return;
+
+                emitted.Add(path);
+                result.Add(new JObject
+                {
+                    ["displayName"] = display,
+                    ["serializedPath"] = path,
+                    ["type"] = MapPropertyType(prop.propertyType),
+                    ["currentValue"] = value,
+                    // The iterator hides these; saying so beside the value stops a reader
+                    // concluding the component is somehow special.
+                    ["hiddenFromIterator"] = true
+                });
+            }
+
+            // Behaviour.enabled (and Renderer/Collider's own enabled flag): the universal
+            // component toggle, hidden from the inspector iterator on every type that has it.
+            Append("m_Enabled", "Enabled");
+
+            // 2D/UI render order. Renderer's live values are ALSO appended by
+            // AppendRendererSorting under the friendly `sortingOrder` spelling; these are the
+            // serialized spellings, and Canvas (not a Renderer) has no other source at all.
+            if (component is Renderer || component is Canvas)
+            {
+                Append("m_SortingOrder", "Sorting Order");
+                Append("m_SortingLayerID", "Sorting Layer ID");
+                Append("m_SortingLayer", "Sorting Layer");
+            }
+            if (component is Canvas)
+            {
+                // Without overrideSorting a nested Canvas's sortingOrder does nothing, so reading
+                // the order without it would answer half the question that was actually asked.
+                Append("m_OverrideSorting", "Override Sorting");
+            }
         }
 
         /// <summary>

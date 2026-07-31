@@ -998,5 +998,77 @@ namespace UnityBridge.Tests
             StringAssert.Contains("not a Material", ex.Message,
                 "a wrong-typed asset should be distinguished from a missing one");
         }
+
+        // ─────────────────────────────────────────────
+        // get_bounds: collider AABBs are SYNCED before they are read (E20 / stale colliders)
+        // ─────────────────────────────────────────────
+
+        [Test]
+        public void GetBounds_ColliderAabbReflectsAnEditModeMove_WithoutASceneSave()
+        {
+            // THE FALSE-EVIDENCE PATH. Collider2D.bounds comes from the physics world, not from
+            // the Transform. In edit mode nothing steps physics, so a collider moved through the
+            // bridge keeps reporting its OLD world AABB until something syncs it (historically a
+            // scene save plus reopen). A placement capture taken in that window binds real-looking
+            // numbers to a collider that is not where they say.
+            EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+
+            {
+                JObject created = _handler.HandleOp("create_object", new JObject { ["name"] = "Ground" });
+                JObject locator = created.Value<JObject>("locator");
+                GameObject go = LocatorResolver.Resolve(locator);
+                BoxCollider2D collider = Undo.AddComponent<BoxCollider2D>(go);
+                collider.size = new Vector2(2f, 1f);
+                Physics2D.SyncTransforms(); // establish a known baseline at the origin
+                Bounds baseline = collider.bounds;
+                Assert.AreEqual(0f, baseline.center.x, 0.001f, "baseline: the collider starts at the origin");
+
+                // The move goes through the handler's OWN set_transform path, exactly as an agent
+                // would drive it. No scene save anywhere in this test.
+                _handler.HandleOp("set_transform", new JObject
+                {
+                    ["locator"] = locator,
+                    ["position"] = new JObject { ["x"] = 5f, ["y"] = 3f, ["z"] = 0f }
+                });
+
+                JObject bounds = _handler.HandleOp("get_bounds", new JObject { ["locator"] = locator });
+
+                JArray colliders = bounds.Value<JArray>("colliders");
+                Assert.AreEqual(1, colliders.Count, "the object carries exactly one collider");
+                JObject aabb = (JObject)colliders[0];
+                Assert.AreEqual(5f, aabb.Value<JObject>("center").Value<float>("x"), 0.001f,
+                    "the reported collider AABB must follow the move, with no scene save");
+                Assert.AreEqual(3f, aabb.Value<JObject>("center").Value<float>("y"), 0.001f);
+                // The convenience roll-up reads through CombinedBounds, which must be synced too.
+                Assert.AreEqual(2.5f, bounds.Value<float>("colliderBottomY"), 0.001f);
+            }
+        }
+
+        [Test]
+        public void GetBounds_TheStalenessThisGuardsAgainstIsReal_NotAVacuousCheck()
+        {
+            // THE VACUITY CHECK. The test above is only meaningful while an unsynced Collider2D
+            // really does report a stale AABB. This one asserts that hazard directly: if Unity ever
+            // stops serving stale bounds with autoSyncTransforms off, this fails and tells us the
+            // handler's sync became dead code, rather than leaving a guard that proves nothing.
+            EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+
+            {
+                var go = new GameObject("Raw");
+                Undo.RegisterCreatedObjectUndo(go, "Create Raw");
+                BoxCollider2D collider = Undo.AddComponent<BoxCollider2D>(go);
+                collider.size = new Vector2(2f, 1f);
+                Physics2D.SyncTransforms();
+                Assert.AreEqual(0f, collider.bounds.center.x, 0.001f);
+
+                go.transform.position = new Vector3(5f, 3f, 0f);
+                Assert.AreEqual(0f, collider.bounds.center.x, 0.001f,
+                    "an unsynced Collider2D still reports its OLD AABB: this is the hazard get_bounds syncs away");
+
+                Physics2D.SyncTransforms();
+                Assert.AreEqual(5f, collider.bounds.center.x, 0.001f,
+                    "SyncTransforms is what makes the read honest");
+            }
+        }
     }
 }

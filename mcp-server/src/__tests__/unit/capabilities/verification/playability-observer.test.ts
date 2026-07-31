@@ -110,6 +110,14 @@ interface FakeOptions extends RecordingOptions {
   /** The player keeps moving under held input behind the overlay. */
   leakyInputLock?: boolean;
   recorderDiesDuringDrive?: boolean;
+  /**
+   * E15: the id `observe.start` reports AFTER `editor.play`. Entering play mode causes a
+   * domain reload, which restarts the bridge server and re-mints its session id, so the
+   * live recorder normally reports something OTHER than the pre-play handshake id. Default
+   * `"editor-abc"` keeps the existing tests on the (unrealistic) equal case; pass a
+   * different value to script the real one, or `null` to script a recorder that reports none.
+   */
+  recorderEditorSessionId?: string | null;
 }
 
 interface Fake {
@@ -147,7 +155,9 @@ function fakeBridge(options: FakeOptions = {}): Fake {
         restartSession = true;
         return {
           sessionId: isRestartProbe ? "restart-session" : "play-session",
-          editorSessionId: "editor-abc",
+          ...(options.recorderEditorSessionId === null
+            ? {}
+            : { editorSessionId: options.recorderEditorSessionId ?? "editor-abc" }),
           started: true,
           alreadyRecording: false,
           recording: true,
@@ -575,5 +585,45 @@ test("gate: a legacy self-declared 'teleported' still warns (unchanged behaviour
   assert.match(
     report.checks.find((check) => check.id === "playability.completable")?.detail ?? "",
     /TELEPORTING/,
+  );
+});
+
+// ── E15: the top-level session stamp names the session that RECORDED ─────────
+//
+// `editor.play` causes a domain reload, which restarts the bridge server and re-mints
+// its session id. Stamping the PRE-play handshake id made one play session show two ids
+// across a slice's files, and pointed the co-temporality check at a session that no
+// longer existed when anything was recorded.
+
+test("observer E15: the top-level editorSessionId is the recorder's POST-play id, not the handshake's", async () => {
+  const { output } = await runSession({ recorderEditorSessionId: "editor-after-reload" });
+  const provenance = (output.playability as Record<string, unknown>)._provenance as Record<string, unknown>;
+  const observation = provenance.observation as Record<string, unknown>;
+
+  assert.equal(observation.recorderEditorSessionId, "editor-after-reload");
+  assert.equal(
+    provenance.editorSessionId,
+    "editor-after-reload",
+    "the top-level stamp must equal the recorder's id, or the file names a session that recorded nothing",
+  );
+  // The pre-play handshake id is kept, never dropped: the difference between the two is
+  // the fact that explains why the ids across a slice disagree.
+  assert.equal(provenance.handshakeEditorSessionId, "editor-abc");
+});
+
+test("observer E15 LITMUS: console.json carries the same corrected stamp (one provenance object)", async () => {
+  const { output } = await runSession({ recorderEditorSessionId: "editor-after-reload" });
+  const consoleProvenance = (output.console as Record<string, unknown>)._provenance as Record<string, unknown>;
+  assert.equal(consoleProvenance.editorSessionId, "editor-after-reload");
+});
+
+test("observer E15: a recorder that reports NO id falls back to the handshake and SAYS SO", async () => {
+  const { output } = await runSession({ recorderEditorSessionId: null });
+  const provenance = (output.playability as Record<string, unknown>)._provenance as Record<string, unknown>;
+  assert.equal(provenance.editorSessionId, "editor-abc", "still bound to something, never left null");
+  assert.match(
+    String(provenance.editorSessionIdNote),
+    /PRE-play handshake id/,
+    "a fallback that does not say it is a fallback is the falsy-skip in prose form",
   );
 });

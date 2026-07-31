@@ -34,6 +34,12 @@ export interface PlayabilityFixtureOptions {
   hop?: { at: number; dx: number };
   runId?: string;
   editorSessionId?: string;
+  /**
+   * E15: the id the RECORDER read inside the running editor. The real producer stamps
+   * this and makes the top-level `editorSessionId` equal to it, so the fixture defaults
+   * to the same value; pass a different one to script two genuinely different sittings.
+   */
+  recorderEditorSessionId?: string;
 }
 
 function buildBuffers(options: PlayabilityFixtureOptions): ObservationBuffers {
@@ -133,6 +139,8 @@ export function producedPlayabilityEvidence(
       editorSessionId: options.editorSessionId ?? "editor-fixture",
       observation: {
         sessionId: "fixture-session",
+        recorderEditorSessionId:
+          options.recorderEditorSessionId ?? options.editorSessionId ?? "editor-fixture",
         open: {
           capacity: 36000,
           fixedTimestep: 0.0166667,

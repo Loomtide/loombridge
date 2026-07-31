@@ -120,7 +120,12 @@ export async function exitCodeForLiveProfileCapture(args: {
   return args.verifierCode;
 }
 
-function phaseForStatus(status: string): LoombridgePhase {
+/**
+ * The one status → phase mapping. EXPORTED (E16) so the slices roll-up in the unified
+ * door records its verdict with exactly the words the flat door uses; two copies of this
+ * mapping is two chances for STATE to describe a verdict nobody minted.
+ */
+export function phaseForStatus(status: string): LoombridgePhase {
   if (status === "pass") return "verified-green";
   if (status === "fail") return "verified-failing";
   return "verified-warn";
@@ -557,6 +562,15 @@ async function runVerifySlice(args: VerifyArgs, acceptance: AcceptanceContract):
     // evidenceOrigin beside each (M18: reported, never wired into
     // requiredEvidenceClasses).
     evidence: ledger,
+    /**
+     * E15: the run-binding QUALIFICATIONS this verdict was minted under. Always written
+     * (an empty array when there are none), because these notes are exactly the facts a
+     * refusal would have carried and a check that softened from refusal to note has to
+     * leave its reasoning somewhere a later reader can find. A note printed only to
+     * stderr is invisible to `doneness`, to the roll-up, and to a human reading the
+     * verdict a week later.
+     */
+    runBindingNotes: binding.notes,
     producedAt,
     runId: prev?.currentBuild?.runId ?? null,
     designTarget: {
