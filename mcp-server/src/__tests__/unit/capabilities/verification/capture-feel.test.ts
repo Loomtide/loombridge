@@ -650,3 +650,30 @@ test("positionFromSnapshot reads the shapes the snapshot op may return, and refu
   assert.equal(positionFromSnapshot({ transform: {} }), null);
   assert.equal(positionFromSnapshot(null), null);
 });
+
+test("E6 F1: a scene-qualified playerLocator reaches the WIRE as {scene, path}, never a bare path", async () => {
+  // The live bridge refuses {"path":"Main:/Player"} outright; the fixtures always used
+  // a qualified locator but nothing asserted the params actually handed to send(), so a
+  // green suite shipped a producer that could not run against its own template's
+  // format. This walks the wire params for every op that names the player.
+  const bridge = fakeBridge();
+  await runFeelSession({
+    send: bridge.send,
+    contract: contract(),
+    runId: "run-e6-f1",
+    editorSessionId: "session-e6",
+  }).catch(() => {
+    // Measurement outcomes are other tests' business; the wire shape is this one's.
+  });
+  const playerOps = bridge.calls.filter((c) => {
+    const locator = (c.params.locator ?? c.params.measure) as Record<string, unknown> | undefined;
+    if (locator === undefined) return false;
+    return String(locator.path ?? "").includes("Player") || String(locator.scene ?? "").length > 0;
+  });
+  assert.ok(playerOps.length > 0, "the session must have sent at least one player-locator op");
+  for (const call of playerOps) {
+    const locator = (call.params.locator ?? call.params.measure) as { scene?: string; path?: string };
+    assert.equal(locator.scene, "Level", `${call.command}: the scene qualifier must ride separately`);
+    assert.equal(locator.path, "/Player", `${call.command}: the path must be bare`);
+  }
+});
