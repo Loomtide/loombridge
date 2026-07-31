@@ -1221,3 +1221,136 @@ L124, L125, L126.
 **Severity: UX friction, with a set of real bridge defects inside it.** None can produce a false
 green on its own. L117 is the exception worth prioritising: it did not fake a verdict, it faked a
 diagnosis.
+
+---
+
+# APPENDIX: the E6 era (re-earning the certificate on hardened gates)
+
+Findings from the four E6 executor sessions, the three instrument-repair waves they
+drove (PRs 40, 41, 42), and the VLM review ceremony. Numbered E1 onward so they never
+collide with the build-phase L-numbers. Status marks: FIXED (merged), OPEN (backlog),
+FACT (a truth recorded, not a defect).
+
+## Instrument defects the live walks drove out (all FIXED)
+
+- E1 (FIXED, PR 40): the feel producer prescribed the scene-qualified locator format
+  its own template teaches and parsed it nowhere: seven wire sites handed
+  "Main:/Player" as a bare path and the live bridge refused every one. Shipped green
+  because the fixtures asserted the emitted FILE, never the wire params. The
+  regression class: producer tests must assert what reaches the wire.
+- E2 (FIXED, PR 40): the run-binding exemption for agent-assembled evidence claimed a
+  warn cap only two of six gates implement; a leftover placement.json from the
+  previous day certified to a pass under --strict, live. Wrong-run evidence now
+  refuses regardless of writer.
+- E3 (FIXED, PR 40): capture's manifest diff was existence-only, so stale leftovers
+  masked producers that wrote nothing ("manifest 5/5 present, exit 0" over one real
+  file). Now runId-aware.
+- E4 (FIXED, PR 40): the feel producer swallowed LOCATOR_UNRESOLVED into a soft
+  "legs not reset" note. An unresolvable seam now refuses naming the harness block.
+- E5 (FIXED, PR 41): the physics-timestep gate could not pass its own first-party
+  producer: the cadence tolerance ignored the bridge's 2-decimal echo rounding
+  (fails by 4e-4 of a sample), the re-derivation was fencepost-wrong ((n)/span vs the
+  producer's correct (n-1)/span, which it called "self-declared"), and multi-window
+  sweep sources structurally carry one fencepost per window. A hand-written file at
+  full precision would have passed where the honest producer failed: the inverted
+  incentive. Fixtures now derive from preserved REAL bridge output (the
+  feel-instrument-e6-live evidence bundle).
+- E6 (FIXED, PR 41): deriveTimeToApex measured from sample 0 including the settle
+  prefix, grading an in-band 325ms controller as 533ms. Now anchored at takeoff,
+  cross-checked analytically against the controller's own v0/g.
+- E7 (FIXED, PR 41): the run leg held moveX for 90 ticks with no notion of level
+  geometry: on TideRunner it drove the player into the spikes three times, the game
+  spent all hearts, entered its modal end state, and every later leg measured a
+  corpse reported as 0. Now: harness.feelSeam.runLeg (ticks, direction), degenerate
+  trajectories refuse instead of deriving 0, a liveness check aborts the session, and
+  capture exits 1 when an accepted metric goes unmeasured.
+- E8 (FIXED, PR 41): a respawn frame emits two samples at one tMs and the
+  strictly-increasing check discarded whole trajectories over one duplicate. Exact
+  consecutive duplicates now collapse.
+- E9 (FIXED, PR 41 C#): ManifestVerification threw an unhandled Newtonsoft cast on a
+  JObject manifest param, logging an editor ERROR that poisoned console-clean for the
+  whole session. Now a structured INVALID_PARAMS naming the expected array shape.
+- E10 (FIXED, PR 42): the coyote sweep anchored on the body's first visible descent,
+  but the controller's ground probe (smaller than the collider) detaches earlier by a
+  rig-dependent margin, so no fixed offset can be correct: TideRunner under-read by
+  exactly 2 ticks (0.0667 vs a dead-on 0.1000 under the true anchor, proven from the
+  trials' own press-registration bracket). The seam can now declare the controller's
+  public grounded field; the sweep samples it per tick and anchors exactly, REFUSING
+  (never silently falling back) when the declared field is unreadable. The offset
+  split into its two honest components (sampling lag, anchor path; injection latency,
+  press path).
+- E11 (FIXED, PR 42): runLeg.ticks bounded both the run leg (which must stay on
+  ground) and the coyote calibration walk (which must leave it): contradictory on any
+  real level. The walk now finds the ledge itself, capped, refusing when the level
+  has none in the declared direction.
+- E12 (FIXED, PR 42): capture's exit-1 set collected all banded feel targets while
+  the gate grades seven; dashTime/dashCooldown made every capture exit 1 forever.
+  The set now intersects the gate's exported graded metrics.
+
+## Session-4 findings (the green run; OPEN unless marked)
+
+- E13 (OPEN, the falsy-skip strikes again): the capture staleness detector refuses a
+  file whose _provenance.runId names a DIFFERENT run but treats a file with NO
+  _provenance at all as fresh: an un-provenanced leftover classified as produced with
+  exit 0. Refuse-on-absent applies; fix alongside E14.
+- E14 (OPEN): capture-report's `produced` array conflates "a recipe wrote it" with
+  "present and not provably stale": a drive-connection-written ui-scan.json was
+  credited to the CLI.
+- E15 (OPEN): playability.json's top-level editorSessionId binds to the
+  pre-editor.play handshake; editor.play rolls the session id, so one play session
+  shows two ids across a slice's files. The recorder's own
+  observation.recorderEditorSessionId is correct; the top-level stamp should match it.
+- E16 (OPEN): a green bare verify does not update STATE.md (still built-unverified /
+  lastVerdict null after 9/9 re-graded green).
+- E17 (FACT, re-capture hazard): re-capturing an early slice after later slices ship
+  can change what its frames depict (the juice stimulus timing now lands on the GAME
+  OVER modal added by end-state). The analyzer failed it loudly, which is correct;
+  documented as: a slice's stimulus timing is only valid against the game as it was
+  when the timing was chosen.
+- E18 (FACT, game tuning): TideRunner's controller grants 5 ticks of coyote (0.0833s),
+  not the contract's 6 (0.1 target): in-band, but a real number now that the anchor
+  is exact.
+
+## VLM ceremony findings
+
+- E19 (OPEN, bridge): editor.screenshot captures the editor window (scene view), not
+  the game camera: the first frame set was skybox-and-quads. The real game frames
+  come from runtime.capture_sequence with view "game". The op doc should say so, or
+  the op should refuse outside its actual semantics.
+- E20 (OPEN, bridge introspection): Canvas.m_SortingOrder and
+  SpriteRenderer.m_SortingOrder are set-only over the bridge (get_properties omits
+  them; runtime.get_snapshot does not surface them), and at least the Canvas set had
+  no observable effect: three scrim-sorting fix attempts were unverifiable and
+  ultimately abandoned as a written-justification known issue. Same class as the
+  m_Enabled gap (L117).
+- E21 (FACT, the review loop worked): round-1 reviewers caught a real placement error
+  (the goal flag floating 2u above ground: a bottom-pivoted sprite placed as if
+  center-pivoted) and a real z-order defect (win scrim behind player and flag);
+  the fix loop (fix, re-capture, FRESH round-2 reviewers) is the schema's intended
+  cycle and it converged: round 2 cleared props-grounded and juice-cue-presence.
+- E22 (FACT, the moat held): with all nine slices green, doneness still refused on
+  two group-C composition warns from the skeptical reviewer (right-loaded centroid
+  0.747 vs the mock's 0.558; stacked terminus column). Nine deterministic greens
+  cannot buy a certificate the design review withholds: the arc's thesis, observed.
+- E23 (FACT, design-instrument coupling): the mock's exact Platform_A position would
+  sit over the spawn point and cap the feel-measurement jump (apex head-height 4.05
+  vs platform underside ~3.3): level design and measurement geometry constrain each
+  other, and a rebalance must thread both.
+
+## Process learnings (for the working agreements)
+
+- E24: every builder/executor stop in this era was an HONEST stop: no agent patched
+  the instrument mid-run, hand-edited CLI state, or weakened a gate; two guards that
+  passed while broken on first LITMUS were strengthened and reported. The discipline
+  propagated to subagents without exception.
+- E25: fixtures derived from scripted bridges shipped three generations of
+  instrument defects (unrounded echoes, hazard-free games, cadence-perfect fakes);
+  every repair since derives its fixtures from preserved live bridge output. The
+  rule: an instrument's tests must include at least one fixture its real environment
+  produced.
+- E26: the interval-mining pattern (a fresh-context Opus miner reading executor
+  transcripts by byte range, appending numbered findings with corrections both ways)
+  caught overclaims in BOTH directions: builders overclaiming (the unevidenced
+  verify --profile shape) and its own earlier claims (L49 disproven with evidence,
+  C1 overturning a builder's phase-accounting theory). Adversarial layering applies
+  to the observers too.
