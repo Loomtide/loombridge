@@ -535,6 +535,15 @@
                 "jumpCut": { "type": "string", "minLength": 1 },
                 "dash": { "type": "string", "minLength": 1 }
               }
+            },
+            "runLeg": {
+              "description": "THE RUNWAY: how far and which way the horizontal legs may drive the player. Optional; the defaults (ticks 90, direction 1) are the historical behaviour. `ticks` bounds BOTH the run leg's hold and the coyote sweep's calibration walk (travel = ticks x runSpeed x fixedTimestep), so a level with a hazard inside the default 10.5-unit runway can say so instead of driving the player into it. `direction` -1 injects keys.moveLeft for those legs and drives fields.moveX negative for the seam proof, so it REQUIRES keys.moveLeft. Neither field can change a measured value: runSpeed is |dx|/dt and the sweep derivations read |dx|.",
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "ticks": { "type": "integer", "minimum": 12, "maximum": 600 },
+                "direction": { "enum": [1, -1] }
+              }
             }
           }
         },

@@ -21,7 +21,12 @@ import test from "node:test";
 
 import { PKG_ROOT } from "../../../_support/paths.js";
 import { validateAcceptanceContract } from "../../../../capabilities/verification/validator.js";
-import { FEEL_SEAM_TEMPLATE, resolveFeelSeam } from "../../../../domain/harness-seam.js";
+import {
+  FEEL_SEAM_TEMPLATE,
+  RUN_LEG_MAX_TICKS,
+  RUN_LEG_MIN_TICKS,
+  resolveFeelSeam,
+} from "../../../../domain/harness-seam.js";
 
 const acceptancePath = path.join(
   PKG_ROOT,
@@ -154,4 +159,72 @@ test("the resolver returns the trimmed seam, and optional fields stay optional",
   assert.equal(result.seam.playerLocator, "Level:/Player");
   assert.equal(result.seam.fields.dashHeld, undefined);
   assert.equal(result.seam.keys.dash, undefined);
+});
+
+// ── 4. THE RUNWAY (E6): harness.feelSeam.runLeg ─────────────────────────────
+
+test("runLeg is OPTIONAL and its absence keeps today's behaviour", () => {
+  const result = resolveFeelSeam({ harness: { feelSeam: SEAM } });
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  assert.equal(result.seam.runLeg, undefined, "an absent runLeg must not materialise as a declared bound");
+  assert.equal(validateAcceptanceContract({ ...contract(), harness: { feelSeam: SEAM } }).valid, true);
+});
+
+test("runLeg { ticks, direction } round-trips through the schema AND the resolver", () => {
+  const seam = { ...SEAM, keys: { ...SEAM.keys, moveLeft: "A" }, runLeg: { ticks: 34, direction: -1 } };
+  assert.equal(validateAcceptanceContract({ ...contract(), harness: { feelSeam: seam } }).valid, true);
+  const result = resolveFeelSeam({ harness: { feelSeam: seam } });
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  assert.deepEqual(result.seam.runLeg, { ticks: 34, direction: -1 });
+});
+
+test("runLeg.ticks outside [12, 600] is REFUSED, never clamped", () => {
+  for (const ticks of [11, 601, 0, -30]) {
+    const result = resolveFeelSeam({ harness: { feelSeam: { ...SEAM, runLeg: { ticks } } } });
+    assert.equal(result.ok, false, `ticks ${ticks} must refuse`);
+    if (result.ok) continue;
+    assert.match(result.refusal, /outside \[12, 600\]/);
+  }
+  // POSITIVE CONTROL: both bounds themselves are accepted, so the refusal is the range.
+  for (const ticks of [12, 600, 90]) {
+    assert.equal(resolveFeelSeam({ harness: { feelSeam: { ...SEAM, runLeg: { ticks } } } }).ok, true);
+  }
+  // A non-integer tick count is a refusal too: the leg is composed in whole ticks.
+  assert.equal(resolveFeelSeam({ harness: { feelSeam: { ...SEAM, runLeg: { ticks: 34.5 } } } }).ok, false);
+});
+
+test("runLeg.direction -1 REQUIRES keys.moveLeft: the keyed legs have to have a key to inject", () => {
+  const withoutLeft = resolveFeelSeam({ harness: { feelSeam: { ...SEAM, runLeg: { direction: -1 } } } });
+  assert.equal(withoutLeft.ok, false);
+  if (withoutLeft.ok) return;
+  assert.match(withoutLeft.refusal, /keys\.moveLeft/);
+
+  // POSITIVE CONTROL: declare the key and the same runLeg resolves.
+  const withLeft = resolveFeelSeam({
+    harness: { feelSeam: { ...SEAM, keys: { ...SEAM.keys, moveLeft: "A" }, runLeg: { direction: -1 } } },
+  });
+  assert.equal(withLeft.ok, true);
+
+  // …and direction 1 never needed it.
+  assert.equal(resolveFeelSeam({ harness: { feelSeam: { ...SEAM, runLeg: { direction: 1 } } } }).ok, true);
+  // Anything other than 1 / -1 is refused rather than coerced.
+  assert.equal(resolveFeelSeam({ harness: { feelSeam: { ...SEAM, runLeg: { direction: 0 } } } }).ok, false);
+  assert.equal(resolveFeelSeam({ harness: { feelSeam: { ...SEAM, runLeg: { direction: "left" } } } }).ok, false);
+});
+
+test("the SCHEMA and the RESOLVER agree on runLeg's bounds (the two ends cannot drift)", () => {
+  const schema = JSON.parse(fs.readFileSync(schemaPath, "utf-8")) as {
+    properties: { harness: { properties: { feelSeam: { properties: Record<string, { properties?: Record<string, { minimum?: number; maximum?: number; enum?: unknown[] }> }> } } } };
+  };
+  const runLeg = schema.properties.harness.properties.feelSeam.properties.runLeg;
+  assert.ok(runLeg, "the schema declares no harness.feelSeam.runLeg");
+  assert.equal(runLeg.properties?.ticks.minimum, RUN_LEG_MIN_TICKS);
+  assert.equal(runLeg.properties?.ticks.maximum, RUN_LEG_MAX_TICKS);
+  assert.deepEqual(runLeg.properties?.direction.enum, [1, -1]);
+  // A contract carrying an out-of-range value must be refused by BOTH ends, not one.
+  const outOfRange = { ...contract(), harness: { feelSeam: { ...SEAM, runLeg: { ticks: 601 } } } };
+  assert.equal(validateAcceptanceContract(outOfRange).valid, false);
+  assert.equal(resolveFeelSeam(outOfRange).ok, false);
 });

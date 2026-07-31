@@ -6,6 +6,7 @@ import type {
 } from "./types.js";
 import { ACCEPTANCE_SCHEMA_VERSION, PROP_PURPOSE_ROLES } from "./types.js";
 import { isSafeCapturePath } from "../../domain/capture-paths.js";
+import { RUN_LEG_MAX_TICKS, RUN_LEG_MIN_TICKS } from "../../domain/harness-seam.js";
 import { EVIDENCE_CLASS_SET, EVIDENCE_CLASSES } from "./gates/evidence-classes.js";
 
 const HEX_PATTERN = /^#[0-9a-fA-F]{6}$/;
@@ -781,6 +782,55 @@ function validateHarnessSection(
           `harness.feelSeam.keys.${optional}`,
         );
       }
+    }
+  }
+  validateFeelSeamRunLeg(seam.runLeg, seam.keys, issues);
+}
+
+/**
+ * THE RUNWAY (E6). Optional, and the defaults are the historical behaviour, so this
+ * only fires on a contract that declares it. Bounds are checked HERE as well as in
+ * `resolveFeelSeam` because a contract-time refusal beats discovering it after play
+ * mode is entered, and because the schema, the validator and the resolver drifting
+ * apart is the shape `harness-seam.test.ts` exists to prevent.
+ */
+function validateFeelSeamRunLeg(
+  runLeg: unknown,
+  keys: unknown,
+  issues: AcceptanceValidationIssue[],
+): void {
+  if (runLeg === undefined) return;
+  if (!isRecord(runLeg)) {
+    push(issues, "INVALID_HARNESS", "harness.feelSeam.runLeg must be an object.", "harness.feelSeam.runLeg");
+    return;
+  }
+  const ticks = runLeg.ticks;
+  if (ticks !== undefined) {
+    if (typeof ticks !== "number" || !Number.isInteger(ticks) || ticks < RUN_LEG_MIN_TICKS || ticks > RUN_LEG_MAX_TICKS) {
+      push(
+        issues,
+        "INVALID_HARNESS",
+        `harness.feelSeam.runLeg.ticks must be a whole number of physics ticks in [${RUN_LEG_MIN_TICKS}, ${RUN_LEG_MAX_TICKS}].`,
+        "harness.feelSeam.runLeg.ticks",
+      );
+    }
+  }
+  const direction = runLeg.direction;
+  if (direction !== undefined) {
+    if (direction !== 1 && direction !== -1) {
+      push(
+        issues,
+        "INVALID_HARNESS",
+        "harness.feelSeam.runLeg.direction must be 1 (right) or -1 (left).",
+        "harness.feelSeam.runLeg.direction",
+      );
+    } else if (direction === -1 && !(isRecord(keys) && isString(keys.moveLeft))) {
+      push(
+        issues,
+        "MISSING_FIELD",
+        "harness.feelSeam.runLeg.direction is -1, so the keyed legs inject keys.moveLeft; declare it.",
+        "harness.feelSeam.keys.moveLeft",
+      );
     }
   }
 }

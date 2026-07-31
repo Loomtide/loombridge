@@ -25,7 +25,8 @@ namespace UnityBridge.Introspection
             JArray manifest = ResolveManifest(parameters);
 
             // matching: how a manifest 'name' resolves to scene objects.
-            JObject matching = parameters.Value<JObject>("matching");
+            JObject matching = RequireObject(parameters, "matching",
+                "an object, e.g. {\"mode\":\"regex\",\"caseSensitive\":false}");
             string matchMode = (matching?.Value<string>("mode") ?? "exact").ToLowerInvariant();
             bool caseSensitive = matching?.Value<bool?>("caseSensitive") ?? false;
             if (matchMode != "exact" && matchMode != "prefix" && matchMode != "regex")
@@ -33,7 +34,8 @@ namespace UnityBridge.Introspection
                     $"Invalid matching.mode: '{matchMode}'. Expected exact, prefix, or regex.");
 
             // placeholderRule: how a placeholder is detected.
-            JObject placeholderRule = parameters.Value<JObject>("placeholderRule");
+            JObject placeholderRule = RequireObject(parameters, "placeholderRule",
+                "an object, e.g. {\"nameSubstring\":\"placeholder\",\"assetPathFolder\":\"Assets/Art/Mock\"}");
             string nameSubstring = placeholderRule?.Value<string>("nameSubstring") ?? "placeholder";
             string folder = placeholderRule?.Value<string>("assetPathFolder");
 
@@ -132,9 +134,52 @@ namespace UnityBridge.Introspection
         // Manifest resolution (inline OR file path)
         // ─────────────────────────────────────────────
 
+        /// <summary>
+        /// A JSON type name for an operator-facing refusal ("object", "string", …).
+        /// </summary>
+        private static string DescribeToken(JToken token)
+        {
+            return token == null ? "nothing" : token.Type.ToString().ToLowerInvariant();
+        }
+
+        /// <summary>
+        /// Read a parameter that MUST be a JSON array, or refuse with INVALID_PARAMS.
+        ///
+        /// `parameters.Value&lt;JArray&gt;(name)` throws a raw Newtonsoft
+        /// InvalidCastException when the caller passed an object where an array belongs,
+        /// and an unhandled exception inside a handler lands a Unity console ERROR,
+        /// which then poisons `console-clean` for the whole editor session, turning one
+        /// mistyped parameter into a failing gate on unrelated work. Every other bad
+        /// shape in this file already refuses structurally; this one has to as well.
+        /// </summary>
+        private static JArray RequireArray(JToken container, string name, string expectedShape)
+        {
+            JToken token = container?[name];
+            if (token == null || token.Type == JTokenType.Null) return null;
+            if (token is JArray array) return array;
+            throw new BridgeException(ErrorCodes.INVALID_PARAMS,
+                $"'{name}' must be a JSON ARRAY, got {DescribeToken(token)}. Expected {expectedShape}.");
+        }
+
+        /// <summary>
+        /// Read a parameter that MUST be a JSON object, or refuse with INVALID_PARAMS.
+        /// Same hazard as <see cref="RequireArray"/>: a mistyped shape here threw the
+        /// same unhandled cast one line away from the manifest one.
+        /// </summary>
+        private static JObject RequireObject(JObject parameters, string name, string expectedShape)
+        {
+            JToken token = parameters?[name];
+            if (token == null || token.Type == JTokenType.Null) return null;
+            if (token is JObject obj) return obj;
+            throw new BridgeException(ErrorCodes.INVALID_PARAMS,
+                $"'{name}' must be a JSON OBJECT, got {DescribeToken(token)}. Expected {expectedShape}.");
+        }
+
         private static JArray ResolveManifest(JObject parameters)
         {
-            JArray inline = parameters.Value<JArray>("manifest");
+            JArray inline = RequireArray(parameters, "manifest",
+                "an array of entries, e.g. [{\"name\":\"Player\",\"type\":\"GameObject\"}]; " +
+                "to pass an object with a 'manifest'/'assets' array, write it to a file and use 'manifestPath'");
             if (inline != null)
                 return inline;
 
@@ -164,7 +209,10 @@ namespace UnityBridge.Introspection
             if (parsed is JArray arr) return arr;
             if (parsed is JObject obj)
             {
-                JArray m = obj.Value<JArray>("manifest") ?? obj.Value<JArray>("assets");
+                // Same refusal discipline on the FILE's shape: a 'manifest' key holding
+                // an object rather than an array threw the identical unhandled cast.
+                JArray m = RequireArray(obj, "manifest", $"a JSON array under 'manifest' in '{path}'")
+                           ?? RequireArray(obj, "assets", $"a JSON array under 'assets' in '{path}'");
                 if (m != null) return m;
             }
             throw new BridgeException(ErrorCodes.INVALID_PARAMS,

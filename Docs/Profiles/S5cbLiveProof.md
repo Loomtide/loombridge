@@ -350,8 +350,10 @@ at its live rate and the injected input reaches the controller normally.
   (stops cleanly on release). Movement happens **iff** the key is held — a clean causal signature.
   Phase-1 runSpeed = 2.25/0.799 = **2.816 u/s**.
 - **Jump** — phases `[{[],150ms},{[Space],400ms},{[],800ms}]`: rises to `peakY=-13.24` during the Space
-  hold, falls back to ground in the settle. `jumpApex` = **0.800 u**, `timeToApex` = **44.24 ms**
-  (measured from the Space press, i.e. samples sliced to the press onward), `deltaX=0` (pure vertical).
+  hold, falls back to ground in the settle. `jumpApex` = **0.800 u**, `timeToApex` = **40.53 ms**
+  (measured from LAUNCH: the last sample still at the pre-launch baseline, which on this capture is
+  3.71 ms after the sliced start; the value read 44.24 ms while the clock started at the first sample
+  of the slice), `deltaX=0` (pure vertical).
 
 **feel.json** (scratch dir, sample project left pristine): flat `runSpeed/jumpApex/timeToApex` +
 `provenance.sources[]` each `derivation:"trajectory"` carrying the **raw live samples** (run-phase

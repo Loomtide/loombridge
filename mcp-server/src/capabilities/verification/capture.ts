@@ -344,6 +344,25 @@ export async function runCapture(args: CaptureArgs, deps: CaptureDeps = defaultD
         for (const gap of result.gaps) {
           console.error(`[loombridge capture] feel: provenance gap: ${gap}`);
         }
+        if (result.aborted) {
+          console.error(`[loombridge capture] feel: session ABORTED after the ${result.aborted.leg} leg: ${result.aborted.reason}`);
+        }
+        // E6: A CAPTURE THAT CANNOT FEED ITS GATE IS NOT A SUCCESSFUL CAPTURE. The
+        // live run 2 wrote feel.json with five of seven banded metrics unmeasured
+        // (the game was frozen in its end state) and exited 0, so the operator's next
+        // signal was a verify FAIL rather than a capture failure. The file is real and
+        // still written (the evidence of WHY is the point), but the recipe outcome is
+        // not ok, which is exit 1.
+        if (result.unmeasuredAcceptedTargets.length > 0) {
+          const error =
+            `the contract bands ${result.unmeasuredAcceptedTargets.length} metric(s) this capture did not measure: ` +
+            `${result.unmeasuredAcceptedTargets.join(", ")}. ` +
+            "feel.json is written (its `_provenance.omitted` names a reason for each), but it cannot feed the feel gate, " +
+            "so this capture did not succeed. Fix the named reasons and re-capture.";
+          console.error(`[loombridge capture] feel: ${error}`);
+          outcomes.push({ recipe, ok: false, error });
+          continue;
+        }
         outcomes.push({ recipe, ok: true });
         continue;
       }

@@ -170,6 +170,18 @@ export interface FeelMeasurementSource {
   requestedCaptureFps?: number;
   effectiveCaptureFps?: number;
   /**
+   * How many INDEPENDENT capture windows this source's `sampleCount`/`durationMs`
+   * pair aggregates (a sweep sums its trials into one pair). Each window sampled
+   * both of its endpoints, so the structural sample count carries one fencepost per
+   * window and the cadence re-derivation has to allow exactly that many.
+   *
+   * Recording it makes the file self-describing; it does NOT buy the tolerance.
+   * `physics-timestep` COUNTS the windows from the source's own retained arrays and
+   * refuses a `windowCount` that disagrees with them, so an inflated number is a
+   * refusal rather than slack. Absent means one window.
+   */
+  windowCount?: number;
+  /**
    * The RETAINED raw echo of every threshold-sweep trial (required when
    * `derivation === "input-bisection"`). Ledger L77: the door-one jumpBuffer trial
    * table was a literal array retyped from console output, and three of its six

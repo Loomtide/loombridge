@@ -62,7 +62,7 @@ import {
   type TickSample,
 } from "../../domain/feel-primitives.js";
 import { resolveFeelSeam, type FeelSeam, locatorParam } from "../../domain/harness-seam.js";
-import { deriveMetric, isValidTrajectory } from "./feel-derive.js";
+import { deriveMetric, isStaticTrajectory, isValidTrajectory } from "./feel-derive.js";
 import type { FeelMeasurementSource, FeelTrajectorySample } from "./gates/feel.js";
 
 /** The producer marker every source this recipe writes carries (stage 1). */
@@ -78,10 +78,34 @@ export const TRAJECTORY_CAPTURE_FPS = 120;
 const SETTLE_TICKS = 12;
 
 /**
- * Ticks of the run hold. Long, deliberately: `runSpeed` is the whole-window average,
- * so a controller with an acceleration ramp under-reads on a short window.
+ * DEFAULT ticks of the run hold. Long, deliberately: `runSpeed` is the whole-window
+ * average, so a controller with an acceleration ramp under-reads on a short window.
+ *
+ * It is a DEFAULT rather than a constant because 90 ticks is 10.5 units at 7 u/s and
+ * the harness has no idea what is 10.5 units away. On the first level with hazards it
+ * drove the player into spikes three times and the game's own end state froze the
+ * rest of the session. `harness.feelSeam.runLeg.ticks` overrides it.
  */
 const RUN_HOLD_TICKS = 90;
+
+/** The run leg's hold, and the coyote calibration walk, in physics ticks. */
+function runLegTicks(seam: FeelSeam): number {
+  return seam.runLeg?.ticks ?? RUN_HOLD_TICKS;
+}
+
+/**
+ * The horizontal KEY the run leg and the calibration walks inject. `direction: -1`
+ * says the safe runway lies left, and `resolveFeelSeam` has already refused a -1 that
+ * declares no `keys.moveLeft`, so the non-null assertion below cannot fire.
+ */
+function runLegKey(seam: FeelSeam): string {
+  return seam.runLeg?.direction === -1 ? seam.keys.moveLeft! : seam.keys.moveRight;
+}
+
+/** The sign the SEAM-driven legs write into `fields.moveX` for a horizontal drive. */
+function runLegSign(seam: FeelSeam): 1 | -1 {
+  return seam.runLeg?.direction === -1 ? -1 : 1;
+}
 
 /** How many canonical short-hop attempts to capture (see SHORT_HOP_CAPTURE_ATTEMPTS rationale). */
 const SHORT_HOP_ATTEMPTS = 3;
@@ -130,6 +154,16 @@ export interface CaptureFeelResult {
   /** Provenance gaps this run could not close (ops that echo too little). */
   gaps: string[];
   logCount: number;
+  /**
+   * Metrics the contract BANDS that this capture did not measure. Non-empty means the
+   * capture cannot feed its own gate, which the CLI reports as a failed recipe
+   * (exit 1): the verdict would fail on "NOT MEASURED" anyway, and a capture that
+   * exits 0 having produced an ungradeable file is the shape that lets a run look
+   * clean right up to the verdict.
+   */
+  unmeasuredAcceptedTargets: string[];
+  /** The leg a liveness check ended the session on, when one did. */
+  aborted?: { leg: string; reason: string };
 }
 
 /** The one wire primitive the session needs; a scripted fake satisfies it in tests. */
@@ -160,6 +194,28 @@ export interface FeelSessionOutput {
   omitted: { metric: string; reason: string }[];
   gaps: string[];
   logCount: number;
+  /**
+   * Metrics the CONTRACT bands (`feel.<metric>.target`) that this session did not
+   * measure. A capture that cannot feed its own gate is not a successful capture, so
+   * the CLI turns a non-empty list into a failed recipe outcome (exit 1) rather than
+   * a green run whose verdict then fails on "NOT MEASURED".
+   */
+  unmeasuredAcceptedTargets: string[];
+  /** The leg the session gave up on, when a liveness check ended it early. */
+  aborted?: { leg: string; reason: string };
+}
+
+/**
+ * The session's own stop signal. Thrown by the liveness guard and caught inside
+ * `runFeelSession`, so the `finally` still restores the reader / ends the input
+ * session / leaves play mode, and the evidence gathered so far is still WRITTEN
+ * (a thrown-through error would lose the file that proves why the run stopped).
+ */
+class FeelSessionAbort extends Error {
+  constructor(readonly leg: string, message: string) {
+    super(message);
+    this.name = "FeelSessionAbort";
+  }
 }
 
 // ── small readers over the op responses ─────────────────────────────────────
@@ -201,13 +257,24 @@ function windowMsOf(data: unknown): number | undefined {
 /**
  * The EFFECTIVE sampling cadence, re-derived from the run's own echoes (H8/L47).
  * `captureFps` is an input the op never echoes back, so recording it alone lets a
- * file claim 120 for a capture that really sampled at 11Hz. N samples span N-1
- * intervals, which is the endpoint convention the gate's own re-derivation uses.
+ * file claim 120 for a capture that really sampled at 11Hz.
+ *
+ * N samples span N-1 intervals, PER WINDOW. A source that aggregates `windowCount`
+ * independent captures into one pair sampled both endpoints of each of them, so it
+ * spans `N - windowCount` intervals. Getting this wrong is not cosmetic: the live
+ * ten-trial sweep recorded 60.6708fps for a capture that really ran at exactly 60,
+ * and the gate (which re-derives the same way) then had to be told to tolerate the
+ * error instead of catching it.
  */
-export function effectiveCaptureFps(sampleCount: number | undefined, windowMs: number | undefined): number | undefined {
+export function effectiveCaptureFps(
+  sampleCount: number | undefined,
+  windowMs: number | undefined,
+  windowCount = 1,
+): number | undefined {
   if (sampleCount === undefined || windowMs === undefined) return undefined;
-  if (sampleCount < 2 || windowMs <= 0) return undefined;
-  return (sampleCount - 1) / (windowMs / 1000);
+  if (!Number.isInteger(windowCount) || windowCount < 1) return undefined;
+  if (sampleCount < windowCount + 1 || windowMs <= 0) return undefined;
+  return (sampleCount - windowCount) / (windowMs / 1000);
 }
 
 /** Round to 4dp for a readable file; the re-derive tolerance (1e-3) absorbs it. */
@@ -220,6 +287,13 @@ function round4(n: number): number {
 export interface SeamPersistenceVerdict {
   ok: boolean;
   reason?: string;
+  /**
+   * WHICH refusal this is, so the caller can go and find out MORE before printing a
+   * diagnosis. `"no-motion"` is the ambiguous one: a wrong drive field and a dead
+   * game look identical from the trajectory alone, and this pure function cannot tell
+   * them apart (see `diagnoseFrozenPlayer`).
+   */
+  reasonKind?: "too-few-samples" | "no-motion" | "one-tick";
   totalDx: number;
   tailDx: number;
   /** Displacement the final third would show if motion were sustained evenly. */
@@ -246,6 +320,7 @@ export function evaluateSeamPersistence(samples: TickSample[]): SeamPersistenceV
     return {
       ok: false,
       reason: `the seam proof returned ${samples.length} sample(s); at least 6 are needed to compare the window's tail against its whole.`,
+      reasonKind: "too-few-samples",
       totalDx: 0,
       tailDx: 0,
       expectedTailDx: 0,
@@ -263,6 +338,7 @@ export function evaluateSeamPersistence(samples: TickSample[]): SeamPersistenceV
       reason:
         `driving the seam moved the player ${totalDx.toFixed(4)}u, below the ${SEAM_PROOF_MIN_TOTAL_U}u floor: ` +
         "the declared drive field does not move this player (wrong component/field name), or the input reader zeroed it immediately.",
+      reasonKind: "no-motion",
       totalDx,
       tailDx,
       expectedTailDx,
@@ -275,12 +351,97 @@ export function evaluateSeamPersistence(samples: TickSample[]): SeamPersistenceV
         `the driven value did NOT survive the window: the final third moved ${tailDx.toFixed(4)}u against ${expectedTailDx.toFixed(4)}u expected from the total. ` +
         "That is the ledger-C1 signature: a live input reader rewriting the seam every Update, so the driver survives one FixedUpdate. " +
         "The declared harness.feelSeam.inputReaderComponent was not actually disabled; measuring through the seam now would report one tick of motion as the whole result.",
+      reasonKind: "one-tick",
       totalDx,
       tailDx,
       expectedTailDx,
     };
   }
   return { ok: true, totalDx, tailDx, expectedTailDx };
+}
+
+// ── the frozen-player diagnosis (E6 finding: honest blame) ──────────────────
+
+/**
+ * IS THE PLAYER EVEN ALIVE? A pure reader over a `runtime.get_snapshot` response.
+ *
+ * The no-motion refusal above blames the SEAM ("wrong component/field name"), and on
+ * the live run that sentence was simply false: the seam was correct and the game had
+ * entered its modal end state, which disabled the controller and froze the player at
+ * one point for the rest of the session. An operator who believes the message goes
+ * and edits a correct contract.
+ *
+ * So before blaming the seam, the recipe asks the scene. This function reads the
+ * shapes `runtime.get_snapshot` actually returns (verified against the live E6
+ * response: `components[].runtimeProperties[] = {name, value}` alongside a
+ * `properties[]` list, plus the object's own `activeInHierarchy`) and answers with a
+ * NAMED end-state reason, or null when nothing in the snapshot says the player is
+ * disabled. Null means "the snapshot does not accuse anything", never "all is well":
+ * the caller keeps the seam sentence in that case, which is the honest split.
+ */
+export function diagnoseFrozenPlayer(snapshot: unknown, seam: FeelSeam): string | null {
+  if (!isRecord(snapshot)) return null;
+
+  if (snapshot.activeInHierarchy === false) {
+    return (
+      `the player object ${JSON.stringify(seam.playerLocator)} is INACTIVE in the hierarchy, so nothing can drive it: ` +
+      "the game may have entered an end state (or despawned the player); restart play mode before measuring."
+    );
+  }
+
+  const components = Array.isArray(snapshot.components) ? snapshot.components.filter(isRecord) : [];
+  for (const component of components) {
+    const typeName = typeof component.type_name === "string" ? component.type_name : "";
+    const values = componentPropertyValues(component);
+
+    if (typeName === seam.controllerComponent && (values.get("enabled") === false || values.get("m_Enabled") === false)) {
+      return (
+        `the controller component "${seam.controllerComponent}" reports enabled=false, so the driven seam field is never read: ` +
+        "the game may be in an end state; restart play mode before measuring."
+      );
+    }
+    if ((typeName === "Rigidbody2D" || typeName === "Rigidbody") && values.get("simulated") === false) {
+      return (
+        `the player's ${typeName} reports simulated=false, so physics cannot move it: ` +
+        "the game may be in an end state; restart play mode before measuring."
+      );
+    }
+  }
+  return null;
+}
+
+/**
+ * Does the snapshot AFFIRMATIVELY report the controller enabled? Absence is not a
+ * yes: the liveness guard treats "the bridge could not answer" as no evidence of
+ * life, which is the refuse-don't-skip posture the rest of this file takes.
+ */
+export function controllerReportsEnabled(snapshot: unknown, seam: FeelSeam): boolean {
+  if (!isRecord(snapshot)) return false;
+  if (snapshot.activeInHierarchy === false) return false;
+  const components = Array.isArray(snapshot.components) ? snapshot.components.filter(isRecord) : [];
+  for (const component of components) {
+    if (component.type_name !== seam.controllerComponent) continue;
+    const values = componentPropertyValues(component);
+    if (values.get("enabled") === true || values.get("m_Enabled") === true) return true;
+  }
+  return false;
+}
+
+/** `{name: value}` over BOTH property lists a snapshot component may carry. */
+function componentPropertyValues(component: Record<string, unknown>): Map<string, unknown> {
+  const out = new Map<string, unknown>();
+  for (const key of ["properties", "runtimeProperties"] as const) {
+    const list = component[key];
+    if (!Array.isArray(list)) continue;
+    for (const entry of list) {
+      if (!isRecord(entry) || typeof entry.name !== "string") continue;
+      out.set(entry.name, entry.value);
+    }
+  }
+  // Some snapshot shapes carry a plain `{enabled: false}` object instead of a list.
+  const plain = component.properties;
+  if (isRecord(plain)) for (const [name, value] of Object.entries(plain)) out.set(name, value);
+  return out;
 }
 
 // ── capture composition ─────────────────────────────────────────────────────
@@ -496,6 +657,51 @@ export async function runFeelSession(options: FeelSessionOptions): Promise<FeelS
     await send("scene.set_transform", { locator: locatorParam(seam.playerLocator), position: spawn }, 15000);
   };
 
+  /**
+   * THE LIVENESS READING, BETWEEN LEGS (E6, TideRunner run 2).
+   *
+   * Run 2 measured a corpse: the run leg produced no motion, and so did the jump leg,
+   * and the short hop, and the coyote walk, and the buffer sweep, and the seam proof.
+   * Six captures of a frozen player, five omissions, two zeroes, and eight minutes of
+   * play mode to produce a file that could not feed its gate.
+   *
+   * So a leg that produced NO motion at all is followed by one cheap question. The
+   * player is alive if EITHER the leg moved it, OR the controller component answers
+   * that it is enabled. Nothing else counts: a snapshot the bridge cannot answer is
+   * not evidence of life, and continuing on "we could not tell" is what produced the
+   * five corpses. When the answer is death, the session stops HERE, with the reason
+   * named, and everything captured so far is still written.
+   */
+  const assertAlive = async (leg: string, samples: TickSample[]): Promise<void> => {
+    if (samples.length > 0 && !isStaticTrajectory(samples as FeelTrajectorySample[])) return;
+    let snapshot: unknown;
+    try {
+      snapshot = await send(
+        "runtime.get_snapshot",
+        {
+          locator: locatorParam(seam.playerLocator),
+          components: [seam.controllerComponent],
+          include_paths: ["enabled", "m_Enabled"],
+        },
+        15000,
+      );
+      record("runtime.get_snapshot", { purpose: `liveness after the ${leg} leg`, leg });
+    } catch (error) {
+      snapshot = { available: false, reason: error instanceof Error ? error.message : String(error) };
+    }
+    if (controllerReportsEnabled(snapshot, seam)) return;
+    const diagnosis = diagnoseFrozenPlayer(snapshot, seam);
+    throw new FeelSessionAbort(
+      leg,
+      `the ${leg} leg moved the player not at all, and the controller "${seam.controllerComponent}" does not report itself enabled` +
+        `${diagnosis === null ? "" : ` (${diagnosis})`}. ` +
+        "Measuring the remaining legs would record the same frozen player five more times, so the session stopped here. " +
+        "Restart play mode (and check the game is not sitting in a modal end state) before re-capturing.",
+    );
+  };
+
+  let aborted: { leg: string; reason: string } | undefined;
+
   try {
     await send("editor.play", {}, 30000);
     await send("editor.wait_for", { playMode: "playing", frames: 2, timeoutMs: 30000 }, 35000);
@@ -559,11 +765,12 @@ export async function runFeelSession(options: FeelSessionOptions): Promise<FeelS
     const run = await keyedCapture(
       send,
       seam.playerLocator,
-      [{ keys: [seam.keys.moveRight], fixedTicks: RUN_HOLD_TICKS }],
+      [{ keys: [runLegKey(seam)], fixedTicks: runLegTicks(seam) }],
       TRAJECTORY_CAPTURE_FPS,
     );
     record("runtime.capture_input_motion", { leg: "run", sampleCount: run.sampleCount });
     emitTrajectorySource(run, ["runSpeed"], measuredAt, metrics, sources, omitted);
+    await assertAlive("run", run.samples);
 
     // ── 3. jump leg ───────────────────────────────────────────────────────────
     await restoreSpawn();
@@ -579,6 +786,7 @@ export async function runFeelSession(options: FeelSessionOptions): Promise<FeelS
     );
     record("runtime.capture_input_motion", { leg: "jump", sampleCount: jump.sampleCount });
     emitTrajectorySource(jump, ["jumpApex", "timeToApex"], measuredAt, metrics, sources, omitted);
+    await assertAlive("jump", jump.samples);
 
     // ── 4. short hop: the canonical tap, N attempts, stimulus bound to the ECHO ──
     const attempts: { capture: KeyedCapture; apex: number | null; tapTicks: number | undefined }[] = [];
@@ -601,6 +809,7 @@ export async function runFeelSession(options: FeelSessionOptions): Promise<FeelS
       attempts.push({ capture, apex, tapTicks: actualFixedTicksOfPhase(capture.phases, 1) });
     }
     emitShortHop(attempts, measuredAt, metrics, sources, omitted);
+    await assertAlive("shortHop", attempts[attempts.length - 1]?.capture.samples ?? []);
 
     // ── 5. coyote sweep ───────────────────────────────────────────────────────
     await runSweep({
@@ -659,6 +868,10 @@ export async function runFeelSession(options: FeelSessionOptions): Promise<FeelS
       }
     }
     log(`[loombridge capture] feel: measured ${Object.keys(metrics).join(", ") || "(nothing)"}`);
+  } catch (error) {
+    if (!(error instanceof FeelSessionAbort)) throw error;
+    aborted = { leg: error.leg, reason: error.message };
+    log(`[loombridge capture] feel: ABORTED after the ${error.leg} leg: ${error.message}`);
   } finally {
     // Restore in reverse order, best-effort: an interrupted session must not leave
     // the game with its input reader switched off.
@@ -691,6 +904,23 @@ export async function runFeelSession(options: FeelSessionOptions): Promise<FeelS
     }
   }
 
+  // THE CONTRACT'S OWN LIST, closed out. Every metric the contract bands and this
+  // session did not measure gets an omission entry, so `feel.json` never leaves a
+  // banded metric silently absent: a metric with neither a value nor a stated
+  // reason is the shape a reader mistakes for "not applicable".
+  const acceptedTargets = acceptedFeelTargets(options.contract);
+  const explained = new Set(omitted.map((entry) => entry.metric));
+  for (const metric of acceptedTargets) {
+    if (metrics[metric] !== undefined || explained.has(metric)) continue;
+    omitted.push({
+      metric,
+      reason: aborted
+        ? `the session was ABORTED after the ${aborted.leg} leg, so this metric was never attempted: ${aborted.reason}`
+        : "the session ended before this metric was measured.",
+    });
+  }
+  const unmeasuredAcceptedTargets = acceptedTargets.filter((metric) => metrics[metric] === undefined);
+
   const provenance = {
     writer: FEEL_PRODUCER,
     recipe: "feel",
@@ -701,7 +931,9 @@ export async function runFeelSession(options: FeelSessionOptions): Promise<FeelS
     ...(options.unityRouting ? { unityRouting: options.unityRouting } : {}),
     seam,
     readerDisable: readerDisableEvidence,
+    ...(aborted ? { aborted } : {}),
     omitted,
+    unmeasuredAcceptedTargets,
     gaps,
     ops: opLog,
   };
@@ -719,10 +951,40 @@ export async function runFeelSession(options: FeelSessionOptions): Promise<FeelS
     omitted,
     gaps,
     logCount: logs.length,
+    unmeasuredAcceptedTargets,
+    ...(aborted ? { aborted } : {}),
   };
 }
 
+/**
+ * The feel metrics the CONTRACT bands: every `feel.<metric>` (and `feel.extra.<metric>`)
+ * carrying a finite numeric `target`. This is the same predicate the feel-provenance
+ * gate uses to decide which metrics it grades, so "what the capture owes" and "what
+ * the gate will demand" cannot drift apart.
+ */
+export function acceptedFeelTargets(contract: unknown): string[] {
+  const feel = isRecord(contract) ? contract.feel : undefined;
+  if (!isRecord(feel)) return [];
+  const names: string[] = [];
+  const collect = (entries: Record<string, unknown>): void => {
+    for (const [key, value] of Object.entries(entries)) {
+      if (key === "extra") continue;
+      if (isRecord(value) && num(value.target) !== undefined) names.push(key);
+    }
+  };
+  collect(feel);
+  if (isRecord(feel.extra)) collect(feel.extra);
+  return names;
+}
+
 // ── source emitters ─────────────────────────────────────────────────────────
+
+/**
+ * THE DEGENERATE-LEG REASON (E6, TideRunner run 2). Named once, here, because both the
+ * omission and the session abort say it.
+ */
+export const DEGENERATE_LEG_REASON =
+  "the player never moved during this leg: the game may have entered an end state or the controller is disabled.";
 
 function emitTrajectorySource(
   capture: KeyedCapture,
@@ -736,6 +998,15 @@ function emitTrajectorySource(
     for (const metric of wanted) {
       omitted.push({ metric, reason: "the capture returned no usable trajectory (need ≥2 finite, strictly time-ordered samples)." });
     }
+    return;
+  }
+  // THE FROZEN CORPSE. Every apex/speed derivation over a trajectory that never left
+  // its first position is a well-formed ZERO, and run 2 shipped exactly that:
+  // `jumpApex: 0`, `timeToApex: 0`, both certified by a structurally valid source
+  // over 218 samples at one point. A zero derived from no motion is not a
+  // measurement, so the metric is OMITTED with the reason named.
+  if (isStaticTrajectory(capture.samples as FeelTrajectorySample[])) {
+    for (const metric of wanted) omitted.push({ metric, reason: DEGENERATE_LEG_REASON });
     return;
   }
   const measuredMetrics: string[] = [];
@@ -827,7 +1098,7 @@ interface SweepRunArgs {
  * `deriveSweepMetric` over those echoes, the same function the gate re-runs (L76/L77).
  */
 async function runSweep(args: SweepRunArgs): Promise<void> {
-  const { metric, send, seam, fixedTimestep, sweepFps, metrics, sources, omitted, record } = args;
+  const { metric, send, seam, fixedTimestep, sweepFps, metrics, sources, omitted, record, log } = args;
   const maxTicks = sweepTicksForTarget(targetSeconds(args.contract, metric), fixedTimestep);
 
   await args.beforeLeg();
@@ -869,12 +1140,16 @@ async function runSweep(args: SweepRunArgs): Promise<void> {
   // on the landing tick itself. Neither is a threshold measurement.
   for (let offset = 1; offset <= maxTicks; offset += 1) {
     const plan = trialPhases(metric, seam, referenceIndex, offset);
-    if (plan === null) {
-      omitted.push({
-        metric,
-        reason: `the reference event lands at sample ${referenceIndex}, too early to place a press ${offset} tick(s) from it (the settle phase would have to be negative).`,
-      });
-      return;
+    if ("refusal" in plan) {
+      // The trials gathered so far are still retained below when they bracket a
+      // threshold; a sweep that stops early because the runway ran out is a smaller
+      // sweep, not a corrupt one.
+      if (trials.length === 0) {
+        omitted.push({ metric, reason: plan.refusal });
+        return;
+      }
+      log(`[loombridge capture] feel: ${metric} sweep stopped at offset ${offset}: ${plan.refusal}`);
+      break;
     }
     await args.beforeLeg();
     const capture = await keyedCapture(send, seam.playerLocator, plan.phases, sweepFps);
@@ -912,7 +1187,12 @@ function sweepSource(
   // the same pair the gate uses.
   const sampleCount = trials.reduce((sum, t) => sum + t.samples.length, 0);
   const durationMs = trials.reduce((sum, t) => sum + (t.samples.length > 1 ? t.samples[t.samples.length - 1].tMs - t.samples[0].tMs : 0), 0);
-  const effective = effectiveCaptureFps(sampleCount, durationMs);
+  // ONE FENCEPOST PER TRIAL. Each trial is its own capture window and sampled both
+  // of its endpoints, so the summed pair spans `sampleCount - trials.length`
+  // intervals. `windowCount` is written next to it so the file states the shape it
+  // is in; the gate counts the same number off `trials[]` and refuses a disagreement.
+  const windowCount = trials.length;
+  const effective = effectiveCaptureFps(sampleCount, durationMs, windowCount);
   return {
     source: "runtime.capture_input_motion",
     producedBy: FEEL_PRODUCER,
@@ -920,6 +1200,7 @@ function sweepSource(
     measuredMetrics,
     sampleCount,
     durationMs: round4(durationMs),
+    windowCount,
     captureFps: args.sweepFps,
     requestedCaptureFps: args.sweepFps,
     ...(effective === undefined ? {} : { effectiveCaptureFps: round4(effective) }),
@@ -938,12 +1219,20 @@ function sweepSource(
   };
 }
 
-/** The calibration capture: walk off the ledge (coyote) or jump and land (buffer). */
+/**
+ * The calibration capture: walk off the ledge (coyote) or jump and land (buffer).
+ *
+ * The coyote walk is bounded by the SAME `runLeg.ticks` the run leg uses, and this is
+ * what bounds the whole sweep: every trial's walk is placed inside the reference event
+ * the calibration found, so a calibration that never leaves the declared runway makes
+ * the sweep refuse ("no ledge within the walk window") instead of driving the trials
+ * further than the level allows.
+ */
 function calibrationPhases(metric: SweepMetric, seam: FeelSeam): KeyedPhase[] {
   return metric === "coyoteTime"
     ? [
         { keys: [], fixedTicks: SETTLE_TICKS },
-        { keys: [seam.keys.moveRight], fixedTicks: 90 },
+        { keys: [runLegKey(seam)], fixedTicks: runLegTicks(seam) },
       ]
     : [
         { keys: [], fixedTicks: SETTLE_TICKS },
@@ -966,24 +1255,56 @@ export function trialPhases(
   seam: FeelSeam,
   referenceIndex: number,
   offset: number,
-): { phases: KeyedPhase[]; pressPhaseIndex: number } | null {
+): { phases: KeyedPhase[]; pressPhaseIndex: number } | { refusal: string } {
   if (metric === "coyoteTime") {
     const pressIndex = referenceIndex + offset - BRIDGE_SAMPLE_TICK_OFFSET;
     const walkTicks = pressIndex - SETTLE_TICKS;
-    if (walkTicks < 1) return null;
+    if (walkTicks < 1) {
+      return {
+        refusal:
+          `the reference event lands at sample ${referenceIndex}, too early to place a press ${offset} tick(s) from it ` +
+          "(the settle phase would have to be negative).",
+      };
+    }
+    // THE RUNWAY BINDS THE TRIALS TOO (E6). A press `offset` ticks after the ledge
+    // needs `offset` more ticks of walking than the calibration did, and on a level
+    // that declared a bounded runway those ticks are not available. Refuse the trial
+    // rather than drive past the bound: an offset the level cannot host is a smaller
+    // sweep, and the derivation already refuses a sweep that does not bracket.
+    const maxWalkTicks = runLegTicks(seam);
+    if (walkTicks > maxWalkTicks) {
+      return {
+        refusal:
+          `placing the press ${offset} tick(s) after the ledge needs a ${walkTicks}-tick walk, past the ` +
+          `${maxWalkTicks}-tick runway harness.feelSeam.runLeg.ticks declares. Widen the runway if the level has one, ` +
+          "or accept the shorter sweep.",
+      };
+    }
+    const move = runLegKey(seam);
+    // The post-press hold keeps driving horizontally while the player is airborne, so
+    // it is bound by the declared runway too: 36 ticks is another 4.2u at 7 u/s, and a
+    // level that said its runway is 20 ticks long did not consent to that either.
+    // Capped, not replaced, so the default (36 <= 90) is unchanged.
+    const trailingTicks = Math.min(36, runLegTicks(seam));
     return {
       phases: [
         { keys: [], fixedTicks: SETTLE_TICKS },
-        { keys: [seam.keys.moveRight], fixedTicks: walkTicks },
-        { keys: [seam.keys.moveRight, seam.keys.jump], fixedTicks: 2 },
-        { keys: [seam.keys.moveRight], fixedTicks: 36 },
+        { keys: [move], fixedTicks: walkTicks },
+        { keys: [move, seam.keys.jump], fixedTicks: 2 },
+        { keys: [move], fixedTicks: trailingTicks },
       ],
       pressPhaseIndex: 2,
     };
   }
   const pressIndex = referenceIndex - offset - BRIDGE_SAMPLE_TICK_OFFSET;
   const fallTicks = pressIndex - SETTLE_TICKS - 8;
-  if (fallTicks < 1) return null;
+  if (fallTicks < 1) {
+    return {
+      refusal:
+        `the reference event lands at sample ${referenceIndex}, too early to place a press ${offset} tick(s) from it ` +
+        "(the settle phase would have to be negative).",
+    };
+  }
   return {
     phases: [
       { keys: [], fixedTicks: SETTLE_TICKS },
@@ -1068,12 +1389,15 @@ async function proveReaderDisabled(
   // produces (one tick, then flat) and would read a flat zero. The last settle sample
   // is the baseline the drive is measured from.
   const settleTicks = 6;
+  // The runway applies to the SEAM-driven horizontal drive too: a level whose safe
+  // ground is leftward gets a negative moveX, not a shorter walk into the same hazard.
+  const drive = runLegSign(seam);
   const data = await probe(
     send,
     seam,
     [
       { durationMs: (settleTicks * 1000) / captureFps, drivers: [driver(seam, seam.fields.moveX, 0)] },
-      { durationMs: (SEAM_PROOF_TICKS * 1000) / captureFps, drivers: [driver(seam, seam.fields.moveX, 1)] },
+      { durationMs: (SEAM_PROOF_TICKS * 1000) / captureFps, drivers: [driver(seam, seam.fields.moveX, drive)] },
       { durationMs: 100, drivers: [driver(seam, seam.fields.moveX, 0)] },
     ],
     captureFps,
@@ -1084,10 +1408,37 @@ async function proveReaderDisabled(
   const driveCount = num(echoedPhases[1]?.sampleCount) ?? 0;
   const driveSamples = samplesOf(data).slice(Math.max(settleCount - 1, 0), settleCount + driveCount);
   const verdict = evaluateSeamPersistence(driveSamples);
+
+  // NOTHING MOVED is ambiguous, so ask the scene before blaming the seam (E6). The
+  // extra snapshot is only taken on that one refusal path, so the happy path costs
+  // nothing, and an unanswerable snapshot leaves the seam sentence exactly as it was.
+  let frozen: string | null = null;
+  let frozenSnapshot: unknown = undefined;
+  if (verdict.reasonKind === "no-motion") {
+    try {
+      frozenSnapshot = await send(
+        "runtime.get_snapshot",
+        {
+          locator: locatorParam(seam.playerLocator),
+          components: [seam.controllerComponent, "Rigidbody2D", "Rigidbody"],
+          include_paths: ["enabled", "m_Enabled", "simulated"],
+        },
+        15000,
+      );
+      record("runtime.get_snapshot", { purpose: "no-motion diagnosis (controller/body alive?)" });
+      frozen = diagnoseFrozenPlayer(frozenSnapshot, seam);
+    } catch (error) {
+      frozenSnapshot = { available: false, reason: error instanceof Error ? error.message : String(error) };
+    }
+  }
+  const reason = frozen ?? verdict.reason;
+
   return {
     attempted: true,
     ok: verdict.ok,
-    ...(verdict.reason ? { reason: verdict.reason } : {}),
+    ...(reason ? { reason } : {}),
+    ...(verdict.reasonKind ? { reasonKind: verdict.reasonKind } : {}),
+    ...(frozenSnapshot === undefined ? {} : { noMotionDiagnosis: { blamedEndState: frozen !== null, snapshot: frozenSnapshot } }),
     decidedBy: "behavioral (driven-value persistence)",
     behavioral: {
       driveTicks: SEAM_PROOF_TICKS,
@@ -1305,6 +1656,8 @@ export async function captureFeelEvidence(args: CaptureFeelArgs): Promise<Captur
       omitted: output.omitted,
       gaps: output.gaps,
       logCount: output.logCount,
+      unmeasuredAcceptedTargets: output.unmeasuredAcceptedTargets,
+      ...(output.aborted ? { aborted: output.aborted } : {}),
     };
   } finally {
     await resolved.disconnect();

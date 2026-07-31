@@ -1,0 +1,392 @@
+{
+  "status": "fail",
+  "gates": {
+    "manifest": "not_applicable",
+    "ui-conformance": "not_applicable",
+    "framing": "not_applicable",
+    "render-frame": "not_applicable",
+    "coverage": "not_applicable",
+    "parallax-motion": "not_applicable",
+    "visual-artifacts": "not_applicable",
+    "reachability": "not_applicable",
+    "placement": "not_applicable",
+    "platform-tiles": "not_applicable",
+    "tile-render": "not_applicable",
+    "prop-purpose": "not_applicable",
+    "playability": "not_applicable",
+    "feel": "fail",
+    "feel-provenance": "pass",
+    "physics-timestep": "fail",
+    "feel-rederive": "not_applicable",
+    "console-clean": "fail",
+    "asset-source-fidelity": "not_applicable"
+  },
+  "checks": [
+    {
+      "id": "manifest.slice",
+      "expected": "gate is in the slice's acceptance.gates",
+      "actual": "out_of_scope",
+      "status": "not_applicable",
+      "detail": "Gate \"manifest\" is not in this slice's acceptance.gates; it is only graded by a slice that requests it (or the full `verify`)."
+    },
+    {
+      "id": "ui-conformance.slice",
+      "expected": "gate is in the slice's acceptance.gates",
+      "actual": "out_of_scope",
+      "status": "not_applicable",
+      "detail": "Gate \"ui-conformance\" is not in this slice's acceptance.gates; it is only graded by a slice that requests it (or the full `verify`)."
+    },
+    {
+      "id": "framing.slice",
+      "expected": "gate is in the slice's acceptance.gates",
+      "actual": "out_of_scope",
+      "status": "not_applicable",
+      "detail": "Gate \"framing\" is not in this slice's acceptance.gates; it is only graded by a slice that requests it (or the full `verify`)."
+    },
+    {
+      "id": "render-frame.slice",
+      "expected": "gate is in the slice's acceptance.gates",
+      "actual": "out_of_scope",
+      "status": "not_applicable",
+      "detail": "Gate \"render-frame\" is not in this slice's acceptance.gates; it is only graded by a slice that requests it (or the full `verify`)."
+    },
+    {
+      "id": "coverage.slice",
+      "expected": "gate is in the slice's acceptance.gates",
+      "actual": "out_of_scope",
+      "status": "not_applicable",
+      "detail": "Gate \"coverage\" is not in this slice's acceptance.gates; it is only graded by a slice that requests it (or the full `verify`)."
+    },
+    {
+      "id": "parallax-motion.slice",
+      "expected": "gate is in the slice's acceptance.gates",
+      "actual": "out_of_scope",
+      "status": "not_applicable",
+      "detail": "Gate \"parallax-motion\" is not in this slice's acceptance.gates; it is only graded by a slice that requests it (or the full `verify`)."
+    },
+    {
+      "id": "visual-artifacts.slice",
+      "expected": "gate is in the slice's acceptance.gates",
+      "actual": "out_of_scope",
+      "status": "not_applicable",
+      "detail": "Gate \"visual-artifacts\" is not in this slice's acceptance.gates; it is only graded by a slice that requests it (or the full `verify`)."
+    },
+    {
+      "id": "reachability.slice",
+      "expected": "gate is in the slice's acceptance.gates",
+      "actual": "out_of_scope",
+      "status": "not_applicable",
+      "detail": "Gate \"reachability\" is not in this slice's acceptance.gates; it is only graded by a slice that requests it (or the full `verify`)."
+    },
+    {
+      "id": "placement.slice",
+      "expected": "gate is in the slice's acceptance.gates",
+      "actual": "out_of_scope",
+      "status": "not_applicable",
+      "detail": "Gate \"placement\" is not in this slice's acceptance.gates; it is only graded by a slice that requests it (or the full `verify`)."
+    },
+    {
+      "id": "platform-tiles.slice",
+      "expected": "gate is in the slice's acceptance.gates",
+      "actual": "out_of_scope",
+      "status": "not_applicable",
+      "detail": "Gate \"platform-tiles\" is not in this slice's acceptance.gates; it is only graded by a slice that requests it (or the full `verify`)."
+    },
+    {
+      "id": "tile-render.slice",
+      "expected": "gate is in the slice's acceptance.gates",
+      "actual": "out_of_scope",
+      "status": "not_applicable",
+      "detail": "Gate \"tile-render\" is not in this slice's acceptance.gates; it is only graded by a slice that requests it (or the full `verify`)."
+    },
+    {
+      "id": "prop-purpose.slice",
+      "expected": "gate is in the slice's acceptance.gates",
+      "actual": "out_of_scope",
+      "status": "not_applicable",
+      "detail": "Gate \"prop-purpose\" is not in this slice's acceptance.gates; it is only graded by a slice that requests it (or the full `verify`)."
+    },
+    {
+      "id": "playability.slice",
+      "expected": "gate is in the slice's acceptance.gates",
+      "actual": "out_of_scope",
+      "status": "not_applicable",
+      "detail": "Gate \"playability\" is not in this slice's acceptance.gates; it is only graded by a slice that requests it (or the full `verify`)."
+    },
+    {
+      "id": "feel.runSpeed",
+      "expected": "7u/s (±5%)",
+      "actual": "(not measured)",
+      "status": "fail",
+      "detail": "runSpeed: target 7u/s ±5%: NOT MEASURED this run, so the contract's band for it was never graded. Refused (not a warn): measure it, or remove the acceptance target if the metric does not apply to this game."
+    },
+    {
+      "id": "feel.jumpApex",
+      "expected": "2.2u (±5%)",
+      "actual": "2.2239u",
+      "status": "pass",
+      "detail": "jumpApex: target 2.2u, measured 2.2239u, band ±5% -> PASS."
+    },
+    {
+      "id": "feel.timeToApex",
+      "expected": "325ms (±10%)",
+      "actual": "533.33ms",
+      "status": "fail",
+      "detail": "timeToApex: target 325ms, measured 533.33ms, band ±10% -> FAIL."
+    },
+    {
+      "id": "feel.shortHopApex",
+      "expected": "1.41u (±10%)",
+      "actual": "1.4133u",
+      "status": "pass",
+      "detail": "shortHopApex: target 1.41u, measured 1.4133u, band ±10% -> PASS."
+    },
+    {
+      "id": "feel.dashDistance",
+      "expected": "2.8125u (±5%)",
+      "actual": "2.8125u",
+      "status": "pass",
+      "detail": "dashDistance: target 2.8125u, measured 2.8125u, band ±5% -> PASS."
+    },
+    {
+      "id": "feel.coyoteTime",
+      "expected": "0.1s (±0.02s)",
+      "actual": "(not measured)",
+      "status": "fail",
+      "detail": "coyoteTime: target 0.1s ±0.02s: NOT MEASURED this run, so the contract's band for it was never graded. Refused (not a warn): measure it, or remove the acceptance target if the metric does not apply to this game."
+    },
+    {
+      "id": "feel.jumpBuffer",
+      "expected": "0.1s (±0.02s)",
+      "actual": "0.1s",
+      "status": "pass",
+      "detail": "jumpBuffer: target 0.1s, measured 0.1s, band ±0.02s -> PASS."
+    },
+    {
+      "id": "feel-provenance.present",
+      "expected": "provenance.sources[] with per-metric measurement evidence",
+      "actual": "4 source(s)",
+      "status": "pass",
+      "detail": "feel.json includes measurement provenance sources."
+    },
+    {
+      "id": "feel-provenance.jumpApex",
+      "expected": "covered by the owning valid source: FeelHarness / runtime.measure_motion / runtime.capture_input_motion own runSpeed/jumpApex/timeToApex/shortHopApex; runtime.capture_input_motion may own dashDistance only with derivation:\"phase-delta\" + valid phase evidence; runtime.probe owns dashDistance/coyoteTime/jumpBuffer/shortHopApex; source must also have sampleCount>0, captureFps>0, measuredAt, projectFixedTimestepBeforeMeasurement, measurementFixedTimestep",
+      "actual": "runtime.capture_input_motion:valid-owner",
+      "status": "pass",
+      "detail": "jumpApex is covered by valid runtime.capture_input_motion measurement evidence."
+    },
+    {
+      "id": "feel-provenance.timeToApex",
+      "expected": "covered by the owning valid source: FeelHarness / runtime.measure_motion / runtime.capture_input_motion own runSpeed/jumpApex/timeToApex/shortHopApex; runtime.capture_input_motion may own dashDistance only with derivation:\"phase-delta\" + valid phase evidence; runtime.probe owns dashDistance/coyoteTime/jumpBuffer/shortHopApex; source must also have sampleCount>0, captureFps>0, measuredAt, projectFixedTimestepBeforeMeasurement, measurementFixedTimestep",
+      "actual": "runtime.capture_input_motion:valid-owner",
+      "status": "pass",
+      "detail": "timeToApex is covered by valid runtime.capture_input_motion measurement evidence."
+    },
+    {
+      "id": "feel-provenance.shortHopApex",
+      "expected": "covered by the owning valid source: FeelHarness / runtime.measure_motion / runtime.capture_input_motion own runSpeed/jumpApex/timeToApex/shortHopApex; runtime.capture_input_motion may own dashDistance only with derivation:\"phase-delta\" + valid phase evidence; runtime.probe owns dashDistance/coyoteTime/jumpBuffer/shortHopApex; source must also have sampleCount>0, captureFps>0, measuredAt, projectFixedTimestepBeforeMeasurement, measurementFixedTimestep",
+      "actual": "runtime.capture_input_motion:valid-owner",
+      "status": "pass",
+      "detail": "shortHopApex is covered by valid runtime.capture_input_motion measurement evidence."
+    },
+    {
+      "id": "feel-provenance.shortHopApex.stimulus",
+      "expected": "canonical tap recorded: stimulus.tapTicks === 6 (fixed ticks held before jumpCut)",
+      "actual": "6 ticks (canonical)",
+      "status": "pass",
+      "detail": "shortHopApex was measured with the canonical 6-tick tap."
+    },
+    {
+      "id": "feel-provenance.dashDistance",
+      "expected": "covered by the owning valid source: FeelHarness / runtime.measure_motion / runtime.capture_input_motion own runSpeed/jumpApex/timeToApex/shortHopApex; runtime.capture_input_motion may own dashDistance only with derivation:\"phase-delta\" + valid phase evidence; runtime.probe owns dashDistance/coyoteTime/jumpBuffer/shortHopApex; source must also have sampleCount>0, captureFps>0, measuredAt, projectFixedTimestepBeforeMeasurement, measurementFixedTimestep",
+      "actual": "runtime.probe:valid-owner",
+      "status": "pass",
+      "detail": "dashDistance is covered by valid runtime.probe measurement evidence."
+    },
+    {
+      "id": "feel-provenance.jumpBuffer",
+      "expected": "covered by the owning valid source: FeelHarness / runtime.measure_motion / runtime.capture_input_motion own runSpeed/jumpApex/timeToApex/shortHopApex; runtime.capture_input_motion may own dashDistance only with derivation:\"phase-delta\" + valid phase evidence; runtime.probe owns dashDistance/coyoteTime/jumpBuffer/shortHopApex; source must also have sampleCount>0, captureFps>0, measuredAt, projectFixedTimestepBeforeMeasurement, measurementFixedTimestep",
+      "actual": "runtime.capture_input_motion:valid-owner",
+      "status": "pass",
+      "detail": "jumpBuffer is covered by valid runtime.capture_input_motion measurement evidence."
+    },
+    {
+      "id": "physics-timestep.project",
+      "expected": "0.0166667 ±0.0001",
+      "actual": "0:runtime.capture_input_motion=0.016667, 1:runtime.capture_input_motion=0.016667, 2:runtime.capture_input_motion=0.016667, 3:runtime.probe=0.016667",
+      "status": "pass",
+      "detail": "Project fixed timestep before measurement matches acceptance.physics.fixedTimestep for every measurement source."
+    },
+    {
+      "id": "physics-timestep.measurement",
+      "expected": "0.0166667 ±0.0001",
+      "actual": "0:runtime.capture_input_motion=0.016667, 1:runtime.capture_input_motion=0.016667, 2:runtime.capture_input_motion=0.016667, 3:runtime.probe=0.016667",
+      "status": "pass",
+      "detail": "Measurement fixed timestep matches acceptance.physics.fixedTimestep for every measurement source."
+    },
+    {
+      "id": "physics-timestep.captureFps",
+      "expected": "1 / captureFps ≈ measurementFixedTimestep",
+      "actual": "0:runtime.capture_input_motion fps=120, measurement=0.016667, 1:runtime.capture_input_motion fps=120, measurement=0.016667, 2:runtime.capture_input_motion fps=60, measurement=0.016667, 3:runtime.probe fps=60, measurement=0.016667",
+      "status": "pass",
+      "detail": "captureFps is consistent with measurementFixedTimestep for every measurement source."
+    },
+    {
+      "id": "physics-timestep.effectiveCadence",
+      "expected": "re-derived sampling cadence within 1 sample of the declared captureFps",
+      "actual": "0:runtime.capture_input_motion declared=120fps, effective=120.55fps (218 samples / 1808.33ms from durationMs), expected 217.00 samples, off by 1.00; 1:runtime.capture_input_motion declared=120fps, effective=120.66fps (182 samples / 1508.33ms from durationMs), expected 181.00 samples, off by 1.00; 2:runtime.capture_input_motion declared=60fps, effective=60.75fps (815 samples / 13416.67ms from durationMs), expected 805.00 samples, off by 10.00; 3:runtime.probe declared=60fps, effective=61.05fps (58 samples / 950.00ms from durationMs), expected 57.00 samples, off by 1.00",
+      "status": "fail",
+      "detail": "3 source(s) sampled at a cadence more than one tick from the captureFps they declare; the file's timing convention does not describe the run that produced it (ledger L47)."
+    },
+    {
+      "id": "physics-timestep.recordedCadencePair",
+      "expected": "requestedCaptureFps === captureFps, and effectiveCaptureFps === the cadence re-derived from the source's own echoes",
+      "actual": "0:runtime.capture_input_motion requested=120, effective=120.0002; 1:runtime.capture_input_motion requested=120, effective=120.0003; 2:runtime.capture_input_motion requested=60, effective=60.6708; 3:runtime.probe requested=60, effective=60",
+      "status": "fail",
+      "detail": "1 problem(s): 0:runtime.capture_input_motion records effectiveCaptureFps 120.00 but its own echoes re-derive 120.55. A recorded derivation nobody re-derives is a self-declared number (ledger L45/L47, review H8)."
+    },
+    {
+      "id": "feel-rederive.slice",
+      "expected": "gate is in the slice's acceptance.gates",
+      "actual": "out_of_scope",
+      "status": "not_applicable",
+      "detail": "Gate \"feel-rederive\" is not in this slice's acceptance.gates; it is only graded by a slice that requests it (or the full `verify`)."
+    },
+    {
+      "id": "console-clean.errors",
+      "expected": "no Error/Exception entries in the console",
+      "actual": "1 error/exception entry",
+      "status": "fail",
+      "detail": "Console has 1 error/exception entry — a verified build must have a clean console. First: \"[Loombridge] Op execution error: Cannot cast Newtonsoft.Json.Linq.JObject to Newtonsoft.Json.Linq.JToken. at Newtonso...\"."
+    },
+    {
+      "id": "asset-source-fidelity.slice",
+      "expected": "gate is in the slice's acceptance.gates",
+      "actual": "out_of_scope",
+      "status": "not_applicable",
+      "detail": "Gate \"asset-source-fidelity\" is not in this slice's acceptance.gates; it is only graded by a slice that requests it (or the full `verify`)."
+    }
+  ],
+  "failures": [
+    {
+      "id": "feel.runSpeed",
+      "expected": "7u/s (±5%)",
+      "actual": "(not measured)",
+      "status": "fail",
+      "detail": "runSpeed: target 7u/s ±5%: NOT MEASURED this run, so the contract's band for it was never graded. Refused (not a warn): measure it, or remove the acceptance target if the metric does not apply to this game."
+    },
+    {
+      "id": "feel.timeToApex",
+      "expected": "325ms (±10%)",
+      "actual": "533.33ms",
+      "status": "fail",
+      "detail": "timeToApex: target 325ms, measured 533.33ms, band ±10% -> FAIL."
+    },
+    {
+      "id": "feel.coyoteTime",
+      "expected": "0.1s (±0.02s)",
+      "actual": "(not measured)",
+      "status": "fail",
+      "detail": "coyoteTime: target 0.1s ±0.02s: NOT MEASURED this run, so the contract's band for it was never graded. Refused (not a warn): measure it, or remove the acceptance target if the metric does not apply to this game."
+    },
+    {
+      "id": "physics-timestep.effectiveCadence",
+      "expected": "re-derived sampling cadence within 1 sample of the declared captureFps",
+      "actual": "0:runtime.capture_input_motion declared=120fps, effective=120.55fps (218 samples / 1808.33ms from durationMs), expected 217.00 samples, off by 1.00; 1:runtime.capture_input_motion declared=120fps, effective=120.66fps (182 samples / 1508.33ms from durationMs), expected 181.00 samples, off by 1.00; 2:runtime.capture_input_motion declared=60fps, effective=60.75fps (815 samples / 13416.67ms from durationMs), expected 805.00 samples, off by 10.00; 3:runtime.probe declared=60fps, effective=61.05fps (58 samples / 950.00ms from durationMs), expected 57.00 samples, off by 1.00",
+      "status": "fail",
+      "detail": "3 source(s) sampled at a cadence more than one tick from the captureFps they declare; the file's timing convention does not describe the run that produced it (ledger L47)."
+    },
+    {
+      "id": "physics-timestep.recordedCadencePair",
+      "expected": "requestedCaptureFps === captureFps, and effectiveCaptureFps === the cadence re-derived from the source's own echoes",
+      "actual": "0:runtime.capture_input_motion requested=120, effective=120.0002; 1:runtime.capture_input_motion requested=120, effective=120.0003; 2:runtime.capture_input_motion requested=60, effective=60.6708; 3:runtime.probe requested=60, effective=60",
+      "status": "fail",
+      "detail": "1 problem(s): 0:runtime.capture_input_motion records effectiveCaptureFps 120.00 but its own echoes re-derive 120.55. A recorded derivation nobody re-derives is a self-declared number (ledger L45/L47, review H8)."
+    },
+    {
+      "id": "console-clean.errors",
+      "expected": "no Error/Exception entries in the console",
+      "actual": "1 error/exception entry",
+      "status": "fail",
+      "detail": "Console has 1 error/exception entry — a verified build must have a clean console. First: \"[Loombridge] Op execution error: Cannot cast Newtonsoft.Json.Linq.JObject to Newtonsoft.Json.Linq.JToken. at Newtonso...\"."
+    }
+  ],
+  "warnings": [],
+  "evidenceClasses": {
+    "compile_import": {
+      "status": "absent",
+      "source": "no-producer"
+    },
+    "console_clean": {
+      "status": "present",
+      "source": "gate:console-clean"
+    },
+    "scene_validation": {
+      "status": "absent",
+      "source": "gate:manifest (not_applicable)"
+    },
+    "frame_evidence": {
+      "status": "absent",
+      "source": "gate:render-frame (not_applicable); gate:frame-integrity (not run)"
+    },
+    "input_exercised": {
+      "status": "present",
+      "source": "gate:feel"
+    },
+    "play_trace": {
+      "status": "absent",
+      "source": "gate:playability (not_applicable)"
+    },
+    "telemetry": {
+      "status": "absent",
+      "source": "no-producer"
+    },
+    "human_notes": {
+      "status": "absent",
+      "source": "no-producer"
+    }
+  },
+  "evidence": {
+    "schemaVersion": "1",
+    "inputsDir": ".loombridge/verify/player-feel",
+    "runId": "run-player-feel-2026-07-31T03-35-32-996Z-a1c86a8d",
+    "files": [
+      {
+        "file": "console.json",
+        "sha256": "5db76c8145c9eed7204f05679aaff436b149aefcaa9811b14e9de9358d6f1f01",
+        "evidenceOrigin": "produced",
+        "writer": "loombridge-capture",
+        "runId": "run-player-feel-2026-07-31T03-35-32-996Z-a1c86a8d",
+        "editorSessionId": "64a056c7-dd9e-4de3-b4c6-6e0430e323bf"
+      },
+      {
+        "file": "feel.json",
+        "sha256": "11a4d8318d66da02bcc358b94dea2c815345d97238f3b39a5d4eb598fa6af072",
+        "evidenceOrigin": "produced",
+        "writer": "loombridge-capture",
+        "runId": "run-player-feel-2026-07-31T03-35-32-996Z-a1c86a8d",
+        "editorSessionId": "64a056c7-dd9e-4de3-b4c6-6e0430e323bf"
+      }
+    ],
+    "missing": []
+  },
+  "producedAt": "2026-07-31T03:37:47.015Z",
+  "runId": "run-player-feel-2026-07-31T03-35-32-996Z-a1c86a8d",
+  "designTarget": {
+    "status": "approved",
+    "kind": "rendered-unity-frame",
+    "heroShot": ".loombridge/design/hero-shot.png",
+    "pngSha256": "305446724335607a6357331d6e74cc61b0eda75e3f74454e8b33c138ac3f5132",
+    "frozenMatches": true
+  },
+  "slice": {
+    "id": "player-feel",
+    "gates": [
+      "feel",
+      "feel-provenance",
+      "physics-timestep",
+      "console-clean"
+    ]
+  }
+}

@@ -266,7 +266,15 @@ function recordingDeps(options: { writeFiles?: boolean } = {}): RecordedDeps {
         await writeJson(feelPath, { runSpeed: 7 });
         await writeJson(consolePath, { logs: [] });
       }
-      return { feelPath, consolePath, measured: ["runSpeed"], omitted: [], gaps: [], logCount: 0 };
+      return {
+        feelPath,
+        consolePath,
+        measured: ["runSpeed"],
+        omitted: [],
+        gaps: [],
+        logCount: 0,
+        unmeasuredAcceptedTargets: [],
+      };
     },
     capturePlayability: async (a) => {
       calls.push("playability");
@@ -613,6 +621,46 @@ test("runCapture: the L34 player-feel shape is now PRODUCED (stage 2: the feel r
   assert.deepEqual(report.agentAssemblyRequired, []);
   assert.deepEqual(report.produced, ["player-feel/feel.json", "player-feel/console.json"]);
   assert.deepEqual(report.producerFailed, []);
+  await fs.rm(root, { recursive: true, force: true });
+});
+
+test("runCapture E6: a feel capture that leaves BANDED metrics unmeasured exits 1, and still writes the evidence", async () => {
+  // Run 2's live shape: the game was frozen in its modal end state, five of seven
+  // banded metrics came back unmeasured, feel.json was written, and `capture` exited
+  // 0, so the operator's first signal that anything was wrong was a verify FAIL two
+  // steps later. A capture that cannot feed its own gate is not a successful capture.
+  const root = await scaffold();
+  const { deps } = recordingDeps();
+  const unmeasured = ["runSpeed", "shortHopApex", "dashDistance", "coyoteTime", "jumpBuffer"];
+  const partial: CaptureDeps = {
+    ...deps,
+    captureFeel: async (a) => ({ ...(await deps.captureFeel(a)), measured: ["jumpApex", "timeToApex"], unmeasuredAcceptedTargets: unmeasured }),
+  };
+  const { code, errors } = await runCapturing(baseArgs(root, "player-feel"), partial);
+  assert.equal(code, 1);
+  assert.ok(
+    errors.some((line) => /the contract bands 5 metric\(s\) this capture did not measure/.test(line)),
+    errors.join("\n"),
+  );
+  assert.equal(errors[errors.length - 1], "[loombridge capture] exit=1");
+
+  // The evidence is still on disk and still in the report: the file is WHY the run
+  // failed, so losing it would be the wrong kind of strict.
+  const report = await readReport(root, "player-feel");
+  assert.deepEqual(report.produced, ["player-feel/feel.json", "player-feel/console.json"]);
+  assert.deepEqual(report.producerFailed, [], "the file landed; it is the recipe outcome that failed");
+  assert.equal((report.recipes as { recipe: string; ok: boolean }[]).find((r) => r.recipe === "feel")!.ok, false);
+  await fs.rm(root, { recursive: true, force: true });
+});
+
+test("runCapture E6 LITMUS: the SAME capture with nothing unmeasured exits 0 (the positive control)", async () => {
+  const root = await scaffold();
+  const { deps } = recordingDeps();
+  const { code, errors } = await runCapturing(baseArgs(root, "player-feel"), deps);
+  assert.equal(code, 0);
+  assert.equal(errors.some((line) => /did not measure/.test(line)), false);
+  const report = await readReport(root, "player-feel");
+  assert.equal((report.recipes as { recipe: string; ok: boolean }[]).find((r) => r.recipe === "feel")!.ok, true);
   await fs.rm(root, { recursive: true, force: true });
 });
 
