@@ -51,3 +51,8 @@ continue work after a restart.
 5. If `Warnings` appears, surface them before any next-step recommendation. Proof warnings,
    stale slices, missing capture files, and run-binding mismatches are exactly what `status`
    exists to make visible.
+
+6. If the developer wants an already-approved slice reopened, run `loombridge reopen <slice-id>`
+   (see `plan.md` step 7). Never edit `.loombridge/SLICES.json` by hand to make a slice stale:
+   the verb also clears that slice's approval artifacts, cascades to its dependents, and records
+   the event, none of which a hand edit does.

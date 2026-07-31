@@ -15,7 +15,10 @@ import path from "node:path";
 
 import {
   ASSET_MANIFEST_INPUT_FILE,
+  captureAbsentGates,
+  declaredInputFileForGate,
   gradedGates,
+  isCaptureAbsentCheck,
   runGates,
   sliceEvidenceFiles,
   VERIFY_STAGES,
@@ -25,6 +28,7 @@ import { buildEvidenceLedger, originSummary, runBindingRefusals } from "./eviden
 import { deriveEvidenceClasses } from "./gates/evidence-classes.js";
 import { assertValidAcceptanceContract } from "./validator.js";
 import type { AcceptanceContract } from "./types.js";
+import type { BuildVerdict } from "./gates/types.js";
 import {
   fileExists,
   loombridgePaths,
@@ -100,6 +104,53 @@ export function exitCodeForVerdict(status: string, opts: { strict: boolean }): n
   if (status === "fail") return 1;
   if (opts.strict && status === "warn") return 1;
   return 0;
+}
+
+/**
+ * The three tiers a SLICE verdict can land in, and the exit code each one owns.
+ *
+ * Bare `verify` keeps its documented tiers untouched (`exitCodeForVerdict` above). A
+ * slice verify is a different question and used to answer it with the same code: a
+ * `warn` exited 0, which is the code a PASS returns, while the slice was not advanced.
+ * Exit 0 therefore covered approved, blocked-on-warn, and never-evaluated at once
+ * (ledger L64/L113). It now splits three ways:
+ *
+ *  - `pass`      → 0. The only approvable outcome.
+ *  - `harness`   → 2. The verdict is `warn` and EVERY warning is a gate whose input file
+ *                  was absent, i.e. the gate never ran. A capture gap is a harness fault
+ *                  and must never read as a game defect, nor as a pass (the same tier
+ *                  `runBindingRefusals` and an incomplete live-profile capture exit in).
+ *  - `defect`    → 1. Anything else: a `fail`, or a `warn` over evidence that was
+ *                  actually graded. Slice verify is STRICT BY DEFAULT: a warn does not
+ *                  advance the slice, so reporting success for it was false advertising.
+ *
+ * `--strict` is consequently a no-op for `--slice` (kept for compatibility; a warn is
+ * already non-zero and a pass is never upgraded).
+ *
+ * Pure + exported so the rule is exhaustively tested off the assembled report alone.
+ */
+export type SliceVerdictTier = "pass" | "defect" | "harness";
+
+export function sliceVerdictOutcome(
+  report: Pick<BuildVerdict, "status" | "gates" | "checks">,
+): { code: number; tier: SliceVerdictTier; approvable: boolean; missingEvidence: string[] } {
+  const absentGates = captureAbsentGates(report);
+  const missingEvidence = absentGates.map((gate) => declaredInputFileForGate(gate) ?? `${gate} (input file undeclared)`);
+
+  if (report.status === "pass") {
+    return { code: 0, tier: "pass", approvable: true, missingEvidence: [] };
+  }
+  if (report.status === "warn") {
+    const warnings = report.checks.filter((c) => c.status === "warn");
+    // Refuse-not-skip: an EMPTY warning list under a `warn` status is a contradiction in
+    // the report itself, so it falls to the defect tier rather than being read as "no
+    // graded warnings, therefore harness".
+    const allFromAbsentInputs = warnings.length > 0 && warnings.every(isCaptureAbsentCheck);
+    if (allFromAbsentInputs) {
+      return { code: 2, tier: "harness", approvable: false, missingEvidence };
+    }
+  }
+  return { code: 1, tier: "defect", approvable: false, missingEvidence };
 }
 
 export async function exitCodeForLiveProfileCapture(args: {
@@ -587,14 +638,35 @@ async function runVerifySlice(args: VerifyArgs, acceptance: AcceptanceContract):
   };
 
   const writesDiagnostic = shouldWriteSliceDiagnostic(slice, prev?.currentBuild?.runId);
+  const outcome = sliceVerdictOutcome(report);
+  const code = outcome.code;
+  /**
+   * MACHINE-READABLE approvability (the C6/PIPESTATUS lesson: three separate runs lost
+   * this verb's exit code to a pipe and were saved only because the CLI also PRINTS it).
+   * A reader that cannot see the exit code must still be able to answer the only
+   * question that matters: may this slice be approved on the strength of this verdict?
+   *
+   * A diagnostic verdict is never approvable however green it is: it is not bound to the
+   * slice's proof, which is exactly why it was written to the diagnostic path.
+   */
+  const approvable = outcome.approvable && !writesDiagnostic;
   const verdictPath = writesDiagnostic
     ? getSliceDiagnosticPath(paths, sliceId)
     : getSliceVerdictPath(paths, sliceId);
-  const verdictOut = writesDiagnostic ? { ...reportOut, diagnostic: true } : reportOut;
+  const verdictOut = writesDiagnostic
+    ? { ...reportOut, approvable, diagnostic: true }
+    : { ...reportOut, approvable };
   await fs.mkdir(path.dirname(verdictPath), { recursive: true });
   await fs.writeFile(verdictPath, `${JSON.stringify(verdictOut, null, 2)}\n`, "utf-8");
 
-  const code = exitCodeForVerdict(report.status, { strict: args.strict });
+  if (args.strict) {
+    // Kept for compatibility (scripts pass it), but it can no longer change anything:
+    // a slice warn is already non-zero and a pass is never upgraded. Say so rather than
+    // letting the flag imply this run was graded more harshly than a bare one.
+    console.error(
+      `[loombridge verify] slice ${sliceId}: --strict is a NO-OP for --slice (slice verify is strict by default: a warn never exits 0).`,
+    );
+  }
   const gateLine = Object.entries(report.gates)
     .filter(([, v]) => v !== "not_applicable")
     .map(([g, v]) => `${g}=${v}`)
@@ -610,11 +682,25 @@ async function runVerifySlice(args: VerifyArgs, acceptance: AcceptanceContract):
   const relVerdict = path.relative(args.root, verdictPath);
   console.error(
     writesDiagnostic
-      ? `[loombridge verify] slice ${sliceId}: diagnostic (not bound to slice proof) → ${relVerdict} exit=${code}${args.strict ? " (strict)" : ""}`
-      : `[loombridge verify] slice ${sliceId}: ${report.status} → ${relVerdict} exit=${code}${args.strict ? " (strict)" : ""}`,
+      ? `[loombridge verify] slice ${sliceId}: diagnostic (not bound to slice proof) → ${relVerdict} exit=${code} approvable=${approvable}`
+      : `[loombridge verify] slice ${sliceId}: ${report.status} → ${relVerdict} exit=${code} approvable=${approvable}`,
   );
-  if (code !== 0) {
-    const why = report.status === "fail" ? "gate failures" : "warnings under --strict";
+  if (outcome.tier === "harness") {
+    // Never a pass, never a game bug: the gates below never ran, so this verdict says
+    // nothing about the game at all. Name the files, because the fix is to capture them.
+    console.error(
+      `[loombridge verify] slice ${sliceId} NOT GRADED: harness/capture gap (exit 2, not a game defect): ` +
+        `gate(s) ${captureAbsentGates(report).join(", ")} had no input.`,
+    );
+    console.error(
+      `[loombridge verify] missing evidence: ${outcome.missingEvidence.join(", ")} under ` +
+        `${path.relative(args.root, inputsDir)}/: produce them (\`loombridge capture --root ${args.root} --slice ${sliceId}\`), then re-verify.`,
+    );
+  } else if (code !== 0) {
+    const why =
+      report.status === "fail"
+        ? "gate failures"
+        : "warnings over graded evidence (slice verify is strict by default: a warn does not advance the slice)";
     console.error(`[loombridge verify] slice ${sliceId} NOT green — ${why}.`);
   }
   const flip = sliceVerifiedFlipDecision({
@@ -1339,7 +1425,9 @@ function printUsage(): void {
       "  --vlm <path>          Advisory VLM findings (optional)",
       "  --strict              Treat warnings as failures (require all-green). On a bare",
       "                        run, applies to the unified run (see above) and is mirrored",
-      "                        into every section that has an all-green mode.",
+      "                        into every section that has an all-green mode. NO-OP for",
+      "                        --slice: slice verify is strict by DEFAULT (a warn never",
+      "                        exits 0). The flag is accepted for compatibility.",
       "  --verbose             (--minigame) Print the full per-finding breakdown in the",
       "                        terminal (default: slim — the detail lives in the report)",
       "  --quiet-next          (--minigame) Suppress the resolved next-step footer (the",
@@ -1357,6 +1445,11 @@ function printUsage(): void {
       "                        whole-game build-verdict.json or STATE; a fresh pass",
       "                        flips the slice built -> verified. Mutually exclusive",
       "                        with --stage (they are independent axes).",
+      "                        Slice exit codes are their own three-way contract: 0 pass",
+      "                        (the verdict records `approvable: true`), 1 a game defect",
+      "                        (fail, or a warn over evidence that WAS graded), 2 a",
+      "                        harness/capture gap (the only failing checks are gates",
+      "                        whose input file was absent, so nothing was graded).",
       "  --profile <id>        VERIFY-FIRST mode (S5b): grade an existing 2D platformer",
       "                        against a feel profile (precision | classic | momentum).",
       "                        Runs standalone — no ACCEPTANCE.json/SLICES.json, no project",

@@ -16,7 +16,7 @@ import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
-import { runVerify } from "../../../../capabilities/verification/verify.js";
+import { runVerify, sliceVerdictOutcome } from "../../../../capabilities/verification/verify.js";
 import { REPO_ROOT as REPO_ROOT_SUPPORT } from "../../../_support/paths.js";
 import {
   ensureScaffold,
@@ -101,6 +101,18 @@ function passingHudCaptures(): Record<string, unknown> {
       canvas: { renderMode: "Screen Space - Camera", cameraName: "UICamera", cameraHasPixelPerfect: true, cameraUpscaleRT: false },
     },
   };
+}
+
+/** Run `fn` with console.error captured, returning the exit code and the emitted lines. */
+async function captureStderr(fn: () => Promise<number>): Promise<{ code: number; lines: string[] }> {
+  const lines: string[] = [];
+  const original = console.error;
+  console.error = (...a: unknown[]) => void lines.push(a.map(String).join(" "));
+  try {
+    return { code: await fn(), lines };
+  } finally {
+    console.error = original;
+  }
 }
 
 async function writeCaptures(dir: string, files: Record<string, unknown>): Promise<void> {
@@ -471,25 +483,182 @@ test("verify --slice exit code reflects the gate status (failing selected gate �
   }
 });
 
-test("verify --slice --strict upgrades a warn (missing capture) to a non-zero exit", async () => {
+// ── the three-way warn split (ledger L64/L113; B4) ───────────────────────────
+//
+// This test CHANGED deliberately. It used to assert `lenient === 0`: a slice verify
+// whose gates never ran exited with the same code a PASS returns, so exit 0 covered
+// approved, blocked-on-warn and never-evaluated at once. The three tests below pin the
+// replacement contract: 0 pass / 1 game defect / 2 harness gap, with `--strict` reduced
+// to a no-op because slice verify is now strict by default.
+
+test("verify --slice: a warn whose ONLY failing checks are absent gate inputs is HARNESS tier (exit 2)", async () => {
   const root = await tmpRoot();
   try {
     await scaffold(root);
     const paths = loombridgePaths(root);
     await writeSlicePlan(paths, planWith(["manifest", "ui-conformance"]));
-    // Only manifest present → ui-conformance degrades to warn.
+    // Only manifest present → ui-conformance degrades to warn: that gate never ran, so
+    // this verdict says NOTHING about the game. Never a pass, never a game defect.
     await writeCaptures(path.join(paths.verifyInputs, "s1-hud"), {
       "verify-manifest.json": { missing: [], placeholders: [], extras: [], all_ok: true },
     });
 
-    const lenient = await runVerify({ ...baseArgs(root), slice: "s1-hud" });
-    assert.equal(lenient, 0, "a warn is tolerated without --strict");
+    const { code, lines } = await captureStderr(() => runVerify({ ...baseArgs(root), slice: "s1-hud" }));
+    assert.equal(code, 2, "a capture gap is a harness fault: exit 2, never 0 and never 1");
+    assert.ok(
+      lines.some((l) => /NOT GRADED/.test(l) && /harness\/capture gap/.test(l)),
+      lines.join("\n"),
+    );
+    // The message NAMES the evidence file, because producing it is the fix.
+    assert.ok(lines.some((l) => l.includes("ui-scan.json")), "the refusal must name the missing evidence file");
 
-    const strictCode = await runVerify({ ...baseArgs(root), slice: "s1-hud", strict: true });
-    assert.equal(strictCode, 1, "--strict upgrades the warn to a failure");
+    // --strict cannot change a thing (kept for compatibility, announced as a no-op).
+    const strictRun = await captureStderr(() => runVerify({ ...baseArgs(root), slice: "s1-hud", strict: true }));
+    assert.equal(strictRun.code, 2, "--strict is a no-op for --slice");
+    assert.ok(strictRun.lines.some((l) => /--strict is a NO-OP/.test(l)), strictRun.lines.join("\n"));
+
+    const verdict = JSON.parse(await fs.readFile(getSliceVerdictPath(paths, "s1-hud"), "utf-8"));
+    assert.equal(verdict.approvable, false, "an ungraded slice is not approvable");
   } finally {
     await fs.rm(root, { recursive: true, force: true });
   }
+});
+
+test("verify --slice: a warn over evidence that WAS graded is a game defect (exit 1)", async () => {
+  const root = await tmpRoot();
+  try {
+    await scaffold(root);
+    const paths = loombridgePaths(root);
+    await writeSlicePlan(paths, planWith(["manifest", "console-clean"]));
+    // Both inputs PRESENT. console-clean grades a real capture and warns on a benign
+    // gameplay warning: a statement about the game, not about the harness.
+    await writeCaptures(path.join(paths.verifyInputs, "s1-hud"), {
+      "verify-manifest.json": { missing: [], placeholders: [], extras: [], all_ok: true },
+      "console.json": { logs: [{ type: "warning", message: "Player sprite reimported at runtime" }] },
+    });
+
+    const { code, lines } = await captureStderr(() => runVerify({ ...baseArgs(root), slice: "s1-hud" }));
+    assert.equal(code, 1, "a graded warn does not advance the slice, so it must not exit 0");
+    assert.ok(
+      lines.some((l) => /NOT green/.test(l) && /strict by default/.test(l)),
+      lines.join("\n"),
+    );
+    assert.ok(!lines.some((l) => /harness\/capture gap/.test(l)), "a graded warn is NOT the harness tier");
+
+    const verdict = JSON.parse(await fs.readFile(getSliceVerdictPath(paths, "s1-hud"), "utf-8"));
+    assert.equal(verdict.status, "warn");
+    assert.equal(verdict.gates["console-clean"], "warn");
+    assert.equal(verdict.approvable, false);
+
+    // Same run under --strict: identical code. The flag is inert here.
+    const strictCode = await runVerify({ ...baseArgs(root), slice: "s1-hud", strict: true });
+    assert.equal(strictCode, 1);
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test("verify --slice: a pass exits 0 and records `approvable: true` in the verdict", async () => {
+  // The C6/PIPESTATUS lesson: three live runs lost this verb's exit code to a pipe. The
+  // verdict must answer "may this be approved?" on its own, in a machine-readable field.
+  const root = await tmpRoot();
+  try {
+    await scaffold(root);
+    const paths = loombridgePaths(root);
+    await writeSlicePlan(paths, planWith(["manifest", "ui-conformance"]));
+    await writeCaptures(path.join(paths.verifyInputs, "s1-hud"), passingHudCaptures());
+
+    const { code, lines } = await captureStderr(() => runVerify({ ...baseArgs(root), slice: "s1-hud" }));
+    assert.equal(code, 0);
+    const verdict = JSON.parse(await fs.readFile(getSliceVerdictPath(paths, "s1-hud"), "utf-8"));
+    assert.equal(verdict.status, "pass");
+    assert.equal(verdict.approvable, true);
+    // …and the printed summary line states it, for the reader who has only the log.
+    assert.ok(lines.some((l) => /exit=0 approvable=true/.test(l)), lines.join("\n"));
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test("verify --slice: a DIAGNOSTIC verdict is never approvable, however green", async () => {
+  // A diagnostic run is not bound to the slice's proof: that is why it is written to a
+  // different path. `approvable` must not read `true` off its `pass` status alone.
+  const root = await tmpRoot();
+  try {
+    await scaffold(root);
+    const paths = loombridgePaths(root);
+    const plan = builtPlanWith(["manifest", "ui-conformance"], "run-s1-hud-proof");
+    plan.slices[0]!.state = "approved";
+    plan.slices[0]!.proof = { ...plan.slices[0]!.proof!, checkpointId: "s1-hud", approvedAt: "2026-01-01T00:00:01.000Z" };
+    await writeSlicePlan(paths, plan);
+    await writeCaptures(path.join(paths.verifyInputs, "s1-hud"), passingHudCaptures());
+    await writeState(paths, {
+      genre: "platformer-2d",
+      engine: "unity",
+      phase: "built-unverified",
+      currentBuild: { runId: "run-other-slice", startedAt: nowIso() },
+      lastVerdict: null,
+      updatedAt: nowIso(),
+    });
+
+    const code = await runVerify({ ...baseArgs(root), slice: "s1-hud" });
+    assert.equal(code, 0);
+    const diagnostic = JSON.parse(await fs.readFile(getSliceDiagnosticPath(paths, "s1-hud"), "utf-8"));
+    assert.equal(diagnostic.status, "pass");
+    assert.equal(diagnostic.diagnostic, true);
+    assert.equal(diagnostic.approvable, false, "a diagnostic verdict can never approve a slice");
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test("sliceVerdictOutcome: the pure three-way rule, off the assembled report alone", () => {
+  const absentCheck = (gate: string) => ({
+    id: `${gate}.input`,
+    expected: `captured op output at "${gate}.json"`,
+    actual: "(missing)",
+    status: "warn" as const,
+    detail: "Gate not evaluated.",
+  });
+  const gradedWarn = {
+    id: "console-clean.warnings",
+    expected: "no warnings",
+    actual: "1 warning",
+    status: "warn" as const,
+    detail: "benign",
+  };
+
+  const pass = sliceVerdictOutcome({ status: "pass", gates: { manifest: "pass" }, checks: [] });
+  assert.deepEqual({ code: pass.code, tier: pass.tier, approvable: pass.approvable }, { code: 0, tier: "pass", approvable: true });
+
+  const harness = sliceVerdictOutcome({
+    status: "warn",
+    gates: { manifest: "pass", "ui-conformance": "warn" },
+    checks: [absentCheck("ui-conformance")],
+  });
+  assert.equal(harness.code, 2);
+  assert.equal(harness.tier, "harness");
+  assert.deepEqual(harness.missingEvidence, ["ui-scan.json"], "the tier names the file it was missing");
+
+  // MIXED: one gate never ran, another warned over real evidence. A graded warning is
+  // present, so this is a defect, not a harness gap: the harness tier must not absorb it.
+  const mixed = sliceVerdictOutcome({
+    status: "warn",
+    gates: { "console-clean": "warn", "ui-conformance": "warn" },
+    checks: [absentCheck("ui-conformance"), gradedWarn],
+  });
+  assert.equal(mixed.code, 1);
+  assert.equal(mixed.tier, "defect");
+
+  const fail = sliceVerdictOutcome({ status: "fail", gates: { manifest: "fail" }, checks: [] });
+  assert.equal(fail.code, 1);
+  assert.equal(fail.approvable, false);
+
+  // Refuse-not-skip: a `warn` status with NO warning checks is a self-contradictory
+  // report. It must fall to the defect tier, never be read as "no graded warns → harness".
+  const empty = sliceVerdictOutcome({ status: "warn", gates: { manifest: "warn" }, checks: [] });
+  assert.equal(empty.code, 1);
+  assert.equal(empty.tier, "defect");
 });
 
 test("verify --inputs override survives a --slice run (explicit beats the per-slice default)", async () => {

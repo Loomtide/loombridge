@@ -23,6 +23,50 @@ test("exitCodeForVerdict enforces the build gate", () => {
   assert.equal(exitCodeForVerdict("fail", { strict: true }), 1);
 });
 
+test("BARE verify tiers are UNTOUCHED by the slice warn split: a partially-graded warn still exits 0", async () => {
+  // The B4 three-way split is scoped to `--slice`. Bare `verify` has a documented,
+  // consumed 0/1/2 contract (CI users read it), and changing it silently is the exact
+  // class this repo refuses. This pins the boundary: one gate graded, another degraded to
+  // warn on an absent capture, and the bare run still exits 0 with no `approvable` field.
+  const root = await tmpRoot();
+  await runPlan({ root, genre: "platformer-2d", engine: "unity", force: false, allowMissingDesignTarget: true });
+  const paths = loombridgePaths(root);
+  await fs.mkdir(paths.verifyInputs, { recursive: true });
+  await fs.writeFile(
+    path.join(paths.verifyInputs, "verify-manifest.json"),
+    JSON.stringify({ missing: [], placeholders: [], extras: [], all_ok: true }),
+    "utf-8",
+  );
+
+  const { result: code } = await captureStderr(() =>
+    runVerify({
+      root,
+      inputsDir: paths.verifyInputs,
+      acceptancePath: paths.acceptance,
+      outputPath: paths.verdict,
+      strict: false,
+    }),
+  );
+  assert.equal(code, 0, "bare verify still tolerates a warn without --strict");
+
+  const verdict = JSON.parse(await fs.readFile(paths.verdict, "utf-8"));
+  assert.equal(verdict.status, "warn");
+  assert.equal("approvable" in verdict, false, "`approvable` is a SLICE verdict field only");
+
+  // …and --strict still upgrades it to 1, exactly as documented.
+  const strict = await captureStderr(() =>
+    runVerify({
+      root,
+      inputsDir: paths.verifyInputs,
+      acceptancePath: paths.acceptance,
+      outputPath: paths.verdict,
+      strict: true,
+    }),
+  );
+  assert.equal(strict.result, 1);
+  await fs.rm(root, { recursive: true, force: true });
+});
+
 // ── plan ─────────────────────────────────────────────────────────────────────
 
 test("plan scaffolds .loombridge/ for the platformer genre", async () => {

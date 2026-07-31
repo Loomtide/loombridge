@@ -83,7 +83,9 @@ test("status routes built slice to capture only when deterministic captures are 
     await fs.writeFile(path.join(root, ".loombridge", "verify", "framing", "console.json"), "{}\n", "utf-8");
 
     model = await statusModel(root);
-    assert.equal(model.nextCommand, "loombridge verify --slice framing --strict");
+    // No `--strict`: slice verify is strict by DEFAULT now (a warn never exits 0), so
+    // carrying the flag in the suggested command would imply the plain form is laxer.
+    assert.equal(model.nextCommand, "loombridge verify --slice framing");
     assert.equal(model.warnings.some((w) => /missing capture file/.test(w)), false);
   } finally {
     await fs.rm(root, { recursive: true, force: true });

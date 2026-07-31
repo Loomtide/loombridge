@@ -14,7 +14,11 @@ import {
   markDependentStale,
   nextUnblockedSlice,
   planDispatchMode,
+  reopenSlicePlan,
   SLICES_SCHEMA_VERSION,
+  SLICE_FIELDS,
+  SLICE_HISTORY_FIELDS,
+  SLICE_PROOF_FIELDS,
   type SliceEntry,
   type SlicePlan,
 } from "../../../../capabilities/verification/slices.js";
@@ -118,6 +122,209 @@ test("slices.schema.json `required` agrees with what the validator actually enfo
       `schema calls "${field}" required, but the validator accepts a slice without it`,
     );
   }
+});
+
+test("slices.schema.json and the TS validator declare the SAME property sets, both directions", async () => {
+  // The `required` test above binds one direction of one field list. This binds the whole
+  // SHAPE, both ways, for all three objects: and it is the guard that was missing when
+  // `history` was added: a field present in the schema and unknown to the validator is
+  // accepted by a reader trusting the schema and refused at runtime; a field the validator
+  // knows and the schema omits is refused by every schema-aware tool, since `slice`,
+  // `proof` and `sliceHistoryEntry` all declare `additionalProperties: false`.
+  const schema = JSON.parse(
+    await fs.readFile(path.join(REPO_PKG_ROOT, "src/domain/schemas/slices.schema.json"), "utf-8"),
+  ) as { $defs: Record<string, { properties: Record<string, unknown> }> };
+
+  const pairs: Array<[string, readonly string[], string]> = [
+    ["slice", SLICE_FIELDS, "SLICE_FIELDS"],
+    ["proof", SLICE_PROOF_FIELDS, "SLICE_PROOF_FIELDS"],
+    ["sliceHistoryEntry", SLICE_HISTORY_FIELDS, "SLICE_HISTORY_FIELDS"],
+  ];
+
+  for (const [def, tsFields, name] of pairs) {
+    const schemaProps = Object.keys(schema.$defs[def]!.properties).sort();
+    assert.deepEqual(
+      [...tsFields].sort(),
+      schemaProps,
+      `${name} and slices.schema.json $defs.${def}.properties disagree: a field was added to ` +
+        "one home and not the other (the TS interface, the TS validator, and the schema are three homes; all three or none).",
+    );
+  }
+});
+
+test("assertValidSlicePlan: an unknown slice field is REFUSED (closed keys, like proof)", () => {
+  // The positive control for the guard above: a hand-edited SLICES.json carrying an
+  // invented field (a mistyped `histroy`, a fabricated `approved: true`) must not read as
+  // valid while every consumer ignores it.
+  const plan = smallPlan() as unknown as { slices: Array<Record<string, unknown>> };
+  plan.slices[0]!.histroy = [];
+  assert.throws(() => assertValidSlicePlan(plan), /unknown field 'histroy'/);
+});
+
+test("assertValidSlicePlan: `history` shape: closed action set, cascade ids, closed keys", () => {
+  const ok = smallPlan() as unknown as { slices: Array<Record<string, unknown>> };
+  ok.slices[0]!.history = [{ at: "2026-01-01T00:00:00.000Z", action: "reopen", cascade: ["b", "c"] }];
+  assert.doesNotThrow(() => assertValidSlicePlan(ok));
+
+  const badAction = smallPlan() as unknown as { slices: Array<Record<string, unknown>> };
+  badAction.slices[0]!.history = [{ at: "2026-01-01T00:00:00.000Z", action: "approved-by-hand", cascade: [] }];
+  assert.throws(() => assertValidSlicePlan(badAction), /history\[0\]\.action/);
+
+  const badCascade = smallPlan() as unknown as { slices: Array<Record<string, unknown>> };
+  badCascade.slices[0]!.history = [{ at: "2026-01-01T00:00:00.000Z", action: "reopen", cascade: ["../escape"] }];
+  assert.throws(() => assertValidSlicePlan(badCascade), /not a safe slice id/);
+
+  const missingAt = smallPlan() as unknown as { slices: Array<Record<string, unknown>> };
+  missingAt.slices[0]!.history = [{ action: "reopen", cascade: [] }];
+  assert.throws(() => assertValidSlicePlan(missingAt), /history\[0\]\.at/);
+
+  const extraKey = smallPlan() as unknown as { slices: Array<Record<string, unknown>> };
+  extraKey.slices[0]!.history = [{ at: "2026-01-01T00:00:00.000Z", action: "reopen", cascade: [], by: "me" }];
+  assert.throws(() => assertValidSlicePlan(extraKey), /history\[0\]: unknown field 'by'/);
+});
+
+test("instantiateSlicePlan: carries `history` through (it rebuilds field by field)", () => {
+  // The trap this function has: it reconstructs every entry explicitly, so a field it does
+  // not name is silently dropped. An audit trail is the worst kind of field to lose that way.
+  const template = smallPlan();
+  template.slices[0]!.history = [{ at: "2026-01-01T00:00:00.000Z", action: "reopen", cascade: ["b"] }];
+  const fresh = instantiateSlicePlan(template);
+  assert.deepEqual(fresh.slices[0]!.history, [{ at: "2026-01-01T00:00:00.000Z", action: "reopen", cascade: ["b"] }]);
+  // …by value, not by reference: mutating the copy must not reach back into the template.
+  fresh.slices[0]!.history![0]!.cascade.push("c");
+  assert.deepEqual(template.slices[0]!.history![0]!.cascade, ["b"]);
+});
+
+// ── reopenSlicePlan (the pure transition behind `loombridge reopen`) ──────────
+
+/** a -> b -> c, all approved with full approval artifacts (a TideRunner-shaped chain). */
+function approvedPlan(): SlicePlan {
+  const plan = smallPlan();
+  for (const slice of plan.slices) {
+    slice.state = "approved";
+    slice.proof = {
+      runId: `run-${slice.id}-1`,
+      startedAt: "2026-01-01T00:00:00.000Z",
+      verdictPath: `.loombridge/reports/slices/${slice.id}.verdict.json`,
+      captureManifest: [`${slice.id}/verify-manifest.json`],
+      checkpointId: slice.id,
+      approvedAt: "2026-01-02T00:00:00.000Z",
+      approvalNote: "looked right",
+      signoffArtifact: `.loombridge/reports/slices/${slice.id}/signoff.png`,
+      signoffSha256: "a".repeat(64),
+    };
+  }
+  return plan;
+}
+
+test("reopenSlicePlan: target goes stale, approval artifacts are CLEARED, cascade follows", () => {
+  const before = approvedPlan();
+  const result = reopenSlicePlan(before, "a", "2026-02-01T00:00:00.000Z");
+  assert.ok(result.ok);
+
+  const byId = new Map(result.plan.slices.map((s) => [s.id, s]));
+  for (const id of ["a", "b", "c"]) {
+    assert.equal(byId.get(id)!.state, "stale", `${id} must be stale`);
+    const proof = byId.get(id)!.proof!;
+    // A stale slice carrying approval artifacts is a RE-APPROVAL SHORTCUT: these are
+    // exactly the fields `plan --go` and `isSliceDone` read to conclude it was signed off.
+    for (const field of ["checkpointId", "approvedAt", "approvalNote", "signoffArtifact", "signoffSha256"] as const) {
+      assert.equal(proof[field], undefined, `${id}.proof.${field} must be cleared by a reopen`);
+    }
+    // The BUILD identity survives: reopening withdraws an approval, it does not forge a
+    // new run, and `runId`/`startedAt` are what a later reader binds the old evidence to.
+    assert.equal(proof.runId, `run-${id}-1`);
+  }
+
+  // The input plan is untouched (pure function).
+  assert.equal(before.slices[0]!.state, "approved");
+  assert.equal(before.slices[0]!.proof!.approvedAt, "2026-01-02T00:00:00.000Z");
+});
+
+test("reopenSlicePlan: records history{at, action, cascade} on the TARGET only", () => {
+  const result = reopenSlicePlan(approvedPlan(), "a", "2026-02-01T00:00:00.000Z");
+  assert.ok(result.ok);
+  const byId = new Map(result.plan.slices.map((s) => [s.id, s]));
+  assert.deepEqual(byId.get("a")!.history, [
+    { at: "2026-02-01T00:00:00.000Z", action: "reopen", cascade: ["b", "c"] },
+  ]);
+  assert.equal(byId.get("b")!.history, undefined, "a cascaded slice is not the subject of the event");
+  // The written plan must still validate (the schema/validator accept what we emit).
+  assert.doesNotThrow(() => assertValidSlicePlan(result.plan));
+});
+
+test("reopenSlicePlan: history is APPEND-ONLY across repeated reopens", () => {
+  const first = reopenSlicePlan(approvedPlan(), "a", "2026-02-01T00:00:00.000Z");
+  assert.ok(first.ok);
+  // Re-approve `a` by hand-rolling the state a second build+verify+approve would produce.
+  const rebuilt: SlicePlan = {
+    ...first.plan,
+    slices: first.plan.slices.map((s) =>
+      s.id === "a" ? { ...s, state: "approved" as const, proof: { ...s.proof, checkpointId: "a", approvedAt: "2026-02-02T00:00:00.000Z" } } : s,
+    ),
+  };
+  const second = reopenSlicePlan(rebuilt, "a", "2026-02-03T00:00:00.000Z");
+  assert.ok(second.ok);
+  const history = second.plan.slices.find((s) => s.id === "a")!.history!;
+  assert.equal(history.length, 2, "the first reopen must survive the second");
+  assert.deepEqual(history.map((h) => h.at), ["2026-02-01T00:00:00.000Z", "2026-02-03T00:00:00.000Z"]);
+});
+
+test("reopenSlicePlan: reports every touched slice with its PRIOR state, target first", () => {
+  const plan = approvedPlan();
+  plan.slices[1]!.state = "built"; // b is mid-flight when a is reopened
+  const result = reopenSlicePlan(plan, "a", "2026-02-01T00:00:00.000Z");
+  assert.ok(result.ok);
+  assert.deepEqual(
+    result.touched.map((t) => ({ id: t.id, priorState: t.priorState, target: t.target })),
+    [
+      { id: "a", priorState: "approved", target: true },
+      { id: "b", priorState: "built", target: false },
+      { id: "c", priorState: "approved", target: false },
+    ],
+  );
+  // Dependencies before dependents, so the operator never re-verifies against evidence
+  // that does not exist yet.
+  assert.deepEqual(result.reverifyChain, ["a", "b", "c"]);
+});
+
+test("reopenSlicePlan: the re-verify chain is DAG order, not array order", () => {
+  // Same graph, authored out of order. A chain read off the array would print c before a.
+  const plan: SlicePlan = {
+    schemaVersion: SLICES_SCHEMA_VERSION,
+    genre: "platformer-2d",
+    slices: [
+      { id: "c", title: "C", dependsOn: ["b"], feelIntent: "f", acceptance: { gates: ["manifest"] }, state: "approved" },
+      { id: "b", title: "B", dependsOn: ["a"], feelIntent: "f", acceptance: { gates: ["manifest"] }, state: "approved" },
+      { id: "a", title: "A", dependsOn: [], feelIntent: "f", acceptance: { gates: ["manifest"] }, state: "approved" },
+    ],
+  };
+  const result = reopenSlicePlan(plan, "a", "2026-02-01T00:00:00.000Z");
+  assert.ok(result.ok);
+  assert.deepEqual(result.reverifyChain, ["a", "b", "c"]);
+});
+
+test("reopenSlicePlan: refuses an unknown slice, and states 'nothing to reopen' for stale/pending", () => {
+  const unknown = reopenSlicePlan(approvedPlan(), "nope", "2026-02-01T00:00:00.000Z");
+  assert.equal(unknown.ok, false);
+  assert.equal(unknown.ok === false ? unknown.reason : null, "unknown-slice");
+  assert.deepEqual(unknown.ok === false && unknown.reason === "unknown-slice" ? unknown.knownIds : [], ["a", "b", "c"]);
+
+  for (const state of ["stale", "pending"] as const) {
+    const plan = approvedPlan();
+    plan.slices[0]!.state = state;
+    const result = reopenSlicePlan(plan, "a", "2026-02-01T00:00:00.000Z");
+    assert.equal(result.ok, false, `${state} has nothing to reopen`);
+    assert.equal(result.ok === false ? result.reason : null, "nothing-to-reopen");
+  }
+});
+
+test("reopenSlicePlan: a `built` target IS reopenable (in-flight work is a state to withdraw)", () => {
+  const plan = approvedPlan();
+  plan.slices[0]!.state = "built";
+  const result = reopenSlicePlan(plan, "a", "2026-02-01T00:00:00.000Z");
+  assert.ok(result.ok);
+  assert.equal(result.touched[0]!.priorState, "built");
 });
 
 test("assertValidSlicePlan — `skill` is optional, but a present-but-blank one is refused", () => {
