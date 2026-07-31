@@ -1289,18 +1289,18 @@ FACT (a truth recorded, not a defect).
 
 ## Session-4 findings (the green run; OPEN unless marked)
 
-- E13 (OPEN, the falsy-skip strikes again): the capture staleness detector refuses a
+- E13 (FIXED, PR 44): the capture staleness detector refuses a
   file whose _provenance.runId names a DIFFERENT run but treats a file with NO
   _provenance at all as fresh: an un-provenanced leftover classified as produced with
   exit 0. Refuse-on-absent applies; fix alongside E14.
-- E14 (OPEN): capture-report's `produced` array conflates "a recipe wrote it" with
+- E14 (FIXED, PR 44): capture-report's `produced` array conflates "a recipe wrote it" with
   "present and not provably stale": a drive-connection-written ui-scan.json was
   credited to the CLI.
-- E15 (OPEN): playability.json's top-level editorSessionId binds to the
+- E15 (FIXED, PR 44): playability.json's top-level editorSessionId binds to the
   pre-editor.play handshake; editor.play rolls the session id, so one play session
   shows two ids across a slice's files. The recorder's own
   observation.recorderEditorSessionId is correct; the top-level stamp should match it.
-- E16 (OPEN): a green bare verify does not update STATE.md (still built-unverified /
+- E16 (FIXED, PR 44): a green bare verify does not update STATE.md (still built-unverified /
   lastVerdict null after 9/9 re-graded green).
 - E17 (FACT, re-capture hazard): re-capturing an early slice after later slices ship
   can change what its frames depict (the juice stimulus timing now lands on the GAME
@@ -1313,11 +1313,11 @@ FACT (a truth recorded, not a defect).
 
 ## VLM ceremony findings
 
-- E19 (OPEN, bridge): editor.screenshot captures the editor window (scene view), not
+- E19 (DOCUMENTED, PR 44; rename or refusal still open): editor.screenshot captures the editor window (scene view), not
   the game camera: the first frame set was skybox-and-quads. The real game frames
   come from runtime.capture_sequence with view "game". The op doc should say so, or
   the op should refuse outside its actual semantics.
-- E20 (OPEN, bridge introspection): Canvas.m_SortingOrder and
+- E20 (FIXED, PR 44): Canvas.m_SortingOrder and
   SpriteRenderer.m_SortingOrder are set-only over the bridge (get_properties omits
   them; runtime.get_snapshot does not surface them), and at least the Canvas set had
   no observable effect: three scrim-sorting fix attempts were unverifiable and
@@ -1354,3 +1354,64 @@ FACT (a truth recorded, not a defect).
   verify --profile shape) and its own earlier claims (L49 disproven with evidence,
   C1 overturning a builder's phase-accounting theory). Adversarial layering applies
   to the observers too.
+
+## Late findings (the close-out sessions, E27 onward)
+
+- E27 (FACT, pack authoring rule): the platformer pack's mock and its contract DISAGREE
+  about the player anchor (the mock's player sits at 0.28 of frame width; the contract
+  and the framing gate demand 0.40), which makes pixel-faithful mock composition
+  unreachable under the contract's own terms and manifests as reviewer warns about a
+  right-translated arc. Rule for future packs: render the mock FROM the contract's
+  framing numbers, or derive the contract's framing from the approved mock: never
+  author them independently.
+- E28 (FACT, review termination): across four independent-reviewer rounds, composition
+  criteria oscillated between reviewer tastes (round 2 warned the flag inside the
+  platform's column; round 3 warned the mock-position flag's edge clip). Worst-status
+  union across rounds is monotonically stricter and does not terminate on taste-class
+  criteria; a close-out needs either majority voting across three or more reviewers or
+  the re-freeze ceremony to end the loop.
+- E29 (FACT, the reader-restore trap): GameManager.RequestRestart restores the input
+  reader's pre-modal enabled state, silently undoing a disable taken before the
+  restart. Bit three different driver scripts before the ordering rule (restart first,
+  then disable) was learned. Any harness that disables a reader must do so AFTER any
+  game-side state restore it triggers.
+- E30 (FIXED, PR 44): stale collider AABBs after edit-mode set_transform (bounds reads
+  now sync physics transforms first) and per-connection editorSessionId instability
+  (the recorder id is the strong binder; weak-id disagreement downgrades to a
+  persisted note). Recorded here because both were found after the E1-E26 appendix.
+
+## THE OPEN BACKLOG (single consolidated list, 2026-07-31, post v0.2.0)
+
+Product and moat:
+1. Bridge op journal (E-series residual): a fabricated self-consistent observation
+   buffer with forged producer markers is undetectable offline; a bridge-side journal
+   or signed drain closes it. Own PR, design sketched in the stage-3 PR body.
+2. Fuller contract-coverage guard (R3 remainder): the roll-up's minimum viable check
+   covers required-content sections; schema-required-but-ungraded FIELDS inside walked
+   sections (the framing subset, L3/L28) still need per-field coverage.
+3. Slice re-open verb: staleness is still a hand edit to SLICES.json (E6 runbook gap).
+4. verify exits 0 on warn (L64): a warn verdict does not advance the slice but shares
+   the exit code of a pass.
+5. editor.screenshot semantic rename or refusal (E19 residual: documented only).
+6. Paused-stepped replay slice: measured and justified by the KidsAdventure idle-probe
+   discriminator (drift is game-clock phase desync; per-settle alignment insufficient);
+   preconditions listed in the aligned-wave plan review findings 1-4, 8, 9, 14, 15, 22.
+
+Bridge op additions (all with live repro data in this ledger):
+7. scene.get_transform (read side of set_transform, L118).
+8. Material tiling ops: mainTextureScale/Offset read and write (L68).
+9. asset.set_texture_import_settings: wrapMode and filterMode args (L67).
+10. ui.get_screen_rects returns empty in play and edit mode (L104, C4): root-cause.
+11. Bridge-wide unknown-parameter guard (the ui-scoped one shipped in PR 44).
+12. Installed-bridge-vs-TOOLS.md skew guard (L69): doc-versus-bridge drift is unguarded.
+13. runtime.probe sampledFields support (L71) so probe-owned metrics can observe
+    non-transform signals on the tick clock.
+
+Housekeeping:
+14. Four pre-existing EditMode failures (ComponentHandler x2 asset-name assertions,
+    OpExecutor and TraceCollector missing LogAssert expectations).
+15. N-capture averaging for feel snapshots (KnightsQuest: fallGravity/runDecel
+    single-capture-unstable).
+16. Workspace-id UX: explicit --id workspaces invisible under the derived id.
+17. UnifiedVerify RFC stages S3/S4.
+18. UNITY_LICENSE secret for CI EditMode (user action).
