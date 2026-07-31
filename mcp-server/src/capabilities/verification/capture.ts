@@ -344,6 +344,15 @@ export async function runCapture(args: CaptureArgs, deps: CaptureDeps = defaultD
         for (const gap of result.gaps) {
           console.error(`[loombridge capture] feel: provenance gap: ${gap}`);
         }
+        // OUT OF SCOPE, NOT FAILED (E6 session three). A band on a metric the feel
+        // gate never reads cannot be satisfied by any capture, so it is said out loud
+        // and left out of the exit code.
+        if ((result.outOfScopeAcceptedTargets ?? []).length > 0) {
+          console.error(
+            `[loombridge capture] feel: NOTE: the contract bands ${result.outOfScopeAcceptedTargets.join(", ")}, which the feel gate does not grade ` +
+              "and no capture leg measures. Not a capture failure: remove the band or keep it as documentation.",
+          );
+        }
         if (result.aborted) {
           console.error(`[loombridge capture] feel: session ABORTED after the ${result.aborted.leg} leg: ${result.aborted.reason}`);
         }

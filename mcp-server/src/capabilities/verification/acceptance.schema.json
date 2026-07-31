@@ -521,7 +521,12 @@
               "properties": {
                 "moveX": { "type": "string", "minLength": 1 },
                 "jumpHeld": { "type": "string", "minLength": 1 },
-                "dashHeld": { "type": "string", "minLength": 1 }
+                "dashHeld": { "type": "string", "minLength": 1 },
+                "grounded": {
+                  "description": "OPTIONAL public bool on controllerComponent that reports the controller's own ground probe (e.g. \"grounded\"). Declare it when the controller exposes its ground probe: it makes the coyoteTime anchor EXACT. The coyote sweep samples it on the trajectory's tick clock (runtime.capture_input_motion sampledFields) and anchors on the ungrounding tick; without it the sweep anchors on the first VISIBLE y-descent, which on a rig whose ground probe is smaller than the collider fires ticks later (TideRunner: two ticks, 0.0667s measured against a real 0.1000s). The written evidence names which anchor was used.",
+                  "type": "string",
+                  "minLength": 1
+                }
               }
             },
             "keys": {

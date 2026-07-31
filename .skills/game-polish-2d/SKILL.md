@@ -43,10 +43,14 @@ tune toward the profile's bands.
    canonical measurements and WRITES `feel.json` from the op echoes. Declare the controller
    seam once in `ACCEPTANCE.json` under `harness.feelSeam` (player locator, controller
    component, the input-reader component to disable, the drive field names, the keys); the
-   recipe refuses and prints the exact JSON when it is absent. If a hazard or a ledge sits
-   inside the run leg's default 10.5-unit runway, add `runLeg: { ticks, direction }` to that
-   block. Otherwise the run and coyote legs drive the player into it, and a game that ends
-   the session on death leaves the remaining legs measuring a corpse. Do NOT hand-author
+   recipe refuses and prints the exact JSON when it is absent. If a hazard sits inside the
+   run leg's default 10.5-unit runway, add `runLeg: { ticks, direction }` to that block.
+   Otherwise the run leg drives the player into it, and a game that ends the session on
+   death leaves the remaining legs measuring a corpse. `runLeg` does not bound the coyote
+   calibration walk, which must leave the ground and hunts for the ledge under its own cap.
+   Also declare `fields.grounded` (the controller's public ground-probe bool) when the
+   controller has one: it makes `coyoteTime` exact instead of short by the rig's
+   probe-vs-collider overhang, and the evidence records which anchor was used. Do NOT hand-author
    `feel.json`: the gates re-derive its headline numbers from the raw evidence it carries,
    so a typed value is refused, not graded.
 6. Tune with the reference configs:

@@ -749,7 +749,10 @@ function validateHarnessSection(
         "harness.feelSeam.fields.moveX",
       );
     }
-    for (const optional of ["jumpHeld", "dashHeld"]) {
+    // `grounded` is optional like the rest, but a BLANK one is refused here rather
+    // than ignored: an empty string would resolve to "no ground flag declared" and
+    // silently drop the coyote sweep back onto the rig-dependent descent anchor.
+    for (const optional of ["jumpHeld", "dashHeld", "grounded"]) {
       if (seam.fields[optional] !== undefined && !isString(seam.fields[optional])) {
         push(
           issues,

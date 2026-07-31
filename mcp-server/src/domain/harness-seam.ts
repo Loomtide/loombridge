@@ -33,6 +33,28 @@ export interface FeelSeamFields {
   jumpHeld?: string;
   /** Dash-held field, e.g. "dashHeld". */
   dashHeld?: string;
+  /**
+   * THE GROUND FLAG, e.g. "grounded" (E6 session three). Optional, and the ONE
+   * declaration that makes `coyoteTime` exact.
+   *
+   * The coyote sweep has to know the tick the controller ungrounded on. Without this
+   * it can only read the first VISIBLE y-descent, and on a real rig those are not the
+   * same tick: a ground probe smaller than the player's collider reads false while the
+   * collider still rests on the ledge overhang, and the trajectory stays flat for as
+   * long as the overhang lasts. On TideRunner that gap is two ticks and it moved the
+   * measurement from 0.1000s to 0.0667s. The gap is a property of the RIG, so no fixed
+   * correction is right for the next game.
+   *
+   * Declared, the sweep passes this field to `runtime.capture_input_motion` as a
+   * `sampledFields` entry (that op samples it on the trajectory's own tick clock;
+   * `runtime.probe` does not sample fields at all, ledger L71) and anchors on the last
+   * still-true reading, which IS the ungrounding step. It must be a PUBLIC BOOL member
+   * on `controllerComponent`, readable at run time.
+   *
+   * Absent, the sweep still measures: it anchors on the descent and the written
+   * evidence says so, so a reader can tell an exact reading from a rig-dependent one.
+   */
+  grounded?: string;
 }
 
 /** Keyboard bindings the keyed captures inject (InputSystem Key names). */
@@ -63,11 +85,17 @@ export interface FeelSeamKeys {
  * here. Both fields are OPTIONAL and the defaults are exactly today's behaviour, so no
  * existing contract changes meaning:
  *
- *   - `ticks`     bounds BOTH the run leg's hold and the coyote sweep's calibration
- *                 walk (which is what the trial walks are placed inside, so bounding
- *                 the calibration bounds the whole sweep). Travel is
+ *   - `ticks`     bounds the RUN LEG's hold, and only that. Travel is
  *                 `ticks × runSpeed × fixedTimestep`, so a level with 4 clear units
  *                 at 7 u/s wants ~34 ticks.
+ *
+ *                 IT DOES NOT BOUND THE COYOTE CALIBRATION WALK (E6 session three).
+ *                 The two legs want opposite things on the same number: the run leg
+ *                 must STAY on the ground for its whole hold, and the coyote walk must
+ *                 LEAVE it. One bound cannot serve both on any real level, and while it
+ *                 did, a runway short enough to keep the run leg safe refused the coyote
+ *                 sweep outright ("no ledge within the walk window"). The coyote walk
+ *                 now searches for the ledge under its own hard cap.
  *   - `direction` which way the safe runway lies. `-1` injects `keys.moveLeft` for
  *                 those legs and drives `fields.moveX` negative for the seam proof;
  *                 declaring it therefore REQUIRES `keys.moveLeft`.
@@ -199,7 +227,7 @@ export const FEEL_SEAM_TEMPLATE = `  "harness": {
       "playerLocator": "<Scene>:/Player",
       "controllerComponent": "PlayerController",
       "inputReaderComponent": "PlayerInputReader",
-      "fields": { "moveX": "moveX", "jumpHeld": "jumpHeld", "dashHeld": "dashHeld" },
+      "fields": { "moveX": "moveX", "jumpHeld": "jumpHeld", "dashHeld": "dashHeld", "grounded": "grounded" },
       "keys": { "jump": "Space", "moveRight": "D", "moveLeft": "A", "jumpCut": "Space", "dash": "LeftShift" },
       "runLeg": { "ticks": 90, "direction": 1 }
     }
@@ -211,10 +239,22 @@ export const FEEL_SEAM_TEMPLATE = `  "harness": {
  * required: otherwise an operator adds a bound they have not measured.
  */
 export const FEEL_SEAM_RUNLEG_NOTE =
-  `"runLeg" is OPTIONAL (defaults: ticks 90, direction 1). It bounds how far the run leg and the ` +
-  `coyote calibration walk drive the player, in physics ticks (travel = ticks x runSpeed x fixedTimestep), and ` +
-  `which way they drive. Set it when the level has a hazard or a ledge inside the default 90-tick runway; ` +
-  `direction -1 also requires keys.moveLeft. It cannot change a measured value.`;
+  `"runLeg" is OPTIONAL (defaults: ticks 90, direction 1). It bounds how far the RUN LEG drives the player, ` +
+  `in physics ticks (travel = ticks x runSpeed x fixedTimestep), and which way it drives. Set it when the level ` +
+  `has a hazard inside the default 90-tick runway; direction -1 also requires keys.moveLeft. It does NOT bound ` +
+  `the coyote calibration walk (which must LEAVE the ground and so searches for the ledge on its own), and it ` +
+  `cannot change a measured value.`;
+
+/**
+ * The note for `fields.grounded`. Its own sentence because it is the one optional
+ * declaration that changes a MEASURED value's accuracy rather than the harness's
+ * safety, and an operator who skips it gets a rig-dependent coyote reading.
+ */
+export const FEEL_SEAM_GROUNDED_NOTE =
+  `"fields.grounded" is OPTIONAL: declare it when the controller exposes its ground probe (a public bool such ` +
+  `as "grounded"). It makes the coyote anchor exact. Without it the sweep anchors on the first visible descent, ` +
+  `which on a rig whose ground probe is smaller than the collider fires ticks after the controller ungrounded ` +
+  `(TideRunner: two ticks, 0.0667s measured against a real 0.1000s). The evidence records which anchor was used.`;
 
 /**
  * The exact JSON the playability observer needs. Emitted verbatim inside its
@@ -258,7 +298,7 @@ function refuse(what: string): FeelSeamResolution {
       "(which component reads input, which fields it writes, which keys drive it). Add it to " +
       ".loombridge/ACCEPTANCE.json:\n" +
       FEEL_SEAM_TEMPLATE +
-      `\n\n${FEEL_SEAM_RUNLEG_NOTE}`,
+      `\n\n${FEEL_SEAM_RUNLEG_NOTE}\n\n${FEEL_SEAM_GROUNDED_NOTE}`,
   };
 }
 
@@ -353,6 +393,7 @@ export function resolveFeelSeam(contract: unknown): FeelSeamResolution {
         moveX: (f.moveX as string).trim(),
         ...(isName(f.jumpHeld) ? { jumpHeld: f.jumpHeld.trim() } : {}),
         ...(isName(f.dashHeld) ? { dashHeld: f.dashHeld.trim() } : {}),
+        ...(isName(f.grounded) ? { grounded: f.grounded.trim() } : {}),
       },
       keys: {
         jump: (k.jump as string).trim(),
