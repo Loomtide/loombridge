@@ -26,33 +26,51 @@ Two constraints bind everything on this page:
   re-derivable evidence. Harness faults exit in their own tier (2), never as a pass, never
   as a game bug.
 
+## The findings ledger
+
+Two live campaigns (the KidsAdventure ratchet dogfood and the TideRunner door-one walk)
+produced a 156-finding engineering ledger:
+[Docs/Design/TideRunnerDoorOneLedger.md](Docs/Design/TideRunnerDoorOneLedger.md). Every
+finding is marked fixed (with its PR), documented, or open, and its **THE OPEN BACKLOG**
+section is the single authoritative list of pending items. The roadmap items below
+reference it; when they disagree, the ledger is the fresher truth.
+
 ## Now (in progress or next up, in this order)
 
-The order is a dependency chain, not a preference ranking. The unified front door lands
-first so that every later gate arrives as a provider inside one report, never as another
-top-level mode; that collapse is the simplification program for the whole verify surface.
-
-1. **Unified verify front door.** One bare `loombridge verify` that discovers a project's
-   verification assets (demonstration, pixel baseline, feel snapshot, screen contract,
-   acceptance contract), prints its plan, runs everything into one report, and exits by worst
-   tier. Empty projects get a two-command on-ramp (record a demonstration, approve it) instead
-   of usage text. Design: [Docs/Design/UnifiedVerify.md](Docs/Design/UnifiedVerify.md).
-2. **Unity Test Runner as a bound gate.** EditMode/PlayMode results consumed as a
-   deterministic gate bound to the run that produced them. The single biggest table-stakes gap
-   against the wider ecosystem. Sequenced after the front door on purpose: it ships as the
-   first new asset kind in the unified report (a proof of the row shape), not as a sixth
-   standalone mode.
-3. **CI robustness for verification.** The headless story: surviving domain reloads, first
-   import indexing, and unfocused editors without a human clicking a window. Includes the
-   documented post-reload stall recovery and forced `runInBackground` paths. Underpins both
-   items above; lands incrementally alongside them.
+1. **Close the evidence-trust residuals** (ledger backlog items 1 to 5). The evidence
+   architecture shipped in 0.2.0 (producers, the observer, sha-bound verdicts, the
+   re-grading roll-up); what remains is the last honesty gap and its trim: a bridge-side
+   op journal so a fabricated self-consistent observation buffer is detectable, per-field
+   contract coverage inside walked sections, a slice re-open verb (staleness is still a
+   hand edit), and the warn-verdict exit code that is indistinguishable from a pass.
+2. **CI robustness for verification.** The headless story: surviving domain reloads,
+   first-import indexing, and unfocused editors without a human clicking a window
+   (background throttling trips settle budgets today, measured live at ~10Hz). Includes
+   the `UNITY_LICENSE` CI path for the EditMode gate.
+3. **Paused-stepped replay.** The measured next step for pixel baselines on animated
+   games: capture-aligned settles shipped in 0.2.0 and the idle-probe discriminator
+   proved the residual drift is game-clock phase desync accumulating in the unaligned
+   inter-segment windows, which only whole-run stepped execution closes. The
+   preconditions are recorded in the aligned-wave review; either it ships, or a game
+   stays honestly flow-green with a red pixel gate.
 4. **N-capture averaging for feel snapshots.** Some metrics are single-capture-noisy
-   (tail-of-trajectory derivations measured 2x spreads on real games). The manifest already
-   reserves `captureRuns`; capture N times, freeze the aggregate, and surface per-metric
-   stability at approve time. Independent of the chain above.
+   (tail-of-trajectory derivations measured 2x spreads on real games). The manifest
+   already reserves `captureRuns`; capture N times, freeze the aggregate, and surface
+   per-metric stability at approve time. Independent of the chain above.
 
 ## Next
 
+- **Bridge op-surface batch** (ledger backlog items 7 to 13, each with live repro data):
+  `scene.get_transform` (the read half of an asymmetric verb pair), material tiling
+  read/write, `wrapMode`/`filterMode` import args, the `ui.get_screen_rects` empty-result
+  root cause, `sampledFields` on `runtime.probe`, a bridge-wide unknown-parameter guard
+  (the ui-scoped one shipped), and an installed-bridge-versus-TOOLS.md skew guard.
+- **Hero-shot pipeline rules from the live campaigns.** Packs must derive the mock from
+  the contract's framing numbers (or vice versa): the two frozen artifacts disagreeing
+  about the player anchor made pixel-faithful composition provably unreachable once
+  (ledger E27). And taste-class review criteria need a termination rule (majority
+  voting across three or more reviewers, or the re-freeze ceremony), because
+  worst-status union across rounds is monotonically stricter and oscillates (E28).
 - **Player-build gate.** Verify against a built player (target platform), not only the
   editor: the editor is a simulator of the thing that ships.
 - **Doneness binding for the drift report.** The feel-snapshot drift report already stamps
@@ -85,13 +103,35 @@ top-level mode; that collapse is the simplification program for the whole verify
 - **Second engine.** The CLI core is engine-agnostic by design; a second engine is
   deliberately deferred until the Unity surface is the obvious default choice.
 
-## Recently shipped (context for the items above)
+## Recently shipped (context for the items above; 0.2.0 is the evidence release)
 
+- **The evidence architecture** (0.2.0, the four-stage arc): evidence is produced,
+  observed, or honestly second-class. The CLI produces feel evidence itself through a
+  declared harness seam (op echoes, never typed numbers; known-truth calibrated tick
+  conventions; a behaviorally proven input-reader disable); playability is observed by a
+  bridge-side recorder with `completionMethod` derived from motion continuity against
+  the contract's own kinematics (a teleported win cannot say "played"); verdicts carry
+  a sha per graded evidence file; the front door re-grades slices instead of trusting
+  stored verdicts; required contract content no gate walks refuses by name; evidence
+  binds to the run and editor session that produced it.
+- **Unified verify front door** with the slices roll-up section, live-proven: a 9/9
+  project re-graded green through bare `verify`, and `doneness` still refusing on
+  hero-shot fidelity is the moat demonstrated end to end
+  ([Docs/Design/UnifiedVerify.md](Docs/Design/UnifiedVerify.md)).
+- **Unity Test Runner as a bound gate**: `tests run` executes headless, stamps run-bound
+  results, and `verify` grades them offline as the fifth asset kind.
+- **Ratchet-door extensions, all live-proven on a consumer project**: human-consented
+  pixel tolerances, drift masks with a structural (16x16 grid) reproduced-drift
+  discriminator, replay pacing, capture-aligned settles inside a pinned tick loop, and
+  focus-independent world taps through an InputSystem session.
+- **Delivery integrity**: the bundled bridge is digest-bound to its packaged sources;
+  stale bundles refuse at install, update and doctor, and same-version byte drift
+  between a project and the CLI turns doctor red naming the fix.
 - Record-and-replay verification with perceptual baselines, live-proven end to end on a
   consumer project, including phase-gated recording (`--auto-state-signal`), honest anchor
   semantics for invisible uGUI hit-targets, and loud flow-stall reporting.
 - Tuning snapshot ("a lockfile for game feel"): capture, human approve, deterministic
-  kinematic drift gate (`verify --snapshot`), live-proven with both clean and drift exits.
+  kinematic drift gate, live-proven with both clean and drift exits.
 - Feel profile grammar/taste split: universal feel-grammar metrics gate; archetype taste
   targets are descriptive placement unless explicitly enforced.
 - The verification supervisor: run-bound verdicts, design-target freezing, hero-shot
