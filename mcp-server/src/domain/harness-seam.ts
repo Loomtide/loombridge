@@ -374,3 +374,16 @@ export function resolvePlayabilitySeam(contract: unknown): PlayabilitySeamResolu
     },
   };
 }
+
+/**
+ * Split a scene-qualified locator ("Main:/Player") into the {scene, path} shape the
+ * bridge ops take. A bare "/Player" passes through with no scene. E6 finding F1: the
+ * feel producer handed the QUALIFIED string as a bare path at seven sites and the
+ * bridge refused every one; the split lives here, next to the templates that teach
+ * the qualified form, so a producer cannot prescribe a format it does not parse.
+ */
+export function locatorParam(locator: string): { path: string; scene?: string } {
+  const marker = locator.indexOf(":/");
+  if (marker <= 0) return { path: locator };
+  return { scene: locator.slice(0, marker), path: locator.slice(marker + 1) };
+}

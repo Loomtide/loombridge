@@ -421,8 +421,36 @@ export async function runCapture(args: CaptureArgs, deps: CaptureDeps = defaultD
   });
   const producerFor = new Map(dispatch.files.map((entry) => [entry.file, entry.recipe]));
   const producerOf = (entry: string): CaptureKind | null => producerFor.get(path.posix.basename(entry)) ?? null;
-  const producerFailed = completeness.missing.filter((entry) => producerOf(entry) !== null);
-  const agentAssemblyRequired = completeness.missing.filter((entry) => producerOf(entry) === null);
+
+  // E6 F3: EXISTENCE IS NOT PRODUCTION. A leftover file from an earlier run satisfies
+  // an existsSync diff and lets "manifest 5/5 present, exit 0" describe a run that
+  // wrote one file (observed live: parallax produced only console.json over four
+  // leftovers, and player-feel produced nothing at all behind "2/2 present"). A
+  // present file whose _provenance.runId names a DIFFERENT run is stale: a producer
+  // entry counts as failed, an agent-assembly entry re-enters the required list.
+  const staleFromOtherRun: string[] = [];
+  for (const entry of completeness.present) {
+    const absolute = completeness.entries.find((e) => e.entry === entry)?.absolutePath;
+    if (!absolute) continue;
+    try {
+      const parsed = JSON.parse(await fs.readFile(absolute, "utf-8")) as {
+        _provenance?: { runId?: unknown };
+      };
+      const fileRun = parsed?._provenance?.runId;
+      if (typeof fileRun === "string" && fileRun.length > 0 && fileRun !== runId) staleFromOtherRun.push(entry);
+    } catch {
+      // Unreadable or non-JSON evidence is the gates' business, not the diff's.
+    }
+  }
+  const effectiveMissing = [...completeness.missing, ...staleFromOtherRun];
+  const producerFailed = effectiveMissing.filter((entry) => producerOf(entry) !== null);
+  const agentAssemblyRequired = effectiveMissing.filter((entry) => producerOf(entry) === null);
+  for (const entry of staleFromOtherRun) {
+    console.error(
+      `[loombridge capture] STALE: ${entry} exists but its _provenance.runId names a different run; ` +
+        "this run did not produce it (re-capture or re-assemble it under the minted run).",
+    );
+  }
   const recipeFailed = outcomes.filter((o) => !o.ok);
 
   let exit = 0;

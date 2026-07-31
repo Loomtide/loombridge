@@ -61,7 +61,7 @@ import {
   type SweepTrialEcho,
   type TickSample,
 } from "../../domain/feel-primitives.js";
-import { resolveFeelSeam, type FeelSeam } from "../../domain/harness-seam.js";
+import { resolveFeelSeam, type FeelSeam, locatorParam } from "../../domain/harness-seam.js";
 import { deriveMetric, isValidTrajectory } from "./feel-derive.js";
 import type { FeelMeasurementSource, FeelTrajectorySample } from "./gates/feel.js";
 
@@ -339,7 +339,7 @@ async function keyedCapture(
   const data = await send(
     "runtime.capture_input_motion",
     {
-      measure: { path: playerLocator },
+      measure: locatorParam(playerLocator),
       phases: keyedPhases(phases),
       captureFps,
       includeSamples: true,
@@ -472,7 +472,7 @@ export async function runFeelSession(options: FeelSessionOptions): Promise<FeelS
     await send(
       "component.set_property",
       {
-        locator: { path: seam.playerLocator },
+        locator: locatorParam(seam.playerLocator),
         type_name: seam.inputReaderComponent,
         property_path: "m_Enabled",
         value: enabled,
@@ -493,7 +493,7 @@ export async function runFeelSession(options: FeelSessionOptions): Promise<FeelS
   let spawn: { x: number; y: number; z: number } | null = null;
   const restoreSpawn = async (): Promise<void> => {
     if (spawn === null) return;
-    await send("scene.set_transform", { locator: { path: seam.playerLocator }, position: spawn }, 15000);
+    await send("scene.set_transform", { locator: locatorParam(seam.playerLocator), position: spawn }, 15000);
   };
 
   try {
@@ -502,9 +502,19 @@ export async function runFeelSession(options: FeelSessionOptions): Promise<FeelS
     await send("input.begin_session", { backend: "InputSystem" }, 15000);
 
     try {
-      spawn = positionFromSnapshot(await send("runtime.get_snapshot", { locator: { path: seam.playerLocator } }, 15000));
+      spawn = positionFromSnapshot(await send("runtime.get_snapshot", { locator: locatorParam(seam.playerLocator) }, 15000));
       record("runtime.get_snapshot", { purpose: "player spawn (restored between legs)" });
-    } catch {
+    } catch (error) {
+      // E6 F4: an UNRESOLVABLE seam locator is a wiring refusal, not a degraded
+      // measurement. Swallowing it here once turned a shipped locator bug into a
+      // "legs were not reset" note while every later leg failed anyway.
+      const msg = error instanceof Error ? error.message : String(error);
+      if (/LOCATOR_UNRESOLVED|Could not resolve locator/i.test(msg)) {
+        throw new Error(
+          `the feel seam's playerLocator ${JSON.stringify(seam.playerLocator)} does not resolve in the ` +
+            `running scene: fix harness.feelSeam before measuring (${msg})`,
+        );
+      }
       spawn = null;
     }
     if (spawn === null) {
@@ -997,7 +1007,7 @@ async function probe(
   const data = await send(
     "runtime.probe",
     {
-      measure: { path: seam.playerLocator },
+      measure: locatorParam(seam.playerLocator),
       phases,
       captureFps,
       includeSamples: true,
@@ -1014,7 +1024,7 @@ async function probe(
 
 function driver(seam: FeelSeam, field: string, value: unknown): Record<string, unknown> {
   return {
-    locator: { path: seam.playerLocator },
+    locator: locatorParam(seam.playerLocator),
     type_name: seam.controllerComponent,
     property_path: field,
     value,
@@ -1039,7 +1049,7 @@ async function proveReaderDisabled(
     const snapshot = await send(
       "runtime.get_snapshot",
       {
-        locator: { path: seam.playerLocator },
+        locator: locatorParam(seam.playerLocator),
         components: [seam.inputReaderComponent],
         include_paths: ["enabled", "m_Enabled"],
       },

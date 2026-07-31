@@ -314,9 +314,17 @@ export function runBindingRefusals(args: {
 
   for (const record of args.ledger.files.filter((f) => !isCliWritten(f.evidenceOrigin))) {
     if (args.mintedRunId && record.runId && record.runId !== args.mintedRunId) {
-      notes.push(
-        `${args.label}: "${record.file}" is agent-assembled and claims run \`${record.runId}\`, not \`${args.mintedRunId}\` ` +
-          "(warn-level: agent-assembled evidence is already capped below a certifying pass)",
+      // E6 F2: WRONG-RUN evidence refuses regardless of writer. The old warn note
+      // claimed agent-assembled evidence "is already capped below a certifying pass",
+      // but only the feel and playability gates implement that cap: placement,
+      // reachability, prop-purpose and ui-conformance graded a leftover file from the
+      // previous day to a certifying pass, live, under --strict. A file that names a
+      // DIFFERENT run is not weakly-provenanced: it is evidence about some other run.
+      // (An ABSENT runId stays a warn note: no producer exists to stamp one for these
+      // gates, and absent is the honest self-authored state the origin cap reports.)
+      refusals.push(
+        `${args.label}: "${record.file}" is agent-assembled and claims run \`${record.runId}\`, not the minted ` +
+          `\`${args.mintedRunId}\`: evidence about another run cannot certify this one; re-assemble it under the minted run`,
       );
     } else if (!record.runId) {
       notes.push(

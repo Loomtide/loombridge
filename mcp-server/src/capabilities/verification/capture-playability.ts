@@ -156,11 +156,9 @@ function pointOf(value: unknown): ObservedPoint | undefined {
  * string as `path` makes the resolver hunt for a root object literally named
  * "Scene:".
  */
-export function locatorParam(locator: string): { path: string; scene?: string } {
-  const marker = locator.indexOf(":/");
-  if (marker <= 0) return { path: locator };
-  return { scene: locator.slice(0, marker), path: locator.slice(marker + 1) };
-}
+// locatorParam moved to domain/harness-seam.ts (E6 F1): one splitter beside the templates.
+import { locatorParam } from "../../domain/harness-seam.js";
+export { locatorParam };
 
 /** Parallel-array buffers out of a drain response, with nothing coerced. */
 export function buffersFromDrain(data: unknown): ObservationBuffers | null {
