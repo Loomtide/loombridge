@@ -24,7 +24,7 @@ export const ROUTING_DOC_RELPATH = "LOOMBRIDGE.md";
  * changes so that `install-bridge` re-runs update an out-of-date file in place and
  * `doctor` can flag a stale one.
  */
-export const ROUTING_DOC_VERSION = 3;
+export const ROUTING_DOC_VERSION = 4;
 
 /**
  * The single copy-paste line a user can add to their CLAUDE.md / AGENTS.md. We never
@@ -95,6 +95,7 @@ surface instead of hand-rolling raw editor pokes.
 | Running an op that recompiles (package add/remove, script edit) | chain \`unity_editor_wait_for\` with \`{ compiling: false }\` before the next op | a fixed \`sleep\` |
 | Kicking off a long player / platform build | \`unity_editor_execute_menu_item\` with a raised \`timeoutMs\` — a real build far outlasts the default | letting the default timeout abort it |
 | A uGUI element paints under/over another | \`unity_scene_set_sibling_index\` — a LATER sibling paints on top | hand-editing the scene YAML |
+| An approved slice has to be redone (evidence invalidated, contract changed, art redone) | \`loombridge reopen <sliceId>\`: sets it \`stale\`, CLEARS its approval artifacts, cascades to every dependent, prints the re-verify chain, records it in \`history\` | editing \`.loombridge/SLICES.json\` to \`state: "stale"\` by hand |
 | The console is drowning you | \`unity_editor_console_logs\` with \`errors_only\` / a \`max_chars\` cap | scrolling raw logs |
 | Scene looks wrong-lit / fogged / dark | \`unity_scene_get_render_settings\` → \`unity_scene_set_render_settings\` | patching lighting in scene YAML by hand |
 | Swapping a graybox for a prefab without severing wiring | \`unity_scene_find_references_to\` (pre-flight) → \`unity_asset_replace_with_prefab\` with \`remap_references\` → \`unity_scene_validate_references\` (confirm nothing severed) | a blind replace that NULLs references |

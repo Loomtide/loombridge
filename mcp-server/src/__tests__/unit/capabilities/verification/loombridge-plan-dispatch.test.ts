@@ -6,6 +6,8 @@ import path from "node:path";
 import test from "node:test";
 
 import { runPlan } from "../../../../capabilities/verification/plan.js";
+import { runBuild } from "../../../../capabilities/verification/build.js";
+import { runReopen } from "../../../../capabilities/verification/reopen.js";
 import { designStatus, setDesignTarget } from "../../../../capabilities/verification/design.js";
 import {
   createDraftAssetManifest,
@@ -453,6 +455,86 @@ test("await-approval mode — --go --note --signoff copies durable artifact and 
       framing.proof?.signoffSha256,
       createHash("sha256").update(durableBytes).digest("hex"),
     );
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+// ── B4/R3: a REOPENED slice cannot re-approve without a fresh binding verify ──
+
+test("reopen then plan --go: a reopened slice is not even offered for approval", async () => {
+  const root = await tmpRoot();
+  try {
+    await approveDesignTarget(root);
+    const paths = loombridgePaths(root);
+    await runPlan({ ...base, root, go: true });
+    const plan = (await readSlicePlan(paths))!;
+    await makeSliceDone(root, plan, "framing");
+    await writeSlicePlan(paths, plan);
+    assert.equal(await runPlan({ ...base, root, go: true }), 0);
+    assert.equal((await readSlicePlan(paths))!.slices[0]!.state, "approved");
+
+    // Withdraw the approval through the verb.
+    assert.equal(await runReopen({ root, sliceId: "framing" }), 0);
+    const reopened = (await readSlicePlan(paths))!.slices.find((s) => s.id === "framing")!;
+    assert.equal(reopened.state, "stale");
+
+    // `plan --go` now has nothing awaiting approval: a stale slice is a BUILD target, so
+    // the approval seam cannot re-approve it off the verdict it was approved on before.
+    const { code, err } = await runPlanCapture({ ...base, root, go: true });
+    assert.equal(code, 0);
+    assert.doesNotMatch(err, /approved: framing/);
+    assert.match(err, /Plan next slice: framing|Next unblocked: framing/);
+    assert.equal((await readSlicePlan(paths))!.slices[0]!.state, "stale", "still stale after --go");
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test("reopen then a forged `verified` state is REFUSED: cleared checkpointId, then the runId binding", async () => {
+  // The adversarial path the artifact-clearing exists for: after a reopen, hand-edit the
+  // state back to `verified` and run the approval seam against the OLD verdict.
+  //
+  // Two independent doors must hold, and this test walks through the first to reach the
+  // second (a LITMUS that neither is redundant): the cleared `checkpointId` refuses first;
+  // forge that too, rebuild (which mints a new runId), and the run binding refuses because
+  // the verdict on disk was produced under the previous run.
+  const root = await tmpRoot();
+  try {
+    await approveDesignTarget(root);
+    const paths = loombridgePaths(root);
+    await runPlan({ ...base, root, go: true });
+    const seeded = (await readSlicePlan(paths))!;
+    await makeSliceDone(root, seeded, "framing");
+    await writeSlicePlan(paths, seeded);
+    assert.equal(await runPlan({ ...base, root, go: true }), 0);
+    assert.equal(await runReopen({ root, sliceId: "framing" }), 0);
+
+    // Forge #1: state back to `verified`, everything else as the reopen left it.
+    const forged = (await readSlicePlan(paths))!;
+    forged.slices[0]!.state = "verified";
+    await writeSlicePlan(paths, forged);
+    const first = await runPlanCapture({ ...base, root, go: true });
+    assert.equal(first.code, 1, "approval must be refused");
+    assert.match(first.err, /framing: NOT approved.*proof\.checkpointId is missing/);
+    assert.equal((await readSlicePlan(paths))!.slices[0]!.state, "verified", "no approval was granted");
+
+    // Forge #2: put the checkpoint back too, and rebuild the slice so a REAL new run is in
+    // flight. The verdict still on disk was minted under `run-framing`.
+    const reset = (await readSlicePlan(paths))!;
+    reset.slices[0]!.state = "stale"; // undo forge #1 so `build` can take the slice
+    await writeSlicePlan(paths, reset);
+    assert.equal(await runBuild({ root }), 0);
+    const rebuilt = (await readSlicePlan(paths))!;
+    const framing = rebuilt.slices.find((s) => s.id === "framing")!;
+    framing.state = "verified";
+    framing.proof = { ...framing.proof, checkpointId: "framing" };
+    await writeSlicePlan(paths, rebuilt);
+
+    const second = await runPlanCapture({ ...base, root, go: true });
+    assert.equal(second.code, 1, "a verdict from the pre-reopen run cannot approve the new one");
+    assert.match(second.err, /verdict\.runId `run-framing` != slice\.proof\.runId `run-framing-/);
+    assert.notEqual((await readSlicePlan(paths))!.slices.find((s) => s.id === "framing")!.state, "approved");
   } finally {
     await fs.rm(root, { recursive: true, force: true });
   }

@@ -100,7 +100,9 @@ export function developerNextAction(model: LoombridgeStatusModel): string {
       const word = failure.failing.length > 0 ? "FAILED" : "warned";
       return (
         `${name}: gate(s) ${red.join(", ")} ${word} in ${failure.verdictPath} (verdict status \`${failure.status}\`); ` +
-        `fix them, then re-run \`loombridge verify --slice ${failure.sliceId} --strict\`.`
+        // No `--strict`: slice verify is strict by default (a warn never exits 0), so the
+        // flag would now only suggest that the plain command grades more leniently.
+        `fix them, then re-run \`loombridge verify --slice ${failure.sliceId}\`.`
       );
     }
     return `${name} needs capture/verify evidence; run /loombridge:build or say continue.`;
@@ -209,7 +211,7 @@ function nextCommandFor(args: {
     if (capture && capture.recipes.length > 0 && (capture.missing.length > 0 || capture.unsafe.length > 0)) {
       return `loombridge capture --slice ${slice.id}`;
     }
-    return `loombridge verify --slice ${slice.id} --strict`;
+    return `loombridge verify --slice ${slice.id}`;
   }
   if (slice.state === "verified") return "loombridge plan (approval flow)";
   if (slice.state === "pending" || slice.state === "stale") return "loombridge build";

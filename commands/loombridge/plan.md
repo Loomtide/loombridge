@@ -240,5 +240,23 @@ so the two agents cannot drift.
    developer-facing `Next:` line in the response.
    For read-only progress without any scaffold/state mutation, run `loombridge status`.
 
+7. **Withdrawing an approval: `loombridge reopen <sliceId>`, never a hand edit.** When an
+   approved slice has to be revisited (its evidence was invalidated, the contract changed, the
+   art was redone), do NOT edit `.loombridge/SLICES.json` to set `state: "stale"`. Run:
+
+   ```bash
+   loombridge reopen <slice-id> --root .
+   ```
+
+   The verb sets that slice `stale`, **clears its approval artifacts** (`checkpointId`,
+   `approvedAt`, `approvalNote`, sign-off artifact + sha) so it cannot be re-approved without a
+   fresh binding verify, cascades staleness to every transitive dependent through the same rule
+   a rebuild uses, prints every slice it touched with the state it held before (calling out
+   `built` slices whose in-flight work is lost), prints the re-verify chain in dependency order,
+   and records the event in that slice's `history`. A hand edit does none of those five things,
+   and the one it most visibly skips is the cascade: a downstream approved slice otherwise keeps
+   certifying against evidence its upstream just invalidated. A slice that is already `stale` or
+   still `pending` reports "nothing to reopen" (exit 0); an unknown id is refused (exit 2).
+
 For local dogfooding from the Loombridge repo before installing the CLI, the equivalent command is
 `node mcp-server/dist/surfaces/cli.js <subcommand>`.

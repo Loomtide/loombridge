@@ -88,9 +88,13 @@ export interface SliceRollupResult {
   status: "pass" | "refused";
 }
 
-/** The exact command an operator runs to re-mint one slice's verdict. */
+/**
+ * The exact command an operator runs to re-mint one slice's verdict. No `--strict`:
+ * slice verify is strict by DEFAULT (a warn never exits 0), so the flag would now only
+ * imply that the plain command grades more leniently than this one.
+ */
 export function reverifyCommand(root: string, sliceId: string): string {
-  return `loombridge verify --root ${root} --slice ${sliceId} --strict`;
+  return `loombridge verify --root ${root} --slice ${sliceId}`;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

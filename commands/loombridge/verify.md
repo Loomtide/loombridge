@@ -240,6 +240,24 @@ reads without re-running a multi-minute editor.
    > least one real capture makes a `warn` verdict a real result over a real subset (exit `0`,
    > `1` under `--strict`, `STATE.md` flipped).
 
+   > **Slice-scoped verify has its OWN three-way exit contract** (the bare tiers above are
+   > unchanged). `loombridge verify --slice <id>` exits:
+   >
+   > - `0` the slice PASSED, and the per-slice verdict records `"approvable": true`. It is the
+   >   only outcome that can advance the slice.
+   > - `1` a game defect: a `fail`, **or a `warn` over evidence that was actually graded**. A
+   >   warn does not advance the slice, so reporting it as success was false advertising.
+   >   Slice verify is therefore **strict by default**; `--strict` is accepted for compatibility
+   >   and is a NO-OP for `--slice` (the run announces this).
+   > - `2` a harness/capture gap: the only failing checks are gates whose input file was absent,
+   >   so nothing was graded and the verdict says nothing about the game. The message names the
+   >   missing evidence files. Harness fault is never a game defect.
+   >
+   > Read `approvable` rather than re-deriving approvability from `status`: a pipeline that
+   > loses the exit code (`| tail` drops `$?`) still has one machine-readable answer, and a
+   > *diagnostic* verdict is `approvable: false` however green it is, because it is not bound
+   > to the slice's proof.
+
 2. **Report honestly from the verdict.** `cat .loombridge/reports/build-verdict.json`.
    - `status: "pass"` → green; state it plainly.
    - `status: "fail"` → enumerate `failures[]` (gate + expected vs actual). **Do NOT claim

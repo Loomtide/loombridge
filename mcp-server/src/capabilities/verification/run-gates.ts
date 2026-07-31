@@ -849,6 +849,50 @@ export function gradedGates(verdict: Pick<BuildVerdict, "gates" | "checks">): st
   return graded;
 }
 
+/**
+ * The gates in an assembled verdict whose INPUT WAS ABSENT: the degraded-warn
+ * population, read back off the verdict with the same marker `gradedGates` uses so the
+ * two can never disagree about which gates did not grade.
+ *
+ * This is the population that separates a HARNESS gap from a game defect: a gate that
+ * never ran said nothing about the game, so a verdict whose only warnings come from here
+ * is a capture failure wearing a verdict's clothes. `runVerifySlice` exits 2 on it.
+ */
+export function captureAbsentGates(verdict: Pick<BuildVerdict, "gates" | "checks">): string[] {
+  const absent: string[] = [];
+  for (const [gate, status] of Object.entries(verdict.gates)) {
+    if (status === "not_applicable") continue;
+    const ids = captureAbsentCheckIds(gate);
+    if (verdict.checks.some((c) => ids.includes(c.id) && c.actual === CAPTURE_ABSENT_ACTUAL)) {
+      absent.push(gate);
+    }
+  }
+  return absent;
+}
+
+/** True for the exact check a degraded (missing-input) gate report carries. */
+export function isCaptureAbsentCheck(check: GateCheck): boolean {
+  if (check.actual !== CAPTURE_ABSENT_ACTUAL) return false;
+  const gate = check.id.replace(/[.](input|cue-map)$/, "");
+  return gate !== check.id && captureAbsentCheckIds(gate).includes(check.id);
+}
+
+/**
+ * The evidence file a gate READS, by gate id: the one map that can name the file a
+ * degraded gate was missing. Derived from the same registries the runner dispatches
+ * from (GATE_SPECS / SFX_GATE_FILES / the staged asset manifest), never from parsing a
+ * message string, so a reworded refusal cannot silently stop naming the file.
+ */
+export function declaredInputFileForGate(gate: string): string | undefined {
+  const spec = GATE_SPECS.find((s) => s.gate === gate);
+  if (spec) return spec.file;
+  if (gate === "asset-source-fidelity") return ASSET_MANIFEST_INPUT_FILE;
+  if ((SFX_GATE_NAMES as readonly string[]).includes(gate)) {
+    return SFX_GATE_FILES[gate as (typeof SFX_GATE_NAMES)[number]];
+  }
+  return undefined;
+}
+
 /** Capture filename each SFX gate consumes (the bridge-side spec; see capture-shapes.ts). */
 const SFX_GATE_FILES: Record<(typeof SFX_GATE_NAMES)[number], string> = {
   "sfx-presence": "sfx-bindings.json",

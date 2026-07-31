@@ -89,6 +89,9 @@ function printUsage(): void {
       "               bundle instead of the interview).",
       "  build      Mint a build runId + gate preconditions; the agent constructs + verifies.",
       "  status     Read-only slice progress, next command, and proof/capture warnings.",
+      "  reopen     Send a settled slice back to `stale` through the state machine (never a",
+      "               hand edit to SLICES.json): clears its approval artifacts, cascades to",
+      "               every dependent, prints what it touched, and records it in `history`.",
       "",
       "Reference (shipped and supported; run `loombridge <verb> --help` for details):",
       "  adopt          Ingest an existing built project + design docs; PROPOSE a contract",
@@ -131,6 +134,15 @@ export async function loombridgeCli(argv: string[]): Promise<number> {
     }
     case "status": {
       const { run } = await import("../capabilities/verification/status.js");
+      return run(rest);
+    }
+    case "reopen": {
+      // A TOP-LEVEL verb on purpose, routed BEFORE any engine resolution: re-opening a
+      // slice is a statement about recorded state, not about a running editor. Hanging
+      // it off `plan` would have inherited plan's design-target gate, so a project whose
+      // hero shot had drifted could not withdraw an approval: the exact moment you most
+      // need to.
+      const { run } = await import("../capabilities/verification/reopen.js");
       return run(rest);
     }
     case "ask": {

@@ -72,6 +72,29 @@
         }
       }
     },
+    "sliceHistoryEntry": {
+      "title": "One recorded lifecycle event on a slice",
+      "description": "Written by `loombridge reopen`, the only sanctioned way to send a settled slice back to `stale`. Before that verb the transition was a hand edit to this file, which left no record it had happened.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["at", "action", "cascade"],
+      "properties": {
+        "at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO timestamp of the event."
+        },
+        "action": {
+          "enum": ["reopen"],
+          "description": "What happened. A CLOSED set: a free-text verb here would be readable only by a human, and a typo would silently become a new event class."
+        },
+        "cascade": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "description": "The OTHER slices this event marked stale (transitive dependents). The subject slice is never listed; [] means nothing downstream was touched."
+        }
+      }
+    },
     "acceptance": {
       "title": "Slice acceptance — which gates apply to this slice",
       "description": "The source `verify --slice` reads (plan §'Slice scoping vs --stage'): data-driven gate selection, NOT the hardcoded --stage phase enum.",
@@ -123,7 +146,12 @@
         },
         "acceptance": { "$ref": "#/$defs/acceptance" },
         "state": { "$ref": "#/$defs/sliceState" },
-        "proof": { "$ref": "#/$defs/proof" }
+        "proof": { "$ref": "#/$defs/proof" },
+        "history": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/sliceHistoryEntry" },
+          "description": "Append-only lifecycle log. Absent until an event a later reader could not otherwise reconstruct is recorded (today: `loombridge reopen`)."
+        }
       }
     }
   }
