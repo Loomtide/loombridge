@@ -1,6 +1,6 @@
 # Loombridge
 
-**Your agent builds the Unity game. Loombridge decides whether it is actually done.**
+**Loombridge is the open agent layer for Unity: your AI agent sees, builds, and plays your game through a typed MCP bridge, and a deterministic CLI proves the result is actually done.**
 
 [![CI](https://github.com/Loomtide/loombridge/actions/workflows/ci.yml/badge.svg)](https://github.com/Loomtide/loombridge/actions/workflows/ci.yml)
 [![Unity EditMode](https://github.com/Loomtide/loombridge/actions/workflows/unity-editmode.yml/badge.svg)](https://github.com/Loomtide/loombridge/actions/workflows/unity-editmode.yml)
@@ -8,38 +8,110 @@
 [![Node](https://img.shields.io/badge/node-%3E%3D18-339933?logo=nodedotjs&logoColor=white)](#support-matrix)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
 
-[Two doors](#two-doors-in) · [Quickstart](#quickstart) · [Verification](#the-verification-flow) · [Skills & commands](#what-your-agent-gets-skills-and-commands) · [Tools](#tool-surface) · [Architecture](ARCHITECTURE.md) · [Threat model](Docs/ThreatModel.md)
+<!-- ═══════════════════════════════════════════════════════════════════
+     VIDEO TRAILER placeholder (60-90s).
+     Storyboard: (1) agent builds a slice live through the bridge in the
+     Unity editor, (2) `loombridge verify` gates it, (3) `loombridge
+     doneness` REFUSES with reasons on screen, (4) fix, re-verify,
+     doneness goes green. The refusal appears BEFORE the green.
+     Embed: [![Loombridge trailer](thumbnail.png)](video-url)
+     ═══════════════════════════════════════════════════════════════════ -->
 
-An AI agent can already build a Unity game. What it cannot do is tell you honestly whether
-the result is any good, because the same model that wrote the code writes the report card.
-Loombridge gives the agent a typed MCP tool surface to construct scenes, inject real input,
-and measure motion from the running game, and then takes the verdict away from it:
-`loombridge doneness` exits green only on a fresh, run-bound verdict whose cited evidence
-exists on disk. A self-graded "done" is refused, not accepted.
+## Install
+
+One command installs and updates (macOS / Linux / Windows via Git Bash; needs Node >= 18 and the [GitHub CLI](https://cli.github.com)):
+
+```bash
+gh release download -R Loomtide/loombridge -p install.sh && sh install.sh
+```
+
+Then wire your Unity project and health-check it:
+
+```bash
+loombridge install-bridge --project /path/to/UnityProject   # adds the bridge (a file: tarball dependency)
+# open the project in Unity, let it compile, then:
+loombridge doctor --project /path/to/UnityProject --live
+```
+
+`doctor` prints `healthy`; every failed row prints the exact command that fixes it.
+
+**Connect your agent** (Claude Code, Codex, Cursor, any MCP client): command `loombridge`, args `["mcp"]`.
+
+<details>
+<summary>Install from source / full setup notes</summary>
+
+```bash
+git clone https://github.com/Loomtide/loombridge.git
+cd loombridge/mcp-server
+npm ci && npm run build && npm link          # `loombridge` now on your PATH
+bash ../scripts/loombridge-pack-bridge.sh    # pack the bridge tarball install-bridge ships
+```
+
+Full setup, transports, fresh-machine bootstrap: [`Docs/Install.md`](Docs/Install.md).
+Unity Personal and license-less CI: [`Docs/Licensing-and-CI.md`](Docs/Licensing-and-CI.md).
+Optional agent surface (slash commands + skills, committed into your repo):
+`loombridge install-agent --project <p>`.
+</details>
+
+## What is Loombridge?
+
+An AI agent can already build a Unity game. What it cannot do is tell you honestly whether the result is any good, because the same model that wrote the code writes the report card. Loombridge splits those roles:
+
+- **The hands**: a typed MCP tool surface (125+ ops, 14 categories) to construct scenes, write C#, inject real Input System events, and measure motion from the running game. No raw code-eval op, ever.
+- **The judge**: a deterministic CLI that gates every claim against ground truth a human approved once: contracts, frozen hero shots, recorded demonstrations, measured feel baselines.
+- **The rule**: a self-graded "done" is refused. `loombridge doneness` exits green only on a fresh, run-bound verdict whose cited evidence exists on disk and re-derives.
+- **Evidence is produced or observed, never typed**: the CLI drives feel measurements itself and records playability from inside the game loop; a teleported win cannot claim it was played.
+- **A human plays and approves exactly once**; the agent gets the deterministic gates forever after.
+- **Local and quiet**: no telemetry, no cloud requirement, loopback-only bridge.
 
 "Playwright for Unity" is the mechanism. **Provable doneness is the product.**
 
-<!-- HERO DEMO GIF: agent builds a slice through the bridge, `loombridge doneness` REFUSES
-     (red, exit 1), the agent fixes and re-verifies, doneness goes green. The refusal must
-     be on screen before the green. ~20-30s, loop, <5 MB.
-     Caption under it: "The agent built this. It did not decide it was done." -->
+## The three workflows
 
-## The refusal, in ten seconds
+| Workflow | You start with | Commands | You get |
+|---|---|---|---|
+| **Build** a new game | An idea (or a design doc) | `plan` → `build` → agent constructs → `verify --slice` → `plan --go` | A game built slice by slice against a contract the agent cannot redefine |
+| **Verify** an existing game | A playable game | `trace record --observe` → `trace approve` → `verify` | Play once, approve once; deterministic pixel + flow + feel gates forever after |
+| **Certify** it is done | Green gates | `doneness` | A certificate bound to the run, the evidence, and the frozen design target: or a refusal naming exactly why not |
 
-Verbatim output from this repo's CLI in an empty scratch directory. `plan` scaffolds
-`.loombridge/`; `doneness` is then asked to certify a build that has no verification run
-behind it, and refuses, non-zero, with every reason listed:
+## Build: the supervised loop
+
+<!-- GIF placeholder: `plan` scaffolding + the agent building a slice through the
+     bridge in the editor + `verify --slice` going green + `plan --go`. ~20s. -->
+
+```bash
+loombridge plan --genre platformer-2d --name MyGame   # contract + design target, frozen first
+loombridge build                                      # mints a run and gates preconditions
+# your agent constructs the slice through the MCP bridge
+loombridge capture --slice player-feel                # the CLI produces the evidence itself
+loombridge verify --slice player-feel --strict        # deterministic gates over that evidence
+loombridge plan --go                                  # human checkpoint: approve, next slice
+```
+
+`plan` refuses to scaffold without an approved Design Target, and `build` refuses without an approved asset manifest: the contract exists before the first line of code. Genre packs ship for `platformer-2d`, `2d-shooter`, `3d-shooter`, `3d-topdown-arena`, and any-genre contracts grade with their coverage stated honestly.
+
+## Verify: record once, replay deterministically
+
+<!-- GIF placeholder: a human plays ~15s (`trace record --observe`), then `trace
+     replay` drives the game by itself and the report shows green flow + pixel rows. -->
+
+```bash
+loombridge trace record --observe --id happy-path     # you play; Loombridge watches
+loombridge trace replay --id happy-path               # it replays your run deterministically
+loombridge trace approve --id happy-path              # you approve the baseline once
+loombridge verify                                     # from now on: one command, exit by worst tier
+```
+
+Replays drive real input through the game (focus-independent, no field pokes) and diff every capture against your approved baseline perceptually. Animated games get honest levers, each human-consented and printed with the hole it opens: bounded pixel tolerances, region masks with a structural reproduced-drift detector, replay pacing, and capture-aligned settles inside a pinned tick loop. A verify that measured nothing refuses (exit 2): it never passes by default.
+
+## Doneness: the certificate that cannot be talked into green
+
+<!-- GIF placeholder: `doneness` refusing with reasons listed, then (after fixes)
+     the green certificate. The refusal must be on screen before the green. ~15s. -->
+
+Verbatim, from an empty scratch project:
 
 ```console
-$ loombridge plan --genre platformer-2d --name DemoGame --engine unity
-[loombridge plan] genre=platformer-2d engine=unity root=/tmp/loombridge-demo.9lkvGK
-[loombridge plan] created: .loombridge/FEEL_SPEC.json, .loombridge/ACCEPTANCE.json, .loombridge/GAME_SPEC.md, .loombridge/design/README.md
-[loombridge plan] Roadmap: none yet (design phase).
-[loombridge plan] design target: missing
-[loombridge plan] asset manifest: missing
-[loombridge plan] NOT ready — no approved Design Target (annotated hero shot). Establish/re-approve via `loombridge target set/approve` (see commands/loombridge/plan.md §3c), then re-run. (Use --allow-missing-design-target only for early scaffolding — `build` will still block.)
-; exit 1
-
 $ loombridge doneness
 [loombridge doneness] NOT done:
   - phase is `planned`, not `verified-green`
@@ -48,227 +120,18 @@ $ loombridge doneness
 ; exit 1
 ```
 
-There is no path to a green `doneness` that a build can talk its way into. Green requires
-`STATE.phase === verified-green`, a verdict whose `runId` matches the in-flight build, a
-`producedAt` on or after the build's `startedAt`, and every cited capture artifact present
-on disk.
+Green requires: a verdict whose `runId` matches the in-flight build, `producedAt` on or after the build started, every cited capture present on disk with its recorded sha, every slice re-graded from its own evidence, hero-shot fidelity against the frozen, sha256-pinned design target, and an independent multi-reviewer design review. Nine green gates once met a certificate that still said no, because the design review withheld: that is the product working, and the [156-finding engineering ledger](Docs/Design/TideRunnerDoorOneLedger.md) from proving it live ships in this repo.
 
-## Two doors in
+Four invariants keep every gate honest:
 
-| Your situation | The door | What happens |
-|---|---|---|
-| **New game**, built by an agent | `loombridge plan` | Contract and hero shot are frozen before the first line of code; the agent builds slice by slice against a target it cannot redefine; `doneness` certifies with run-bound evidence. |
-| **Existing game**, about to let an agent in | `loombridge trace record --observe --id <name>` | You play once and approve once. From then on, bare `loombridge verify` discovers every approved anchor, prints its plan first, and checks what it can (`--live` adds replay pixel-diffing and feel capture). A verify that measured nothing refuses, exit 2. |
-
-The split of labor is the point: **a human plays and approves exactly once; the agent gets
-the deterministic gates forever after.** The unified front door (S1) is shipped; selectors
-and mode-flag deprecations are staged next:
-[`Docs/Design/UnifiedVerify.md`](Docs/Design/UnifiedVerify.md). Full positioning:
-[`Docs/Design/Positioning.md`](Docs/Design/Positioning.md).
-
-Both doors assume the [Quickstart](#quickstart) below (bridge installed, `doctor` healthy,
-and for the recording door a live editor with the scene open).
-
-<details>
-<summary>Advanced entry points</summary>
-
-| I want to... | Start with | Needs |
-|---|---|---|
-| Feel-grade a 2D platformer I already have | `loombridge verify --profile precision\|classic\|momentum` | Just the project; no contract, no mutation. Diagnostic grading, never part of a deterministic verdict ([guide](Docs/Profiles/VerifyFirstEntry.md)) |
-| Lock my game's feel and catch tuning drift in CI | `loombridge feel snapshot` then `verify --snapshot` | A reviewed capture contract; a human approves the baseline once ([guide](Docs/Profiles/TuningSnapshotVerification.md)) |
-| Release-verify a 2D mini-game in CI | `loombridge verify --minigame` | A recorded trace + capture pack, frozen `0/1/2` exit contract ([quickstart](Docs/Profiles/MiniGameVerifyQuickstart.md) · [CI guide](Docs/Profiles/MiniGameVerifyCI.md)) |
-| Adopt an already-built project into the contract | `loombridge adopt` | The project + its design docs (proposes a contract, never green on its own) |
-</details>
-
-## What's in the box
-
-| Capability | Status |
-|---|---|
-| Unity editor bridge + MCP server (typed `unity_*` ops, 12 categories) | Shipped |
-| Deterministic verification CLI: `plan` / `build` / `verify` / `doneness` | Shipped |
-| Runtime input injection (real Input System key/pointer events, not field pokes) | Shipped |
-| Feel measurement (jump height, coyote time, fire cadence, hitstop, screen shake) | Shipped (kinematic tier; deeper feel tiers on the roadmap) |
-| Record and replay with perceptual pixel-diff baselines (`loombridge trace`) | Shipped |
-| Tuning snapshot: freeze human-approved measured behavior, verify kinematic drift (`loombridge feel snapshot` + `verify --snapshot`) | Shipped |
-| Genre packs (`platformer-2d`, `2d-shooter`, `3d-shooter`, `3d-topdown-arena`) plus any-genre contracts with honest coverage grading | Shipped |
-| Agent surface: 14 skills + slash commands, installable into your repo | Shipped |
-| Hosted CC0-heavy asset catalog, browsable in-editor (optional, read-only) | Shipped |
-| Unity Test Runner results as a bound verification gate | Planned |
-| Player-build (target platform) gate | Planned |
-
-## Quickstart
-
-```bash
-# 1. Install the CLI (macOS / Linux / Windows; needs Node >= 18 and the GitHub CLI)
-gh release download -R Loomtide/loombridge -p install.sh && sh install.sh
-
-# 2. Wire the bridge into your Unity project (an immutable file: tarball dependency)
-loombridge install-bridge --project /path/to/UnityProject
-
-# 3. Open the project in Unity, let it compile, then health-check
-loombridge doctor --project /path/to/UnityProject --live
-```
-
-`doctor` prints `healthy`, and every failed row prints the exact command that fixes it.
-
-**4. Connect your agent** (Claude Code, Codex, Cursor, any MCP client):
-
-- command: `loombridge`
-- args: `["mcp"]`
-
-**5. Optional:** install the agent surface (slash commands + skills) into your project repo
-with `loombridge install-agent --project <p>`.
-
-Full setup, transport notes, and the fresh-machine bootstrap: [`Docs/Install.md`](Docs/Install.md).
-Unity Personal and license-less CI: [`Docs/Licensing-and-CI.md`](Docs/Licensing-and-CI.md).
-Once `doctor` prints `healthy`, head back to [your door](#two-doors-in).
-
-<details>
-<summary>Install from source instead</summary>
-
-```bash
-git clone https://github.com/Loomtide/loombridge.git
-cd loombridge/mcp-server
-npm ci
-npm run build
-npm link                                  # `loombridge` now on your PATH
-bash ../scripts/loombridge-pack-bridge.sh # pack the bridge tarball install-bridge ships
-```
-</details>
-
-
-## The verification flow
-
-<!-- VIDEO: plan -> build -> verify -> doneness against a live Unity editor. Show the
-     design target getting frozen, the agent building through the bridge, Tier-1 gates
-     running, and doneness refusing then passing. Embed here when recorded. -->
-
-`.loombridge/` is the single source of truth per project (contract, design target,
-captures, reports, replays). The supervised loop is four verbs:
-
-- **`plan`**: scaffold `.loombridge/`, seed the acceptance contract and feel spec from a
-  genre pack, and freeze the Design Target hero shot. No approved target, no roadmap.
-- **`build`**: mint a build `runId` and gate preconditions; the agent then constructs
-  in-engine through the bridge tools.
-- **`verify`**: run the Tier-1 deterministic gates (asset/manifest, UI conformance,
-  framing, playability, feel measurement) against the contract and write the verdict.
-- **`doneness`**: the freshness and integrity gate. Exit `0` only on a fresh, run-bound,
-  green verdict whose cited captures exist on disk.
-
-The binding is the product:
-
-```
-plan          build              verify                    doneness
- |             |                  |                         |
- contract      mints runId -----> verdict bound to runId --> exit 0 only if:
- + frozen                         + producedAt                verdict.runId == build.runId
- design                           + cited captures            producedAt >= build.startedAt
- target                                                       every cited capture on disk
-                                                              hero-shot fidelity + review
-```
-
-Four invariants keep the gate honest:
-
-- **Refuse on absent, never skip.** A gate predicate with a missing bound field refuses
-  the verdict; it never silently skips the check. The threat model is a hand-crafted or
-  self-graded verdict.
-- **Two tracks, one line.** Gates, exits, and state are deterministic and live in the CLI.
-  Model judgment (VLM design review) is advisory and never enters a deterministic verdict.
-- **Harness fault is not a game defect.** Capture and harness gaps exit `2` in their own
-  report tier: never a pass, never a game bug.
-- **Only a frozen, sha256-pinned rendered Unity frame can certify doneness.** A flat 2D
-  mock is a style reference; freezing it would certify against a fiction, so it is refused.
-
-### Record once, replay deterministically
-
-`loombridge trace record --observe` captures a human demonstration as an action trace.
-`trace replay` drives it back against the editor deterministically and diffs frames
-against a perceptual baseline; `trace approve` freezes the baseline, `trace report` writes
-a self-contained HTML report. Regressions show up as pixels, not opinions.
-
-A game that animates under its own clock can never hold a frozen frame exactly, so
-`trace tolerance --id <id> --set <fraction>` stamps a bounded, human-approved pixel
-allowance (capped at 2%) onto the approved baseline. It is a separate verb from `approve`
-for a reason: approve re-freezes frames, so a single command that widened the gate and
-re-approved would destroy the anchor it was meant to keep. Every non-default tolerance is
-printed with the size of the hole it opens, and a drift-only failure tells you the exact
-command to consent to it.
-
-When only one REGION animates under its own clock, `trace mask --id <id> --set
-<captureId?>:<x>,<y>,<w>x<h>@<reason>` excludes it and leaves the rest of the frame graded
-at full strictness. The rects are blanked in both images, capped at 10% of any one frame on
-both sides, and each one carries the reason a human typed. The tool suggests a mask only
-after two runs whose drift lands in the same region and does not REPRODUCE between them:
-reproduction is measured structurally (95% of the drifted pixels in the same cells of a
-16x16 grid), not by byte equality, so a real regression cannot be re-run until the bitmaps
-differ and then masked. A drift that reproduces is a deterministic change, and the tool
-says so instead of offering to hide it.
-
-### Feel is measured, not vibed
-
-The bridge samples position, velocity, and animator state from the running game on real
-axes, with input injection and motion capture launch-aligned in a single op so MCP
-round-trip latency cannot corrupt the measurement. Feel specs make "the jump feels
-floaty" a number: jump height, apex time, coyote time, run speed, fire cadence, hitstop,
-screen shake.
-
-## What your agent gets: skills and commands
-
-Verification answers "is it done?". Skills answer "how does the agent know what good
-looks like?". Loombridge ships an agent surface you install into your own repo with
-`loombridge install-agent` (works with Claude Code and Codex):
-
-| Slash command | What it does |
-|---|---|
-| `/loombridge:plan` | Interview the human, produce the acceptance contract + frozen design target |
-| `/loombridge:build` | Drive a supervised build slice through the bridge under the minted `runId` |
-| `/loombridge:verify` | Run the Tier-1 gates, triage failures, loop until green |
-| `/loombridge:status` | Read-only progress, next command, and proof/capture warnings |
-
-The 14 skills are the distilled build knowledge, grouped by phase:
-
-| Phase | Skills |
-|---|---|
-| Build | `unity-2d-game`, `platformer-level-design`, `new-unity-test-project` |
-| Polish | `game-polish-2d`, `parallax-2d`, `ui-polish-pack`, `sfx-integration-pack`, `generated-3d-art-integration` |
-| Verify & tune | `verify-2d-game`, `graybox-greed-loop-tuning-pack`, `mobile-device-perf` |
-| Author & operate | `genre-pack-authoring`, `asset-layer`, `session-retro` |
-
-Each skill carries verified, gotcha-level knowledge (locked project structure, collider
-alignment rules, anti-fatigue SFX grammar, real-device frame-time pipelines) so the agent
-spends tokens building, not rediscovering.
-
-## Tool surface
-
-The bridge exposes generic `unity_*` tools across 12 categories: actuation and
-measurement, no game-specific magic. Full auto-generated reference:
-[`mcp-server/TOOLS.md`](mcp-server/TOOLS.md).
-
-| Category | What it covers |
-|---|---|
-| Scene | Create/find/transform objects, hierarchy, bounds, references, geometry snapshots |
-| Editor | Play/pause/stop, state, screenshots, menu items, diagnostics, game-view sizing |
-| Input | Real Input System key/pointer sessions, taps, holds, observe/record |
-| Runtime | Motion capture, `measure_motion`, animator sampling, probes, `wait_for_condition` |
-| Component | Add/remove/list, get/set properties, describe |
-| Code | Create/read/modify/attach C# scripts |
-| Animator | Controllers, states, transitions, parameters, motion binding, apply-spec |
-| UI | Canvas, buttons/images/text, rect transforms, screen rects, pointer dispatch |
-| Asset | Sprites/materials/prefabs, model & audio importers, sub-assets, sprite assignment |
-| Package | Add/remove/list/search UPM packages |
-| Capture | Static-method capture invocation |
-| Ops | List, describe, and batch ops; introspect the registry itself |
-
-Locators, not instance IDs (`SceneName:/Path/To/Object[index]`). Deterministic waits via
-`wait_for()`, never sleeps. Every tool routes through the op registry.
+- **Refuse on absent, never skip.** A missing bound field refuses the verdict, never skips the check.
+- **Deterministic decides; advisory advises.** Model judgment (VLM review) never enters a deterministic exit code.
+- **Harness fault is not a game defect.** Capture gaps exit `2` in their own tier: never a pass, never a game bug.
+- **Evidence binds to its run.** Files from another run, another editor session, or no provenance at all cannot certify this one.
 
 ## Not another Unity MCP
 
-There are more than a dozen Unity MCP servers, including a first-party one from Unity.
-They are actuation layers: move an object, edit a script, take a screenshot, and let the
-calling model decide subjectively whether the result looks right. The hard part of
-AI-built games is not building them; it is telling a real "done" from a confident
-hallucination. That layer does not exist anywhere else:
+There are more than a dozen Unity MCP servers, including a first-party one. They are actuation layers: move an object, take a screenshot, let the calling model decide subjectively whether it looks right. The hard part of AI-built games is telling a real "done" from a confident hallucination, and that layer exists only here:
 
 | Capability | Typical Unity MCP | Loombridge |
 |---|---|---|
@@ -277,17 +140,17 @@ hallucination. That layer does not exist anywhere else:
 | Deterministic waits instead of sleeps | No | `wait_for()`, never `sleep()` |
 | Measure motion and feel from the running game | No | Jump apex, coyote time, hitstop, cadence |
 | Record gameplay once, replay it, pixel-diff against a baseline | No | `loombridge trace` |
-| A verdict bound to the build run that produced it | No | `runId` binding; refused if absent |
+| Playability observed from inside the game loop | No | A teleported win cannot say "played" |
 | A "done" claim the agent cannot self-grade | No | `loombridge doneness` |
-| Harness fault separated from game defect | No | Its own exit tier (`2`) |
 | Raw code-eval op ("run this C#/shell string") | Common | **Refused by design** |
 | Telemetry | Varies | **None** |
 
-The last two rows are deliberate. There is no eval escape hatch: every tool is typed and
-schema-validated, and code enters the project only the auditable way (`code.create_script`
-writes C# that Unity compiles; `invoke_static` / `execute_menu_item` run project code
-behind a refuse-by-default allowlist). And Loombridge phones home to nothing: no
-analytics, no usage beacon, no account. See [`Docs/ThreatModel.md`](Docs/ThreatModel.md).
+## Reference
+
+- **Tool surface**: 125+ typed `unity_*` ops across scene, editor, input, runtime measurement, components, code, animator, UI, assets, packages, capture, observe, and registry introspection. Auto-generated reference: [`mcp-server/TOOLS.md`](mcp-server/TOOLS.md).
+- **Agent surface**: 4 slash commands (`/loombridge:plan|build|verify|status`) and 14 skills of gotcha-level build knowledge, installable into your repo with `loombridge install-agent`.
+- **Architecture**: [`ARCHITECTURE.md`](ARCHITECTURE.md) · **Roadmap**: [`ROADMAP.md`](ROADMAP.md) · **Findings ledger and open backlog**: [`Docs/Design/TideRunnerDoorOneLedger.md`](Docs/Design/TideRunnerDoorOneLedger.md) · **Positioning**: [`Docs/Design/Positioning.md`](Docs/Design/Positioning.md)
+- **Asset catalog (optional)**: a public, read-only hosted catalog (66,000+ records, predominantly CC0), browsable via **Window → Loombridge → Asset Browser**; license and provenance enforced before any import. [`Docs/Assets/PublicCatalogQuickstart.md`](Docs/Assets/PublicCatalogQuickstart.md)
 
 ## Support matrix
 
@@ -296,54 +159,25 @@ analytics, no usage beacon, no account. See [`Docs/ThreatModel.md`](Docs/ThreatM
 | **Unity** | `2022.3 LTS` (compatibility) to **`6000.x LTS` (primary target)** |
 | **Node.js** | `>= 18` |
 | **OS** | macOS · Windows · Linux |
-| **Transport** | `auto` (default): IPC first, then TCP loopback. IPC is a named pipe on Windows; on macOS/Linux the bridge runs on TCP loopback. `doctor --live` prints the transport it actually used, so a fallback is never silent. Details: [`Docs/Install.md`](Docs/Install.md). |
+| **Transport** | `auto`: IPC first, then TCP loopback; `doctor --live` prints the transport it actually used. Details: [`Docs/Install.md`](Docs/Install.md) |
 
 ## Security posture
 
-Loombridge is a local, single-developer editor tool. The agent talks to the MCP server
-over stdio; the MCP server talks to a bridge inside your Unity Editor over loopback only.
-No raw-eval op, no telemetry, no cloud requirement. Exposing the bridge to a network is an
-unsupported configuration, not a feature. Report vulnerabilities privately per
-[`SECURITY.md`](SECURITY.md); the full model is in [`Docs/ThreatModel.md`](Docs/ThreatModel.md).
+Loombridge is a local, single-developer editor tool. The agent talks to the MCP server over stdio; the MCP server talks to a bridge inside your Unity Editor over loopback only. No raw-eval op, no telemetry, no cloud requirement. Exposing the bridge to a network is an unsupported configuration, not a feature. Report vulnerabilities privately per [`SECURITY.md`](SECURITY.md); the full model is in [`Docs/ThreatModel.md`](Docs/ThreatModel.md).
 
-## Roadmap and non-goals
+## Non-goals (permanent, not missing features)
 
-The full, current roadmap lives in [`ROADMAP.md`](ROADMAP.md). Loombridge is pre-1.0.
-Near-term: one unified `verify` front door over every verification asset, Unity Test
-Runner results as a bound gate, a player-build gate, CI-headless robustness, and
-N-capture averaging for snapshot baselines. Two recent additions worth knowing: feel profiles split grammar
-from taste (universal feel-grammar checks gate pass/fail; archetype targets are
-descriptive placement unless you opt in with `--enforce-taste`), and the tuning snapshot
-(freeze how the game measurably plays once a human accepts it, then catch kinematic
-drift the way `trace` catches pixel drift). Some things are permanent non-goals, not missing features:
-
-- **No arbitrary code-execution op.** The typed op registry is a security boundary.
-  Capability gaps are closed by adding typed ops, not an escape hatch.
+- **No arbitrary code-execution op.** The typed op registry is a security boundary; gaps are closed with typed ops, never an eval escape hatch.
 - **No telemetry.** No analytics, usage beacons, or phone-home. This will not change.
-- **No cloud requirement.** The core CLI and bridge run fully local. The hosted asset
-  catalog is an optional, read-only convenience, never a dependency for
-  plan/build/verify/doneness.
-- **Not a game factory.** Loombridge carries no opinion about what a good game is. It is
-  the machinery for stating yours once (a human approval) and enforcing it forever (a
-  deterministic gate). See [`Docs/Design/Positioning.md`](Docs/Design/Positioning.md).
-
-## Asset catalog (optional)
-
-A public, read-only hosted catalog (66,000+ records, predominantly CC0 with a
-clearly-flagged attribution-required tier: PNG sprites, OGG audio, GLB models, SVG
-vectors), browsable in-editor via **Window → Loombridge → Asset Browser**. License and
-provenance policy is enforced before any Unity import. Quickstart:
-[`Docs/Assets/PublicCatalogQuickstart.md`](Docs/Assets/PublicCatalogQuickstart.md).
+- **No cloud requirement.** Core CLI and bridge run fully local.
+- **Not a game factory.** Loombridge carries no opinion about what a good game is; it is the machinery for stating yours once and enforcing it forever.
 
 ## Contributing
 
-See [`CONTRIBUTING.md`](CONTRIBUTING.md) (DCO sign-off, test suite, PR conventions) and
-[`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md).
+See [`CONTRIBUTING.md`](CONTRIBUTING.md) (DCO sign-off, test suite, PR conventions) and [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md).
 
 ## License and trademark
 
 Licensed under **Apache-2.0**: see [`LICENSE`](LICENSE).
 
-"Loombridge" and "Loomtide" are trademarks of Loomtide. The Apache-2.0 license grants
-rights to the code; it does not grant permission to use the Loombridge or Loomtide names,
-logos, or branding except as needed for reasonable and customary descriptive reference.
+"Loombridge" and "Loomtide" are trademarks of Loomtide. The Apache-2.0 license grants rights to the code; it does not grant permission to use the Loombridge or Loomtide names, logos, or branding except as needed for reasonable and customary descriptive reference.
