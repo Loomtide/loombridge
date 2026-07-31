@@ -18,7 +18,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  DEGENERATE_LEG_REASON,
   actualFixedTicksOfPhase,
+  controllerReportsEnabled,
+  diagnoseFrozenPlayer,
   effectiveCaptureFps,
   evaluateSeamPersistence,
   positionFromSnapshot,
@@ -26,6 +29,10 @@ import {
   sweepTicksForTarget,
   type FeelSend,
 } from "../../../../capabilities/verification/capture-feel.js";
+import { deriveTimeToApex } from "../../../../capabilities/verification/feel-derive.js";
+import { evaluatePhysicsTimestep } from "../../../../capabilities/verification/gates/physics-timestep.js";
+import type { AcceptanceContract } from "../../../../capabilities/verification/types.js";
+import type { FeelMeasurements, FeelTrajectorySample } from "../../../../capabilities/verification/gates/feel.js";
 import { SHORT_HOP_CANONICAL_TAP_TICKS } from "../../../../domain/feel-primitives.js";
 
 // ── the scripted game ───────────────────────────────────────────────────────
@@ -147,6 +154,18 @@ interface FakeOptions {
    * (ComputeProbeResult). Off by default so the OLD-bridge path stays covered.
    */
   probeEchoesProvenance?: boolean;
+  /**
+   * E6: the game is FROZEN: every step is a no-op, so every capture comes back as a
+   * flat trajectory at one point. This is the live run-2 shape (a modal end state that
+   * stopped the whole simulation) and it is what turned into `jumpApex: 0`.
+   */
+  frozen?: boolean;
+  /** Freeze the SEAM probe only, so the keyed legs still run and the seam proof reads no motion. */
+  seamProofDead?: boolean;
+  /** The controller-facing get_snapshot answers `enabled: true` (an affirmative sign of life). */
+  controllerReportsEnabled?: boolean;
+  /** The controller-facing get_snapshot answers `enabled: false` (the end-state signature). */
+  controllerDisabled?: boolean;
 }
 
 interface FakeBridge {
@@ -176,7 +195,24 @@ function fakeBridge(options: FakeOptions = {}): FakeBridge {
       for (let i = 0; i < ticks; i += 1) stepKeys.push((phase.keys ?? []).map((k) => k.toLowerCase()));
     }
 
+    // THE SAMPLER SAMPLES AT captureFps (E6). The fake used to emit ONE sample per
+    // physics step whatever cadence was requested, so a 120fps trajectory leg came
+    // back with half the samples a real 120fps capture returns, and every scripted
+    // source therefore carried a cadence its own `captureFps` did not explain. That
+    // is precisely what physics-timestep exists to catch, and the fake's cleanliness
+    // hid the fencepost bug the live run then failed on. A finer cadence is an
+    // integer multiple of the physics rate: sample k reports the state after step
+    // floor(k / perStep), which reproduces the live pairing (two identical readings
+    // per step at 120fps of a 60Hz sim).
+    const perStep = Math.max(1, Math.round((captureFps || 1 / DT) * DT));
+    const sampleMs = 1000 / (captureFps || 1 / DT);
     const samples: { tMs: number; x: number; y: number }[] = [{ tMs: 0, x: state.x, y: state.y }];
+    const emitFor = (stepIndex: number): void => {
+      for (let k = 0; k < perStep; k += 1) {
+        const sampleIndex = stepIndex * perStep + k + 1;
+        samples.push({ tMs: Math.round(sampleIndex * sampleMs * 100) / 100, x: state.x, y: state.y });
+      }
+    };
     const phaseEcho: Record<string, unknown>[] = [];
     let step = 0;
     let prevJumpHeld = false;
@@ -190,14 +226,14 @@ function fakeBridge(options: FakeOptions = {}): FakeBridge {
       for (let i = 0; i < ticks; i += 1) {
         const keys = step === 0 ? [] : stepKeys[step - 1];
         const input: StepInput = {
-          moveX: keys.includes("d") || keys.includes("rightarrow") ? 1 : 0,
+          moveX: keys.includes("d") || keys.includes("rightarrow") ? 1 : keys.includes("a") || keys.includes("leftarrow") ? -1 : 0,
           jumpHeld: keys.includes("space"),
           dashHeld: keys.includes("leftshift"),
         };
-        stepGame(state, input, step, prevJumpHeld);
+        if (!options.frozen) stepGame(state, input, step, prevJumpHeld);
         prevJumpHeld = input.jumpHeld;
+        emitFor(step);
         step += 1;
-        samples.push({ tMs: step * DT * 1000, x: state.x, y: state.y });
         minY = Math.min(minY, state.y);
         maxY = Math.max(maxY, state.y);
       }
@@ -205,7 +241,7 @@ function fakeBridge(options: FakeOptions = {}): FakeBridge {
         index,
         keys: phase.keys ?? [],
         requestedDurationMs: ticks * DT * 1000,
-        sampleCount: ticks,
+        sampleCount: ticks * perStep,
         ...(phase.fixedTicks === undefined ? {} : { requestedFixedTicks: phase.fixedTicks }),
         fixedTickStart: startTick,
         fixedTickEnd: step,
@@ -221,14 +257,15 @@ function fakeBridge(options: FakeOptions = {}): FakeBridge {
         maxY,
       });
     }
-    // The first sample is the pre-step state, so N steps yield N+1 samples; the
-    // recipe's phase indexing sums the per-phase counts, matching the live echo.
-    void captureFps;
+    // The first sample is the pre-step state, so N steps at `perStep` samples each
+    // yield N*perStep+1 samples; the recipe's phase indexing sums the per-phase
+    // counts, matching the live echo. `durationMs` is the SPAN of the samples, which
+    // is what the live op echoes.
     return {
       samples,
       phases: phaseEcho,
       sampleCount: samples.length,
-      durationMs: step * DT * 1000,
+      durationMs: samples[samples.length - 1].tMs,
       projectFixedTimestepBeforeMeasurement: DT,
       measurementFixedTimestep: DT,
       peakY: Math.max(...samples.map((s) => s.y)),
@@ -254,7 +291,9 @@ function fakeBridge(options: FakeOptions = {}): FakeBridge {
         // survives exactly one FixedUpdate and then reads zero.
         const effectiveMoveX = readerLive && i > 0 ? 0 : moveX;
         const effectiveDash = readerLive && i > 0 ? false : dashHeld;
-        stepGame(state, { moveX: effectiveMoveX, jumpHeld: false, dashHeld: effectiveDash }, step, false);
+        if (!options.frozen && !options.seamProofDead) {
+          stepGame(state, { moveX: effectiveMoveX, jumpHeld: false, dashHeld: effectiveDash }, step, false);
+        }
         step += 1;
         count += 1;
         samples.push({ tMs: step * DT * 1000, x: state.x, y: state.y, phase: index });
@@ -300,13 +339,40 @@ function fakeBridge(options: FakeOptions = {}): FakeBridge {
         }
         return {};
       }
-      case "runtime.get_snapshot":
-        if (params.components !== undefined) {
+      case "runtime.get_snapshot": {
+        const components = params.components as string[] | undefined;
+        if (components === undefined) {
+          return { transform: { position: { x: DECLARED.spawnX, y: DECLARED.groundY, z: 0 } } };
+        }
+        if (components.includes("PlayerInputReader")) {
           // The reader read-back: unreadable today (L117).
           if (options.snapshotRefuses !== false) throw new Error("m_Enabled is not exposed by get_snapshot");
           return { components: [{ type: "PlayerInputReader", properties: { enabled: !readerLive } }] };
         }
-        return { transform: { position: { x: DECLARED.spawnX, y: DECLARED.groundY, z: 0 } } };
+        // E6: the CONTROLLER-facing snapshots: the between-legs liveness reading and
+        // the no-motion diagnosis. Unanswerable by default, which is the live default
+        // and the reason "we could not tell" must never count as a sign of life.
+        if (options.controllerReportsEnabled || options.controllerDisabled) {
+          return {
+            activeInHierarchy: true,
+            components: [
+              {
+                type_name: "PlayerController",
+                properties: [],
+                runtimeProperties: [
+                  {
+                    name: "enabled",
+                    type: "Boolean",
+                    value: Boolean(options.controllerReportsEnabled),
+                    declaringType: "Behaviour",
+                  },
+                ],
+              },
+            ],
+          };
+        }
+        throw new Error("component enabled state is not exposed by get_snapshot (L117)");
+      }
       case "component.set_property":
         if (params.property_path === "m_Enabled") {
           readerLive = params.value === true ? true : Boolean(options.readerStaysLive);
@@ -676,4 +742,249 @@ test("E6 F1: a scene-qualified playerLocator reaches the WIRE as {scene, path}, 
     assert.equal(locator.scene, "Level", `${call.command}: the scene qualifier must ride separately`);
     assert.equal(locator.path, "/Player", `${call.command}: the path must be bare`);
   }
+});
+
+// ── E6: the produced sources, graded by the gate they have to feed ──────────
+
+test("E6: the produced sources PASS physics-timestep, the guard the scripted suite never had", () => {
+  // Nothing graded the producer's own output through the cadence gate, so the two
+  // shipped in one commit with incompatible arithmetic and the first live run failed
+  // every source. This is that missing edge, and it is why the fake now samples at
+  // the cadence it was asked for rather than once per physics step.
+  return run().then(({ output }) => {
+    const report = evaluatePhysicsTimestep(
+      output.feel as unknown as FeelMeasurements,
+      contract() as unknown as AcceptanceContract,
+    );
+    const cadence = report.checks.find((c) => c.id === "physics-timestep.effectiveCadence")!;
+    assert.equal(cadence.status, "pass", cadence.actual);
+    const pair = report.checks.find((c) => c.id === "physics-timestep.recordedCadencePair")!;
+    assert.equal(pair.status, "pass", pair.detail);
+
+    // LITMUS: bump ONE source's sampleCount by a single sample and the gate refuses.
+    const sources = (output.feel.provenance as { sources: Record<string, unknown>[] }).sources;
+    sources[0]!.sampleCount = (sources[0]!.sampleCount as number) + 1;
+    assert.equal(
+      evaluatePhysicsTimestep(output.feel as unknown as FeelMeasurements, contract() as unknown as AcceptanceContract)
+        .checks.find((c) => c.id === "physics-timestep.effectiveCadence")!.status,
+      "fail",
+    );
+  });
+});
+
+test("E6: the SWEEP source records windowCount, and it is the number of trials it retained", async () => {
+  const { output } = await run();
+  for (const metric of ["coyoteTime", "jumpBuffer"]) {
+    const source = sourceFor(output, metric)!;
+    const trials = source.trials as unknown[];
+    assert.equal(source.windowCount, trials.length, `${metric} windowCount`);
+    // The recorded cadence is the per-window rate, not the sum-over-one-fencepost
+    // number the shipped producer wrote (60.6708 for a 60fps sweep).
+    const sampleCount = source.sampleCount as number;
+    const durationMs = source.durationMs as number;
+    const expected = effectiveCaptureFps(sampleCount, durationMs, trials.length)!;
+    assert.ok(Math.abs((source.effectiveCaptureFps as number) - expected) < 1e-3);
+  }
+});
+
+// ── E6: timeToApex from launch ──────────────────────────────────────────────
+
+test("E6: timeToApex is measured from LAUNCH, so the 12-tick settle prefix is not in the number", async () => {
+  const { output } = await run();
+  // The scripted controller launches at 12 u/s under 30 u/s²: v0/g = 400ms exactly.
+  // The jump leg prepends 12 settle ticks (200ms) plus a tick of injection latency,
+  // all of which the old first-sample anchor charged to the rise.
+  const measured = output.feel.timeToApex as number;
+  assert.ok(Math.abs(measured - 400) <= 2 * (DT * 1000), `timeToApex ${measured} (analytic 400ms)`);
+  assert.ok(measured < 500, "the settle prefix must not be inside the reading");
+
+  // …and it re-derives from the source's own samples, which is what the gate checks.
+  const source = sourceFor(output, "timeToApex")!;
+  assert.equal(deriveTimeToApex(source.samples as FeelTrajectorySample[]), measured);
+});
+
+// ── E6: the runway ──────────────────────────────────────────────────────────
+
+test("E6: runLeg.ticks bounds BOTH the run leg and the coyote calibration walk", async () => {
+  const short = await run({}, {
+    harness: {
+      feelSeam: {
+        playerLocator: "Level:/Player",
+        controllerComponent: "PlayerController",
+        inputReaderComponent: "PlayerInputReader",
+        fields: { moveX: "moveX", jumpHeld: "jumpHeld", dashHeld: "dashHeld" },
+        keys: { jump: "Space", moveRight: "D", jumpCut: "Space", dash: "LeftShift" },
+        runLeg: { ticks: 20 },
+      },
+    },
+  });
+  const holds = short.bridge.calls
+    .filter((c) => c.command === "runtime.capture_input_motion")
+    .flatMap((c) => (c.params.phases as { keys?: string[]; fixedTicks?: number }[]) ?? [])
+    .filter((p) => (p.keys ?? []).includes("D") && !(p.keys ?? []).includes("Space"));
+  assert.ok(holds.length >= 2, "the run leg and the calibration walk both hold the move key");
+  for (const phase of holds) {
+    assert.ok((phase.fixedTicks ?? 0) <= 20, `a horizontal hold ran ${phase.fixedTicks} ticks past the declared runway`);
+  }
+
+  // POSITIVE CONTROL: the DEFAULT is unchanged, so no existing contract moves.
+  const { bridge } = await run();
+  const defaultHold = (bridge.calls
+    .filter((c) => c.command === "runtime.capture_input_motion")
+    .flatMap((c) => (c.params.phases as { keys?: string[]; fixedTicks?: number }[]) ?? [])
+    .find((p) => (p.keys ?? []).includes("D") && !(p.keys ?? []).includes("Space")))!;
+  assert.equal(defaultHold.fixedTicks, 90);
+});
+
+test("E6: runLeg.direction -1 injects moveLeft and drives moveX negative, and measures the same speed", async () => {
+  const left = await run({}, {
+    harness: {
+      feelSeam: {
+        playerLocator: "Level:/Player",
+        controllerComponent: "PlayerController",
+        inputReaderComponent: "PlayerInputReader",
+        fields: { moveX: "moveX", jumpHeld: "jumpHeld", dashHeld: "dashHeld" },
+        keys: { jump: "Space", moveRight: "D", moveLeft: "A", jumpCut: "Space", dash: "LeftShift" },
+        runLeg: { ticks: 90, direction: -1 },
+      },
+    },
+  });
+  const keyed = left.bridge.calls
+    .filter((c) => c.command === "runtime.capture_input_motion")
+    .flatMap((c) => (c.params.phases as { keys?: string[] }[]) ?? []);
+  assert.ok(keyed.some((p) => (p.keys ?? []).includes("A")), "the leftward runway must inject moveLeft");
+  assert.equal(keyed.some((p) => (p.keys ?? []).includes("D")), false, "and never the rightward key");
+
+  // The SEAM-driven proof drives the field negative, not just the keyed legs.
+  const proof = left.bridge.calls.find((c) => c.command === "runtime.probe")!;
+  const drives = ((proof.params.phases as { drivers?: { property_path: string; value: unknown }[] }[]) ?? [])
+    .flatMap((p) => p.drivers ?? [])
+    .filter((d) => d.property_path === "moveX")
+    .map((d) => d.value);
+  assert.ok(drives.includes(-1), `moveX drives were ${JSON.stringify(drives)}`);
+
+  // AND the derivations are direction-blind: |dx| either way, so the runway bound
+  // cannot move a measured value.
+  const { output: right } = await run();
+  assert.ok(
+    Math.abs((left.output.feel.runSpeed as number) - (right.feel.runSpeed as number)) < 1e-6,
+    `left ${left.output.feel.runSpeed} vs right ${right.feel.runSpeed}`,
+  );
+});
+
+// ── E6: the frozen corpse ───────────────────────────────────────────────────
+
+test("E6: a leg that never moves the player OMITS its metrics and ABORTS the session, never derives 0", async () => {
+  const { output } = await run({ frozen: true });
+  // The zeroes that shipped are gone.
+  assert.equal(output.feel.jumpApex, undefined);
+  assert.equal(output.feel.timeToApex, undefined);
+  assert.equal(output.feel.runSpeed, undefined);
+  assert.ok(output.omitted.some((o) => o.metric === "runSpeed" && o.reason === DEGENERATE_LEG_REASON));
+
+  // …and the session gave up after the FIRST corpse rather than measuring five more.
+  assert.ok(output.aborted, "a dead player must end the session");
+  assert.equal(output.aborted!.leg, "run");
+  assert.match(output.aborted!.reason, /moved the player not at all/);
+  const legs = (output.feel._provenance as { ops: { leg?: string }[] }).ops
+    .map((op) => op.leg)
+    .filter((leg): leg is string => typeof leg === "string");
+  assert.equal(legs.some((leg) => leg.startsWith("shortHop")), false, "no leg after the abort may run");
+  assert.equal(legs.some((leg) => leg.includes("coyote")), false);
+
+  // POSITIVE CONTROL: the same code path on the LIVE game measures normally.
+  const { output: alive } = await run();
+  assert.equal(alive.aborted, undefined);
+  assert.ok((alive.feel.runSpeed as number) > 0);
+});
+
+test("E6: a controller that reports itself ENABLED keeps the session alive even after a still leg", async () => {
+  // Liveness is `the leg moved it OR the controller says it is enabled`. A game that
+  // simply does not respond to one stimulus is not a corpse, and must not abort.
+  const { output } = await run({ frozen: true, controllerReportsEnabled: true });
+  assert.equal(output.aborted, undefined);
+  assert.ok(output.omitted.some((o) => o.reason === DEGENERATE_LEG_REASON), "the metric is still omitted, not zeroed");
+  assert.equal(output.feel.jumpApex, undefined);
+});
+
+// ── E6: honest blame for a no-motion seam proof ────────────────────────────
+
+test("E6: diagnoseFrozenPlayer blames the END STATE when the snapshot says so, and the seam otherwise", () => {
+  const seam = {
+    playerLocator: "Main:/Player",
+    controllerComponent: "PlayerController",
+    inputReaderComponent: "PlayerInputReader",
+    fields: { moveX: "moveX" },
+    keys: { jump: "Space", moveRight: "D" },
+  };
+  // The shape the LIVE bridge returns (E6 run 1's readerDisable.snapshotReadBack):
+  // components[].runtimeProperties[] = {name, type, value, declaringType}.
+  const disabled = {
+    activeInHierarchy: true,
+    components: [
+      {
+        type_name: "PlayerController",
+        properties: [],
+        runtimeProperties: [{ name: "enabled", type: "Boolean", value: false, declaringType: "Behaviour" }],
+      },
+    ],
+  };
+  assert.match(diagnoseFrozenPlayer(disabled, seam)!, /controller component "PlayerController" reports enabled=false/);
+  assert.match(diagnoseFrozenPlayer(disabled, seam)!, /restart play mode/);
+
+  const notSimulated = {
+    activeInHierarchy: true,
+    components: [{ type_name: "Rigidbody2D", runtimeProperties: [{ name: "simulated", value: false }] }],
+  };
+  assert.match(diagnoseFrozenPlayer(notSimulated, seam)!, /Rigidbody2D reports simulated=false/);
+
+  assert.match(diagnoseFrozenPlayer({ activeInHierarchy: false }, seam)!, /INACTIVE in the hierarchy/);
+
+  // …and when NOTHING in the snapshot accuses anything, it says nothing: the seam
+  // sentence stands. Silence is not a clean bill of health, it is no evidence.
+  const healthy = {
+    activeInHierarchy: true,
+    components: [{ type_name: "PlayerController", runtimeProperties: [{ name: "enabled", value: true }] }],
+  };
+  assert.equal(diagnoseFrozenPlayer(healthy, seam), null);
+  assert.equal(diagnoseFrozenPlayer(undefined, seam), null);
+
+  // controllerReportsEnabled is the affirmative half, and an unanswerable snapshot
+  // is NOT a yes.
+  assert.equal(controllerReportsEnabled(healthy, seam), true);
+  assert.equal(controllerReportsEnabled(disabled, seam), false);
+  assert.equal(controllerReportsEnabled({ available: false }, seam), false);
+});
+
+test("E6: a no-motion seam proof says END STATE when the scene says so, not 'wrong component/field name'", async () => {
+  const { output } = await run({ readerStaysLive: true, seamProofDead: true, controllerDisabled: true });
+  const disable = (output.feel._provenance as Record<string, unknown>).readerDisable as Record<string, unknown>;
+  assert.equal(disable.ok, false);
+  assert.match(String(disable.reason), /reports enabled=false/);
+  assert.equal(/wrong component\/field name/.test(String(disable.reason)), false, "the seam must not be blamed");
+
+  // POSITIVE CONTROL: the SAME dead drive with a snapshot that accuses nothing keeps
+  // the seam sentence, because then the seam really is the best available guess.
+  const { output: noEvidence } = await run({ readerStaysLive: true, seamProofDead: true });
+  const bare = (noEvidence.feel._provenance as Record<string, unknown>).readerDisable as Record<string, unknown>;
+  assert.match(String(bare.reason), /wrong component\/field name/);
+});
+
+// ── E6: capture exit honesty ────────────────────────────────────────────────
+
+test("E6: a capture that leaves a BANDED metric unmeasured reports it, so the CLI can refuse to exit 0", async () => {
+  const { output } = await run({ frozen: true });
+  // Run 2's shape: the contract bands metrics the session could not measure.
+  assert.deepEqual(
+    [...output.unmeasuredAcceptedTargets].sort(),
+    ["coyoteTime", "jumpApex", "jumpBuffer", "runSpeed"],
+  );
+  // Every one of them carries a stated reason: no banded metric is silently absent.
+  for (const metric of output.unmeasuredAcceptedTargets) {
+    assert.ok(output.omitted.some((o) => o.metric === metric), `${metric} has no stated reason`);
+  }
+
+  // POSITIVE CONTROL: a fully-measured session owes nothing, which is the exit-0 path.
+  const { output: full } = await run();
+  assert.deepEqual(full.unmeasuredAcceptedTargets, []);
 });

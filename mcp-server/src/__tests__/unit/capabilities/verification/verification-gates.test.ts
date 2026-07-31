@@ -2099,10 +2099,13 @@ function feelWithProvenance(overrides: Partial<FeelMeasurements> = {}): FeelMeas
       sources: [
         {
           source: "FeelHarness",
-          sampleCount: 180,
-          // L47: sampleCount + durationMs must RE-DERIVE the declared captureFps
-          // (180 samples over 3000ms is 60fps). A source carrying no window carries
-          // no cadence evidence at all, and physics-timestep refuses it.
+          // L47: sampleCount + durationMs must RE-DERIVE the declared captureFps. The
+          // structural count is `fps * window + one fencepost per capture window`, so
+          // 60fps across a single 3000ms window is 181 samples, not 180 (E6: the
+          // missing fencepost used to be absorbed by a one-sample tolerance, which
+          // made a real one-sample cadence error free too). A source carrying no
+          // window carries no cadence evidence at all, and physics-timestep refuses it.
+          sampleCount: 181,
           durationMs: 3000,
           captureFps: 60,
           measuredAt: "2026-05-31T00:00:00.000Z",
@@ -2114,7 +2117,7 @@ function feelWithProvenance(overrides: Partial<FeelMeasurements> = {}): FeelMeas
         },
         {
           source: "runtime.probe",
-          sampleCount: 90,
+          sampleCount: 91,
           durationMs: 1500,
           captureFps: 60,
           measuredAt: "2026-05-31T00:00:01.000Z",
@@ -2528,8 +2531,9 @@ test("physics-timestep: a finer integer-multiple captureFps (120fps sampling of 
   const m = feelWithProvenance();
   m.provenance!.sources![1]!.captureFps = 120;
   // Sampling twice as fast over the same window really does yield twice the
-  // samples; the source has to say so, or the cadence re-derivation refuses it.
-  m.provenance!.sources![1]!.sampleCount = 180;
+  // intervals; the source has to say so, or the cadence re-derivation refuses it.
+  // 120fps across 1500ms is 180 intervals plus the window's own fencepost.
+  m.provenance!.sources![1]!.sampleCount = 181;
   const r = evaluatePhysicsTimestep(m, acceptance);
   assert.equal(checkById(r, "physics-timestep.captureFps").status, "pass");
   assert.equal(checkById(r, "physics-timestep.effectiveCadence").status, "pass");
@@ -2544,7 +2548,7 @@ test("physics-timestep: a NON-integer captureFps multiple (90fps of 60Hz) warns;
   // is untouched and still passes. This is the same logic that keeps 60fps-of-50Hz (1.2x) flagged.
   const m = feelWithProvenance();
   m.provenance!.sources![1]!.captureFps = 90;
-  m.provenance!.sources![1]!.sampleCount = 135; // 90fps over the same 1500ms window
+  m.provenance!.sources![1]!.sampleCount = 136; // 90fps over the same 1500ms window (135 intervals + fencepost)
   const r = evaluatePhysicsTimestep(m, acceptance);
   assert.equal(checkById(r, "physics-timestep.captureFps").status, "warn");
   assert.equal(checkById(r, "physics-timestep.project").status, "pass");
@@ -2583,17 +2587,81 @@ test("physics-timestep: the L47 shape (real ~11Hz sampling under a declared 120f
   const r = evaluatePhysicsTimestep(m, acceptance);
   const check = checkById(r, "physics-timestep.effectiveCadence");
   assert.equal(check.status, "fail");
-  assert.match(check.actual, /effective=11\.11fps/);
+  assert.match(check.actual, /effective=10\.56fps/);
   assert.equal(r.verdict, "fail");
 });
 
-test("physics-timestep: divergence of exactly one tick (the endpoint convention) still passes", () => {
-  // N samples span N-1 intervals, so an honest capture can legitimately land one
-  // sample either side. One tick is the tolerance, and not one more.
+test("physics-timestep: the fencepost is STRUCTURE, so a one-sample error either way now FAILS (E6)", () => {
+  // The old check compared N against `fps*window` and forgave a one-sample gap,
+  // which meant the endpoint convention AND a genuine off-by-one cadence error were
+  // both free. N samples span N-1 intervals is now part of the expectation, and the
+  // only tolerance left is the bridge's 2-decimal timestamp rounding (~9e-4 samples
+  // here). LITMUS, both directions, around the exact structural count.
   const m = feelWithProvenance();
-  m.provenance!.sources![1]!.sampleCount = 89; // 90 expected at 60fps over 1500ms
+  m.provenance!.sources![1]!.sampleCount = 91; // 90 intervals at 60fps over 1500ms, + 1
   assert.equal(checkById(evaluatePhysicsTimestep(m, acceptance), "physics-timestep.effectiveCadence").status, "pass");
-  m.provenance!.sources![1]!.sampleCount = 88; // two ticks out
+  m.provenance!.sources![1]!.sampleCount = 90; // the old "endpoint convention" slack
+  assert.equal(checkById(evaluatePhysicsTimestep(m, acceptance), "physics-timestep.effectiveCadence").status, "fail");
+  m.provenance!.sources![1]!.sampleCount = 92; // one over
+  assert.equal(checkById(evaluatePhysicsTimestep(m, acceptance), "physics-timestep.effectiveCadence").status, "fail");
+});
+
+test("physics-timestep: a multi-window source gets ONE fencepost PER window, counted off its own trials", () => {
+  // The live sweep aggregates ten trial windows into one sampleCount/durationMs pair,
+  // and each window sampled both of its endpoints. The gate COUNTS the windows from
+  // the retained trials; it never takes the number on trust.
+  const m = feelWithProvenance();
+  const source = m.provenance!.sources![1]!;
+  source.captureFps = 60;
+  source.durationMs = 12000; // ten 1200ms windows
+  source.trials = Array.from({ length: 10 }, () => ({ samples: [{ tMs: 0, x: 0, y: 0 }] }));
+  source.sampleCount = 730; // 720 intervals + 10 fenceposts
+  assert.equal(checkById(evaluatePhysicsTimestep(m, acceptance), "physics-timestep.effectiveCadence").status, "pass");
+
+  // LITMUS: the SINGLE-window count (721) no longer passes, and neither does an
+  // eleventh fencepost. The allowance is exactly the number of windows on disk.
+  source.sampleCount = 721;
+  assert.equal(checkById(evaluatePhysicsTimestep(m, acceptance), "physics-timestep.effectiveCadence").status, "fail");
+  source.sampleCount = 731;
+  assert.equal(checkById(evaluatePhysicsTimestep(m, acceptance), "physics-timestep.effectiveCadence").status, "fail");
+});
+
+test("physics-timestep: a DECLARED windowCount that its own trials do not show is refused, not believed", () => {
+  // windowCount is a self-declared knob on the gate's own tolerance, so it is graded
+  // against the retained evidence. Inflating it to buy 90 free samples must refuse.
+  const m = feelWithProvenance();
+  const source = m.provenance!.sources![1]!;
+  source.captureFps = 60;
+  source.durationMs = 12000;
+  source.trials = Array.from({ length: 10 }, () => ({ samples: [{ tMs: 0, x: 0, y: 0 }] }));
+  source.sampleCount = 820;
+  source.windowCount = 100;
+  const check = checkById(evaluatePhysicsTimestep(m, acceptance), "physics-timestep.effectiveCadence");
+  assert.equal(check.status, "fail");
+  assert.match(check.actual, /declares windowCount 100 while its own retained evidence shows 10/);
+
+  // POSITIVE CONTROL: declaring the TRUE count is welcome and changes nothing.
+  source.windowCount = 10;
+  source.sampleCount = 730;
+  assert.equal(checkById(evaluatePhysicsTimestep(m, acceptance), "physics-timestep.effectiveCadence").status, "pass");
+});
+
+test("physics-timestep: an exact duplicate reading the file still carries is allowed for, and only that many", () => {
+  // The bridge occasionally emits one reading twice under a single tMs (a respawn
+  // frame). The derivation side collapses it; the cadence side has to allow for it,
+  // or an honest capture fails on a harness artifact. Counted off the samples, so it
+  // cannot be claimed without carrying it.
+  const m = feelWithProvenance();
+  const source = m.provenance!.sources![1]!;
+  const samples = Array.from({ length: 91 }, (_, i) => ({ tMs: Math.round(i * (1000 / 60) * 100) / 100, x: 0, y: 0 }));
+  samples.splice(30, 0, { ...samples[30] });
+  source.samples = samples;
+  source.durationMs = samples[samples.length - 1].tMs;
+  source.sampleCount = 92; // 90 intervals + fencepost + the duplicate
+  assert.equal(checkById(evaluatePhysicsTimestep(m, acceptance), "physics-timestep.effectiveCadence").status, "pass");
+
+  // LITMUS: claim the duplicate allowance with NO duplicate in the samples and it fails.
+  source.samples = samples.filter((_, i) => i !== 31);
   assert.equal(checkById(evaluatePhysicsTimestep(m, acceptance), "physics-timestep.effectiveCadence").status, "fail");
 });
 

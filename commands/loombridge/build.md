@@ -291,9 +291,14 @@ The recipe is **dispatched by the slice's `acceptance.gates`** — no per-slice 
   and measures the dash through the controller seam with the input reader disabled. It
   requires a `harness.feelSeam` block in `ACCEPTANCE.json` (which component reads input,
   which fields it writes, which keys drive it) and **refuses**, naming the exact JSON to
-  add, when the block is absent: it will not guess a seam. Do not hand-author
-  `feel.json`: every provenance field it carries comes from the op echoes, and the gates
-  now re-derive the headline numbers from the raw evidence in the same file.
+  add, when the block is absent: it will not guess a seam. If the level has a hazard or a
+  ledge inside the run leg's default 10.5-unit runway, also declare
+  `harness.feelSeam.runLeg` (`ticks`, and `direction: -1` when the safe ground is leftward,
+  which also needs `keys.moveLeft`): the recipe drives the player along that runway and has
+  no other way to know where the spikes are. It bounds where the harness drives, never what
+  it reports. Do not hand-author `feel.json`: every provenance field it carries comes from
+  the op echoes, and the gates now re-derive the headline numbers from the raw evidence in
+  the same file.
 - a `console-clean` gate with **no** framing rects / no GroundTiling tiles (e.g. the
   `parallax` slice) → **`console.json` only**. This writes ONLY the `console-clean`
   evidence — the slice's other gates (`parallax-motion.json`, `coverage.json`,

@@ -34,6 +34,7 @@
  * trajectories.
  */
 
+import { SWEEP_MOTION_EPSILON_U, SWEEP_RISE_EPSILON_U } from "../../domain/feel-primitives.js";
 import type { FeelTrajectorySample } from "./gates/feel.js";
 
 /** The feel metrics re-derivable from a single position trajectory. */
@@ -67,13 +68,57 @@ function isFiniteNumber(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value);
 }
 
+/** Optional per-sample channels compared when deciding whether two samples are EXACTLY equal. */
+const SAMPLE_CHANNELS = ["x", "y", "z", "rx", "ry", "rz"] as const;
+
+/** Are two consecutive samples the SAME reading emitted twice (same time, same state)? */
+function isExactDuplicateSample(a: FeelTrajectorySample, b: FeelTrajectorySample): boolean {
+  if (a.tMs !== b.tMs) return false;
+  for (const channel of SAMPLE_CHANNELS) {
+    if (a[channel] !== b[channel]) return false;
+  }
+  return true;
+}
+
+/**
+ * DUPLICATE-FRAME COLLAPSE (E6 finding, live TideRunner diagnostic run).
+ *
+ * The bridge's sampler occasionally emits the SAME reading twice under one tMs: a
+ * respawn frame re-runs the sample step, and the live 183-sample run leg carried one
+ * such pair at 1100ms ({tMs:1100,x:6.4,y:1.5} twice). Under a strictly-increasing
+ * validator that single pair discarded the WHOLE trajectory and `runSpeed` was
+ * omitted as "no usable trajectory": a harness artifact reported as a missing
+ * measurement.
+ *
+ * An exact duplicate carries no information: dropping it cannot move any derived
+ * value, because the retained sample says the same thing at the same instant. So it
+ * is collapsed (keep the first) and everything downstream sees a strictly-increasing
+ * trajectory.
+ *
+ * WHAT IS NOT COLLAPSED, deliberately: two samples at the same tMs whose POSITIONS
+ * differ are contradictory evidence (the player was in two places at one instant),
+ * and DECREASING time is non-causal. Both still refuse: the fix absorbs a known
+ * quantization artifact, it does not soften the ordering contract.
+ */
+export function collapseExactDuplicateSamples<T extends FeelTrajectorySample>(samples: readonly T[]): T[] {
+  const out: T[] = [];
+  for (const sample of samples) {
+    const previous = out[out.length - 1];
+    if (previous !== undefined && isExactDuplicateSample(previous, sample)) continue;
+    out.push(sample);
+  }
+  return out;
+}
+
 /**
  * Validate a trajectory for re-derivation: at least TWO finite {tMs,x,y} samples
- * with STRICTLY INCREASING tMs. The strictness is the raw-evidence contract — a
- * single sample, duplicate timestamps, or non-monotonic (non-causal) time would
- * let `deriveRunSpeed` divide by a non-positive duration or `deriveTimeToApex`
- * read from a scrambled order, weakening the re-derivation guarantee. An invalid
- * trajectory is treated as "no usable samples" by the gate (a refusal).
+ * with STRICTLY INCREASING tMs, AFTER exact consecutive duplicates are collapsed
+ * (see `collapseExactDuplicateSamples`). The strictness is the raw-evidence
+ * contract: a single sample, contradictory readings under one timestamp, or
+ * non-monotonic (non-causal) time would let `deriveRunSpeed` divide by a
+ * non-positive duration or `deriveTimeToApex` read from a scrambled order,
+ * weakening the re-derivation guarantee. An invalid trajectory is treated as
+ * "no usable samples" by the gate (a refusal).
  */
 export function isValidTrajectory(samples: unknown): samples is FeelTrajectorySample[] {
   if (!Array.isArray(samples) || samples.length < 2) return false;
@@ -81,7 +126,45 @@ export function isValidTrajectory(samples: unknown): samples is FeelTrajectorySa
     const s = samples[i] as FeelTrajectorySample;
     if (typeof s !== "object" || s === null) return false;
     if (!isFiniteNumber(s.tMs) || !isFiniteNumber(s.x) || !isFiniteNumber(s.y)) return false;
-    if (i > 0 && !(s.tMs > (samples[i - 1] as FeelTrajectorySample).tMs)) return false; // strictly increasing
+  }
+  const collapsed = collapseExactDuplicateSamples(samples as FeelTrajectorySample[]);
+  if (collapsed.length < 2) return false;
+  for (let i = 1; i < collapsed.length; i += 1) {
+    if (!(collapsed[i].tMs > collapsed[i - 1].tMs)) return false; // strictly increasing
+  }
+  return true;
+}
+
+/**
+ * Vertical/horizontal motion (world units) below which a leg is treated as having
+ * produced NO motion at all. Shared with the sweep primitives' motion epsilon: a
+ * grounded player's sampled position is constant to the bit, so this only has to
+ * clear float noise.
+ */
+export const TRAJECTORY_STATIC_EPSILON_U = SWEEP_MOTION_EPSILON_U;
+
+/**
+ * THE FROZEN-CORPSE TEST (E6 finding, TideRunner run 2).
+ *
+ * A trajectory whose every sample sits on the first sample's position, to within
+ * `TRAJECTORY_STATIC_EPSILON_U`, describes a player that did not move: the live run
+ * that hit this returned 218 samples all at (6.4, 1.51499975) because the game had
+ * entered its modal end state and frozen. Every apex/speed derivation over that
+ * trajectory is a well-formed ZERO, and a zero is what shipped: `jumpApex: 0`,
+ * `timeToApex: 0`, both certified by a structurally valid source.
+ *
+ * So the degenerate case has to be NAMED rather than derived. This predicate is what
+ * names it; the producer omits the metric with a reason instead of writing the zero.
+ */
+export function isStaticTrajectory(
+  samples: readonly FeelTrajectorySample[],
+  epsilon = TRAJECTORY_STATIC_EPSILON_U,
+): boolean {
+  if (samples.length === 0) return true;
+  const { x, y } = samples[0];
+  for (const s of samples) {
+    if (Math.abs(s.x - x) > epsilon) return false;
+    if (Math.abs(s.y - y) > epsilon) return false;
   }
   return true;
 }
@@ -95,15 +178,53 @@ export function deriveJumpApex(samples: FeelTrajectorySample[]): number {
   return peakY - startY;
 }
 
-/** Milliseconds from the first sample to the first sample reaching peak Y. */
-export function deriveTimeToApex(samples: FeelTrajectorySample[]): number {
-  const startT = samples[0].tMs;
-  let peakY = samples[0].y;
-  let peakT = startT;
-  for (const s of samples) {
-    if (s.y > peakY) {
-      peakY = s.y;
-      peakT = s.tMs;
+/**
+ * TIME TO APEX, MEASURED FROM LAUNCH (E6 finding, TideRunner live run).
+ *
+ * The old definition was "first sample → first sample reaching peak Y", which is
+ * only the controller's time-to-apex when the capture STARTS at the launch. The feel
+ * producer's jump leg does not: it prepends a 12-tick settle phase so the player is
+ * at rest on known ground before the key goes in, and the injected press then takes
+ * about another tick to land. On the live run that prefix was 208.33ms of a 533.33ms
+ * reading, and a controller whose real rise takes ~308ms was graded 533.33ms against
+ * a 325ms +/-10% target: a FAIL manufactured entirely by the capture's own shape.
+ *
+ * THE ANCHOR. The launch SAMPLE is the first sample whose y has risen more than
+ * `SWEEP_RISE_EPSILON_U` above the pre-launch baseline (the same epsilon the sweep
+ * primitives use for "the jump registered"). That sample already reflects a completed
+ * physics step under launch velocity, so the launch INSTANT precedes it; anchoring
+ * there would under-read by a whole tick. The clock therefore starts at the sample
+ * BEFORE it: the last reading still at the pre-launch baseline, which is the last
+ * instant at which the player had not yet launched.
+ *
+ * Cross-checked against the live jump arc: per-tick rise 0.225u decaying by 0.012u
+ * per tick gives v0 = 13.5 u/s and g = 43.2 u/s^2, so the analytic v0/g is 312.5ms.
+ * The takeoff anchor reads 308.33ms (half a sample low); the risen-sample anchor
+ * reads 300.00ms (a tick and a half low); the old first-sample anchor read 533.33ms.
+ *
+ * A trajectory that never rises past the epsilon has no launch to measure from and
+ * returns null, never a length of settle prefix reported as a rise time.
+ */
+export function deriveTimeToApex(samples: FeelTrajectorySample[]): number | null {
+  const baseline = samples[0].y;
+  let launchIndex: number | null = null;
+  for (let i = 1; i < samples.length; i += 1) {
+    if (samples[i].y > baseline + SWEEP_RISE_EPSILON_U) {
+      launchIndex = i;
+      break;
+    }
+  }
+  if (launchIndex === null) return null;
+  // The step that produced `launchIndex` is the one the launch velocity was applied
+  // on, so the clock starts at the reading that step began from.
+  const startT = samples[launchIndex - 1].tMs;
+
+  let peakY = samples[launchIndex].y;
+  let peakT = samples[launchIndex].tMs;
+  for (let i = launchIndex; i < samples.length; i += 1) {
+    if (samples[i].y > peakY) {
+      peakY = samples[i].y;
+      peakT = samples[i].tMs;
     }
   }
   return peakT - startT;
@@ -1295,9 +1416,14 @@ export function deriveInputLatency(
  */
 export function deriveMetric(
   metric: string,
-  samples: FeelTrajectorySample[],
+  rawSamples: FeelTrajectorySample[],
   onsetMs?: number,
 ): number | null {
+  // Exact duplicate readings carry no information and cannot move any value below,
+  // but a single one would make a per-interval derivation divide by a zero dt. They
+  // are collapsed once, here, so every calculator sees a strictly-ordered trajectory
+  // (the raw samples stay in the evidence file untouched).
+  const samples = collapseExactDuplicateSamples(rawSamples);
   switch (metric) {
     case "jumpApex":
       return deriveJumpApex(samples);

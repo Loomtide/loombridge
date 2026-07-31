@@ -222,6 +222,47 @@ namespace UnityBridge.Tests
             Assert.AreEqual(ErrorCodes.INVALID_PARAMS, ex.Code);
         }
 
+        [Test]
+        public void VerifyManifest_ObjectShapedManifest_RefusesWithInvalidParams()
+        {
+            // A caller that passes {"manifest": {...}} used to hit a raw Newtonsoft
+            // InvalidCastException inside the handler, which lands a Unity console ERROR
+            // and poisons console-clean for the rest of the editor session. It must be a
+            // structured refusal naming the shape expected.
+            var parameters = new JObject
+            {
+                ["manifest"] = new JObject { ["name"] = "Player", ["type"] = "GameObject" },
+            };
+
+            var ex = Assert.Throws<BridgeException>(() => ManifestVerification.Verify(parameters));
+            Assert.AreEqual(ErrorCodes.INVALID_PARAMS, ex.Code);
+            StringAssert.Contains("must be a JSON ARRAY", ex.Message);
+            StringAssert.Contains("object", ex.Message);
+
+            // POSITIVE CONTROL: the SAME entry inside an array is accepted, so the
+            // refusal is about the shape and nothing else.
+            new GameObject("Player");
+            var wrapped = new JObject
+            {
+                ["manifest"] = new JArray { new JObject { ["name"] = "Player", ["type"] = "GameObject" } },
+            };
+            Assert.IsTrue(ManifestVerification.Verify(wrapped).Value<bool>("all_ok"));
+        }
+
+        [Test]
+        public void VerifyManifest_ObjectShapedMatching_RefusesWithInvalidParams()
+        {
+            var parameters = new JObject
+            {
+                ["manifest"] = new JArray { new JObject { ["name"] = "Player" } },
+                ["matching"] = new JArray { "regex" },
+            };
+
+            var ex = Assert.Throws<BridgeException>(() => ManifestVerification.Verify(parameters));
+            Assert.AreEqual(ErrorCodes.INVALID_PARAMS, ex.Code);
+            StringAssert.Contains("must be a JSON OBJECT", ex.Message);
+        }
+
         // ─────────────────────────────────────────────
         // Helpers
         // ─────────────────────────────────────────────

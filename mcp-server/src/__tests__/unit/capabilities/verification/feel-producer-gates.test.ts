@@ -83,17 +83,29 @@ function coyoteSweep(thresholdTicks: number): SweepTrialEcho[] {
 const SWEEP = coyoteSweep(6);
 const SWEEP_VALUE = deriveSweepMetric("coyoteTime", SWEEP, DT).windowSeconds!;
 
+/**
+ * The sweep's cadence pair, summed off the TRIALS rather than typed: a sweep source's
+ * `sampleCount`/`durationMs` aggregate its trial windows, and the fixture has to be
+ * the shape the producer really writes or it proves nothing about the check. Each of
+ * the 12 trials is 61 samples spanning 1000ms, so the pair is 732 samples over
+ * 12000ms with 12 fenceposts, which re-derives exactly 60fps.
+ */
+const SWEEP_SAMPLE_COUNT = SWEEP.reduce((sum, t) => sum + t.samples.length, 0);
+const SWEEP_DURATION_MS = SWEEP.reduce((sum, t) => sum + (t.samples[t.samples.length - 1].tMs - t.samples[0].tMs), 0);
+const SWEEP_EFFECTIVE_FPS = (SWEEP_SAMPLE_COUNT - SWEEP.length) / (SWEEP_DURATION_MS / 1000);
+
 function sweepSource(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
     source: "runtime.capture_input_motion",
     producedBy: "loombridge-capture",
     derivation: "input-bisection",
     measuredMetrics: ["coyoteTime"],
-    sampleCount: 732,
-    durationMs: 12200,
+    sampleCount: SWEEP_SAMPLE_COUNT,
+    durationMs: SWEEP_DURATION_MS,
+    windowCount: SWEEP.length,
     captureFps: 60,
     requestedCaptureFps: 60,
-    effectiveCaptureFps: 59.93,
+    effectiveCaptureFps: Math.round(SWEEP_EFFECTIVE_FPS * 1e4) / 1e4,
     measuredAt: "2026-07-30T00:00:00.000Z",
     projectFixedTimestepBeforeMeasurement: DT,
     measurementFixedTimestep: DT,

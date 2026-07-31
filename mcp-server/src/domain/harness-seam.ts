@@ -49,6 +49,49 @@ export interface FeelSeamKeys {
   dash?: string;
 }
 
+/**
+ * THE RUNWAY (E6 finding, TideRunner live run).
+ *
+ * The run leg holds the move key for a fixed number of physics ticks and the coyote
+ * calibration walks the same way. Both were written with no notion of level geometry:
+ * 90 ticks at 7 u/s is 10.5 units of travel, and on the first real level that had
+ * hazards it drove the player into spikes three times, spent every heart, and the
+ * game's own modal end state froze the rest of the session (the next run measured a
+ * corpse: 218 samples at one point).
+ *
+ * So the RUNWAY is a fact about the level, and facts about the project's wiring live
+ * here. Both fields are OPTIONAL and the defaults are exactly today's behaviour, so no
+ * existing contract changes meaning:
+ *
+ *   - `ticks`     bounds BOTH the run leg's hold and the coyote sweep's calibration
+ *                 walk (which is what the trial walks are placed inside, so bounding
+ *                 the calibration bounds the whole sweep). Travel is
+ *                 `ticks × runSpeed × fixedTimestep`, so a level with 4 clear units
+ *                 at 7 u/s wants ~34 ticks.
+ *   - `direction` which way the safe runway lies. `-1` injects `keys.moveLeft` for
+ *                 those legs and drives `fields.moveX` negative for the seam proof;
+ *                 declaring it therefore REQUIRES `keys.moveLeft`.
+ *
+ * Neither field can change a MEASURED value: `runSpeed` is |Δx|/Δt and the sweep
+ * derivations read |dx|, so a leftward runway measures the same number as a rightward
+ * one. This is a safety bound on where the harness drives the player, not a knob on
+ * what it reports.
+ */
+export interface FeelSeamRunLeg {
+  /** Physics ticks of hold for the run leg and the coyote calibration walk. */
+  ticks?: number;
+  /** Which way the safe runway lies: `1` right (default), `-1` left. */
+  direction?: 1 | -1;
+}
+
+/** Bounds on `runLeg.ticks`. Below 12 ticks the run window is shorter than the
+ * settle prefix and an acceleration ramp IS the whole measurement; above 600 the leg
+ * runs ten seconds and any level's runway has ended. Outside the range is a refusal,
+ * never a clamp: a silently clamped value would measure something the contract did
+ * not ask for. */
+export const RUN_LEG_MIN_TICKS = 12;
+export const RUN_LEG_MAX_TICKS = 600;
+
 export interface FeelSeam {
   /** Locator of the player object the captures measure, e.g. "Level:/Player". */
   playerLocator: string;
@@ -64,6 +107,8 @@ export interface FeelSeam {
   inputReaderComponent: string;
   fields: FeelSeamFields;
   keys: FeelSeamKeys;
+  /** Optional runway bound for the horizontal legs. Absent keeps today's defaults. */
+  runLeg?: FeelSeamRunLeg;
 }
 
 /**
@@ -155,9 +200,21 @@ export const FEEL_SEAM_TEMPLATE = `  "harness": {
       "controllerComponent": "PlayerController",
       "inputReaderComponent": "PlayerInputReader",
       "fields": { "moveX": "moveX", "jumpHeld": "jumpHeld", "dashHeld": "dashHeld" },
-      "keys": { "jump": "Space", "moveRight": "D", "jumpCut": "Space", "dash": "LeftShift" }
+      "keys": { "jump": "Space", "moveRight": "D", "moveLeft": "A", "jumpCut": "Space", "dash": "LeftShift" },
+      "runLeg": { "ticks": 90, "direction": 1 }
     }
   }`;
+
+/**
+ * The note printed under the template. `runLeg` is optional and its defaults are
+ * today's behaviour, so the template shows it but the refusal has to say it is not
+ * required: otherwise an operator adds a bound they have not measured.
+ */
+export const FEEL_SEAM_RUNLEG_NOTE =
+  `"runLeg" is OPTIONAL (defaults: ticks 90, direction 1). It bounds how far the run leg and the ` +
+  `coyote calibration walk drive the player, in physics ticks (travel = ticks x runSpeed x fixedTimestep), and ` +
+  `which way they drive. Set it when the level has a hazard or a ledge inside the default 90-tick runway; ` +
+  `direction -1 also requires keys.moveLeft. It cannot change a measured value.`;
 
 /**
  * The exact JSON the playability observer needs. Emitted verbatim inside its
@@ -200,8 +257,59 @@ function refuse(what: string): FeelSeamResolution {
       `REFUSED: ${what}. The feel recipe drives this game's controller and cannot guess the seam ` +
       "(which component reads input, which fields it writes, which keys drive it). Add it to " +
       ".loombridge/ACCEPTANCE.json:\n" +
-      FEEL_SEAM_TEMPLATE,
+      FEEL_SEAM_TEMPLATE +
+      `\n\n${FEEL_SEAM_RUNLEG_NOTE}`,
   };
+}
+
+/**
+ * Resolve the optional runway bound, or refuse. Refuse-don't-clamp: an out-of-range
+ * `ticks` means the operator meant something the harness will not do, and silently
+ * substituting 90 would drive the player down a runway they said was not there.
+ */
+function resolveRunLeg(
+  seam: Record<string, unknown>,
+  keys: Record<string, unknown>,
+): { ok: true; runLeg?: FeelSeamRunLeg } | { ok: false; what: string } {
+  const raw = seam.runLeg;
+  if (raw === undefined) return { ok: true };
+  if (!isRecord(raw)) return { ok: false, what: "`harness.feelSeam.runLeg` is not an object" };
+
+  const out: FeelSeamRunLeg = {};
+  const ticks = raw.ticks;
+  if (ticks !== undefined) {
+    if (typeof ticks !== "number" || !Number.isInteger(ticks)) {
+      return { ok: false, what: "`harness.feelSeam.runLeg.ticks` must be a whole number of physics ticks" };
+    }
+    if (ticks < RUN_LEG_MIN_TICKS || ticks > RUN_LEG_MAX_TICKS) {
+      return {
+        ok: false,
+        what:
+          `\`harness.feelSeam.runLeg.ticks\` is ${ticks}, outside [${RUN_LEG_MIN_TICKS}, ${RUN_LEG_MAX_TICKS}]. ` +
+          "Below the floor the hold is shorter than the settle prefix and an acceleration ramp IS the whole " +
+          "measurement; above the ceiling the leg drives for ten seconds and no level's runway is that long",
+      };
+    }
+    out.ticks = ticks;
+  }
+
+  const direction = raw.direction;
+  if (direction !== undefined) {
+    if (direction !== 1 && direction !== -1) {
+      return { ok: false, what: "`harness.feelSeam.runLeg.direction` must be 1 (right) or -1 (left)" };
+    }
+    if (direction === -1 && !isName(keys.moveLeft)) {
+      return {
+        ok: false,
+        what:
+          "`harness.feelSeam.runLeg.direction` is -1, so the keyed legs inject `keys.moveLeft`, and the seam " +
+          "declares none. Add `keys.moveLeft` (the key that moves the player left)",
+      };
+    }
+    out.direction = direction;
+  }
+
+  return { ok: true, ...(Object.keys(out).length > 0 ? { runLeg: out } : {}) };
 }
 
 /**
@@ -233,6 +341,8 @@ export function resolveFeelSeam(contract: unknown): FeelSeamResolution {
 
   const f = fields as Record<string, unknown>;
   const k = keys as Record<string, unknown>;
+  const runLeg = resolveRunLeg(seam, k);
+  if (!runLeg.ok) return refuse(runLeg.what);
   return {
     ok: true,
     seam: {
@@ -251,6 +361,7 @@ export function resolveFeelSeam(contract: unknown): FeelSeamResolution {
         ...(isName(k.jumpCut) ? { jumpCut: k.jumpCut.trim() } : {}),
         ...(isName(k.dash) ? { dash: k.dash.trim() } : {}),
       },
+      ...(runLeg.runLeg ? { runLeg: runLeg.runLeg } : {}),
     },
   };
 }

@@ -12,11 +12,38 @@
  * check still passed. So the gate no longer grades the declared number alone. It
  * RE-DERIVES the cadence the run actually achieved from the source's own echoed
  * `sampleCount` and measurement window (`durationMs`, or the `samples[].tMs`
- * span when the op did not echo one) and refuses a divergence beyond ONE TICK of
- * the declared rate. One tick is the exact tolerance because it is also the
- * endpoint convention's whole ambiguity: N samples over a window span N-1
- * intervals, so an honest capture lands within one sample either way while an
- * order-of-magnitude lie cannot.
+ * span when the op did not echo one).
+ *
+ * THE ARITHMETIC, corrected (E6 finding: the first live run failed this check on
+ * three honest sources). Three things were wrong and each is fixed below:
+ *
+ *  (a) THE FENCEPOST WAS SLACK, NOT STRUCTURE. A capture that samples at `fps`
+ *      across a window of `span` emits `fps*span + 1` samples: the endpoints are
+ *      both sampled, so N samples span N-1 intervals. The old check compared N
+ *      against `fps*span` and absorbed the missing sample with a one-sample
+ *      TOLERANCE, which meant a real one-sample cadence error was also free. The
+ *      fencepost is now part of the expectation, and the tolerance shrinks to the
+ *      quantization below. Strictly stronger in both directions.
+ *
+ *  (b) ONE FENCEPOST PER WINDOW. A sweep source aggregates N independent capture
+ *      windows into ONE `sampleCount`/`durationMs` pair (ten trials on the live
+ *      run), and each window sampled both of its endpoints, so the structural
+ *      count is `fps*span + windows`. `windows` is NOT taken from a declared
+ *      field: it is COUNTED from the retained `trials[]`, so it cannot be inflated
+ *      to buy slack. A source that also DECLARES `windowCount` must have declared
+ *      the same number the trials show, or it is refused: the file states what it
+ *      did AND the statement is bound to the evidence.
+ *
+ *  (c) THE ECHO IS ROUNDED. `durationMs` and every `samples[].tMs` arrive rounded
+ *      to two decimals, so the window carries up to 0.005ms of quantization per
+ *      rounded value, which at 120fps is 6e-4 of a sample. The tolerance is that
+ *      quantity, DERIVED (`cadenceRoundingSlackSamples`), not a magic 1.01.
+ *
+ * An exact duplicate sample (the bridge emitting one reading twice under one tMs,
+ * which `collapseExactDuplicateSamples` absorbs on the derivation side) adds a
+ * sample without adding a window, so the retained samples are scanned for those too
+ * and each one is allowed. Again structural: only duplicates the file itself still
+ * carries are allowed for.
  *
  * A source that echoes NEITHER a window nor a sample count carries no cadence
  * evidence at all, and is refused rather than skipped (the same posture the
@@ -69,12 +96,29 @@ function timestepCheck(
 }
 
 /**
- * Divergence tolerance for the effective-cadence re-derivation, in SAMPLES.
- * Exactly one tick: `1 + eps` so a capture that differs only by the endpoint
- * convention (N samples spanning N-1 intervals) passes, and anything larger does
- * not.
+ * Half of the bridge's timing quantum. Every `tMs` and every `durationMs` the ops
+ * echo is rounded to TWO DECIMALS (live: 1808.33, 1508.33, 13416.67), so a rounded
+ * millisecond value sits within 0.005ms of the truth.
  */
-const CADENCE_TOLERANCE_SAMPLES = 1 + 1e-6;
+const TMS_ROUNDING_HALF_MS = 0.005;
+
+/**
+ * The cadence tolerance, in SAMPLES, DERIVED from that quantum rather than picked.
+ *
+ * A window of W independent captures contributes at most `2W` rounded endpoint
+ * timestamps (each window's span is a difference of two of them) plus one more
+ * rounding when the producer writes the summed `durationMs`. Multiplying that
+ * millisecond error by the declared sampling rate converts it to samples:
+ *
+ *     slack = fps * (0.005ms * (2W + 1)) / 1000
+ *
+ * At 120fps over one window that is 1.8e-3 samples; at 60fps over the live sweep's
+ * ten windows, 6.3e-3. Both are three orders of magnitude below the ONE SAMPLE a
+ * genuine off-by-one cadence error costs, so the check keeps its teeth.
+ */
+function cadenceRoundingSlackSamples(declaredFps: number, windows: number): number {
+  return (declaredFps * TMS_ROUNDING_HALF_MS * (2 * windows + 1)) / 1000;
+}
 
 /** One source's cadence, re-derived from its own echoes (never from the label). */
 interface EffectiveCadence {
@@ -84,14 +128,61 @@ interface EffectiveCadence {
   windowMs: number | null;
   /** Where the window came from, for the report. */
   windowFrom: "durationMs" | "samples[].tMs span" | null;
+  /** Independent capture windows aggregated into this source, COUNTED from its own arrays. */
+  windows: number;
+  /** Exact duplicate readings still present in the retained samples. */
+  duplicateSamples: number;
   effectiveFps: number | null;
   expectedSamples: number | null;
   /** |sampleCount - expectedSamples|, in samples. */
   divergenceSamples: number | null;
+  /** The rounding-derived tolerance this source was graded against, in samples. */
+  slackSamples: number | null;
 }
 
 function positive(value: unknown): number | null {
   return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : null;
+}
+
+interface CadenceSample {
+  tMs?: unknown;
+  x?: unknown;
+  y?: unknown;
+  z?: unknown;
+}
+
+function sampleArray(value: unknown): CadenceSample[] | null {
+  return Array.isArray(value) ? (value as CadenceSample[]) : null;
+}
+
+/** Exact consecutive duplicates inside one sample array (same tMs AND same position). */
+function countExactDuplicates(samples: CadenceSample[]): number {
+  let count = 0;
+  for (let i = 1; i < samples.length; i += 1) {
+    const a = samples[i - 1];
+    const b = samples[i];
+    if (a?.tMs === b?.tMs && a?.x === b?.x && a?.y === b?.y && a?.z === b?.z) count += 1;
+  }
+  return count;
+}
+
+/**
+ * The independent capture windows a source aggregates, and the duplicate readings it
+ * still carries, both COUNTED from the source's own retained arrays. A sweep source
+ * retains one entry per trial; anything else is one window.
+ */
+function structuralWindows(source: FeelMeasurementSource): { windows: number; duplicateSamples: number } {
+  const trials = Array.isArray(source.trials) ? (source.trials as { samples?: unknown }[]) : null;
+  if (trials !== null && trials.length > 0) {
+    let duplicateSamples = 0;
+    for (const trial of trials) {
+      const samples = sampleArray(trial?.samples);
+      if (samples !== null) duplicateSamples += countExactDuplicates(samples);
+    }
+    return { windows: trials.length, duplicateSamples };
+  }
+  const samples = sampleArray(source.samples);
+  return { windows: 1, duplicateSamples: samples === null ? 0 : countExactDuplicates(samples) };
 }
 
 /**
@@ -99,15 +190,30 @@ function positive(value: unknown): number | null {
  * fields the bridge echoed back, never the reported metric values.
  */
 export function effectiveCadenceFor(source: FeelMeasurementSource): EffectiveCadence {
+  const { windows, duplicateSamples } = structuralWindows(source);
   const empty: EffectiveCadence = {
     refusal: null,
     sampleCount: null,
     windowMs: null,
     windowFrom: null,
+    windows,
+    duplicateSamples,
     effectiveFps: null,
     expectedSamples: null,
     divergenceSamples: null,
+    slackSamples: null,
   };
+
+  // A DECLARED windowCount is welcome (the file says what it did) but it is graded
+  // against the count its own retained arrays show, never trusted in their place:
+  // an unbound windowCount would be a self-declared knob on the gate's tolerance.
+  const declaredWindows = source.windowCount;
+  if (declaredWindows !== undefined && declaredWindows !== windows) {
+    return {
+      ...empty,
+      refusal: `declares windowCount ${JSON.stringify(declaredWindows)} while its own retained evidence shows ${windows} window(s)`,
+    };
+  }
 
   const declaredFps = positive(source.captureFps);
   const sampleCount = positive(source.sampleCount) ?? (source.samples && source.samples.length > 0 ? source.samples.length : null);
@@ -139,16 +245,25 @@ export function effectiveCadenceFor(source: FeelMeasurementSource): EffectiveCad
     };
   }
 
-  const effectiveFps = sampleCount! / (windowMs! / 1000);
-  const expectedSamples = declaredFps! * (windowMs! / 1000);
+  // N samples over W windows span N - W intervals, and an exact duplicate reading
+  // adds a sample without adding an interval. Both corrections are structural, so
+  // this is the SAME arithmetic the producer records as `effectiveCaptureFps`: the
+  // gate is no longer re-deriving a different number and calling the producer's
+  // correct one self-declared.
+  const intervals = sampleCount! - windows - duplicateSamples;
+  const effectiveFps = intervals / (windowMs! / 1000);
+  const expectedSamples = declaredFps! * (windowMs! / 1000) + windows + duplicateSamples;
   return {
     refusal: null,
     sampleCount,
     windowMs,
     windowFrom,
+    windows,
+    duplicateSamples,
     effectiveFps,
     expectedSamples,
     divergenceSamples: Math.abs(sampleCount! - expectedSamples),
+    slackSamples: cadenceRoundingSlackSamples(declaredFps!, windows),
   };
 }
 
@@ -161,7 +276,7 @@ function effectiveCadenceCheck(sources: FeelMeasurementSource[]): GateCheck {
   const rows = sources.map((source, index) => ({ index, source, cadence: effectiveCadenceFor(source) }));
   const unbacked = rows.filter((row) => row.cadence.refusal !== null);
   const diverged = rows.filter(
-    (row) => row.cadence.refusal === null && row.cadence.divergenceSamples! > CADENCE_TOLERANCE_SAMPLES,
+    (row) => row.cadence.refusal === null && row.cadence.divergenceSamples! > row.cadence.slackSamples!,
   );
 
   const actual =
@@ -170,22 +285,27 @@ function effectiveCadenceCheck(sources: FeelMeasurementSource[]): GateCheck {
         cadence.refusal !== null
           ? `${index}:${source.source ?? "(missing source)"} NOT RE-DERIVABLE (${cadence.refusal})`
           : `${index}:${source.source ?? "(missing source)"} declared=${source.captureFps}fps, effective=${cadence.effectiveFps!.toFixed(2)}fps ` +
-            `(${cadence.sampleCount} samples / ${cadence.windowMs!.toFixed(2)}ms from ${cadence.windowFrom}), ` +
-            `expected ${cadence.expectedSamples!.toFixed(2)} samples, off by ${cadence.divergenceSamples!.toFixed(2)}`,
+            `(${cadence.sampleCount} samples / ${cadence.windowMs!.toFixed(2)}ms from ${cadence.windowFrom}` +
+            `${cadence.windows > 1 ? `, ${cadence.windows} windows` : ""}` +
+            `${cadence.duplicateSamples > 0 ? `, ${cadence.duplicateSamples} duplicate sample(s)` : ""}), ` +
+            `expected ${cadence.expectedSamples!.toFixed(4)} samples, off by ${cadence.divergenceSamples!.toFixed(4)} ` +
+            `(rounding slack ${cadence.slackSamples!.toFixed(4)})`,
       )
       .join("; ") || "(none)";
 
   const ok = unbacked.length === 0 && diverged.length === 0;
   return {
     id: "physics-timestep.effectiveCadence",
-    expected: `re-derived sampling cadence within ${CADENCE_TOLERANCE_SAMPLES.toFixed(0)} sample of the declared captureFps`,
+    expected:
+      "sampleCount === captureFps x window + one fencepost PER capture window (+ any exact duplicate readings), " +
+      "within the rounding slack the bridge's 2-decimal timestamps imply",
     actual,
     status: ok ? "pass" : "fail",
     detail: ok
       ? "Every source's echoed sampleCount and measurement window re-derive the cadence it declares."
       : unbacked.length > 0
         ? `${unbacked.length} source(s) carry no re-derivable cadence evidence (need captureFps + sampleCount + durationMs, or samples[] with tMs); a self-declared captureFps cannot be graded against itself, so this is refused, not skipped (ledger L47).`
-        : `${diverged.length} source(s) sampled at a cadence more than one tick from the captureFps they declare; the file's timing convention does not describe the run that produced it (ledger L47).`,
+        : `${diverged.length} source(s) sampled at a cadence the captureFps they declare does not explain, beyond the bridge's own timestamp rounding; the file's timing convention does not describe the run that produced it (ledger L47).`,
   };
 }
 
@@ -225,11 +345,15 @@ function recordedCadencePairCheck(sources: FeelMeasurementSource[]): GateCheck {
       problems.push(`${label} records an effectiveCaptureFps that cannot be re-derived (${cadence.refusal ?? "no cadence"})`);
       continue;
     }
-    // One sample of slack: N samples span N-1 intervals, so the two honest endpoint
-    // conventions differ by exactly that and nothing larger.
+    // The producer and this gate now run the SAME arithmetic (samples minus one
+    // fencepost per window, over the echoed span), so the two numbers must agree to
+    // within the quantization that separates them: the same rounding slack the
+    // cadence check derives, converted from samples to fps, plus the 4-decimal
+    // rounding the producer writes the recorded value with.
     const spread = Math.abs(effective - cadence.effectiveFps);
-    const oneSample = cadence.windowMs === null ? 0 : 1000 / cadence.windowMs;
-    if (spread > oneSample + 1e-6) {
+    const windowSec = cadence.windowMs! / 1000;
+    const tolerance = cadence.slackSamples! / windowSec + 5e-5;
+    if (spread > tolerance) {
       problems.push(
         `${label} records effectiveCaptureFps ${effective.toFixed(2)} but its own echoes re-derive ${cadence.effectiveFps.toFixed(2)}`,
       );
