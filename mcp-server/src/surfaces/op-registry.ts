@@ -3324,6 +3324,68 @@ function buildOps(): OpDef[] {
     inputSchema: { type: "object", properties: {} },
   });
 
+  // ───── the bridge op journal (evidence-trust wave, stage B1) ─────
+  // A bounded in-memory record of every op the executor dispatched, ops.batch children
+  // INDIVIDUALLY. It exists because a self-consistent observation buffer with forged
+  // producer markers is undetectable offline: the journal is a second, independently
+  // produced record that a forged one has to agree with.
+
+  ops.push({
+    command: "journal.stats",
+    toolName: "unity_journal_stats",
+    description:
+      "Counters for the bridge OP JOURNAL, the bounded in-memory record of every op this editor " +
+      "dispatched: journalInstanceId (a GUID minted when the journal came up), epochUtc, seq (the last " +
+      "sequence number assigned), totalJournaled (equal to seq by construction, so a consumer can assert " +
+      "the invariant), droppedEntries (non-zero means the ring wrapped and the record has a hole in it), " +
+      "failedAppends (appends that threw and were swallowed so the op could still run), capacity, " +
+      "oldestRetainedSeq, nowTMs and editorSessionId. Call it at the OPEN of an observation window and " +
+      "keep the id and the seq: the journal does NOT survive a domain reload, and a drain that comes back " +
+      "with a different journalInstanceId is a reset, which must be refused rather than read as a clean " +
+      "window. Read-only and idempotent (it journals itself, like every other op).",
+    inputSchema: { type: "object", properties: {} },
+  });
+
+  ops.push({
+    command: "journal.window",
+    toolName: "unity_journal_window",
+    description:
+      "A slice of the bridge OP JOURNAL, oldest first. Select EITHER a sequence range (fromSeq, optional " +
+      "inclusive toSeq) OR a time offset (fromTMs, milliseconds since the journal's epoch); supplying both " +
+      "is refused, and with neither the whole retained ring is returned. Each entry is { seq, tMs, " +
+      "frameCount (the frame the op was DISPATCHED on), effectFrameCount (the frame an ASYNC op's " +
+      "completion callback ran on; null for a synchronous op, which has no separate effect frame), " +
+      "opName ('category.op'), opKind ('write' | 'read' | 'unknown' for an op this bridge's classification " +
+      "table has never heard of), targetDescriptor (the resolved 'Scene:/Path/To/Object' of a write op's " +
+      "primary locator target; null for reads, for writes with no locator, and for targets that did not " +
+      "resolve), paramsSha256 (SHA-256 hex of the UTF-8 bytes of the params object serialized with no " +
+      "whitespace, in wire key order: it cross-binds an entry to the caller's own op log; params " +
+      "themselves are never stored) }. ops.batch children are journaled INDIVIDUALLY, each under its own " +
+      "op name between the parent entry and the next top-level op. The response repeats the journal.stats " +
+      "counters plus 'wrapped': true means the REQUESTED range fell off the ring, so the slice is not the " +
+      "whole story. The journal is wiped by a domain reload and comes back with a new journalInstanceId.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        fromSeq: {
+          type: "integer",
+          minimum: 0,
+          description: "First sequence number to return (inclusive). Pair with the seq captured from journal.stats at window open.",
+        },
+        toSeq: {
+          type: "integer",
+          minimum: 0,
+          description: "Last sequence number to return (inclusive). Only meaningful with fromSeq.",
+        },
+        fromTMs: {
+          type: "number",
+          minimum: 0,
+          description: "Return entries at or after this many milliseconds since the journal epoch. Mutually exclusive with fromSeq.",
+        },
+      },
+    },
+  });
+
   // ───── ops discovery (RCL-T07) ─────
   // Handled SERVER-SIDE (never routed to Unity): they read the op registry so an agent can
   // enumerate what exists instead of probing by firing deliberately-wrong ops.

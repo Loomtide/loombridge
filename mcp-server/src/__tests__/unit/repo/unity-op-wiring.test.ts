@@ -160,6 +160,58 @@ test("unity op wiring: the observe category's ops all appear in the handler the 
   }
 });
 
+test("unity op wiring: the journal category's ops all appear in the handler the bootstrap names", () => {
+  // The op journal is a NEW category (evidence-trust B1): two ops behind one string
+  // that no compiler in either language connects, and the ops exist so a consumer can
+  // bind evidence to a run. A `journal.window` that answers NOT_FOUND would surface as
+  // "this bridge is too old", which is the WRONG diagnosis and the expensive kind.
+  const registered = registeredCategories();
+  const handlerClass = registered.get("journal");
+  assert.ok(handlerClass, "the bootstrap must register the 'journal' category");
+
+  const handlerFile = path.join(BRIDGE_EDITOR, "Handlers", `${handlerClass}.cs`);
+  assert.ok(fs.existsSync(handlerFile), `the bootstrap names ${handlerClass}, which has no file at ${handlerFile}`);
+  const handler = read(handlerFile);
+
+  const registry = new OpRegistry();
+  const journalOps = registry
+    .getAll()
+    .filter((op) => op.command.startsWith("journal."))
+    .map((op) => op.command.slice("journal.".length));
+  assert.deepEqual(journalOps.sort(), ["stats", "window"], "both journal ops must be published");
+
+  for (const op of journalOps) {
+    assert.ok(
+      handler.includes(`case "${op}":`),
+      `${handlerClass}.cs has no \`case "${op}":\`, so a call to journal.${op} answers NOT_FOUND`,
+    );
+  }
+
+  // The ring itself is reached by direct call (same assembly), but the two EXECUTOR
+  // hooks are the load-bearing wiring: journaling only Execute would leave ops.batch a
+  // laundering wrapper (ledger H5(a)), because a batch child reaches its handler
+  // through ExecuteCommandInline and never through Execute. LITMUS: delete either
+  // Append call and this fails.
+  const executor = read(path.join(BRIDGE_EDITOR, "Core", "OpExecutor.cs"));
+  const executeBody = executor.slice(
+    executor.indexOf("public void Execute("),
+    executor.indexOf("public JObject ExecuteCommandInline("),
+  );
+  const inlineBody = executor.slice(executor.indexOf("public JObject ExecuteCommandInline("));
+  assert.ok(executeBody.length > 0 && inlineBody.length > 0, "OpExecutor must still have both entry points");
+  assert.match(executeBody, /OpJournal\.Append\(/, "OpExecutor.Execute must append to the op journal");
+  assert.match(
+    inlineBody,
+    /OpJournal\.Append\(/,
+    "OpExecutor.ExecuteCommandInline must append to the op journal, or ops.batch children are invisible (H5(a))",
+  );
+  assert.match(
+    executeBody,
+    /OpJournal\.RecordEffectFrame\(/,
+    "the async completion callbacks must patch the effect frame",
+  );
+});
+
 test("unity op wiring: the aligned settle's pin recovery is wired into the bootstrap", () => {
   // BX7: the leaked-pin recovery is a call the bootstrap has to MAKE. Defining
   // ReplayCapturePin.RestoreLeakedPin() and never calling it would leave an editor pinned in
