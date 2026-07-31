@@ -16,6 +16,33 @@ namespace UnityBridge.Introspection
     public static class BoundsCapture
     {
         /// <summary>
+        /// Push pending transform changes into the physics engines BEFORE any collider AABB
+        /// is read.
+        ///
+        /// WHY THIS EXISTS (the false-evidence path it closes). Collider2D.bounds is served
+        /// from the physics world, not from the Transform. In EDIT MODE nothing runs a physics
+        /// step, so a collider that was moved through the bridge (scene.set_transform,
+        /// create_object, a parent re-parent) keeps reporting its OLD world AABB until
+        /// something syncs it (historically a scene save plus reopen). A capture taken in that
+        /// window writes real-looking numbers for a collider that is not where they say
+        /// (observed live: a placement.json bound to phantom collider AABBs that no longer
+        /// matched the objects on screen). Reading a stale AABB is worse than failing to read
+        /// one, because it is indistinguishable from a correct read.
+        ///
+        /// SCOPE IS EDIT MODE ON PURPOSE. In play mode the simulation syncs every fixed step,
+        /// so the staleness window is sub-frame; and when Physics2D.autoSyncTransforms is off,
+        /// an out-of-band sync in the middle of a running game shifts colliders relative to the
+        /// simulation and can change contact/trigger events. An introspection op must never
+        /// perturb the game it is measuring, so this is a no-op while playing.
+        /// </summary>
+        private static void SyncPhysicsTransformsForRead()
+        {
+            if (Application.isPlaying) return;
+            Physics2D.SyncTransforms();
+            Physics.SyncTransforms();
+        }
+
+        /// <summary>
         /// Resolves the locator and returns a structured world-bounds readout: transform,
         /// every Collider2D/Collider, and every Renderer (each as a world AABB with
         /// min/max/center/size). Adds convenience fields comparing the visible (renderer)
@@ -24,6 +51,7 @@ namespace UnityBridge.Introspection
         public static JObject Describe(JObject locator, bool includeDebug = false)
         {
             GameObject go = LocatorResolver.Resolve(locator);
+            SyncPhysicsTransformsForRead();
 
             var colliders = new JArray();
             foreach (Collider2D c in go.GetComponents<Collider2D>())
@@ -122,6 +150,9 @@ namespace UnityBridge.Introspection
 
             if (includeColliders)
             {
+                // Same reason as Describe: an unsynced Collider2D reports the AABB it had
+                // before the last edit-mode transform write.
+                SyncPhysicsTransformsForRead();
                 if (includeChildren)
                 {
                     foreach (Collider2D c in go.GetComponentsInChildren<Collider2D>()) Add(c.bounds);

@@ -394,6 +394,13 @@ function buildOps(): OpDef[] {
     toolName: "unity_editor_screenshot",
     description:
       "Take a screenshot of the Scene or Game view. Returns base64-encoded image. " +
+      "NOT THE GAME CAMERA BY DEFAULT: view defaults to 'scene', which captures the EDITOR's " +
+      "Scene view (its own camera, gizmos, whatever the editor window is looking at). A design " +
+      "review run against those frames reviews the editor, not the game (a VLM round graded a " +
+      "set of skybox-and-quads scene-view frames as the game). For frames a player would see, " +
+      "pass view='game', and for a SEQUENCE of gameplay frames prefer " +
+      "unity_runtime_capture_sequence with view='game', which ticks the game loop between " +
+      "captures instead of sampling whatever the editor happens to be showing. " +
       "For named artifacts, pass outputPath (for example captures/start.png or " +
       ".loombridge/captures/start.png); the server writes the screenshot there and returns " +
       "JSON with path/width/height/format/sizeBytes/sha256. Do not scrape trace/artifacts " +
@@ -409,7 +416,13 @@ function buildOps(): OpDef[] {
     inputSchema: {
       type: "object",
       properties: {
-        view: { type: "string", enum: ["scene", "game"], description: "Which editor view to capture (default: scene)" },
+        view: {
+          type: "string",
+          enum: ["scene", "game"],
+          description:
+            "Which editor view to capture (default: scene). 'scene' is the EDITOR's Scene view, not the " +
+            "game camera; pass 'game' for what a player sees.",
+        },
         maxWidth: { type: "number", description: "Maximum width in pixels (default: 1024)" },
         format: { type: "string", enum: ["jpeg", "png"], description: "Image format (default: jpeg)" },
         quality: { type: "number", description: "JPEG quality 1-100 (default: 75)" },
@@ -2328,6 +2341,14 @@ function buildOps(): OpDef[] {
         hold_id: {
           type: "string",
           description: "Held-press token from a prior action='press'; required by action='release'.",
+        },
+        travelPx: {
+          type: "number",
+          description:
+            "action='drag' only: total on-screen travel in pixels. When it exceeds the straight-line " +
+            "from→to distance, the drag oscillates to make up the remainder (a slider that needs more " +
+            "travel than its endpoints span). The replay driver sends this; it was accepted but " +
+            "undocumented until now.",
         },
       },
     },

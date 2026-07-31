@@ -31,7 +31,11 @@
  *   - a manifest entry NO recipe produces                      → exit 0 plus a
  *     named "agent-assembly required" list, printed and written into the
  *     capture report (`CAPTURE_REPORT_FILE`, declared once in domain/capture-manifest.ts);
- *   - an unsafe manifest entry                                 → exit 2.
+ *   - an unsafe manifest entry                                 → exit 2;
+ *   - a present entry that cannot name the run that wrote it (wrong `_provenance.runId`
+ *     OR none at all, E13) is treated exactly like a missing one, and a present entry
+ *     no recipe of this run wrote is reported as `presentFromOtherSources`, never as
+ *     `produced` (E14).
  * The last line always carries `exit=N` in-band (ledger L6/L33/C6: `${PIPESTATUS[0]}`
  * came back empty three times and the run was saved only by verify printing its
  * own exit).
@@ -167,8 +171,24 @@ interface CaptureReport {
     | "none (--out override / no --slice)";
   manifest: string[];
   recipes: RecipeOutcome[];
-  /** Manifest entries a recipe produced and that are on disk. */
+  /**
+   * Manifest entries THIS RUN's recipes actually wrote, tracked from the recipe
+   * outcomes' own returned paths and intersected with what is on disk.
+   *
+   * E14: this used to be `completeness.present`, i.e. "every manifest entry that
+   * exists", which credited the CLI with files it never touched (live: a
+   * drive-connection-written `ui-scan.json` was reported as `produced` by the CLI
+   * run that only wrote `console.json`). "A recipe wrote it" and "a file is there"
+   * are two different claims and now have two different fields. An entry whose bytes
+   * cannot name this run (E13) is never `produced`, whatever a recipe claimed.
+   */
   produced: string[];
+  /**
+   * Manifest entries that are on disk and that NO recipe of this run wrote: leftovers,
+   * agent-assembled evidence, and files another connection produced. Present, but not
+   * this run's work.
+   */
+  presentFromOtherSources: string[];
   /** Manifest entries whose producer RAN but did not land the file (exit 1). */
   producerFailed: string[];
   /**
@@ -296,10 +316,22 @@ export async function runCapture(args: CaptureArgs, deps: CaptureDeps = defaultD
   }
 
   const outcomes: RecipeOutcome[] = [];
+  /**
+   * E14: THE FILES THIS RUN'S RECIPES CLAIM TO HAVE WRITTEN, as absolute paths, taken
+   * from each recipe's own returned paths rather than from the disk. It is the only
+   * source that can distinguish "the CLI produced this" from "this file exists". A
+   * claim recorded here is still intersected with the disk below, so a recipe that
+   * returns a path and lands nothing cannot inflate `produced` (that is `producerFailed`).
+   */
+  const writtenThisRun = new Set<string>();
+  const noteWritten = (...files: string[]): void => {
+    for (const file of files) writtenThisRun.add(path.resolve(file));
+  };
   for (const recipe of dispatch.recipes) {
     try {
       if (recipe === "tiles") {
         const result = await deps.captureTiles({ outDir, ...(args.project ? { project: args.project } : {}), runId });
+        noteWritten(result.consolePath, ...result.provenancedFiles.map((file) => path.join(result.outDir, file)));
         const missing = TILE_CAPTURE_FILES.filter((file) => !result.provenancedFiles.includes(file));
         console.error(
           `[loombridge capture] tiles: invoked GroundTiling.WriteTileCaptures → wrote [${result.provenancedFiles.join(", ") || "(none)"}] ` +
@@ -334,6 +366,7 @@ export async function runCapture(args: CaptureArgs, deps: CaptureDeps = defaultD
           runId,
           ...(args.project ? { project: args.project } : {}),
         });
+        noteWritten(result.feelPath, result.consolePath);
         console.error(
           `[loombridge capture] feel: wrote ${rel(result.feelPath)} (measured ${result.measured.join(", ") || "(nothing)"}) ` +
             `+ ${rel(result.consolePath)} (${result.logCount} log(s))`,
@@ -394,6 +427,7 @@ export async function runCapture(args: CaptureArgs, deps: CaptureDeps = defaultD
           runId,
           ...(args.project ? { project: args.project } : {}),
         });
+        noteWritten(result.playabilityPath, result.consolePath);
         console.error(
           `[loombridge capture] playability: wrote ${rel(result.playabilityPath)} ` +
             `(completionMethod=${result.completionMethod}, ${result.sampleCount} sample(s) over ${result.driveSeconds}s of drive) ` +
@@ -405,6 +439,7 @@ export async function runCapture(args: CaptureArgs, deps: CaptureDeps = defaultD
 
       if (recipe === "console") {
         const result = await deps.captureConsole({ outDir, ...(args.project ? { project: args.project } : {}), runId });
+        noteWritten(result.consolePath);
         console.error(
           `[loombridge capture] console: wrote ${rel(result.consolePath)} ` +
             `(${result.logCount} log(s): ${result.startupCount} startup + ${result.steadyCount} steady, ` +
@@ -422,6 +457,7 @@ export async function runCapture(args: CaptureArgs, deps: CaptureDeps = defaultD
         ...(args.project ? { project: args.project } : {}),
         runId,
       });
+      noteWritten(result.screenRectsPath, result.consolePath);
       console.error(
         `[loombridge capture] framing: wrote ${rel(result.screenRectsPath)} (${result.objectCount} object(s), pixelPerfect=${result.pixelPerfectCaptured}) ` +
           `+ ${rel(result.consolePath)} (${result.logCount} log(s))`,
@@ -456,21 +492,35 @@ export async function runCapture(args: CaptureArgs, deps: CaptureDeps = defaultD
   // leftovers, and player-feel produced nothing at all behind "2/2 present"). A
   // present file whose _provenance.runId names a DIFFERENT run is stale: a producer
   // entry counts as failed, an agent-assembly entry re-enters the required list.
+  //
+  // E13, THE FALSY-SKIP: the wrong-run branch only fired when a runId was PRESENT and
+  // different, so a file with no `_provenance` at all read as fresh and was even counted
+  // as produced. That is the repo's recurring anti-pattern (`else if (x.field && …)`)
+  // wearing a provenance costume: absence skipped the check instead of failing it.
+  // A present manifest entry that cannot name the run that wrote it is STALE-EQUIVALENT
+  // and re-enters the same lists a wrong-run file does. Verified before shipping this:
+  // every CLI producer (framing, console, tiles, feel, playability) stamps `_provenance`
+  // with a REQUIRED runId, so no recipe legitimately writes an unprovenanced file; every
+  // manifest entry is JSON (`GATE_SPECS`), so an unparseable one is unbindable too.
   const staleFromOtherRun: string[] = [];
+  const unprovenanced: string[] = [];
   for (const entry of completeness.present) {
     const absolute = completeness.entries.find((e) => e.entry === entry)?.absolutePath;
     if (!absolute) continue;
+    let fileRun: unknown;
     try {
       const parsed = JSON.parse(await fs.readFile(absolute, "utf-8")) as {
         _provenance?: { runId?: unknown };
       };
-      const fileRun = parsed?._provenance?.runId;
-      if (typeof fileRun === "string" && fileRun.length > 0 && fileRun !== runId) staleFromOtherRun.push(entry);
+      fileRun = parsed?._provenance?.runId;
     } catch {
-      // Unreadable or non-JSON evidence is the gates' business, not the diff's.
+      fileRun = undefined;
     }
+    if (typeof fileRun !== "string" || fileRun.length === 0) unprovenanced.push(entry);
+    else if (fileRun !== runId) staleFromOtherRun.push(entry);
   }
-  const effectiveMissing = [...completeness.missing, ...staleFromOtherRun];
+  const unbound = [...staleFromOtherRun, ...unprovenanced];
+  const effectiveMissing = [...completeness.missing, ...unbound];
   const producerFailed = effectiveMissing.filter((entry) => producerOf(entry) !== null);
   const agentAssemblyRequired = effectiveMissing.filter((entry) => producerOf(entry) === null);
   for (const entry of staleFromOtherRun) {
@@ -479,6 +529,32 @@ export async function runCapture(args: CaptureArgs, deps: CaptureDeps = defaultD
         "this run did not produce it (re-capture or re-assemble it under the minted run).",
     );
   }
+  for (const entry of unprovenanced) {
+    console.error(
+      `[loombridge capture] UNPROVENANCED: ${entry} exists but carries no parseable _provenance.runId, ` +
+        "so nothing binds it to this run: treated exactly like a wrong-run file " +
+        "(re-capture or re-assemble it under the minted run).",
+    );
+  }
+  // E14: `produced` is "a recipe of THIS run says it wrote it" AND "it is on disk" AND
+  // "the bytes on disk name this run". The third clause is not redundant: a recipe's
+  // returned path is a CLAIM, and a recipe that reports success while landing nothing
+  // leaves a previous run's file sitting exactly where its claim points (the E3 shape).
+  // Crediting that to this run is the conflation E14 names, one layer down.
+  const unboundSet = new Set(unbound);
+  const produced = completeness.present.filter((entry) => {
+    if (unboundSet.has(entry)) return false;
+    const absolute = completeness.entries.find((e) => e.entry === entry)?.absolutePath;
+    return absolute !== undefined && writtenThisRun.has(path.resolve(absolute));
+  });
+  const presentFromOtherSources = completeness.present.filter((entry) => !produced.includes(entry));
+  if (presentFromOtherSources.length > 0) {
+    console.error(
+      `[loombridge capture] present but NOT written by this run's recipes: ${presentFromOtherSources.join(", ")}. ` +
+        "Recorded as `presentFromOtherSources`, never as `produced`.",
+    );
+  }
+
   const recipeFailed = outcomes.filter((o) => !o.ok);
 
   let exit = 0;
@@ -493,7 +569,8 @@ export async function runCapture(args: CaptureArgs, deps: CaptureDeps = defaultD
     manifestSource,
     manifest,
     recipes: outcomes,
-    produced: completeness.present,
+    produced,
+    presentFromOtherSources,
     producerFailed,
     agentAssemblyRequired,
     unsafe: completeness.unsafe,
@@ -526,7 +603,8 @@ export async function runCapture(args: CaptureArgs, deps: CaptureDeps = defaultD
     );
   }
   console.error(
-    `[loombridge capture] manifest ${completeness.present.length}/${manifest.length} present` +
+    `[loombridge capture] manifest ${completeness.present.length}/${manifest.length} present ` +
+      `(${produced.length} written by this run's recipes, ${presentFromOtherSources.length} from other sources)` +
       (manifest.length === 0 ? " (no manifest to diff)" : "") +
       (reportPath ? ` → ${rel(reportPath)}` : ""),
   );

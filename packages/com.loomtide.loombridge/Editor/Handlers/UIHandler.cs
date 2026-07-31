@@ -20,8 +20,100 @@ namespace UnityBridge.Handlers
             return false;
         }
 
+        /// <summary>
+        /// The parameters each ui op ACCEPTS, keyed by op name. Kept beside the dispatch so a
+        /// new parameter has to be declared in the same file that reads it.
+        ///
+        /// WHY A CLOSED SET (ledger L114). <c>ui.add_image</c> was called with <c>sprite</c>
+        /// instead of the documented <c>sprite_path</c>. It returned success, created the Image,
+        /// and silently dropped the sprite: the agent then spent turns debugging a "broken"
+        /// sprite import that had never been asked for. The server's argument checker
+        /// deliberately does not reject extra keys ("ops evolve"), and for most ops that is the
+        /// right call, but a CREATION op that quietly ignores half its request produces an object
+        /// that is wrong in a way nothing reports. Refusing names the mistake at the call site.
+        ///
+        /// SCOPE: the ui category only. A bridge-wide guard is a bigger design (some ops take
+        /// pass-through blocks), and this is the category where the silent-drop was observed.
+        /// </summary>
+        private static readonly Dictionary<string, string[]> AcceptedParams =
+            new Dictionary<string, string[]>
+            {
+                ["create_canvas"] = new[] { "name", "render_mode" },
+                ["add_text"] = new[]
+                {
+                    "parent", "name", "text", "text_backend", "font_size", "color", "alignment",
+                    "anchored_position", "size_delta"
+                },
+                ["add_image"] = new[]
+                {
+                    "parent", "name", "color", "sprite_path", "anchored_position", "size_delta"
+                },
+                ["add_button"] = new[]
+                {
+                    "parent", "name", "text", "text_backend", "font_size", "color",
+                    "anchored_position", "size_delta"
+                },
+                ["set_rect_transform"] = new[]
+                {
+                    "locator", "anchor_min", "anchor_max", "anchored_position", "size_delta", "pivot"
+                },
+                ["scan_text_components"] = new[] { "locator" },
+                ["set_text_style"] = new[]
+                {
+                    "locator", "font_size", "color", "font_style", "alignment", "best_fit"
+                },
+                // `travelPx` is read by the drag branch and is NOT in the op's advertised
+                // inputSchema (the replay driver sends it). It is in the accepted set because
+                // the set is enumerated from what the handler READS, not from the schema:
+                // enumerating from the schema alone would have made this guard break the
+                // replay driver on its first drag.
+                ["dispatch_pointer"] = new[]
+                {
+                    "locator", "x", "y", "action", "button", "to_locator", "to_x", "to_y",
+                    "hold_id", "travelPx"
+                },
+                ["get_screen_rects"] = new[] { "locators", "camera" },
+            };
+
+        /// <summary>
+        /// Refuse any parameter key the named op does not read, naming BOTH the unknown keys and
+        /// the accepted set, so the caller can correct the spelling without a docs round trip.
+        /// An op with no declared set is not guarded (never guessed at).
+        /// </summary>
+        /// <summary>
+        /// Transport-level keys any op may carry. `timeoutMs` is resolved by the SERVER (see
+        /// resolveOpTimeoutMs) and forwarded verbatim, so it reaches every handler regardless of
+        /// what the op advertises: refusing it here would turn a working call into an error over
+        /// a parameter the ui layer was never meant to read.
+        /// </summary>
+        private static readonly string[] TransportParams = { "timeoutMs" };
+
+        private static void RequireKnownParams(string opName, JObject parameters)
+        {
+            if (parameters == null) return;
+            if (!AcceptedParams.TryGetValue(opName, out string[] accepted)) return;
+
+            var known = new HashSet<string>(accepted, StringComparer.Ordinal);
+            foreach (string transport in TransportParams)
+                known.Add(transport);
+            var unknown = new List<string>();
+            foreach (JProperty property in parameters.Properties())
+            {
+                if (!known.Contains(property.Name))
+                    unknown.Add(property.Name);
+            }
+            if (unknown.Count == 0) return;
+
+            throw new BridgeException(ErrorCodes.INVALID_PARAMS,
+                $"ui.{opName}: unknown parameter(s) [{string.Join(", ", unknown)}]. " +
+                $"Accepted: [{string.Join(", ", accepted)}]. " +
+                "The op will not silently ignore a parameter it does not read; check the spelling " +
+                "(unity_ops_describe carries the full schema).");
+        }
+
         public JObject HandleOp(string opName, JObject parameters)
         {
+            RequireKnownParams(opName, parameters);
             switch (opName)
             {
                 case "create_canvas":

@@ -427,6 +427,142 @@ namespace UnityBridge.Tests
             public void OnPointerUp(UnityEngine.EventSystems.PointerEventData e) { pressed = false; released = true; upCount++; }
         }
 
+        // ─────────────────────────────────────────────
+        // L114: a ui op never silently ignores a parameter it does not read
+        //
+        // ui.add_image was called with `sprite` instead of `sprite_path`. It returned
+        // success, created the Image, and dropped the sprite on the floor: the agent then
+        // debugged a sprite import that had never been requested. A creation op that half-
+        // honours a request produces an object nothing reports as wrong.
+        // ─────────────────────────────────────────────
+
+        [Test]
+        public void AddImage_UnknownParameter_ThrowsInvalidParamsNamingTheAcceptedSet()
+        {
+            _handler.HandleOp("create_canvas", new JObject { ["name"] = "TestCanvasImageGuard" });
+            _canvasGo = GameObject.Find("TestCanvasImageGuard");
+            JObject locator = LocatorResolver.BuildLocator(_canvasGo);
+
+            var ex = Assert.Throws<BridgeException>(() => _handler.HandleOp("add_image", new JObject
+            {
+                ["parent"] = locator,
+                ["name"] = "Scrim",
+                // THE EXACT L114 MISSPELLING.
+                ["sprite"] = "Assets/Art/scrim.png"
+            }));
+
+            Assert.AreEqual(ErrorCodes.INVALID_PARAMS, ex.Code);
+            StringAssert.Contains("sprite", ex.Message, "the refusal must name the offending key");
+            StringAssert.Contains("sprite_path", ex.Message,
+                "and the accepted set, so the caller can correct it without a docs round trip");
+            Assert.IsNull(_canvasGo.transform.Find("Scrim"),
+                "a refused call must create NOTHING: a half-built object is what the silent drop produced");
+        }
+
+        [Test]
+        public void AddImage_DocumentedParameters_StillWork_PositiveControl()
+        {
+            // THE POSITIVE CONTROL. A guard that only ever sees the broken input proves the
+            // message exists, not that the accepted set is right.
+            _handler.HandleOp("create_canvas", new JObject { ["name"] = "TestCanvasImageOk" });
+            _canvasGo = GameObject.Find("TestCanvasImageOk");
+            JObject locator = LocatorResolver.BuildLocator(_canvasGo);
+
+            JObject result = _handler.HandleOp("add_image", new JObject
+            {
+                ["parent"] = locator,
+                ["name"] = "Scrim",
+                ["color"] = new JObject { ["r"] = 0f, ["g"] = 0f, ["b"] = 0f, ["a"] = 0.5f },
+                ["sprite_path"] = "Assets/__does_not_exist__.png",
+                ["anchored_position"] = new JObject { ["x"] = 10f, ["y"] = 20f },
+                ["size_delta"] = new JObject { ["x"] = 100f, ["y"] = 50f }
+            });
+
+            Assert.IsNotNull(result["locator"]);
+            Transform scrim = _canvasGo.transform.Find("Scrim");
+            Assert.IsNotNull(scrim, "every documented parameter must still be accepted");
+            Image image = scrim.GetComponent<Image>();
+            Assert.AreEqual(0.5f, image.color.a, 0.001f);
+            RectTransform rect = scrim.GetComponent<RectTransform>();
+            Assert.AreEqual(100f, rect.sizeDelta.x, 0.001f);
+        }
+
+        [Test]
+        public void UiOps_UnknownParameter_IsRefusedAcrossTheCategory()
+        {
+            // The guard is the CATEGORY's, not one op's: a typo in any ui op is named.
+            var ex = Assert.Throws<BridgeException>(() => _handler.HandleOp("create_canvas", new JObject
+            {
+                ["name"] = "TestCanvasNeverCreated",
+                ["renderMode"] = "overlay"   // the documented spelling is render_mode
+            }));
+            Assert.AreEqual(ErrorCodes.INVALID_PARAMS, ex.Code);
+            StringAssert.Contains("renderMode", ex.Message);
+            StringAssert.Contains("render_mode", ex.Message);
+            Assert.IsNull(GameObject.Find("TestCanvasNeverCreated"));
+        }
+
+        [Test]
+        public void UiOps_TransportTimeoutParameter_IsNotTreatedAsUnknown()
+        {
+            // `timeoutMs` is resolved by the SERVER and forwarded verbatim to every handler.
+            // Refusing it would break working calls over a key the ui layer never reads.
+            _handler.HandleOp("create_canvas", new JObject
+            {
+                ["name"] = "TestCanvasTimeout",
+                ["timeoutMs"] = 15000
+            });
+            _canvasGo = GameObject.Find("TestCanvasTimeout");
+            Assert.IsNotNull(_canvasGo);
+        }
+
+        [Test]
+        public void DispatchPointer_TravelPx_IsAccepted_TheReplayDriverSendsIt()
+        {
+            // travelPx is read by the drag branch but was absent from the op's advertised
+            // schema. Enumerating the accepted set from the SCHEMA rather than from what the
+            // handler READS would have made this guard break the replay driver's first drag.
+            // Whatever this call fails on (no EventSystem in an EditMode scene), it must not be
+            // the parameter guard.
+            string travelPxFailure = FailureMessage("dispatch_pointer", new JObject
+            {
+                ["action"] = "drag",
+                ["x"] = 10f,
+                ["y"] = 10f,
+                ["to_x"] = 50f,
+                ["to_y"] = 50f,
+                ["travelPx"] = 400f
+            });
+            Assert.IsFalse(travelPxFailure != null && travelPxFailure.Contains("unknown parameter"),
+                "travelPx is a real, read parameter; the guard must not refuse the replay driver's own drags: "
+                    + travelPxFailure);
+
+            // LITMUS: the same call with the key misspelled IS refused, so the check above is
+            // not passing merely because the guard never runs on this op.
+            string typoFailure = FailureMessage("dispatch_pointer", new JObject
+            {
+                ["action"] = "drag",
+                ["travelPxx"] = 400f
+            });
+            Assert.IsNotNull(typoFailure, "a misspelled key must be refused");
+            StringAssert.Contains("unknown parameter", typoFailure);
+            StringAssert.Contains("travelPxx", typoFailure);
+        }
+
+        /// <summary>Run an op and return its BridgeException message, or null when it did not throw one.</summary>
+        private string FailureMessage(string opName, JObject parameters)
+        {
+            try
+            {
+                _handler.HandleOp(opName, parameters);
+                return null;
+            }
+            catch (BridgeException ex)
+            {
+                return ex.Message;
+            }
+        }
+
         private static void AssertTextComponentAndValue(GameObject go, string expectedText, bool expectTmpWhenAvailable)
         {
             if (TmpTextType != null && expectTmpWhenAvailable)

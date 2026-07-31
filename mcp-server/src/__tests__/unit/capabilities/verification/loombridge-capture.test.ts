@@ -230,6 +230,18 @@ async function writeJson(file: string, body: unknown): Promise<void> {
   await fs.writeFile(file, JSON.stringify(body, null, 2), "utf-8");
 }
 
+/**
+ * A fake producer's write. It stamps `_provenance.runId` because every REAL producer
+ * does (framing/console/tiles/feel/playability all declare `runId: string` as required
+ * and stamp it unconditionally, H11). Before E13 the fakes wrote bare JSON and the diff
+ * still called it fresh, which is precisely the hole: an unprovenanced file must be
+ * indistinguishable from a wrong-run one, so the fakes have to be as honest as the
+ * producers they stand in for.
+ */
+async function writeProduced(file: string, body: Record<string, unknown>, runId: string): Promise<void> {
+  await writeJson(file, { ...body, _provenance: { writer: "loombridge capture (test fake)", runId } });
+}
+
 interface RecordedDeps {
   deps: CaptureDeps;
   calls: string[];
@@ -252,8 +264,8 @@ function recordingDeps(options: { writeFiles?: boolean } = {}): RecordedDeps {
       const screenRectsPath = path.join(a.outDir, "screen-rects.json");
       const consolePath = path.join(a.outDir, "console.json");
       if (writeFiles) {
-        await writeJson(screenRectsPath, { objects: [] });
-        await writeJson(consolePath, { logs: [] });
+        await writeProduced(screenRectsPath, { objects: [] }, a.runId);
+        await writeProduced(consolePath, { logs: [] }, a.runId);
       }
       return { screenRectsPath, consolePath, pixelPerfectCaptured: true, objectCount: 1, logCount: 3 };
     },
@@ -263,8 +275,8 @@ function recordingDeps(options: { writeFiles?: boolean } = {}): RecordedDeps {
       const feelPath = path.join(a.outDir, "feel.json");
       const consolePath = path.join(a.outDir, "console.json");
       if (writeFiles) {
-        await writeJson(feelPath, { runSpeed: 7 });
-        await writeJson(consolePath, { logs: [] });
+        await writeProduced(feelPath, { runSpeed: 7 }, a.runId);
+        await writeProduced(consolePath, { logs: [] }, a.runId);
       }
       return {
         feelPath,
@@ -283,8 +295,8 @@ function recordingDeps(options: { writeFiles?: boolean } = {}): RecordedDeps {
       const playabilityPath = path.join(a.outDir, "playability.json");
       const consolePath = path.join(a.outDir, "console.json");
       if (writeFiles) {
-        await writeJson(playabilityPath, { completable: true });
-        await writeJson(consolePath, { logs: [] });
+        await writeProduced(playabilityPath, { completable: true }, a.runId);
+        await writeProduced(consolePath, { logs: [] }, a.runId);
       }
       return {
         playabilityPath,
@@ -300,9 +312,9 @@ function recordingDeps(options: { writeFiles?: boolean } = {}): RecordedDeps {
       runIds.push(a.runId);
       const consolePath = path.join(a.outDir, "console.json");
       if (writeFiles) {
-        await writeJson(path.join(a.outDir, "platform-tiles.json"), { platforms: [] });
-        await writeJson(path.join(a.outDir, "tile-render.json"), { platforms: [] });
-        await writeJson(consolePath, { logs: [] });
+        await writeProduced(path.join(a.outDir, "platform-tiles.json"), { platforms: [] }, a.runId);
+        await writeProduced(path.join(a.outDir, "tile-render.json"), { platforms: [] }, a.runId);
+        await writeProduced(consolePath, { logs: [] }, a.runId);
       }
       return {
         outDir: a.outDir,
@@ -317,7 +329,7 @@ function recordingDeps(options: { writeFiles?: boolean } = {}): RecordedDeps {
       calls.push("console");
       runIds.push(a.runId);
       const consolePath = path.join(a.outDir, "console.json");
-      if (writeFiles) await writeJson(consolePath, { logs: [] });
+      if (writeFiles) await writeProduced(consolePath, { logs: [] }, a.runId);
       return { consolePath, logCount: 0, startupCount: 0, steadyCount: 0 };
     },
   };
@@ -715,5 +727,142 @@ test("runCapture: the minted proof manifest wins over re-derivation, and the rep
   const report = await readReport(root, "parallax");
   assert.equal(report.manifestSource, "slice.proof.captureManifest");
   assert.deepEqual(report.manifest, ["parallax/console.json"]);
+  await fs.rm(root, { recursive: true, force: true });
+});
+
+// ── E13: refuse-on-absent for the run binding of a PRESENT file ──────────────
+//
+// The falsy-skip: the wrong-run branch read `typeof fileRun === "string" && … !== runId`,
+// so a leftover carrying NO `_provenance` at all fell through every arm and was counted
+// as produced with exit 0. Absence must fail the check, never skip it.
+
+test("runCapture E13: a present manifest entry with NO _provenance is stale-equivalent (agent-assembly re-entry)", async () => {
+  const root = await scaffold();
+  const outDir = path.join(root, ".loombridge", "verify", "ground-tiling");
+  // placement.json is the slice's agent-assembled entry. Written by nobody this run,
+  // and carrying no provenance at all: exactly the leftover E13 describes.
+  await writeJson(path.join(outDir, "placement.json"), { platforms: [] });
+
+  const { deps } = recordingDeps();
+  const { code, errors } = await runCapturing(baseArgs(root, "ground-tiling"), deps);
+  assert.equal(code, 0, "an agent-assembly entry is not a producer failure");
+
+  const report = await readReport(root, "ground-tiling");
+  assert.deepEqual(
+    report.agentAssemblyRequired,
+    ["ground-tiling/placement.json"],
+    "an unprovenanced leftover must re-enter the agent-assembly list exactly like a wrong-run file",
+  );
+  assert.equal(
+    (report.produced as string[]).includes("ground-tiling/placement.json"),
+    false,
+    "an unbindable file may never be reported as produced",
+  );
+  assert.ok(
+    errors.some((line) => /UNPROVENANCED/.test(line) && /placement\.json/.test(line)),
+    errors.join("\n"),
+  );
+  await fs.rm(root, { recursive: true, force: true });
+});
+
+test("runCapture E13 LITMUS: the SAME entry stamped with the MINTED runId is accepted (positive control)", async () => {
+  const root = await scaffold();
+  const outDir = path.join(root, ".loombridge", "verify", "ground-tiling");
+  await writeJson(path.join(outDir, "placement.json"), {
+    platforms: [],
+    _provenance: { writer: "agent", runId: "run-test-0001" },
+  });
+
+  const { deps } = recordingDeps();
+  const { code, errors } = await runCapturing(baseArgs(root, "ground-tiling"), deps);
+  assert.equal(code, 0);
+  const report = await readReport(root, "ground-tiling");
+  assert.deepEqual(report.agentAssemblyRequired, [], "a run-bound agent file is assembled, not required");
+  assert.equal(errors.some((line) => /UNPROVENANCED/.test(line)), false, errors.join("\n"));
+  await fs.rm(root, { recursive: true, force: true });
+});
+
+test("runCapture E13: an unprovenanced entry with a PRODUCER is a producer failure (exit 1)", async () => {
+  // Same shape on the other side of the producer/agent split: a producer-owned entry
+  // that exists but cannot name its run counts as not landed, which is exit 1.
+  const root = await scaffold();
+  const outDir = path.join(root, ".loombridge", "verify", "parallax");
+  await writeJson(path.join(outDir, "console.json"), { logs: [] });
+
+  const deps: CaptureDeps = {
+    ...recordingDeps().deps,
+    // The recipe "succeeds" and writes nothing: the leftover above is all that is on disk.
+    captureConsole: async (a) => ({
+      consolePath: path.join(a.outDir, "console.json"),
+      logCount: 0,
+      startupCount: 0,
+      steadyCount: 0,
+    }),
+  };
+  const { code, errors } = await runCapturing(baseArgs(root, "parallax"), deps);
+  assert.equal(code, 1);
+  const report = await readReport(root, "parallax");
+  assert.deepEqual(report.producerFailed, ["parallax/console.json"]);
+  assert.deepEqual(report.produced, []);
+  assert.ok(errors.some((line) => /UNPROVENANCED/.test(line)), errors.join("\n"));
+  await fs.rm(root, { recursive: true, force: true });
+});
+
+// ── E14: `produced` means "a recipe of THIS run wrote it" ────────────────────
+
+test("runCapture E14: a file this run's recipes did not write is presentFromOtherSources, never produced", async () => {
+  // The live shape: a drive-connection-written file sitting in the slice dir was
+  // credited to the CLI because the report copied `completeness.present` wholesale.
+  // It carries THIS run's runId (so it is not stale) and still was not produced here.
+  const root = await scaffold();
+  const outDir = path.join(root, ".loombridge", "verify", "ground-tiling");
+  await writeJson(path.join(outDir, "placement.json"), {
+    platforms: [],
+    _provenance: { writer: "agent (other connection)", runId: "run-test-0001" },
+  });
+
+  const { deps } = recordingDeps();
+  const { code, errors } = await runCapturing(baseArgs(root, "ground-tiling"), deps);
+  assert.equal(code, 0);
+  const report = await readReport(root, "ground-tiling");
+  assert.deepEqual(report.produced, [
+    "ground-tiling/platform-tiles.json",
+    "ground-tiling/tile-render.json",
+    "ground-tiling/console.json",
+  ]);
+  assert.deepEqual(report.presentFromOtherSources, ["ground-tiling/placement.json"]);
+  assert.ok(
+    errors.some((line) => /present but NOT written by this run's recipes/.test(line)),
+    errors.join("\n"),
+  );
+  await fs.rm(root, { recursive: true, force: true });
+});
+
+test("runCapture E14 LITMUS: a recipe whose file was written by an EARLIER run is not credited to this one", async () => {
+  // The producer runs but lands nothing; the file on disk is a previous run's. The
+  // pre-E14 report called it `produced`. It is neither produced NOR bindable.
+  const root = await scaffold();
+  const outDir = path.join(root, ".loombridge", "verify", "parallax");
+  await writeJson(path.join(outDir, "console.json"), {
+    logs: [],
+    _provenance: { writer: "loombridge capture (console)", runId: "run-YESTERDAY" },
+  });
+
+  const deps: CaptureDeps = {
+    ...recordingDeps().deps,
+    captureConsole: async (a) => ({
+      consolePath: path.join(a.outDir, "console.json"),
+      logCount: 0,
+      startupCount: 0,
+      steadyCount: 0,
+    }),
+  };
+  const { code, errors } = await runCapturing(baseArgs(root, "parallax"), deps);
+  assert.equal(code, 1);
+  const report = await readReport(root, "parallax");
+  assert.deepEqual(report.produced, []);
+  assert.deepEqual(report.presentFromOtherSources, ["parallax/console.json"]);
+  assert.deepEqual(report.producerFailed, ["parallax/console.json"]);
+  assert.ok(errors.some((line) => /STALE/.test(line)), errors.join("\n"));
   await fs.rm(root, { recursive: true, force: true });
 });

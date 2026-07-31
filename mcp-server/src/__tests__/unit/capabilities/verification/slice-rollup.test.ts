@@ -35,6 +35,7 @@ import {
   ensureScaffold,
   loombridgePaths,
   nowIso,
+  readState,
   writeState,
   type LoombridgePaths,
 } from "../../../../domain/state.js";
@@ -473,17 +474,23 @@ test("LITMUS E4: produced evidence from a FOREIGN run refuses at verify time; th
   }
 });
 
-test("LITMUS L106: two CLI-written files from two editor sessions refuse; one session passes", async () => {
-  // BREAK: feel.json is produced in session B while playability.json was observed in
-  // session A. Same runId on both, which is exactly why runId agreement proves nothing.
-  const mixed = await approvedFixture({ feelProducerSession: "editor-session-B", expectVerifyExit: 2 });
+test("E15 (was LITMUS L106): two different editorSessionIds NOTE the limitation instead of refusing", async () => {
+  // WHAT CHANGED AND WHY. This case used to refuse: feel.json produced under session B,
+  // playability.json observed under session A, same runId on both. The E6 sessions then
+  // proved the premise wrong. `editorSessionId` is a bridge SERVER-GENERATION id, and a
+  // domain reload (which every play-mode entry causes) re-mints it, so ONE editor sitting
+  // routinely hands two ids to a slice's CLI-plus-agent evidence. Refusing on that alone
+  // walled off honest runs, so the weak binder now notes and only
+  // `observation.recorderEditorSessionId` (read inside the running editor) refuses
+  // (pinned directly, both ways, in run-binding.test.ts).
+  const mixed = await approvedFixture({ feelProducerSession: "editor-session-B" });
   try {
-    assert.equal(
-      await fs
-        .access(getSliceVerdictPath(mixed.paths, "core"))
-        .then(() => true)
-        .catch(() => false),
-      false,
+    const verdict = JSON.parse(await fs.readFile(getSliceVerdictPath(mixed.paths, "core"), "utf-8"));
+    assert.equal(verdict.status, "pass", "a bridge restart is not proof of two sittings");
+    const notes: string[] = verdict.runBindingNotes ?? [];
+    assert.ok(
+      notes.some((n) => /different `editorSessionId`s/.test(n) && /SERVER GENERATION/.test(n)),
+      `the limitation must be SAID, not silently dropped: ${JSON.stringify(notes)}`,
     );
   } finally {
     await cleanup(mixed);
@@ -582,6 +589,96 @@ test("a project whose roadmap is only PARTLY approved is not a whole-project ver
       result.refusals.join(" | "),
     );
   } finally {
+    await cleanup(fixture);
+  }
+});
+
+// ── E16: a green roll-up is recorded in STATE, like the flat door records its own ──
+//
+// Observed live: nine slices re-graded green through this exact door and STATE.md still
+// read `built-unverified` / `lastVerdict: null`. The only writer of that block was
+// `runVerify`, which on a slice-planned project has no flat row to grade at all (see
+// discovery's "ONE ASSET, ONE GRADER"), so the path that DID the grading was the path
+// that never said so.
+
+test("E16: a green slices roll-up records the verdict in STATE.md (the flat door's contract, mirrored)", async () => {
+  const fixture = await approvedFixture();
+  const workspace = await fs.mkdtemp(path.join(os.tmpdir(), "loombridge-rollup-ws-"));
+  try {
+    const before = await readState(fixture.paths);
+    assert.equal(before?.phase, "built-unverified", "the fixture starts unverified, as a real project does");
+    assert.equal(before?.lastVerdict ?? null, null);
+
+    assert.equal(await runUnifiedVerify({ root: fixture.root, strict: false, live: false, workspace }), 0);
+
+    const after = await readState(fixture.paths);
+    assert.equal(after?.phase, "verified-green");
+    assert.equal(after?.lastVerdict?.status, "pass");
+    assert.equal(
+      after?.lastVerdict?.verdictPath,
+      path.join(".loombridge", "reports", "verify.json"),
+      "the roll-up's verdict is the unified report, and STATE must point at the document that decided",
+    );
+    // A verdict record is not a re-mint: the run binding is carried through untouched.
+    assert.equal(after?.currentBuild?.runId, RUN_ID);
+    assert.equal(after?.genre, before?.genre);
+  } finally {
+    await fs.rm(workspace, { recursive: true, force: true });
+    await cleanup(fixture);
+  }
+});
+
+test("E16 LITMUS: a roll-up that could not measure (harness fault) leaves STATE untouched", async () => {
+  // The same fixture and the same door as the green case, with ONE evidence byte moved
+  // so nothing re-grades. `harness-fault` is not a verdict about the game, so it must
+  // not become a `verified-*` phase an agent can quote.
+  const fixture = await approvedFixture();
+  const workspace = await fs.mkdtemp(path.join(os.tmpdir(), "loombridge-rollup-ws-"));
+  try {
+    const feelPath = path.join(fixture.sliceDir, "feel.json");
+    await fs.writeFile(feelPath, (await fs.readFile(feelPath, "utf-8")).replace('"runSpeed": 8', '"runSpeed": 8.5'), "utf-8");
+
+    const lines: string[] = [];
+    const origError = console.error;
+    console.error = (...a: unknown[]) => void lines.push(a.map(String).join(" "));
+    let code: number;
+    try {
+      code = await runUnifiedVerify({ root: fixture.root, strict: false, live: false, workspace });
+    } finally {
+      console.error = origError;
+    }
+    assert.equal(code, 2);
+
+    const after = await readState(fixture.paths);
+    assert.equal(after?.phase, "built-unverified", "a harness fault may never move the phase");
+    assert.equal(after?.lastVerdict ?? null, null);
+    assert.ok(
+      lines.some((line) => /STATE not updated/.test(line) && /harness-fault/.test(line)),
+      lines.join("\n"),
+    );
+  } finally {
+    await fs.rm(workspace, { recursive: true, force: true });
+    await cleanup(fixture);
+  }
+});
+
+test("E16: a SCOPED (--only) run never writes the single-slot state", async () => {
+  const fixture = await approvedFixture();
+  const workspace = await fs.mkdtemp(path.join(os.tmpdir(), "loombridge-rollup-ws-"));
+  try {
+    const code = await runUnifiedVerify({
+      root: fixture.root,
+      strict: false,
+      live: false,
+      workspace,
+      only: "slices",
+    });
+    assert.equal(code, 0);
+    const after = await readState(fixture.paths);
+    assert.equal(after?.phase, "built-unverified", "a scoped run reports on a subset and certifies nothing");
+    assert.equal(after?.lastVerdict ?? null, null);
+  } finally {
+    await fs.rm(workspace, { recursive: true, force: true });
     await cleanup(fixture);
   }
 });

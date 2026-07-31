@@ -50,6 +50,12 @@ export interface EvidenceFileRecord {
   runId: string | null;
   /** `_provenance.editorSessionId` (or the routing block's), or null. */
   editorSessionId: string | null;
+  /**
+   * `_provenance.observation.recorderEditorSessionId`, or null (E15). The id the
+   * RECORDER read from inside the running editor, which is the only one that can prove
+   * two files came from two different sittings. See `runBindingRefusals`.
+   */
+  recorderEditorSessionId: string | null;
 }
 
 /** The block stamped onto a slice verdict under `evidence`. */
@@ -113,6 +119,7 @@ export async function buildEvidenceLedger(args: {
       writer: facts.writer,
       runId: facts.runId,
       editorSessionId: facts.editorSessionId,
+      recorderEditorSessionId: facts.recorderEditorSessionId,
     });
   }
   return {
@@ -182,6 +189,7 @@ export function readEvidenceLedger(verdict: unknown, reverifyHint: string): Ledg
       writer: optionalString(entry.writer),
       runId: optionalString(entry.runId),
       editorSessionId: optionalString(entry.editorSessionId),
+      recorderEditorSessionId: optionalString(entry.recorderEditorSessionId),
     });
   }
   return {
@@ -245,11 +253,32 @@ export interface RunBindingResult {
  *  1. `_provenance.runId` must equal the minted runId. A produced file from another
  *     run is a measurement of another build; grading it and stamping this run's id on
  *     the verdict is precisely the mixed-vintage certificate L106 recorded.
- *  2. Every CLI-written file in one slice's evidence dir must carry the SAME
- *     `editorSessionId`. Three files from three play sessions all stamped with one
- *     runId is what actually happened on the door-one run: runId is minted by `build`
- *     and says nothing about co-temporality, so the session id is the only field that
- *     can answer "was this one sitting?".
+ *  2. Every CLI-written file in one slice's evidence dir must have come from ONE editor
+ *     SITTING. runId is minted by `build` and says nothing about co-temporality, so
+ *     something else has to answer "was this one sitting?".
+ *
+ * WHICH FIELD ANSWERS IT (E15, a correction paid for live). This check used to refuse
+ * whenever two CLI-written files carried different `editorSessionId`s. That field is a
+ * bridge SERVER-GENERATION id: it is minted when the bridge server starts and RE-MINTED
+ * by every domain reload, which entering play mode causes, and each connection reads it
+ * from its own handshake or its cached discovery record. Two files produced minutes apart
+ * from one editor window, by the CLI and by an agent's own connection, therefore
+ * legitimately disagree, and the E6 sessions hit exactly that false refusal on evidence
+ * that was demonstrably one sitting.
+ *
+ * So the two facts are now graded separately:
+ *
+ *   - `recorderEditorSessionId` (`_provenance.observation.recorderEditorSessionId`) is the
+ *     STRONG BINDER: the recorder reads it from inside the running editor at window-open
+ *     time. Two files that disagree on it were recorded by two different sittings, and
+ *     that is still a hard REFUSAL.
+ *   - `editorSessionId` alone is a WEAK binder. A disagreement downgrades to a note that
+ *     names the limitation, rather than a refusal that would wall off honest mixed
+ *     CLI-plus-agent evidence. When the strong binder is present and agrees, the note
+ *     says the sitting was confirmed instead.
+ *
+ * ABSENCE IS STILL A REFUSAL: a CLI-written file with no `editorSessionId` at all can
+ * show nothing about which editor produced it, and that arm is unchanged.
  *
  * AGENT-ASSEMBLED FILES ARE NOT HARD-REFUSED HERE. They carry no producer marker, are
  * already capped at warn by the gates that read them, and hard-refusing them now would
@@ -288,7 +317,7 @@ export function runBindingRefusals(args: {
     }
   }
 
-  // L106: co-temporality across the slice's own evidence dir.
+  // L106 + E15: co-temporality across the slice's own evidence dir.
   const sessions = new Map<string, string[]>();
   for (const record of cliWritten) {
     if (!record.editorSessionId) {
@@ -302,13 +331,46 @@ export function runBindingRefusals(args: {
     bucket.push(record.file);
     sessions.set(record.editorSessionId, bucket);
   }
-  if (sessions.size > 1) {
-    const rendered = [...sessions.entries()]
-      .map(([session, files]) => `${session} (${files.join(", ")})`)
-      .join(" vs ");
+
+  // The STRONG binder first: a disagreement here is proof of two sittings, and it refuses
+  // whether or not the weak ids happen to agree.
+  const recorders = new Map<string, string[]>();
+  for (const record of cliWritten) {
+    if (!record.recorderEditorSessionId) continue;
+    const bucket = recorders.get(record.recorderEditorSessionId) ?? [];
+    bucket.push(record.file);
+    recorders.set(record.recorderEditorSessionId, bucket);
+  }
+  const renderBuckets = (map: Map<string, string[]>): string =>
+    [...map.entries()].map(([session, files]) => `${session} (${files.join(", ")})`).join(" vs ");
+
+  if (recorders.size > 1) {
     refusals.push(
-      `${args.label}: this slice's evidence came from ${sessions.size} DIFFERENT editor sessions — ${rendered}. ` +
-        "One slice's verdict must describe one sitting; re-capture the slice in a single session (L106)",
+      `${args.label}: this slice's evidence was RECORDED IN ${recorders.size} DIFFERENT editor sittings: ` +
+        `${renderBuckets(recorders)}. That is \`observation.recorderEditorSessionId\`, read from inside the running ` +
+        "editor, so this is not a reconnect artefact; one slice's verdict must describe one sitting. Re-capture the " +
+        "slice in a single session (L106)",
+    );
+  } else if (sessions.size > 1) {
+    // WEAK binder only. Never a refusal on its own (E15): the id is re-minted by every
+    // domain reload, so mixed CLI + agent evidence from one sitting differs by design.
+    // The note says exactly how much the strong binder covered, because "one file agreed
+    // with itself" and "every recorded file agreed" are not the same claim.
+    const withRecorder = [...recorders.values()].reduce((n, files) => n + files.length, 0);
+    const preamble =
+      `${args.label}: this slice's evidence carries ${sessions.size} different \`editorSessionId\`s: ` +
+      `${renderBuckets(sessions)}. That id names a bridge SERVER GENERATION (a domain reload re-mints it), ` +
+      "so a difference does not by itself mean two sittings and is not refused here";
+    notes.push(
+      recorders.size === 1 && withRecorder > 1
+        ? `${preamble}; every file that records one agrees on recorder sitting \`${[...recorders.keys()][0]}\`, ` +
+          "so this is one sitting across a bridge restart, not two"
+        : recorders.size === 1
+          ? `${preamble}; only ${withRecorder} of ${cliWritten.length} CLI-written file(s) records an ` +
+            "`observation.recorderEditorSessionId`, so the strong binder covers that file alone and " +
+            "co-temporality across the rest is UNCONFIRMED (warn-level)"
+          : `${preamble}. No file carries \`observation.recorderEditorSessionId\`, so nothing available can ` +
+            "confirm or deny one sitting (warn-level)",
     );
   }
 
