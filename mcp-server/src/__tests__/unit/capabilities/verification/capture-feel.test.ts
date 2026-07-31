@@ -32,7 +32,11 @@ import {
 import { deriveTimeToApex } from "../../../../capabilities/verification/feel-derive.js";
 import { evaluatePhysicsTimestep } from "../../../../capabilities/verification/gates/physics-timestep.js";
 import type { AcceptanceContract } from "../../../../capabilities/verification/types.js";
-import type { FeelMeasurements, FeelTrajectorySample } from "../../../../capabilities/verification/gates/feel.js";
+import {
+  GRADED_FEEL_METRICS,
+  type FeelMeasurements,
+  type FeelTrajectorySample,
+} from "../../../../capabilities/verification/gates/feel.js";
 import { SHORT_HOP_CANONICAL_TAP_TICKS } from "../../../../domain/feel-primitives.js";
 
 // ── the scripted game ───────────────────────────────────────────────────────
@@ -69,6 +73,14 @@ interface GameState {
   ungroundStep: number | null;
   bufferedAtStep: number | null;
   dashTicksLeft: number;
+  /**
+   * Ticks the COLLIDER is still resting on the ledge overhang after the ground PROBE
+   * has let go. Zero on every existing fixture; the E6 rig sets it (see
+   * `FakeOptions.groundProbeLeadTicks`).
+   */
+  supportedTicksLeft: number;
+  /** Whether a jump launched this airtime (a launched body is never "supported"). */
+  launched: boolean;
 }
 
 function spawnState(): GameState {
@@ -80,12 +92,14 @@ function spawnState(): GameState {
     ungroundStep: null,
     bufferedAtStep: null,
     dashTicksLeft: 0,
+    supportedTicksLeft: 0,
+    launched: false,
   };
 }
 
 /** The floor under the player: past the ledge there is a drop. */
-function floorAt(x: number): number {
-  return x > DECLARED.ledgeX ? DECLARED.lowerGroundY : DECLARED.groundY;
+function floorAt(x: number, noLedge = false): number {
+  return !noLedge && x > DECLARED.ledgeX ? DECLARED.lowerGroundY : DECLARED.groundY;
 }
 
 interface StepInput {
@@ -94,8 +108,29 @@ interface StepInput {
   dashHeld: boolean;
 }
 
+/** Level/rig knobs a fixture can vary without touching the controller itself. */
+interface GameRig {
+  /**
+   * Ticks the ground PROBE leads the visible descent by (E6 session three): the
+   * probe is narrower than the collider, so it reads false while the body is still
+   * supported by the ledge overhang. 0 (the default) is the old fixture, where the
+   * two anchors coincide and the field is worth nothing.
+   */
+  groundProbeLeadTicks: number;
+  /** A level with no ledge at all in the walked direction: the floor never ends. */
+  noLedge: boolean;
+}
+
+const FLAT_RIG: GameRig = { groundProbeLeadTicks: 0, noLedge: false };
+
 /** One fixed step of the scripted controller. */
-function stepGame(state: GameState, input: StepInput, step: number, prevJumpHeld: boolean): void {
+function stepGame(
+  state: GameState,
+  input: StepInput,
+  step: number,
+  prevJumpHeld: boolean,
+  rig: GameRig = FLAT_RIG,
+): void {
   const pressedJump = input.jumpHeld && !prevJumpHeld;
   const releasedJump = !input.jumpHeld && prevJumpHeld;
 
@@ -104,6 +139,7 @@ function stepGame(state: GameState, input: StepInput, step: number, prevJumpHeld
     if (state.grounded || airborneTicks <= DECLARED.coyoteSeconds / DT) {
       state.vy = DECLARED.jumpSpeed;
       state.grounded = false;
+      state.launched = true;
     } else {
       state.bufferedAtStep = step;
     }
@@ -119,22 +155,34 @@ function stepGame(state: GameState, input: StepInput, step: number, prevJumpHeld
   } else {
     state.x += input.moveX * DECLARED.runSpeed * DT;
   }
-  if (state.grounded && state.x > DECLARED.ledgeX) {
+  if (state.grounded && !rig.noLedge && state.x > DECLARED.ledgeX) {
+    // The PROBE lets go here: this is the tick the controller's coyote timer starts.
     state.grounded = false;
     state.ungroundStep = step;
+    state.supportedTicksLeft = rig.groundProbeLeadTicks;
   }
   if (!state.grounded) {
+    // …but the COLLIDER is still on the overhang for a few ticks, so the body does
+    // not begin to fall and the trajectory stays flat. This is the gap that made the
+    // live sweep read 0.0667s for a real 0.1000s window.
+    if (!state.launched && state.supportedTicksLeft > 0) {
+      state.supportedTicksLeft -= 1;
+      return;
+    }
     state.vy += DECLARED.gravity * DT;
     state.y += state.vy * DT;
-    const floor = floorAt(state.x);
+    const floor = floorAt(state.x, rig.noLedge);
     if (state.y <= floor) {
       state.y = floor;
       state.vy = 0;
       state.grounded = true;
+      state.launched = false;
+      state.supportedTicksLeft = 0;
       state.ungroundStep = null;
       if (state.bufferedAtStep !== null && step - state.bufferedAtStep <= DECLARED.bufferSeconds / DT) {
         state.vy = DECLARED.jumpSpeed;
         state.grounded = false;
+        state.launched = true;
         state.y += state.vy * DT;
       }
       state.bufferedAtStep = null;
@@ -166,6 +214,18 @@ interface FakeOptions {
   controllerReportsEnabled?: boolean;
   /** The controller-facing get_snapshot answers `enabled: false` (the end-state signature). */
   controllerDisabled?: boolean;
+  /**
+   * E6 session three: the rig whose ground PROBE lets go N ticks before the body
+   * starts to fall (a probe narrower than the collider, resting on the ledge
+   * overhang). 0 keeps every older fixture exactly as it was.
+   */
+  groundProbeLeadTicks?: number;
+  /** A level with no ledge in the walked direction: the coyote walk can never unground. */
+  noLedge?: boolean;
+  /** The bridge cannot resolve the declared grounded field (a wrong field name). */
+  groundedUnresolved?: boolean;
+  /** The bridge is too old to echo fieldTimeline at all (pre-L3a). */
+  noFieldTimelineEcho?: boolean;
 }
 
 interface FakeBridge {
@@ -174,13 +234,27 @@ interface FakeBridge {
   readerEnabled: boolean[];
 }
 
+interface SampledFieldSpec {
+  id?: string;
+  type_name?: string;
+  property_path?: string;
+}
+
 function fakeBridge(options: FakeOptions = {}): FakeBridge {
   const calls: { command: string; params: Record<string, unknown> }[] = [];
   const readerEnabled: boolean[] = [];
   let readerLive = true;
   let state = spawnState();
+  const rig: GameRig = {
+    groundProbeLeadTicks: options.groundProbeLeadTicks ?? 0,
+    noLedge: options.noLedge === true,
+  };
 
-  const runKeyed = (phases: Phase[], captureFps: number): Record<string, unknown> => {
+  const runKeyed = (
+    phases: Phase[],
+    captureFps: number,
+    sampledFields?: SampledFieldSpec[],
+  ): Record<string, unknown> => {
     // ONE TICK OF INJECTION LATENCY. A key whose phase begins at sample index j is
     // consumed by the controller at step j+1, not step j: the same live behaviour
     // the canonical short-hop constant is built around (a 2-3 tick tap never
@@ -207,10 +281,15 @@ function fakeBridge(options: FakeOptions = {}): FakeBridge {
     const perStep = Math.max(1, Math.round((captureFps || 1 / DT) * DT));
     const sampleMs = 1000 / (captureFps || 1 / DT);
     const samples: { tMs: number; x: number; y: number }[] = [{ tMs: 0, x: state.x, y: state.y }];
+    // L3a: the ground flag is read on the SAME tick clock as the position sample, so
+    // the two arrays are one-for-one. That alignment is what the anchor indexes into.
+    const groundedReadings: { tMs: number; value: boolean }[] = [{ tMs: 0, value: state.grounded }];
     const emitFor = (stepIndex: number): void => {
       for (let k = 0; k < perStep; k += 1) {
         const sampleIndex = stepIndex * perStep + k + 1;
-        samples.push({ tMs: Math.round(sampleIndex * sampleMs * 100) / 100, x: state.x, y: state.y });
+        const tMs = Math.round(sampleIndex * sampleMs * 100) / 100;
+        samples.push({ tMs, x: state.x, y: state.y });
+        groundedReadings.push({ tMs, value: state.grounded });
       }
     };
     const phaseEcho: Record<string, unknown>[] = [];
@@ -230,7 +309,7 @@ function fakeBridge(options: FakeOptions = {}): FakeBridge {
           jumpHeld: keys.includes("space"),
           dashHeld: keys.includes("leftshift"),
         };
-        if (!options.frozen) stepGame(state, input, step, prevJumpHeld);
+        if (!options.frozen) stepGame(state, input, step, prevJumpHeld, rig);
         prevJumpHeld = input.jumpHeld;
         emitFor(step);
         step += 1;
@@ -261,6 +340,18 @@ function fakeBridge(options: FakeOptions = {}): FakeBridge {
     // yield N*perStep+1 samples; the recipe's phase indexing sums the per-phase
     // counts, matching the live echo. `durationMs` is the SPAN of the samples, which
     // is what the live op echoes.
+    // L3a: `fieldTimeline` appears ONLY when the call declared `sampledFields`, and an
+    // unresolvable member is reported as unresolved rather than fabricated as false.
+    const fieldTimeline = (sampledFields ?? []).map((field) => {
+      const resolvable =
+        options.groundedUnresolved !== true &&
+        field.type_name === "PlayerController" &&
+        field.property_path === "grounded";
+      return resolvable
+        ? { id: field.id, samples: groundedReadings }
+        : { id: field.id, samples: [], unresolved: `no public member ${String(field.property_path)} on ${String(field.type_name)}` };
+    });
+
     return {
       samples,
       phases: phaseEcho,
@@ -270,6 +361,7 @@ function fakeBridge(options: FakeOptions = {}): FakeBridge {
       measurementFixedTimestep: DT,
       peakY: Math.max(...samples.map((s) => s.y)),
       deltaX: state.x - samples[0].x,
+      ...(sampledFields === undefined || options.noFieldTimelineEcho === true ? {} : { fieldTimeline }),
     };
   };
 
@@ -292,7 +384,7 @@ function fakeBridge(options: FakeOptions = {}): FakeBridge {
         const effectiveMoveX = readerLive && i > 0 ? 0 : moveX;
         const effectiveDash = readerLive && i > 0 ? false : dashHeld;
         if (!options.frozen && !options.seamProofDead) {
-          stepGame(state, { moveX: effectiveMoveX, jumpHeld: false, dashHeld: effectiveDash }, step, false);
+          stepGame(state, { moveX: effectiveMoveX, jumpHeld: false, dashHeld: effectiveDash }, step, false, rig);
         }
         step += 1;
         count += 1;
@@ -380,7 +472,11 @@ function fakeBridge(options: FakeOptions = {}): FakeBridge {
         }
         return {};
       case "runtime.capture_input_motion":
-        return runKeyed(params.phases as Phase[], Number(params.captureFps));
+        return runKeyed(
+          params.phases as Phase[],
+          Number(params.captureFps),
+          params.sampledFields as SampledFieldSpec[] | undefined,
+        );
       case "runtime.probe":
         return runProbe(params.phases as Phase[]);
       default:
@@ -805,7 +901,20 @@ test("E6: timeToApex is measured from LAUNCH, so the 12-tick settle prefix is no
 
 // ── E6: the runway ──────────────────────────────────────────────────────────
 
-test("E6: runLeg.ticks bounds BOTH the run leg and the coyote calibration walk", async () => {
+/** Every horizontal hold the session injected, in call order. */
+function horizontalHolds(bridge: FakeBridge): { keys?: string[]; fixedTicks?: number }[] {
+  return bridge.calls
+    .filter((c) => c.command === "runtime.capture_input_motion")
+    .flatMap((c) => (c.params.phases as { keys?: string[]; fixedTicks?: number }[]) ?? [])
+    .filter((p) => (p.keys ?? []).includes("D") && !(p.keys ?? []).includes("Space"));
+}
+
+test("E6 session three: runLeg.ticks bounds the RUN LEG only, and the coyote walk searches for the ledge past it", async () => {
+  // THE CONTRADICTION THIS FIXES. One number bounded both the run leg (which must
+  // STAY on the ground for its whole hold) and the coyote calibration walk (which
+  // must LEAVE it). A level that declared a safe 20-tick runway therefore refused
+  // the coyote sweep outright, and a runway long enough to reach the ledge walked
+  // the run leg off it.
   const short = await run({}, {
     harness: {
       feelSeam: {
@@ -818,22 +927,152 @@ test("E6: runLeg.ticks bounds BOTH the run leg and the coyote calibration walk",
       },
     },
   });
-  const holds = short.bridge.calls
+  const holds = horizontalHolds(short.bridge);
+  // The RUN LEG is the first horizontal hold of the session, and it still obeys the
+  // declared runway to the tick.
+  assert.equal(holds[0].fixedTicks, 20, "the run leg must still honour the declared runway");
+  // …and the coyote sweep still measured, which under the old shared bound it could
+  // not: 20 ticks of walking never reaches a ledge 17 ticks out plus a settle.
+  assert.ok(
+    Math.abs((short.output.feel.coyoteTime as number) - DECLARED.coyoteSeconds) <= DT,
+    `coyoteTime ${short.output.feel.coyoteTime} on a 20-tick runway`,
+  );
+  assert.ok(
+    holds.some((p) => (p.fixedTicks ?? 0) > 20),
+    "the calibration walk must be free to walk past the run leg's runway to reach the ledge",
+  );
+
+  // POSITIVE CONTROL: the DEFAULT run leg is unchanged, so no existing contract moves.
+  const { bridge } = await run();
+  assert.equal(horizontalHolds(bridge)[0].fixedTicks, 90);
+});
+
+test("E6 session three: a level with no reachable ledge REFUSES coyoteTime by name, and does not sweep", async () => {
+  const { output, bridge } = await run({ noLedge: true });
+  assert.equal(output.feel.coyoteTime, undefined, "a level with no ledge must not produce a coyote number");
+  const reason = output.omitted.find((o) => o.metric === "coyoteTime")!.reason;
+  assert.match(reason, /no reachable ledge in the declared direction/);
+  assert.match(reason, /declare a runway direction with a walkable ledge/);
+  // The hunt is CAPPED: it stops rather than walking the player across the level forever.
+  const walks = bridge.calls
     .filter((c) => c.command === "runtime.capture_input_motion")
     .flatMap((c) => (c.params.phases as { keys?: string[]; fixedTicks?: number }[]) ?? [])
     .filter((p) => (p.keys ?? []).includes("D") && !(p.keys ?? []).includes("Space"));
-  assert.ok(holds.length >= 2, "the run leg and the calibration walk both hold the move key");
-  for (const phase of holds) {
-    assert.ok((phase.fixedTicks ?? 0) <= 20, `a horizontal hold ran ${phase.fixedTicks} ticks past the declared runway`);
+  assert.ok(walks.every((p) => (p.fixedTicks ?? 0) <= 600), "the ledge hunt must stay under its hard cap");
+
+  // POSITIVE CONTROL: the same code on a level that HAS a ledge measures it.
+  const { output: withLedge } = await run();
+  assert.ok((withLedge.feel.coyoteTime as number) > 0);
+});
+
+// ── E6 session three: the coyote anchor ─────────────────────────────────────
+
+/** The seam, with or without the controller's ground flag declared. */
+function seamWithGrounded(grounded: boolean): Record<string, unknown> {
+  return {
+    feelSeam: {
+      playerLocator: "Level:/Player",
+      controllerComponent: "PlayerController",
+      inputReaderComponent: "PlayerInputReader",
+      fields: {
+        moveX: "moveX",
+        jumpHeld: "jumpHeld",
+        dashHeld: "dashHeld",
+        ...(grounded ? { grounded: "grounded" } : {}),
+      },
+      keys: { jump: "Space", moveRight: "D", jumpCut: "Space", dash: "LeftShift" },
+    },
+  };
+}
+
+test("E6 session three: on a rig whose ground probe leads the descent, fields.grounded recovers the DECLARED coyote window; without it the same rig under-reads by the overhang", async () => {
+  // The live TideRunner shape: the probe lets go two ticks before the body falls.
+  const exact = await run({ groundProbeLeadTicks: 2 }, { harness: seamWithGrounded(true) });
+  assert.ok(
+    Math.abs((exact.output.feel.coyoteTime as number) - DECLARED.coyoteSeconds) < DT / 2,
+    `grounded-anchored coyoteTime ${exact.output.feel.coyoteTime} vs declared ${DECLARED.coyoteSeconds}`,
+  );
+
+  // THE SAME GAME, the field not declared: still honest, still measured, and short by
+  // exactly the rig's overhang. This is what the evidence's anchorSource sentence is for.
+  const blind = await run({ groundProbeLeadTicks: 2 }, { harness: seamWithGrounded(false) });
+  assert.ok(
+    Math.abs((blind.output.feel.coyoteTime as number) - (DECLARED.coyoteSeconds - 2 * DT)) < 1e-3,
+    `descent-anchored coyoteTime ${blind.output.feel.coyoteTime} (expected ${DECLARED.coyoteSeconds - 2 * DT})`,
+  );
+
+  // …and on a rig with NO overhang the two anchors agree, so declaring the field can
+  // never move a number that was already right.
+  const flatExact = await run({}, { harness: seamWithGrounded(true) });
+  const flatBlind = await run({}, { harness: seamWithGrounded(false) });
+  assert.equal(flatExact.output.feel.coyoteTime, flatBlind.output.feel.coyoteTime);
+});
+
+test("E6 session three: the coyote source NAMES its anchor, and every trial retains the timeline the anchor came from", async () => {
+  const exact = await run({ groundProbeLeadTicks: 2 }, { harness: seamWithGrounded(true) });
+  const source = sourceFor(exact.output, "coyoteTime")!;
+  assert.equal(source.anchorSource, "grounded-field");
+  assert.equal(source.anchorField, "grounded");
+  assert.equal(source.anchorOffsetTicks, 1, "only the injection latency is charged to a grounded anchor");
+  const trials = source.trials as { groundedTimeline?: { samples?: unknown[] }; samples: unknown[] }[];
+  assert.ok(trials.length >= 6);
+  for (const trial of trials) {
+    assert.ok(Array.isArray(trial.groundedTimeline?.samples), "a trial with no retained timeline cannot be re-derived");
+    assert.equal(trial.groundedTimeline!.samples!.length, trial.samples.length, "the timeline must align with the trajectory");
+  }
+  // Every observation says which anchor produced it.
+  for (const observation of source.observations as { refusal?: string; anchorSource?: string }[]) {
+    if (observation.refusal !== undefined) continue;
+    assert.equal(observation.anchorSource, "grounded-field");
   }
 
-  // POSITIVE CONTROL: the DEFAULT is unchanged, so no existing contract moves.
-  const { bridge } = await run();
-  const defaultHold = (bridge.calls
-    .filter((c) => c.command === "runtime.capture_input_motion")
-    .flatMap((c) => (c.params.phases as { keys?: string[]; fixedTicks?: number }[]) ?? [])
-    .find((p) => (p.keys ?? []).includes("D") && !(p.keys ?? []).includes("Space")))!;
-  assert.equal(defaultHold.fixedTicks, 90);
+  // WITHOUT the field: the evidence says so, and says what to declare.
+  const blind = await run({ groundProbeLeadTicks: 2 }, { harness: seamWithGrounded(false) });
+  const blindSource = sourceFor(blind.output, "coyoteTime")!;
+  assert.match(String(blindSource.anchorSource), /^y-descent/);
+  assert.match(String(blindSource.anchorSource), /harness\.feelSeam\.fields\.grounded/);
+  assert.equal(blindSource.anchorField, undefined);
+  assert.equal(blindSource.anchorOffsetTicks, 2);
+  assert.equal((blindSource.trials as { groundedTimeline?: unknown }[])[0].groundedTimeline, undefined);
+});
+
+test("E6 session three: a declared grounded field the bridge cannot read REFUSES the sweep instead of falling back", async () => {
+  // Falling back would report a rig-dependent number in a file whose seam claims an
+  // exact anchor: the reader could not tell, which is the whole failure mode.
+  const wrongField = await run({ groundProbeLeadTicks: 2, groundedUnresolved: true }, { harness: seamWithGrounded(true) });
+  assert.equal(wrongField.output.feel.coyoteTime, undefined);
+  assert.match(
+    wrongField.output.omitted.find((o) => o.metric === "coyoteTime")!.reason,
+    /could not resolve the declared harness\.feelSeam\.fields\.grounded/,
+  );
+
+  // An OLD bridge that echoes no fieldTimeline at all is a different sentence with the
+  // same posture: name the bridge, never quietly measure the other thing.
+  const oldBridge = await run({ groundProbeLeadTicks: 2, noFieldTimelineEcho: true }, { harness: seamWithGrounded(true) });
+  assert.equal(oldBridge.output.feel.coyoteTime, undefined);
+  assert.match(
+    oldBridge.output.omitted.find((o) => o.metric === "coyoteTime")!.reason,
+    /echoed no fieldTimeline entry for it/,
+  );
+});
+
+test("E6 session three: the grounded field is sampled through capture_input_motion (the op that honours sampledFields), never through runtime.probe", async () => {
+  const { bridge } = await run({ groundProbeLeadTicks: 2 }, { harness: seamWithGrounded(true) });
+  const sampled = bridge.calls.filter((c) => c.params.sampledFields !== undefined);
+  assert.ok(sampled.length > 0, "the sweep must declare sampledFields");
+  for (const call of sampled) {
+    assert.equal(call.command, "runtime.capture_input_motion", "runtime.probe has no sampledFields parameter (L71)");
+    const spec = (call.params.sampledFields as Record<string, unknown>[])[0];
+    assert.deepEqual(spec.locator, { scene: "Level", path: "/Player" });
+    assert.equal(spec.type_name, "PlayerController");
+    assert.equal(spec.property_path, "grounded");
+  }
+  // The jump-buffer sweep does not need the flag, so it does not ask for it.
+  const bufferCalls = bridge.calls.filter(
+    (c) => c.command === "runtime.capture_input_motion" && ((c.params.phases as Phase[]) ?? []).length === 5,
+  );
+  assert.ok(bufferCalls.length > 0);
+  assert.ok(bufferCalls.every((c) => c.params.sampledFields === undefined));
 });
 
 test("E6: runLeg.direction -1 injects moveLeft and drives moveX negative, and measures the same speed", async () => {
@@ -987,4 +1226,63 @@ test("E6: a capture that leaves a BANDED metric unmeasured reports it, so the CL
   // POSITIVE CONTROL: a fully-measured session owes nothing, which is the exit-0 path.
   const { output: full } = await run();
   assert.deepEqual(full.unmeasuredAcceptedTargets, []);
+  assert.deepEqual(full.outOfScopeAcceptedTargets, []);
+});
+
+test("E6 session three: a band on a metric the feel GATE does not grade is an out-of-scope note, never an exit-1", async () => {
+  // TideRunner's real contract bands dashTime and dashCooldown. No leg measures them
+  // and `evaluateFeel` never reads them, so counting them made a run whose seven
+  // graded metrics were all measured exit 1, with no re-capture that could clear it.
+  const { output } = await run({ probeEchoesProvenance: true }, {
+    feel: {
+      runSpeed: { target: DECLARED.runSpeed, unit: "u/s", band: { percent: 10 } },
+      coyoteTime: { target: DECLARED.coyoteSeconds, unit: "s", band: { abs: 0.02 } },
+      dashTime: { target: 0.15, unit: "s", band: { percent: 10 } },
+      dashCooldown: { target: 0.4, unit: "s", band: { percent: 10 } },
+    },
+  });
+  assert.deepEqual(output.unmeasuredAcceptedTargets, [], "an ungradeable band must not fail the capture");
+  assert.deepEqual([...output.outOfScopeAcceptedTargets].sort(), ["dashCooldown", "dashTime"]);
+  // …and each is still CLOSED OUT with a stated reason: never silently absent.
+  for (const metric of ["dashTime", "dashCooldown"]) {
+    const entry = output.omitted.find((o) => o.metric === metric);
+    assert.ok(entry, `${metric} has no stated reason`);
+    assert.match(entry!.reason, /the feel gate does not grade this metric/);
+  }
+  assert.deepEqual(
+    (output.feel._provenance as { outOfScopeAcceptedTargets?: string[] }).outOfScopeAcceptedTargets?.sort(),
+    ["dashCooldown", "dashTime"],
+  );
+
+  // THE EXIT-1 SET IS STILL THE GRADED SET: a graded metric this session could not
+  // measure still fails the capture.
+  const { output: frozen } = await run({ frozen: true }, {
+    feel: {
+      runSpeed: { target: DECLARED.runSpeed, unit: "u/s", band: { percent: 10 } },
+      dashTime: { target: 0.15, unit: "s", band: { percent: 10 } },
+    },
+  });
+  assert.deepEqual(frozen.unmeasuredAcceptedTargets, ["runSpeed"]);
+  assert.deepEqual(frozen.outOfScopeAcceptedTargets, ["dashTime"]);
+});
+
+test("E6 session three: the capture's owed set is the feel GATE's own list, never a second copy of it", async () => {
+  // A duplicated list would drift: either demanding a metric no verdict grades, or
+  // hiding one it does. So the two are the same array, checked here by identity of
+  // content against the gate's export.
+  const graded = new Set<string>(GRADED_FEEL_METRICS as string[]);
+  assert.ok(graded.has("coyoteTime") && graded.has("dashDistance"));
+  assert.equal(graded.has("dashTime"), false);
+  assert.equal(graded.has("dashCooldown"), false);
+
+  // Every metric the gate grades that a contract can band is either measured by the
+  // producer or explicitly out of scope: there is no third category.
+  const banded = Object.fromEntries(
+    [...graded].map((metric) => [metric, { target: 1, unit: "u", band: { percent: 500 } }]),
+  );
+  const { output } = await run({ probeEchoesProvenance: true }, { feel: banded });
+  assert.deepEqual(output.outOfScopeAcceptedTargets, []);
+  for (const metric of output.unmeasuredAcceptedTargets) {
+    assert.ok(graded.has(metric), `${metric} is owed but not graded`);
+  }
 });

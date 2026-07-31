@@ -274,6 +274,7 @@ function recordingDeps(options: { writeFiles?: boolean } = {}): RecordedDeps {
         gaps: [],
         logCount: 0,
         unmeasuredAcceptedTargets: [],
+        outOfScopeAcceptedTargets: [],
       };
     },
     capturePlayability: async (a) => {

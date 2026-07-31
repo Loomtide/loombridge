@@ -52,18 +52,24 @@ import {
   type UnityRoutingMetadata,
 } from "../../bridge/unity-client-resolver.js";
 import {
+  ANCHOR_SOURCE_GROUNDED,
+  ANCHOR_SOURCE_Y_DESCENT_NOTE,
+  BRIDGE_INJECTION_LATENCY_TICKS,
   BRIDGE_SAMPLE_TICK_OFFSET,
+  GROUNDED_FIELD_ID,
   SHORT_HOP_CANONICAL_TAP_TICKS,
   deriveSweepMetric,
   firstDescentSampleIndex,
+  groundedAnchorSampleIndex,
   landingSampleIndexAfter,
+  type FieldTimelineEcho,
   type SweepMetric,
   type SweepTrialEcho,
   type TickSample,
 } from "../../domain/feel-primitives.js";
 import { resolveFeelSeam, type FeelSeam, locatorParam } from "../../domain/harness-seam.js";
 import { deriveMetric, isStaticTrajectory, isValidTrajectory } from "./feel-derive.js";
-import type { FeelMeasurementSource, FeelTrajectorySample } from "./gates/feel.js";
+import { GRADED_FEEL_METRICS, type FeelMeasurementSource, type FeelTrajectorySample } from "./gates/feel.js";
 
 /** The producer marker every source this recipe writes carries (stage 1). */
 export const FEEL_PRODUCER = "loombridge-capture";
@@ -88,10 +94,47 @@ const SETTLE_TICKS = 12;
  */
 const RUN_HOLD_TICKS = 90;
 
-/** The run leg's hold, and the coyote calibration walk, in physics ticks. */
+/**
+ * The RUN LEG's hold, in physics ticks. The coyote calibration walk used to share it
+ * and no longer does (E6 session three): the run leg must stay ON the ground for its
+ * whole hold and the coyote walk must LEAVE it, so one number could not bound both.
+ */
 function runLegTicks(seam: FeelSeam): number {
   return seam.runLeg?.ticks ?? RUN_HOLD_TICKS;
 }
+
+/**
+ * THE LEDGE HUNT (E6 session three). The coyote calibration walks until the player
+ * actually ungrounds, in steps, from a fresh spawn each time: the ledge's distance is
+ * a fact about the level that the harness has to OBSERVE, not one the contract can
+ * state. Stepping (rather than one long walk) keeps the drive as short as the level
+ * allows, which is the same safety concern the runway bound was introduced for.
+ */
+const COYOTE_WALK_STEP_TICKS = 60;
+
+/**
+ * The hard cap on that hunt, in physics ticks. 600 ticks is ten seconds of walking
+ * (70 units at 7 u/s): past that the harness is not looking for a ledge, it is
+ * driving the player across the whole level. Same ceiling as `RUN_LEG_MAX_TICKS`,
+ * for the same reason.
+ */
+const COYOTE_WALK_MAX_TICKS = 600;
+
+/**
+ * The named refusal when the hunt reaches the cap. `coyoteTime` is then NOT measured
+ * and the reason says what to change, because the harness cannot invent a ledge.
+ */
+export const NO_REACHABLE_LEDGE_REASON =
+  `this level has no reachable ledge in the declared direction: walking up to ${COYOTE_WALK_MAX_TICKS} physics ticks from the spawn ` +
+  "never ungrounded the player, so coyoteTime cannot be measured; declare a runway direction with a walkable ledge " +
+  "(harness.feelSeam.runLeg.direction), or measure this metric on a level that has one.";
+
+/**
+ * Ticks of horizontal hold a coyote trial keeps AFTER the press. The player is already
+ * off the ledge and airborne by then, so `runLeg.ticks` (a bound on how far the level's
+ * GROUND runway may be driven) no longer describes it.
+ */
+const COYOTE_TRIAL_TRAILING_TICKS = 36;
 
 /**
  * The horizontal KEY the run leg and the calibration walks inject. `direction: -1`
@@ -160,8 +203,14 @@ export interface CaptureFeelResult {
    * (exit 1): the verdict would fail on "NOT MEASURED" anyway, and a capture that
    * exits 0 having produced an ungradeable file is the shape that lets a run look
    * clean right up to the verdict.
+   *
+   * INTERSECTED WITH THE GRADED SET (`GRADED_FEEL_METRICS`): a band on a metric no
+   * gate reads is inert, and failing a capture over one is a refusal no re-capture
+   * can clear. Those land in `outOfScopeAcceptedTargets` instead.
    */
   unmeasuredAcceptedTargets: string[];
+  /** Banded metrics the feel gate does not grade: reported, never a failure. */
+  outOfScopeAcceptedTargets: string[];
   /** The leg a liveness check ended the session on, when one did. */
   aborted?: { leg: string; reason: string };
 }
@@ -198,9 +247,12 @@ export interface FeelSessionOutput {
    * Metrics the CONTRACT bands (`feel.<metric>.target`) that this session did not
    * measure. A capture that cannot feed its own gate is not a successful capture, so
    * the CLI turns a non-empty list into a failed recipe outcome (exit 1) rather than
-   * a green run whose verdict then fails on "NOT MEASURED".
+   * a green run whose verdict then fails on "NOT MEASURED". Intersected with the
+   * metric set the feel gate actually grades (see `CaptureFeelResult`).
    */
   unmeasuredAcceptedTargets: string[];
+  /** Banded metrics the feel gate does not grade: reported, never a failure. */
+  outOfScopeAcceptedTargets: string[];
   /** The leg the session gave up on, when a liveness check ended it early. */
   aborted?: { leg: string; reason: string };
 }
@@ -469,6 +521,42 @@ interface KeyedCapture {
   projectFixedTimestepBeforeMeasurement: number | undefined;
   measurementFixedTimestep: number | undefined;
   requestedCaptureFps: number;
+  /** `fieldTimeline[]` as echoed (empty unless the call declared `sampledFields`). */
+  fieldTimeline: FieldTimelineEcho[];
+}
+
+/** The echoed `fieldTimeline[]`, verbatim. Absent stays absent (no fabricated entry). */
+function fieldTimelinesOf(data: unknown): FieldTimelineEcho[] {
+  const raw = isRecord(data) ? data.fieldTimeline : undefined;
+  return Array.isArray(raw) ? (raw.filter(isRecord) as FieldTimelineEcho[]) : [];
+}
+
+/**
+ * The ground-flag timeline this capture carries, found by the ID the recipe asked
+ * for. Matched by id ONLY: taking "the one entry there is" would bind the anchor to
+ * whatever field happened to be sampled.
+ */
+function groundedTimelineOf(capture: KeyedCapture): FieldTimelineEcho | undefined {
+  return capture.fieldTimeline.find((entry) => entry.id === GROUNDED_FIELD_ID);
+}
+
+/**
+ * The `sampledFields` spec the coyote sweep sends, or undefined when the seam
+ * declares no ground flag. `runtime.capture_input_motion` honours `sampledFields` and
+ * samples the member on the trajectory's own tick clock; `runtime.probe` has no such
+ * parameter (ledger L71), which is why the sweeps run through the keyed capture op.
+ */
+function groundedSampledFields(seam: FeelSeam): Record<string, unknown>[] | undefined {
+  const field = seam.fields.grounded;
+  if (field === undefined) return undefined;
+  return [
+    {
+      id: GROUNDED_FIELD_ID,
+      locator: locatorParam(seam.playerLocator),
+      type_name: seam.controllerComponent,
+      property_path: field,
+    },
+  ];
 }
 
 /**
@@ -496,6 +584,7 @@ async function keyedCapture(
   playerLocator: string,
   phases: KeyedPhase[],
   captureFps: number,
+  sampledFields?: Record<string, unknown>[],
 ): Promise<KeyedCapture> {
   const data = await send(
     "runtime.capture_input_motion",
@@ -504,6 +593,7 @@ async function keyedCapture(
       phases: keyedPhases(phases),
       captureFps,
       includeSamples: true,
+      ...(sampledFields === undefined ? {} : { sampledFields }),
     },
     120000,
   );
@@ -512,6 +602,7 @@ async function keyedCapture(
     raw,
     samples: samplesOf(raw),
     phases: phasesOf(raw),
+    fieldTimeline: fieldTimelinesOf(raw),
     sampleCount: num(raw.sampleCount),
     durationMs: windowMsOf(raw),
     projectFixedTimestepBeforeMeasurement: num(raw.projectFixedTimestepBeforeMeasurement),
@@ -914,12 +1005,24 @@ export async function runFeelSession(options: FeelSessionOptions): Promise<FeelS
     if (metrics[metric] !== undefined || explained.has(metric)) continue;
     omitted.push({
       metric,
-      reason: aborted
-        ? `the session was ABORTED after the ${aborted.leg} leg, so this metric was never attempted: ${aborted.reason}`
-        : "the session ended before this metric was measured.",
+      reason: outOfScopeFeelTargets(options.contract).includes(metric)
+        ? OUT_OF_SCOPE_TARGET_REASON
+        : aborted
+          ? `the session was ABORTED after the ${aborted.leg} leg, so this metric was never attempted: ${aborted.reason}`
+          : "the session ended before this metric was measured.",
     });
   }
-  const unmeasuredAcceptedTargets = acceptedTargets.filter((metric) => metrics[metric] === undefined);
+  // WHAT THE CAPTURE OWES IS WHAT THE GATE GRADES (E6 session three). A contract may
+  // band a metric no gate reads: TideRunner bands `dashTime` and `dashCooldown`, which
+  // no leg measures and `evaluateFeel` never looks at. Counting those made the recipe
+  // exit 1 on a run whose seven graded metrics were all measured, and no re-capture
+  // could ever clear it: the only fix was to edit the contract. They are reported as
+  // out-of-scope NOTES instead, and the exit-1 set is the intersection with the graded
+  // set: still every metric a verdict will demand, and nothing a verdict ignores.
+  const unmeasuredAcceptedTargets = acceptedTargets.filter(
+    (metric) => metrics[metric] === undefined && GRADED_METRIC_SET.has(metric),
+  );
+  const outOfScopeAcceptedTargets = outOfScopeFeelTargets(options.contract);
 
   const provenance = {
     writer: FEEL_PRODUCER,
@@ -934,6 +1037,7 @@ export async function runFeelSession(options: FeelSessionOptions): Promise<FeelS
     ...(aborted ? { aborted } : {}),
     omitted,
     unmeasuredAcceptedTargets,
+    ...(outOfScopeAcceptedTargets.length === 0 ? {} : { outOfScopeAcceptedTargets }),
     gaps,
     ops: opLog,
   };
@@ -952,8 +1056,25 @@ export async function runFeelSession(options: FeelSessionOptions): Promise<FeelS
     gaps,
     logCount: logs.length,
     unmeasuredAcceptedTargets,
+    outOfScopeAcceptedTargets,
     ...(aborted ? { aborted } : {}),
   };
+}
+
+/** The metric ids `evaluateFeel` grades, as a set. Never a second list (see gates/feel.ts). */
+const GRADED_METRIC_SET: ReadonlySet<string> = new Set<string>(GRADED_FEEL_METRICS as string[]);
+
+/** Why an out-of-scope banded metric is not measured. Named once, said everywhere. */
+export const OUT_OF_SCOPE_TARGET_REASON =
+  "the feel gate does not grade this metric (it is outside evaluateFeel's graded set), so the capture has no leg for it: " +
+  "the band is inert. Remove it from the contract, or keep it as documentation, but no capture can satisfy it.";
+
+/**
+ * Banded feel targets the feel GATE does not grade. Reported as notes, never as a
+ * capture failure: no re-capture can clear them.
+ */
+export function outOfScopeFeelTargets(contract: unknown): string[] {
+  return acceptedFeelTargets(contract).filter((metric) => !GRADED_METRIC_SET.has(metric));
 }
 
 /**
@@ -1092,44 +1213,176 @@ interface SweepRunArgs {
   beforeLeg: () => Promise<void>;
 }
 
+/** What a calibration pass established before any trial is driven. */
+interface SweepCalibration {
+  capture: KeyedCapture;
+  /** The sample index the trials are placed relative to. */
+  referenceIndex: number;
+  /**
+   * Ticks removed when PLANNING a press so the derived offset comes out at `offset`:
+   * the same half of the convention the derivation applies to this anchor.
+   */
+  anchorOffsetTicks: number;
+  /** Named in the evidence (coyote only): which anchor the trials will use. */
+  anchorSource?: string;
+  /** Upper bound on a trial's walk, from the OBSERVED ledge distance (coyote only). */
+  maxWalkTicks?: number;
+}
+
+/** The cadence pin, proven rather than assumed. Returns the refusal, or null. */
+function cadenceRefusal(
+  capture: KeyedCapture,
+  fixedTimestep: number,
+  sweepFps: number,
+): string | null {
+  const perTick = samplesPerTick(capture.samples, fixedTimestep);
+  if (perTick !== null && Math.abs(perTick - 1) <= 0.25) return null;
+  return (
+    `the sweep needs ONE sample per physics tick to index ticks, and the calibration capture sampled ${perTick === null ? "an unreadable cadence" : `${perTick.toFixed(2)} samples/tick`} ` +
+    `(captureFps ${sweepFps} against a ${(1 / fixedTimestep).toFixed(2)}Hz sim).`
+  );
+}
+
 /**
- * A threshold sweep: one calibration capture to locate the reference event, then a
- * trial per tick offset. EVERY trial's raw echo is retained; the reported window is
- * `deriveSweepMetric` over those echoes, the same function the gate re-runs (L76/L77).
+ * THE COYOTE CALIBRATION: walk until the player actually LEAVES THE GROUND.
+ *
+ * This used to be a walk of exactly `runLeg.ticks`, and that was a contradiction on
+ * any real level (E6 session three): the run leg's bound exists to keep the player ON
+ * the ground for its whole hold, while this walk's whole job is to leave it. A level
+ * that declared a safe 60-tick runway therefore refused the coyote sweep outright.
+ * The walk now searches, in `COYOTE_WALK_STEP_TICKS` steps from a fresh spawn each
+ * time, until ungrounding is OBSERVED or the hard cap is reached.
+ *
+ * Ungrounding is observed by the controller's own ground flag when the seam declares
+ * one, and by the first confirmed descent otherwise. The two answers are different
+ * ticks on a rig whose ground probe is smaller than its collider, which is the whole
+ * point of `fields.grounded`.
+ */
+async function calibrateCoyoteLedge(
+  args: SweepRunArgs,
+  maxTicks: number,
+  sampledFields: Record<string, unknown>[] | undefined,
+): Promise<SweepCalibration | { refusal: string }> {
+  const { send, seam, fixedTimestep, sweepFps, record, log } = args;
+  const move = runLegKey(seam);
+
+  for (
+    let walkTicks = COYOTE_WALK_STEP_TICKS;
+    walkTicks <= COYOTE_WALK_MAX_TICKS;
+    walkTicks += COYOTE_WALK_STEP_TICKS
+  ) {
+    await args.beforeLeg();
+    const capture = await keyedCapture(
+      send,
+      seam.playerLocator,
+      [
+        { keys: [], fixedTicks: SETTLE_TICKS },
+        { keys: [move], fixedTicks: walkTicks },
+      ],
+      sweepFps,
+      sampledFields,
+    );
+    record("runtime.capture_input_motion", {
+      leg: `coyoteTime calibration (walk ${walkTicks}t)`,
+      sampleCount: capture.sampleCount,
+    });
+
+    const cadence = cadenceRefusal(capture, fixedTimestep, sweepFps);
+    if (cadence !== null) return { refusal: cadence };
+
+    const descent = firstDescentSampleIndex(capture.samples);
+
+    if (sampledFields !== undefined) {
+      const timeline = groundedTimelineOf(capture);
+      if (timeline === undefined) {
+        return {
+          refusal:
+            `harness.feelSeam.fields.grounded is declared as ${JSON.stringify(seam.fields.grounded)} but the capture echoed no fieldTimeline entry for it: ` +
+            "this bridge predates the sampledFields echo (L3a). Update the Loombridge package in this project, or remove fields.grounded to " +
+            "accept the rig-dependent descent anchor. Falling back silently would report an exactly-anchored number that is not one.",
+        };
+      }
+      const anchor = groundedAnchorSampleIndex(
+        timeline,
+        capture.samples.length,
+        descent === null ? capture.samples.length - 1 : descent,
+      );
+      if ("index" in anchor) {
+        return {
+          capture,
+          referenceIndex: anchor.index,
+          // The anchor index IS the ungrounding step, so only the press path's
+          // injection latency remains (see BRIDGE_SAMPLE_LAG_TICKS).
+          anchorOffsetTicks: BRIDGE_INJECTION_LATENCY_TICKS,
+          anchorSource: ANCHOR_SOURCE_GROUNDED,
+          maxWalkTicks: anchor.index - SETTLE_TICKS + maxTicks,
+        };
+      }
+      // A field the bridge cannot read will not become readable by walking further.
+      if (anchor.kind === "unreadable") return { refusal: anchor.refusal };
+      log(`[loombridge capture] feel: coyoteTime calibration: no ungrounding within a ${walkTicks}-tick walk; extending.`);
+      continue;
+    }
+
+    if (descent !== null) {
+      return {
+        capture,
+        referenceIndex: descent,
+        anchorOffsetTicks: BRIDGE_SAMPLE_TICK_OFFSET,
+        anchorSource: ANCHOR_SOURCE_Y_DESCENT_NOTE,
+        maxWalkTicks: descent - SETTLE_TICKS + maxTicks,
+      };
+    }
+    log(`[loombridge capture] feel: coyoteTime calibration: no descent within a ${walkTicks}-tick walk; extending.`);
+  }
+  return { refusal: NO_REACHABLE_LEDGE_REASON };
+}
+
+/** The jump-buffer calibration: one jump, and the landing it is swept against. */
+async function calibrateBufferLanding(args: SweepRunArgs): Promise<SweepCalibration | { refusal: string }> {
+  const { send, seam, fixedTimestep, sweepFps, record } = args;
+  await args.beforeLeg();
+  const capture = await keyedCapture(
+    send,
+    seam.playerLocator,
+    [
+      { keys: [], fixedTicks: SETTLE_TICKS },
+      { keys: [seam.keys.jump], fixedTicks: 8 },
+      { keys: [], fixedTicks: 100 },
+    ],
+    sweepFps,
+  );
+  record("runtime.capture_input_motion", { leg: "jumpBuffer calibration", sampleCount: capture.sampleCount });
+
+  const cadence = cadenceRefusal(capture, fixedTimestep, sweepFps);
+  if (cadence !== null) return { refusal: cadence };
+
+  const descent = firstDescentSampleIndex(capture.samples);
+  if (descent === null) return { refusal: "the calibration jump never fell: no landing to sweep against." };
+  const landing = landingSampleIndexAfter(capture.samples, descent);
+  if (landing === null) {
+    return { refusal: "the calibration capture never landed inside its window, so the sweep could not be centred." };
+  }
+  return { capture, referenceIndex: landing, anchorOffsetTicks: BRIDGE_SAMPLE_TICK_OFFSET };
+}
+
+/**
+ * A threshold sweep: one calibration pass to locate the reference event, then a
+ * trial per tick offset. EVERY trial's raw echo is retained (including the grounded
+ * timeline that anchors it); the reported window is `deriveSweepMetric` over those
+ * echoes, the same function the gate re-runs (L76/L77).
  */
 async function runSweep(args: SweepRunArgs): Promise<void> {
   const { metric, send, seam, fixedTimestep, sweepFps, metrics, sources, omitted, record, log } = args;
   const maxTicks = sweepTicksForTarget(targetSeconds(args.contract, metric), fixedTimestep);
+  const sampledFields = metric === "coyoteTime" ? groundedSampledFields(seam) : undefined;
 
-  await args.beforeLeg();
-  const calibration = await keyedCapture(send, seam.playerLocator, calibrationPhases(metric, seam), sweepFps);
-  record("runtime.capture_input_motion", { leg: `${metric} calibration`, sampleCount: calibration.sampleCount });
-
-  const perTick = samplesPerTick(calibration.samples, fixedTimestep);
-  if (perTick === null || Math.abs(perTick - 1) > 0.25) {
-    omitted.push({
-      metric,
-      reason:
-        `the sweep needs ONE sample per physics tick to index ticks, and the calibration capture sampled ${perTick === null ? "an unreadable cadence" : `${perTick.toFixed(2)} samples/tick`} ` +
-        `(captureFps ${sweepFps} against a ${(1 / fixedTimestep).toFixed(2)}Hz sim).`,
-    });
-    return;
-  }
-
-  const descent = firstDescentSampleIndex(calibration.samples);
-  if (descent === null) {
-    omitted.push({
-      metric,
-      reason:
-        metric === "coyoteTime"
-          ? "the calibration walk never left the ground: there is no ledge within the walk window, so no coyote sweep is possible from this spawn."
-          : "the calibration jump never fell: no landing to sweep against.",
-    });
-    return;
-  }
-  const referenceIndex = metric === "coyoteTime" ? descent : landingSampleIndexAfter(calibration.samples, descent);
-  if (referenceIndex === null) {
-    omitted.push({ metric, reason: "the calibration capture never landed inside its window, so the sweep could not be centred." });
+  const calibration =
+    metric === "coyoteTime"
+      ? await calibrateCoyoteLedge(args, maxTicks, sampledFields)
+      : await calibrateBufferLanding(args);
+  if ("refusal" in calibration) {
+    omitted.push({ metric, reason: calibration.refusal });
     return;
   }
 
@@ -1139,7 +1392,10 @@ async function runSweep(args: SweepRunArgs): Promise<void> {
   // jump (the derivation refuses that trial by design) and for the buffer is a press
   // on the landing tick itself. Neither is a threshold measurement.
   for (let offset = 1; offset <= maxTicks; offset += 1) {
-    const plan = trialPhases(metric, seam, referenceIndex, offset);
+    const plan = trialPhases(metric, seam, calibration.referenceIndex, offset, {
+      anchorOffsetTicks: calibration.anchorOffsetTicks,
+      ...(calibration.maxWalkTicks === undefined ? {} : { maxWalkTicks: calibration.maxWalkTicks }),
+    });
     if ("refusal" in plan) {
       // The trials gathered so far are still retained below when they bracket a
       // threshold; a sweep that stops early because the runway ran out is a smaller
@@ -1152,13 +1408,25 @@ async function runSweep(args: SweepRunArgs): Promise<void> {
       break;
     }
     await args.beforeLeg();
-    const capture = await keyedCapture(send, seam.playerLocator, plan.phases, sweepFps);
+    const capture = await keyedCapture(send, seam.playerLocator, plan.phases, sweepFps, sampledFields);
     record("runtime.capture_input_motion", { leg: `${metric} trial[${offset}]`, sampleCount: capture.sampleCount });
+    const groundedTimeline = sampledFields === undefined ? undefined : groundedTimelineOf(capture);
+    if (sampledFields !== undefined && groundedTimeline === undefined) {
+      // The calibration proved the bridge echoes this timeline, so a trial without one
+      // is not an older bridge: it is a sweep whose trials would not share one anchor.
+      omitted.push({
+        metric,
+        reason: `trial ${offset} came back with no grounded-field timeline although the calibration had one, so the sweep's trials do not share a single anchor. Re-capture.`,
+      });
+      sources.push(sweepSource(metric, trials, calibration, args, [], deriveSweepMetric(metric, trials, fixedTimestep)));
+      return;
+    }
     trials.push({
       index: offset,
       pressPhaseIndex: plan.pressPhaseIndex,
       phases: capture.phases as SweepTrialEcho["phases"],
       samples: capture.samples,
+      ...(groundedTimeline === undefined ? {} : { groundedTimeline }),
     });
   }
 
@@ -1177,7 +1445,7 @@ async function runSweep(args: SweepRunArgs): Promise<void> {
 function sweepSource(
   metric: SweepMetric,
   trials: SweepTrialEcho[],
-  calibration: KeyedCapture,
+  calibration: SweepCalibration,
   args: SweepRunArgs,
   measuredMetrics: string[],
   derivation: ReturnType<typeof deriveSweepMetric>,
@@ -1205,10 +1473,22 @@ function sweepSource(
     requestedCaptureFps: args.sweepFps,
     ...(effective === undefined ? {} : { effectiveCaptureFps: round4(effective) }),
     measuredAt: args.measuredAt,
-    projectFixedTimestepBeforeMeasurement: calibration.projectFixedTimestepBeforeMeasurement,
-    measurementFixedTimestep: calibration.measurementFixedTimestep,
+    projectFixedTimestepBeforeMeasurement: calibration.capture.projectFixedTimestepBeforeMeasurement,
+    measurementFixedTimestep: calibration.capture.measurementFixedTimestep,
     /** The convention, named in the file so a reader knows what the ticks mean. */
     tickOffset: BRIDGE_SAMPLE_TICK_OFFSET,
+    /**
+     * WHICH ANCHOR (E6 session three). A coyote window read off the visible descent
+     * is a lower bound whose error is the rig's probe-vs-collider overhang, and a
+     * reader has to be able to tell that from an exactly-anchored one. The sentence
+     * carries its own fix, so the evidence teaches the operator what to declare.
+     */
+    ...(calibration.anchorSource === undefined ? {} : { anchorSource: calibration.anchorSource }),
+    ...(metric === "coyoteTime" && args.seam.fields.grounded !== undefined
+      ? { anchorField: args.seam.fields.grounded }
+      : {}),
+    /** Ticks charged to the ANCHOR side of the convention for this sweep. */
+    anchorOffsetTicks: calibration.anchorOffsetTicks,
     /** Raw echo per trial: the gate re-derives the headline from THESE (L77). */
     trials,
     /** What the derivation read out of them (never the input to it). */
@@ -1219,33 +1499,27 @@ function sweepSource(
   };
 }
 
-/**
- * The calibration capture: walk off the ledge (coyote) or jump and land (buffer).
- *
- * The coyote walk is bounded by the SAME `runLeg.ticks` the run leg uses, and this is
- * what bounds the whole sweep: every trial's walk is placed inside the reference event
- * the calibration found, so a calibration that never leaves the declared runway makes
- * the sweep refuse ("no ledge within the walk window") instead of driving the trials
- * further than the level allows.
- */
-function calibrationPhases(metric: SweepMetric, seam: FeelSeam): KeyedPhase[] {
-  return metric === "coyoteTime"
-    ? [
-        { keys: [], fixedTicks: SETTLE_TICKS },
-        { keys: [runLegKey(seam)], fixedTicks: runLegTicks(seam) },
-      ]
-    : [
-        { keys: [], fixedTicks: SETTLE_TICKS },
-        { keys: [seam.keys.jump], fixedTicks: 8 },
-        { keys: [], fixedTicks: 100 },
-      ];
+/** How a trial's press is PLACED, from what the calibration observed. */
+export interface TrialPlanBounds {
+  /**
+   * Ticks removed when placing the press so the DERIVED offset comes out at `offset`:
+   * the anchor half of the convention for THIS sweep's anchor. `BRIDGE_SAMPLE_TICK_OFFSET`
+   * for a trajectory-read anchor, `BRIDGE_INJECTION_LATENCY_TICKS` for the grounded one.
+   */
+  anchorOffsetTicks: number;
+  /**
+   * Upper bound on a coyote trial's walk, derived from the OBSERVED ledge distance
+   * plus the sweep's own margin. It is NOT `runLeg.ticks`: the run leg's runway is a
+   * bound on ground the player may be driven across before it must still be standing,
+   * and this walk's job is to reach the ledge the calibration already found.
+   */
+  maxWalkTicks?: number;
 }
 
 /**
  * The trial phases for one tick offset.
  *
- * The press phase is placed so the DERIVED offset comes out at `offset`: for coyote
- * `elapsed = press − unground + 2`, for the buffer `lead = landing − press − 2`. The
+ * The press phase is placed so the DERIVED offset comes out at `offset`. The
  * placement is a plan, not an assumption: the real offset is whatever the trial's
  * own echo says, which is why a drifting reference event weakens the sweep's
  * resolution but can never corrupt its arithmetic.
@@ -1255,9 +1529,10 @@ export function trialPhases(
   seam: FeelSeam,
   referenceIndex: number,
   offset: number,
+  bounds: TrialPlanBounds = { anchorOffsetTicks: BRIDGE_SAMPLE_TICK_OFFSET },
 ): { phases: KeyedPhase[]; pressPhaseIndex: number } | { refusal: string } {
   if (metric === "coyoteTime") {
-    const pressIndex = referenceIndex + offset - BRIDGE_SAMPLE_TICK_OFFSET;
+    const pressIndex = referenceIndex + offset - bounds.anchorOffsetTicks;
     const walkTicks = pressIndex - SETTLE_TICKS;
     if (walkTicks < 1) {
       return {
@@ -1266,37 +1541,31 @@ export function trialPhases(
           "(the settle phase would have to be negative).",
       };
     }
-    // THE RUNWAY BINDS THE TRIALS TOO (E6). A press `offset` ticks after the ledge
-    // needs `offset` more ticks of walking than the calibration did, and on a level
-    // that declared a bounded runway those ticks are not available. Refuse the trial
-    // rather than drive past the bound: an offset the level cannot host is a smaller
-    // sweep, and the derivation already refuses a sweep that does not bracket.
-    const maxWalkTicks = runLegTicks(seam);
-    if (walkTicks > maxWalkTicks) {
+    // THE OBSERVED LEDGE BINDS THE TRIALS. A press `offset` ticks after the ledge
+    // needs `offset` more ticks of walking than the calibration did; past the ledge
+    // distance the calibration measured plus the sweep's own range, the plan has left
+    // the thing it is measuring. Refuse the trial rather than drive on: an offset the
+    // level cannot host is a smaller sweep, and the derivation already refuses a sweep
+    // that does not bracket.
+    if (bounds.maxWalkTicks !== undefined && walkTicks > bounds.maxWalkTicks) {
       return {
         refusal:
-          `placing the press ${offset} tick(s) after the ledge needs a ${walkTicks}-tick walk, past the ` +
-          `${maxWalkTicks}-tick runway harness.feelSeam.runLeg.ticks declares. Widen the runway if the level has one, ` +
-          "or accept the shorter sweep.",
+          `placing the press ${offset} tick(s) after the ledge needs a ${walkTicks}-tick walk, past the ${bounds.maxWalkTicks}-tick ` +
+          "bound the calibration's OBSERVED ledge distance plus this sweep's range allows. Accept the shorter sweep.",
       };
     }
     const move = runLegKey(seam);
-    // The post-press hold keeps driving horizontally while the player is airborne, so
-    // it is bound by the declared runway too: 36 ticks is another 4.2u at 7 u/s, and a
-    // level that said its runway is 20 ticks long did not consent to that either.
-    // Capped, not replaced, so the default (36 <= 90) is unchanged.
-    const trailingTicks = Math.min(36, runLegTicks(seam));
     return {
       phases: [
         { keys: [], fixedTicks: SETTLE_TICKS },
         { keys: [move], fixedTicks: walkTicks },
         { keys: [move, seam.keys.jump], fixedTicks: 2 },
-        { keys: [move], fixedTicks: trailingTicks },
+        { keys: [move], fixedTicks: COYOTE_TRIAL_TRAILING_TICKS },
       ],
       pressPhaseIndex: 2,
     };
   }
-  const pressIndex = referenceIndex - offset - BRIDGE_SAMPLE_TICK_OFFSET;
+  const pressIndex = referenceIndex - offset - bounds.anchorOffsetTicks;
   const fallTicks = pressIndex - SETTLE_TICKS - 8;
   if (fallTicks < 1) {
     return {
@@ -1657,6 +1926,7 @@ export async function captureFeelEvidence(args: CaptureFeelArgs): Promise<Captur
       gaps: output.gaps,
       logCount: output.logCount,
       unmeasuredAcceptedTargets: output.unmeasuredAcceptedTargets,
+      outOfScopeAcceptedTargets: output.outOfScopeAcceptedTargets,
       ...(output.aborted ? { aborted: output.aborted } : {}),
     };
   } finally {

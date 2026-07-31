@@ -226,8 +226,18 @@ export interface FeelMeasurements {
 
 export const GATE_NAME = "feel";
 
-/** The feel metrics this gate evaluates, in report order. */
-const FEEL_KEYS: Array<keyof FeelMeasurements & keyof FeelSection> = [
+/**
+ * THE GRADED SET: the feel metrics this gate evaluates, in report order.
+ *
+ * Exported because it is the authoritative answer to "which banded metric does a
+ * verdict actually grade", and more than one caller needs it. The feel CAPTURE reads
+ * it to decide what it OWES: a contract may band a metric this gate does not grade
+ * (TideRunner bands `dashTime` and `dashCooldown`, which no leg measures and no check
+ * here reads), and failing the capture over one of those is a refusal nothing can
+ * clear. Never duplicate this list: an out-of-sync copy would either demand a metric
+ * that is never graded or hide one that is.
+ */
+export const GRADED_FEEL_METRICS: Array<keyof FeelMeasurements & keyof FeelSection> = [
   "runSpeed",
   "jumpApex",
   "timeToApex",
@@ -263,7 +273,7 @@ export function evaluateFeel(
   const checks: GateCheck[] = [];
   const feel = acceptance.feel ?? {};
 
-  for (const key of FEEL_KEYS) {
+  for (const key of GRADED_FEEL_METRICS) {
     const target = feel[key] as NumericTarget | undefined;
     if (!target) continue; // no spec for this metric -> nothing to check
     const measured = measurements[key];

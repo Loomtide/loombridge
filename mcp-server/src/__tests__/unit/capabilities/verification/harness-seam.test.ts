@@ -22,6 +22,8 @@ import test from "node:test";
 import { PKG_ROOT } from "../../../_support/paths.js";
 import { validateAcceptanceContract } from "../../../../capabilities/verification/validator.js";
 import {
+  FEEL_SEAM_GROUNDED_NOTE,
+  FEEL_SEAM_RUNLEG_NOTE,
   FEEL_SEAM_TEMPLATE,
   RUN_LEG_MAX_TICKS,
   RUN_LEG_MIN_TICKS,
@@ -140,6 +142,67 @@ test("the refusal text carries the copy-pasteable block, not a documentation poi
   // a second refusal.
   const parsed = JSON.parse(`{${FEEL_SEAM_TEMPLATE}}`) as Record<string, unknown>;
   assert.equal(resolveFeelSeam(parsed).ok, true);
+});
+
+// ── fields.grounded: the exact coyote anchor (E6 session three) ─────────────
+
+test("fields.grounded round-trips through the SCHEMA, the VALIDATOR and the RESOLVER, and stays optional", () => {
+  const seam = { ...SEAM, fields: { ...SEAM.fields, grounded: " grounded " } };
+  assert.equal(validateAcceptanceContract({ ...contract(), harness: { feelSeam: seam } }).valid, true);
+  const result = resolveFeelSeam({ harness: { feelSeam: seam } });
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  assert.equal(result.seam.fields.grounded, "grounded");
+
+  // Optional: absent stays absent rather than materialising as a declared field, so a
+  // contract that never declared it cannot look like one that did.
+  const without = resolveFeelSeam({ harness: { feelSeam: SEAM } });
+  assert.equal(without.ok, true);
+  if (!without.ok) return;
+  assert.equal(without.seam.fields.grounded, undefined);
+  assert.equal(validateAcceptanceContract({ ...contract(), harness: { feelSeam: SEAM } }).valid, true);
+
+  // The SCHEMA knows it too, or a contract carrying it fails against the published
+  // schema while the hand-written validator accepts it.
+  const schema = JSON.parse(fs.readFileSync(schemaPath, "utf-8")) as {
+    properties: {
+      harness: { properties: { feelSeam: { properties: { fields: { properties: Record<string, unknown> } } } } };
+    };
+  };
+  assert.ok(schema.properties.harness.properties.feelSeam.properties.fields.properties.grounded);
+});
+
+test("a BLANK fields.grounded is refused by both ends, never read as 'not declared'", () => {
+  // An empty string would resolve to "no ground flag", which silently drops the coyote
+  // sweep back onto the rig-dependent descent anchor on a contract that meant to
+  // declare one. Refuse at contract time.
+  const blank = { ...SEAM, fields: { ...SEAM.fields, grounded: "   " } };
+  const result = validateAcceptanceContract({ ...contract(), harness: { feelSeam: blank } });
+  assert.equal(result.valid, false);
+  assert.ok(result.issues.some((i) => i.path === "harness.feelSeam.fields.grounded"), JSON.stringify(result.issues));
+});
+
+test("the refusal TEACHES fields.grounded: the template carries it and the note says what it buys", () => {
+  const result = resolveFeelSeam({ feel: {} });
+  assert.equal(result.ok, false);
+  if (result.ok) return;
+  assert.ok(result.refusal.includes(FEEL_SEAM_GROUNDED_NOTE));
+  assert.match(FEEL_SEAM_GROUNDED_NOTE, /declare it when the controller exposes its ground probe/);
+  assert.match(FEEL_SEAM_GROUNDED_NOTE, /makes the coyote anchor exact/);
+  // The template stays a VALID seam with the field in it.
+  const parsed = JSON.parse(`{${FEEL_SEAM_TEMPLATE}}`) as Record<string, unknown>;
+  const resolved = resolveFeelSeam(parsed);
+  assert.equal(resolved.ok, true);
+  if (!resolved.ok) return;
+  assert.equal(resolved.seam.fields.grounded, "grounded");
+  assert.equal(validateAcceptanceContract({ ...contract(), ...parsed }).valid, true);
+});
+
+test("the runway note no longer claims runLeg bounds the coyote calibration walk", () => {
+  // The two legs want opposite things on the same number (E6 session three), and an
+  // operator who reads the old sentence sets a runway that refuses the coyote sweep.
+  assert.match(FEEL_SEAM_RUNLEG_NOTE, /bounds how far the RUN LEG drives the player/);
+  assert.match(FEEL_SEAM_RUNLEG_NOTE, /does NOT bound[\s\S]*coyote calibration walk/);
 });
 
 test("the resolver returns the trimmed seam, and optional fields stay optional", () => {

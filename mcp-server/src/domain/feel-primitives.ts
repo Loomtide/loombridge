@@ -160,36 +160,54 @@ export interface TickSample {
  * breakdown), and the index of the sample at which the reference event is first
  * VISIBLE in the trajectory (the ledge departure for coyote, the landing for
  * jumpBuffer). The controller's own window is in PHYSICS STEPS, so converting
- * sample indices to steps needs the two mechanisms that separate them:
+ * sample indices to steps needs TWO SEPARATE MECHANISMS, and they apply to two
+ * DIFFERENT paths. They are named apart below because for a long time they were
+ * summed into one constant and applied together, which is what hid the E6 coyote
+ * defect: the y-anchor was wrong by an unrelated, rig-dependent amount and the sum
+ * was the only knob anyone could see.
  *
- *   (1) SAMPLING LAG (+1). Sample `i` reports the position AFTER physics step
- *       `i-1`. A state change first VISIBLE at sample index `i` was therefore
- *       produced by step `i-1`, so `referenceStep = referenceSampleIndex - 1`.
+ *   (1) SAMPLING LAG (`BRIDGE_SAMPLE_LAG_TICKS`, the ANCHOR path only). Sample `i`
+ *       reports the position AFTER physics step `i-1`. A state change first VISIBLE
+ *       at sample index `i` was therefore produced by step `i-1`, so
+ *       `referenceStep = referenceSampleIndex - 1`. It applies ONLY where a step
+ *       index is inferred from the sample a change first SHOWS UP in.
  *
- *   (2) INJECTION LATENCY (+1). A key pressed at the phase boundary of sample
- *       index `j` is not consumed by the controller on step `j`: the injection
- *       pipeline costs about one tick. This is the SAME latency the canonical
- *       short-hop constant above is built around, where a live 6-tick tap
- *       realizes as ~5 effective ticks on a cold first injection and a 2-3 tick
- *       tap never registers at all. So `pressStep = pressSampleIndex + 1`.
+ *   (2) INJECTION LATENCY (`BRIDGE_INJECTION_LATENCY_TICKS`, the PRESS path,
+ *       ALWAYS). A key pressed at the phase boundary of sample index `j` is not
+ *       consumed by the controller on step `j`: the injection pipeline costs about
+ *       one tick. This is the SAME latency the canonical short-hop constant above is
+ *       built around, where a live 6-tick tap realizes as ~5 effective ticks on a
+ *       cold first injection and a 2-3 tick tap never registers at all. So
+ *       `pressStep = pressSampleIndex + 1`, on every path, always.
  *
- * For coyote the controller compares (pressStep − ungroundStep):
- *   elapsedTicks = (pressSampleIndex + 1) − (ungroundSampleIndex − 1)
- *                = pressSampleIndex − ungroundSampleIndex + 2.
+ * For a coyote sweep anchored on the VISIBLE y-descent, both apply:
+ *   elapsedTicks = (pressSampleIndex + 1) − (descentSampleIndex − 1)
+ *                = pressSampleIndex − descentSampleIndex + 2.
  * For jumpBuffer the same two mechanisms appear with the reference AFTER the press:
  *   leadTicks    = (landingSampleIndex − 1) − (pressSampleIndex + 1)
  *                = landingSampleIndex − pressSampleIndex − 2.
  *
- * The offset is therefore ONE constant with one sign per direction, not a free
- * parameter, and the live door-one run corroborates it: `+2` was the value that
- * recovered a 0.10s declared window from real trials.
+ * For a coyote sweep anchored on the controller's OWN `grounded` field, only the
+ * injection latency applies: see `groundedAnchorSampleIndex`, whose returned index
+ * IS the ungrounding step (the sampling lag is absorbed by anchoring on the last
+ * still-TRUE reading rather than on the first FALSE one). Applying the sampling lag
+ * there too would bias the whole sweep by a tick.
  *
  * NOTE. Both mechanisms are properties of the HARNESS (how the bridge samples and
  * how injected input lands), not of any game. If a future bridge change removes the
- * injection latency, this constant changes once, here, and the known-truth recovery
- * test fails until it does.
+ * injection latency, these constants change once, here, and the known-truth recovery
+ * tests fail until they do.
  */
-export const BRIDGE_SAMPLE_TICK_OFFSET = 2;
+export const BRIDGE_SAMPLE_LAG_TICKS = 1;
+export const BRIDGE_INJECTION_LATENCY_TICKS = 1;
+
+/**
+ * The two mechanisms summed: the offset for a sweep whose anchor is read off the
+ * TRAJECTORY (the y-descent coyote anchor, and the jumpBuffer landing). Kept as one
+ * exported constant because the trial PLANNER and the file's `tickOffset` field both
+ * want the total, and because ledger L76 is about this number.
+ */
+export const BRIDGE_SAMPLE_TICK_OFFSET = BRIDGE_SAMPLE_LAG_TICKS + BRIDGE_INJECTION_LATENCY_TICKS;
 
 /**
  * Vertical motion (world units) that counts as real movement when reading the
@@ -218,6 +236,163 @@ export const SWEEP_RISE_EPSILON_U = 0.05;
  */
 export const SWEEP_RISE_SEARCH_TICKS = 6;
 
+// ─────────────────────────────────────────────────────────────────────────────
+// THE COYOTE ANCHOR (E6 session three, the last blocked metric).
+//
+// The sweep used to anchor on the first VISIBLE y-descent, and on a real rig that
+// is NOT when the controller ungrounds. TideRunner's ground probe is smaller than
+// the player's collider, so the probe reads `grounded=false` while the collider is
+// still resting on the ledge overhang: the controller's coyote timer starts, and
+// the trajectory stays flat for two more ticks. Anchored on the descent, the live
+// sweep measured 0.0667s against a declared 0.1000s: exactly two ticks short.
+//
+// The overhang is a property of the RIG (probe size vs collider size), so no fixed
+// correction is right for the next game. The only exact anchor is the controller's
+// own ground flag, sampled on the same tick clock as the trajectory. That is what
+// `harness.feelSeam.fields.grounded` declares and what the sweep passes to
+// `runtime.capture_input_motion` as `sampledFields` (that op honours sampledFields;
+// `runtime.probe` does NOT, ledger L71, which is why the sweeps run through the
+// keyed capture op and must keep doing so).
+//
+// The evidence, live: presses at press-sample-index 91, 92 and 93 registered a coyote
+// jump; 94 and later did not. With the grounded anchor at the ungrounding step (88)
+// the largest registering press reads 93 + 1 − 88 = 6 ticks = 0.1000s, dead on the
+// declared target, and the first failure reads 7. An anchor one tick later (89)
+// would have predicted press 94 registering, which the same trials refute.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** One reading of a sampled runtime field, on the position samples' tick clock. */
+export interface FieldTimelineSample {
+  tMs: number;
+  value: unknown;
+}
+
+/**
+ * One `fieldTimeline[]` entry as `runtime.capture_input_motion` echoes it, retained
+ * VERBATIM on the trial. `unresolved` / `readError` are the op's own honest-or-omit
+ * markers: a field it could not read is reported, never fabricated as `false`.
+ */
+export interface FieldTimelineEcho {
+  id?: string;
+  samples?: FieldTimelineSample[];
+  unresolved?: string;
+  readError?: string;
+}
+
+/** The `sampledFields[].id` the coyote sweep asks the bridge to echo back. */
+export const GROUNDED_FIELD_ID = "grounded";
+
+/** Which anchor a coyote observation used. Written into the retained observations. */
+export const ANCHOR_SOURCE_GROUNDED = "grounded-field";
+export const ANCHOR_SOURCE_Y_DESCENT = "y-descent";
+
+/**
+ * The sentence the EVIDENCE carries when the sweep had to fall back on the visible
+ * descent: the number is still honest, but it is a lower bound whose error is the
+ * rig's probe-vs-collider overhang, and the reader is told how to make it exact.
+ */
+export const ANCHOR_SOURCE_Y_DESCENT_NOTE =
+  `${ANCHOR_SOURCE_Y_DESCENT} (rig-dependent: declare harness.feelSeam.fields.grounded for an exact anchor)`;
+
+/** A sampled scalar read as a boolean, or null when it is not one. */
+function asBool(value: unknown): boolean | null {
+  if (typeof value === "boolean") return value;
+  if (value === 1) return true;
+  if (value === 0) return false;
+  return null;
+}
+
+/**
+ * THE UNGROUNDING STEP, from the controller's own ground flag.
+ *
+ * Returns the index of the LAST sample at which the field still read TRUE before it
+ * went false. That index IS the physics step on which the controller ungrounded, with
+ * no further correction: sample `i` reports the state after step `i-1`, so a field
+ * that reads true at sample `i` and false at sample `i+1` changed during step `i`.
+ * Anchoring on the last-true reading is therefore what absorbs `BRIDGE_SAMPLE_LAG_TICKS`
+ * (see the constants above) instead of re-applying it.
+ *
+ * `searchTo` bounds the scan to the ledge departure being measured: the LAST such
+ * transition at or before it, so a controller whose flag chatters earlier in the walk
+ * cannot anchor the trial on a bounce twenty ticks back.
+ *
+ * Refuse-don't-guess at every step. An absent timeline, an op-reported `unresolved` /
+ * `readError`, a timeline that is not one reading per position sample, a non-boolean
+ * reading, or a flag that never went true→false all REFUSE the trial. Falling back on
+ * the y-descent here would silently reintroduce the exact under-read this anchor
+ * exists to remove, on a run whose evidence claims an exact anchor.
+ */
+export type GroundedAnchor =
+  | { index: number }
+  /**
+   * `kind` separates the two refusals a CALLER treats differently: `"no-transition"`
+   * means this window simply did not reach the ledge (the calibration walk answers by
+   * walking further), `"unreadable"` means the declared field is wrong or the echo is
+   * broken (walking further would only repeat it).
+   */
+  | { refusal: string; kind: "no-transition" | "unreadable" };
+
+export function groundedAnchorSampleIndex(
+  timeline: FieldTimelineEcho | undefined,
+  sampleCount: number,
+  searchTo: number,
+): GroundedAnchor {
+  if (timeline === undefined || timeline === null) {
+    return {
+      kind: "unreadable",
+      refusal:
+        "the trial retains no grounded-field timeline, so the exact ungrounding tick cannot be read (re-capture with harness.feelSeam.fields.grounded declared).",
+    };
+  }
+  if (typeof timeline.unresolved === "string" && timeline.unresolved.length > 0) {
+    return {
+      kind: "unreadable",
+      refusal:
+        `the bridge could not resolve the declared harness.feelSeam.fields.grounded on the live controller (${timeline.unresolved}): ` +
+        "the coyote anchor has no ground truth, so the trial is refused rather than silently re-anchored on the visible descent.",
+    };
+  }
+  if (typeof timeline.readError === "string" && timeline.readError.length > 0) {
+    return {
+      kind: "unreadable",
+      refusal: `reading the declared grounded field failed mid-capture (${timeline.readError}), so its timeline is incomplete and cannot anchor the trial.`,
+    };
+  }
+  const readings = timeline.samples;
+  if (!Array.isArray(readings) || readings.length !== sampleCount) {
+    return {
+      kind: "unreadable",
+      refusal:
+        `the grounded timeline carries ${Array.isArray(readings) ? readings.length : "no"} reading(s) against ${sampleCount} position sample(s): ` +
+        "the anchor is an INDEX into the trajectory, so a timeline that is not one reading per sample cannot be aligned with it.",
+    };
+  }
+  const limit = Math.min(searchTo, readings.length - 1);
+  if (limit < 1) {
+    return { kind: "no-transition", refusal: `the grounded timeline has no transition to read before sample ${searchTo}.` };
+  }
+  const values: boolean[] = [];
+  for (let i = 0; i <= limit; i += 1) {
+    const value = asBool(readings[i]?.value);
+    if (value === null) {
+      return {
+        kind: "unreadable",
+        refusal: `the grounded timeline's reading at sample ${i} is ${JSON.stringify(readings[i]?.value)}, not a boolean: harness.feelSeam.fields.grounded must name a public bool field.`,
+      };
+    }
+    values.push(value);
+  }
+  for (let i = limit; i >= 1; i -= 1) {
+    if (values[i] === false && values[i - 1] === true) return { index: i - 1 };
+  }
+  return {
+    kind: "no-transition",
+    refusal:
+      `the declared grounded field never went true→false at or before sample ${limit}: ` +
+      "this trial never left the ground by the controller's own reckoning, so there is no ungrounding tick to measure from.",
+  };
+}
+
 /** One phase of the bridge's echoed per-phase breakdown (the fields this reads). */
 export interface SweepPhaseEcho {
   index?: number;
@@ -245,6 +420,13 @@ export interface SweepTrialEcho {
   phases: SweepPhaseEcho[];
   /** `samples[]` exactly as the op echoed it. */
   samples: TickSample[];
+  /**
+   * The `fieldTimeline[]` entry for the declared `harness.feelSeam.fields.grounded`,
+   * exactly as the op echoed it. Present ONLY when the seam declares that field; its
+   * presence is what selects the exact anchor, and it lives on the trial (not on the
+   * source header) so the gate re-derives the same number from the same disk bytes.
+   */
+  groundedTimeline?: FieldTimelineEcho;
 }
 
 /** Which threshold a sweep measures. Both share the convention, with opposite signs. */
@@ -255,12 +437,20 @@ export interface SweepObservation {
   trialIndex: number;
   /** Sample index at which the press phase begins (from the echoed sampleCounts). */
   pressSampleIndex: number | null;
-  /** Sample index at which the reference event first shows in the trajectory. */
+  /** Sample index of the anchor the arithmetic actually used. */
   referenceSampleIndex: number | null;
   /** Ticks between the reference event and the press, in the controller's frame. */
   elapsedTicks: number | null;
   /** Whether the jump registered for this trial. */
   jumped: boolean | null;
+  /**
+   * WHICH anchor a coyote trial used: the controller's own ground flag, or the
+   * visible y-descent. Recorded per trial so the evidence cannot claim an exact
+   * anchor for a sweep that fell back, and so a mixed sweep is detectable.
+   */
+  anchorSource?: typeof ANCHOR_SOURCE_GROUNDED | typeof ANCHOR_SOURCE_Y_DESCENT;
+  /** The first visible descent, kept for audit even when it is not the anchor. */
+  descentSampleIndex?: number;
   /** Why this trial is unusable, when it is. */
   refusal?: string;
 }
@@ -396,18 +586,65 @@ export function observeSweepTrial(
   }
 
   const descent = firstDescentSampleIndex(samples);
-  if (descent === null) {
-    return {
-      ...base,
-      pressSampleIndex: pressIndex,
-      refusal:
-        metric === "coyoteTime"
-          ? "the trajectory never leaves the ground (no sustained descent), so there is no ledge departure to measure from."
-          : "the trajectory never falls, so there is no landing to measure to.",
-    };
-  }
 
   if (metric === "coyoteTime") {
+    // THE EXACT ANCHOR, when the seam declared the controller's ground flag. The
+    // trial's OWN timeline decides: no descent is needed at all on this path (the
+    // flag is the ungrounding evidence), which matters because a coyote jump that
+    // registers before the collider has left the ledge overhang produces a rise
+    // BEFORE any descent, and the y-only reading below would refuse it as an
+    // ordinary grounded jump.
+    if (trial.groundedTimeline !== undefined) {
+      const anchor = groundedAnchorSampleIndex(
+        trial.groundedTimeline,
+        samples.length,
+        descent === null ? samples.length - 1 : descent,
+      );
+      if ("refusal" in anchor) {
+        return {
+          ...base,
+          pressSampleIndex: pressIndex,
+          ...(descent === null ? {} : { descentSampleIndex: descent }),
+          anchorSource: ANCHOR_SOURCE_GROUNDED,
+          refusal: anchor.refusal,
+        };
+      }
+      // Only the injection latency: `anchor.index` already IS the ungrounding step.
+      const elapsedTicks = pressIndex + BRIDGE_INJECTION_LATENCY_TICKS - anchor.index;
+      if (elapsedTicks <= 0) {
+        // The degenerate trial, read exactly instead of inferred from the shape of
+        // the trajectory: the press was consumed while the controller still called
+        // itself grounded, so this is an ordinary jump, not a coyote jump.
+        return {
+          ...base,
+          pressSampleIndex: pressIndex,
+          referenceSampleIndex: anchor.index,
+          ...(descent === null ? {} : { descentSampleIndex: descent }),
+          anchorSource: ANCHOR_SOURCE_GROUNDED,
+          refusal:
+            `the press (step ${pressIndex + BRIDGE_INJECTION_LATENCY_TICKS}) was consumed at or before the ungrounding step ${anchor.index}: ` +
+            "the controller still reported itself grounded, so this is an ordinary jump, not a coyote jump.",
+        };
+      }
+      return {
+        trialIndex,
+        pressSampleIndex: pressIndex,
+        referenceSampleIndex: anchor.index,
+        ...(descent === null ? {} : { descentSampleIndex: descent }),
+        anchorSource: ANCHOR_SOURCE_GROUNDED,
+        elapsedTicks,
+        jumped: roseWithin(samples, pressIndex, descent === null ? null : landingSampleIndexAfter(samples, descent)),
+      };
+    }
+
+    if (descent === null) {
+      return {
+        ...base,
+        pressSampleIndex: pressIndex,
+        anchorSource: ANCHOR_SOURCE_Y_DESCENT,
+        refusal: "the trajectory never leaves the ground (no sustained descent), so there is no ledge departure to measure from.",
+      };
+    }
     // THE DEGENERATE TRIAL. If the press is consumed while the player is still on
     // the platform, the trajectory's first descent is the resulting hop's own apex,
     // not a ledge departure, and reading it would report the whole hop as a coyote
@@ -419,18 +656,33 @@ export function observeSweepTrial(
           ...base,
           pressSampleIndex: pressIndex,
           referenceSampleIndex: descent,
+          descentSampleIndex: descent,
+          anchorSource: ANCHOR_SOURCE_Y_DESCENT,
           refusal: "the trial rose before leaving the ground: the press was consumed while still grounded, so this is an ordinary jump, not a coyote jump.",
         };
       }
     }
     const landing = landingSampleIndexAfter(samples, descent);
-    const elapsedTicks = pressIndex - descent + BRIDGE_SAMPLE_TICK_OFFSET;
+    // Both mechanisms: the anchor is inferred from the sample the descent SHOWS UP
+    // in, so it carries the sampling lag as well as the injection latency.
+    const elapsedTicks =
+      pressIndex + BRIDGE_INJECTION_LATENCY_TICKS - (descent - BRIDGE_SAMPLE_LAG_TICKS);
     return {
       trialIndex,
       pressSampleIndex: pressIndex,
       referenceSampleIndex: descent,
+      descentSampleIndex: descent,
+      anchorSource: ANCHOR_SOURCE_Y_DESCENT,
       elapsedTicks,
       jumped: roseWithin(samples, pressIndex, landing),
+    };
+  }
+
+  if (descent === null) {
+    return {
+      ...base,
+      pressSampleIndex: pressIndex,
+      refusal: "the trajectory never falls, so there is no landing to measure to.",
     };
   }
 
@@ -530,5 +782,22 @@ export function deriveSweepMetric(
     return { windowSeconds: null, reason: "no trials were retained, so nothing can be re-derived.", observations: [] };
   }
   const observations = list.map((trial, index) => observeSweepTrial(metric, trial, trial?.index ?? index));
+  // ONE SWEEP, ONE CONVENTION. The two coyote anchors differ by the rig's
+  // probe-vs-collider overhang, so a sweep whose trials do not all use the same one
+  // brackets a threshold that exists in neither frame. Refuse rather than average.
+  if (metric === "coyoteTime") {
+    const anchors = new Set(
+      observations.filter((o) => o.refusal === undefined).map((o) => o.anchorSource ?? "(none)"),
+    );
+    if (anchors.size > 1) {
+      return {
+        windowSeconds: null,
+        reason:
+          `the sweep mixes coyote anchors (${[...anchors].sort().join(", ")}): some trials retain the controller's grounded timeline and some do not, ` +
+          "so their tick counts are not in the same frame. Re-capture the whole sweep.",
+        observations,
+      };
+    }
+  }
   return { ...deriveTickThresholdWindow(observations, fixedTimestepSeconds), observations };
 }
