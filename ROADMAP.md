@@ -37,12 +37,12 @@ reference it; when they disagree, the ledger is the fresher truth.
 
 ## Now (in progress or next up, in this order)
 
-1. **Close the evidence-trust residuals** (ledger backlog items 1 to 5). The evidence
-   architecture shipped in 0.2.0 (producers, the observer, sha-bound verdicts, the
-   re-grading roll-up); what remains is the last honesty gap and its trim: a bridge-side
-   op journal so a fabricated self-consistent observation buffer is detectable, per-field
-   contract coverage inside walked sections, a slice re-open verb (staleness is still a
-   hand edit), and the warn-verdict exit code that is indistinguishable from a pass.
+1. **Finish the evidence-trust wave** (ledger backlog items 1, 2, 5). The op journal's
+   bridge half, the reopen verb, and the three-way warn exit shipped (PRs 49 and 50);
+   what remains is the journal's CONSUMPTION half (the observer embeds the window and
+   the gate cross-binds it against the CLI's own op log over a closed allowlist), the
+   framing per-field checks with producer-pinned game view, and eventually the
+   mutation-based per-field coverage guard the wave review scoped out.
 2. **CI robustness for verification.** The headless story: surviving domain reloads,
    first-import indexing, and unfocused editors without a human clicking a window
    (background throttling trips settle budgets today, measured live at ~10Hz). Includes
@@ -104,6 +104,14 @@ reference it; when they disagree, the ledger is the fresher truth.
   deliberately deferred until the Unity surface is the obvious default choice.
 
 ## Recently shipped (context for the items above; 0.2.0 is the evidence release)
+
+- **Post-0.2.0, pre-announcement**: the bridge op journal (every executed op leaves a
+  sequenced, target-resolved record through BOTH executor doors, batch children
+  included, with an instance id so a reset cannot impersonate a clean window);
+  `loombridge reopen` (approvals withdraw through the state machine, cascaded, with
+  artifacts cleared and the re-verify chain printed in dependency order); and the
+  three-way slice warn exit (capture gaps to the harness tier, graded warns strict by
+  default, a machine-readable `approvable` on the verdict).
 
 - **The evidence architecture** (0.2.0, the four-stage arc): evidence is produced,
   observed, or honestly second-class. The CLI produces feel evidence itself through a

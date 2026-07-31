@@ -1383,15 +1383,16 @@ FACT (a truth recorded, not a defect).
 ## THE OPEN BACKLOG (single consolidated list, 2026-07-31, post v0.2.0)
 
 Product and moat:
-1. Bridge op journal (E-series residual): a fabricated self-consistent observation
-   buffer with forged producer markers is undetectable offline; a bridge-side journal
-   or signed drain closes it. Own PR, design sketched in the stage-3 PR body.
+1. Bridge op journal: the BRIDGE HALF SHIPPED (PR 49: journal ring, instance id,
+   both executor doors, the journal category and repo guards); the CONSUMPTION half
+   (observer embeds the window, gate cross-binds it against the CLI opLog with the
+   effect-based allowlist) remains, spec'd as stage B2 of the evidence-trust wave.
 2. Fuller contract-coverage guard (R3 remainder): the roll-up's minimum viable check
    covers required-content sections; schema-required-but-ungraded FIELDS inside walked
    sections (the framing subset, L3/L28) still need per-field coverage.
-3. Slice re-open verb: staleness is still a hand edit to SLICES.json (E6 runbook gap).
-4. verify exits 0 on warn (L64): a warn verdict does not advance the slice but shares
-   the exit code of a pass.
+3. FIXED (PR 50): `loombridge reopen <sliceId>` withdraws approvals through the state machine with cascade and cleared artifacts.
+4. FIXED (PR 50): slice verify is strict by default with a three-way exit (capture
+   gaps to the harness tier, graded warns to 1) and a machine-readable approvable flag.
 5. editor.screenshot semantic rename or refusal (E19 residual: documented only).
 6. Paused-stepped replay slice: measured and justified by the KidsAdventure idle-probe
    discriminator (drift is game-clock phase desync; per-settle alignment insufficient);
