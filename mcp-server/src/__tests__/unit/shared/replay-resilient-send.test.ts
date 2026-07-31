@@ -89,6 +89,13 @@ test("NON_IDEMPOTENT_OPS: exactly the side-effecting ops the replay driver sends
     "editor.console_logs",
     "observe.start",
     "observe.status",
+    // The op journal's two ops are pure reads over a ring the retry cannot disturb.
+    // A retried journal.window returns the same slice (plus the retry's own entry,
+    // which is the journal recording its own traffic, not a side effect on the game),
+    // so a dropped response must stay recoverable: losing the window to a refusal
+    // would turn a reconnect into a failed evidence run.
+    "journal.stats",
+    "journal.window",
   ]) {
     assert.equal(NON_IDEMPOTENT_OPS.has(readOnly), false, `${readOnly} is a read: it must stay retryable`);
   }

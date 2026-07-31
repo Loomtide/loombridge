@@ -8,8 +8,9 @@ test("OpRegistry: has expected total op count", () => {
   const allOps = registry.getAll();
   // replay: 1 (settle_and_capture)
   // scene: 26 (added duplicate_object, set_parent, set_sibling_index, set_active, create_primitive, set_layer, set_tag, get_render_settings, set_render_settings, find_references_to, validate_references, snapshot_gameplay_geometry, compare_gameplay_geometry), editor: 19 (added refresh_assets, set_show_work, show_work_pulse, set_game_view_size, focus_game_view, tick, execute_menu_item, get_project_diagnostics, audit_mobile_assets), input: 11 (added observe_start, observe_stop, pointer_tap, pointer_tap_world), observe: 3 (start, status, drain: the stage-3 play-mode state recorder), runtime: 10 (added measure_motion, probe, capture_sequence, capture_input_motion, capture_pointer_motion, capture_pointer_hold_motion, sample_animator), component: 6, code: 4, animator: 9 (added set_state_motion), ui: 9 (added scan_text_components, get_screen_rects, dispatch_pointer, set_text_style), asset: 19 (added picker_open, picker_state, picker_close, browser_open, create_prefab_variant, replace_with_prefab, set_texture_import_settings, channel_pack, set_renderer_materials, list_sub_assets, inspect_model_importer, configure_model_importer, inspect_audio_importer, configure_audio_importer), package: 4 (add, list, remove, search), capture: 1 (invoke_static), ops: 3 (batch, list, describe)
-  // Total: 125
-  assert.equal(allOps.length, 125);
+  // journal: 2 (stats, window: the evidence-trust B1 op journal)
+  // Total: 127
+  assert.equal(allOps.length, 127);
 });
 
 test("OpRegistry: scene.create_primitive is registered (RCL-T01 gray-box blockout op)", () => {
@@ -996,6 +997,34 @@ test("OpRegistry: ops.list and ops.describe are registered discovery ops", () =>
   // Discovery ops are NOT async (answered server-side from the registry).
   assert.notEqual(list!.isAsync, true);
   assert.notEqual(describe!.isAsync, true);
+});
+
+test("OpRegistry: journal.stats and journal.window are read-only op-journal ops (evidence-trust B1)", () => {
+  const stats = registry.getByCommand("journal.stats");
+  const window = registry.getByCommand("journal.window");
+  assert.ok(stats, "journal.stats should be registered");
+  assert.ok(window, "journal.window should be registered");
+  assert.equal(stats!.toolName, "unity_journal_stats");
+  assert.equal(window!.toolName, "unity_journal_window");
+  // Both are cheap main-thread reads: never async, never a tunable timeout.
+  assert.notEqual(stats!.isAsync, true);
+  assert.notEqual(window!.isAsync, true);
+  assert.deepEqual(stats!.inputSchema, { type: "object", properties: {} });
+
+  // The three selectors the window advertises, and nothing else: an undocumented
+  // selector is a filter a consumer cannot re-derive.
+  const props = (window!.inputSchema as { properties: Record<string, unknown> }).properties;
+  assert.deepEqual(Object.keys(props).sort(), ["fromSeq", "fromTMs", "toSeq"]);
+
+  // The descriptions must state the two things that make the record usable as
+  // evidence rather than as a log: batch children are individual, and a domain
+  // reload wipes the journal and changes its identity.
+  assert.match(stats!.description, /journalInstanceId/);
+  assert.match(stats!.description, /domain reload/i);
+  assert.match(window!.description, /ops\.batch children are journaled INDIVIDUALLY/);
+  assert.match(window!.description, /wrapped/);
+  assert.match(window!.description, /paramsSha256/);
+  assert.match(window!.description, /effectFrameCount/);
 });
 
 test("OpRegistry: buildListing catalogs every op grouped by category", () => {

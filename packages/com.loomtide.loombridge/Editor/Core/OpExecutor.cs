@@ -75,6 +75,14 @@ namespace UnityBridge.Core
                 string category = command.Substring(0, dotIndex);
                 string opName = command.Substring(dotIndex + 1);
 
+                // THE JOURNAL HOOK (evidence-trust B1). Appended at DISPATCH, before the
+                // handler is even looked up, so the record is of what was ATTEMPTED: an
+                // op that failed may still have had a partial effect, and an op aimed at
+                // a category that does not exist is still traffic a consumer should see.
+                // Append never throws; a 0 means the append failed and there is nothing
+                // to patch an effect frame onto.
+                long journalSeq = OpJournal.Append(command, parameters);
+
                 // Look up handler
                 if (!_handlers.TryGetValue(category, out IOpHandler handler))
                 {
@@ -92,11 +100,17 @@ namespace UnityBridge.Core
                     handler.HandleOpAsync(opName, parameters,
                         (resultData) =>
                         {
+                            // The EFFECT frame: an async op's work lands on the frame its
+                            // completion callback runs, which is not the frame it was
+                            // dispatched on. Both are recorded; a synchronous op has no
+                            // effect frame at all (null), never a copy of the dispatch one.
+                            OpJournal.RecordEffectFrame(journalSeq);
                             JObject trace = TraceCollector.EndOp(capturedScope);
                             respond(BridgeResponse.Success(id, resultData, trace));
                         },
                         (error) =>
                         {
+                            OpJournal.RecordEffectFrame(journalSeq);
                             JObject trace = TraceCollector.EndOp(capturedScope);
                             JObject screenshot = TraceCollector.CaptureErrorScreenshot(command);
                             TraceCollector.AttachArtifact(trace, screenshot);
@@ -143,6 +157,15 @@ namespace UnityBridge.Core
                     $"Invalid command format: '{command}'. Expected 'category.opName'.");
             string category = command.Substring(0, dotIndex);
             string opName = command.Substring(dotIndex + 1);
+
+            // THE H5(a) HOLE, CLOSED. A batch child reaches its handler through here and
+            // never through Execute, so journaling only Execute would have made ops.batch
+            // a laundering wrapper: one journal entry reading "ops.batch" while an
+            // arbitrary number of scene writes went unrecorded. Each child appends its
+            // OWN entry, with its own op name and its own resolved target, in dispatch
+            // order between the parent's entry and the next top-level op.
+            long journalSeq = OpJournal.Append(command, parameters);
+
             if (!_handlers.TryGetValue(category, out IOpHandler handler))
                 throw new BridgeException(ErrorCodes.INVALID_PARAMS,
                     $"Unknown category: '{category}'.");
@@ -154,8 +177,8 @@ namespace UnityBridge.Core
                 BridgeException capturedErr = null;
                 bool done = false;
                 handler.HandleOpAsync(opName, parameters,
-                    r => { captured = r; done = true; },
-                    e => { capturedErr = e; done = true; });
+                    r => { captured = r; done = true; OpJournal.RecordEffectFrame(journalSeq); },
+                    e => { capturedErr = e; done = true; OpJournal.RecordEffectFrame(journalSeq); });
                 if (!done)
                     throw new BridgeException(ErrorCodes.INVALID_PARAMS,
                         $"Op '{command}' completes asynchronously across editor ticks and cannot run inside ops.batch. Run it as a standalone op.");

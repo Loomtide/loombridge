@@ -74,6 +74,7 @@ namespace UnityBridge
                 _executor.RegisterCategory("capture", new CaptureHandler());
                 _executor.RegisterCategory("replay", new ReplayHandler());
                 _executor.RegisterCategory("observe", new ObserveHandler());
+                _executor.RegisterCategory("journal", new JournalHandler());
                 _executor.RegisterCategory("ops", new OpsHandler(_executor));
 
                 // Register OpExecutor as default handler for category.op commands
