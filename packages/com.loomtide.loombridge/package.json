@@ -1,6 +1,6 @@
 {
   "name": "com.loomtide.loombridge",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "displayName": "Loombridge for Unity",
   "description": "Unity bridge for Loombridge \u2014 lets AI agents see, control, build, and verify Unity games through 121 typed MCP tools.",
   "unity": "2022.3",
