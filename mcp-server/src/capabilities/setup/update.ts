@@ -51,6 +51,7 @@ import {
 import {
   type LatestVersionLookup,
   executeSelfUpdate,
+  isValidVersionSpec,
   npmRegistryLookup,
   planSelfUpdate,
 } from "./cli-self-update.js";
@@ -75,11 +76,30 @@ interface UpdateArgs {
   dryRun: boolean;
   checkOnly: boolean;
   skipSelf: boolean;
-  channel?: string;
   version?: string;
 }
 
 type ParseHelp = { help: true; usageError?: boolean };
+
+function usageError(message: string): ParseHelp {
+  console.error(`[loombridge update] ${message}`);
+  return { help: true, usageError: true };
+}
+
+/**
+ * Read the value that follows a value-taking flag.
+ *
+ * Returns `null` when the flag is last, or when the next token is itself a flag. Without the
+ * second check `--project --check` consumes `--check` as the project path: the operator gets a
+ * wrong target AND silently loses the no-write flag, which is the quiet-wrong-target class the
+ * refusal exists to close. `--version --check` was worse: it built and RAN
+ * `npm install -g loombridge@--check`.
+ */
+function valueAfter(args: string[], index: number): string | null {
+  const next = args[index + 1];
+  if (next === undefined || next.startsWith("-")) return null;
+  return next;
+}
 
 export function parseArgs(args: string[], cwd: string = process.cwd()): UpdateArgs | ParseHelp {
   let project = "";
@@ -90,22 +110,34 @@ export function parseArgs(args: string[], cwd: string = process.cwd()): UpdateAr
   let dryRun = false;
   let checkOnly = false;
   let skipSelf = false;
-  let channel: string | undefined;
   let version: string | undefined;
   for (let i = 0; i < args.length; i += 1) {
     const arg = args[i];
     if (arg === "--project" || arg === "-p") {
       projectFlagSeen = true;
-      project = args[(i += 1)] ?? "";
+      project = valueAfter(args, i) ?? "";
+      if (project.length > 0) i += 1;
     }
-    else if (arg === "--tarball") tarball = args[(i += 1)] ?? "";
+    else if (arg === "--tarball") {
+      tarball = valueAfter(args, i) ?? "";
+      if (tarball.length === 0) return usageError(`${arg} needs a path.`);
+      i += 1;
+    }
     else if (arg === "--force-bridge") forceBridge = true;
     else if (arg === ALLOW_STALE_FLAG) allowStaleBridge = true;
     else if (arg === "--dry-run") dryRun = true;
     else if (arg === "--check") checkOnly = true;
     else if (arg === "--no-self-update") skipSelf = true;
-    else if (arg === "--channel") channel = args[(i += 1)] ?? "";
-    else if (arg === "--version") version = args[(i += 1)] ?? "";
+    else if (arg === "--version") {
+      version = valueAfter(args, i) ?? "";
+      if (version.length === 0) return usageError(`${arg} needs a version.`);
+      // The pin is interpolated into an install command, so it is validated at the door.
+      // A value containing whitespace would re-split downstream into EXTRA install targets.
+      if (!isValidVersionSpec(version)) {
+        return usageError(`--version "${version}" is not a valid version.`);
+      }
+      i += 1;
+    }
     else if (arg === "--help" || arg === "-h") return { help: true };
     else {
       console.error(`[loombridge update] unknown argument "${arg}".`);
@@ -133,7 +165,6 @@ export function parseArgs(args: string[], cwd: string = process.cwd()): UpdateAr
     dryRun,
     checkOnly,
     skipSelf,
-    channel,
     version,
   };
 }
@@ -147,9 +178,9 @@ function printUsage(): void {
       "then run doctor. With no --project, the current directory is used when it is a",
       "Unity project; otherwise only the CLI is updated.",
       "",
-      "The CLI is self-updated only on the npm channel (one portable command). A frozen",
-      "runtime (install.sh) or a source checkout is detected and the exact command is",
-      "printed instead, never run for you.",
+      "The CLI is self-updated only for a GLOBAL npm install (one portable command). A",
+      "local/npx copy, a frozen runtime, or a source checkout is detected and the exact",
+      "command is printed instead, never run for you.",
       "",
       "Options:",
       "  --project, -p <dir>   Target Unity project (default: cwd when it is one)",
@@ -159,7 +190,6 @@ function printUsage(): void {
       `  ${ALLOW_STALE_FLAG}  Deliver a bundle that does not match this CLI's sources`,
       "  --tarball <path>      Update to this bridge .tgz instead of the CLI-bundled one",
       "  --dry-run             Print the plan without writing any files",
-      "  --channel <name>      (advisory) shown in the CLI update instruction",
       "  --version <x.y.z>     Pin the CLI update to an exact published version",
       "  -h, --help            Show this help",
       "",
@@ -250,7 +280,11 @@ export function runCliSelfUpdatePhase(params: {
         for (const line of manualUpdateInstruction(info.method, RELEASE_REPO)) console.error(line);
         return { kind: "stop-updated", exitCode: 1 };
       }
-      console.log(`  -> CLI updated${plan.latest ? ` to ${plan.latest}` : ""}.`);
+      // Report the spec that was actually INSTALLED, never the registry's `latest`. With
+      // `--version 0.1.5` pinned, `latest` is a different version entirely, and printing it
+      // would be a verdict unbound to the run that produced it: the exact failure this repo's
+      // gates exist to refuse, in the install path.
+      console.log(`  -> CLI updated to ${params.pinnedVersion || plan.latest || "the latest published version"}.`);
       console.log("");
       console.log("     The bridge ships inside the CLI, so the newly installed binary must be the");
       console.log("     one that delivers it. Re-run to reconcile a project's bridge:");
@@ -265,19 +299,47 @@ export function runCliSelfUpdatePhase(params: {
   }
 }
 
-export async function run(args: string[]): Promise<number> {
-  const parsed = parseArgs(args);
+/**
+ * Test seam for `run`. Kept deliberately small: only the two things a unit test cannot control
+ * from outside (the working directory, and the phase that reaches the network and installs).
+ *
+ * It exists because the argv-to-actuator WIRING had no coverage, and that is exactly where a
+ * real defect hid: `--dry-run` was parsed correctly and then never forwarded, so a flag
+ * documented as write-free ran a global install. Every unit test passed, because they all
+ * called the phase directly with hand-supplied parameters and never walked argv into it.
+ */
+export interface UpdateRunDeps {
+  cwd?: string;
+  selfUpdatePhase?: typeof runCliSelfUpdatePhase;
+}
+
+export async function run(args: string[], deps: UpdateRunDeps = {}): Promise<number> {
+  const parsed = parseArgs(args, deps.cwd);
   if ("help" in parsed) {
     printUsage();
     return parsed.usageError ? 2 : 0;
   }
   const { project } = parsed;
 
+  // Validate an explicitly named project BEFORE phase 1. Phase 1 can end the run by
+  // self-updating and returning 0, so a typo'd `--project /typo/path` would exit 0 having
+  // never noticed the path is wrong, and the operator would believe that project was handled.
+  // Argument validity is a precondition, so it is checked before anything is actuated.
+  if (project.length > 0 && (!existsSync(project) || !looksLikeUnityProject(project))) {
+    console.error(`[loombridge update] ${project} is not a Unity project.`);
+    return 2;
+  }
+
   // Phase 1: the CLI itself. A successful self-update ends the run (see the header note on
   // ordering): the replaced binary owns the bridge tarball the next phase would deliver.
   if (!parsed.skipSelf) {
-    const outcome = runCliSelfUpdatePhase({
-      checkOnly: parsed.checkOnly,
+    const outcome = (deps.selfUpdatePhase ?? runCliSelfUpdatePhase)({
+      // BOTH no-write flags gate the install. `--dry-run` is documented as "print the plan
+      // without writing any files"; forwarding only `--check` here meant `--dry-run` ran a
+      // real global `npm install -g`, and `--dry-run --version <x>` silently DOWNGRADED the
+      // CLI. A flag that promises to write nothing must reach every actuator, not just the
+      // one it was written alongside.
+      checkOnly: parsed.checkOnly || parsed.dryRun,
       pinnedVersion: parsed.version,
     });
     if (outcome.kind === "stop-updated") return outcome.exitCode;
@@ -295,11 +357,7 @@ export async function run(args: string[]): Promise<number> {
     return 0;
   }
 
-  if (!existsSync(project) || !looksLikeUnityProject(project)) {
-    console.error(`[loombridge update] ${project} is not a Unity project.`);
-    return 2;
-  }
-
+  // (Project validity was already checked above, before anything could be actuated.)
   const meta = readInstallMetadata(project);
   if (!meta) {
     console.error(

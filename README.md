@@ -1,8 +1,7 @@
 # Loombridge
 
-### Agent layer to build and verify what was build along with feel. ###
+### Agent layer to build and verify games in Unity. It supports recording the game play once and replaying deterministicaly so you can automate regressions. You can also snapshot game feel and verify the drift in tuniung via replay. It generates reports of viauls and feel issues. ###
 
-It enables agents to operate Unity via typed commands, deterministic CLI to record and replay the game. It can take snapshot and verify gameplay against it to detect the drift.
 
 [![CI](https://github.com/Loomtide/loombridge/actions/workflows/ci.yml/badge.svg)](https://github.com/Loomtide/loombridge/actions/workflows/ci.yml)
 [![Unity EditMode](https://github.com/Loomtide/loombridge/actions/workflows/unity-editmode.yml/badge.svg)](https://github.com/Loomtide/loombridge/actions/workflows/unity-editmode.yml)
@@ -41,7 +40,7 @@ project's bridge, so the CLI and the bridge never drift apart:
 loombridge update          # add --check to see what would change without installing
 ```
 
-**Connect your agent** (Claude Code, Codex, Cursor, any MCP client): command `loombridge`.
+**Connect your agent** (Claude Code, Codex, Cursor, any MCP client): command `loombridge`, args `["mcp"]`.
 
 <details>
 <summary>Install from source / full setup notes</summary>

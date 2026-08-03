@@ -133,14 +133,24 @@ test("loombridge update self-updates ONLY through the channel it owns", async ()
     );
   }
 
-  // The installer remains the documented fallback for the channels above.
-  const src = readFileSync(
-    path.join(repoRoot, "mcp-server/src/capabilities/setup/cli-install-method.ts"),
-    "utf-8",
-  );
-  assert.ok(
-    src.includes("install.sh"),
-    "the manual-update instruction must still name the GitHub-Releases installer fallback",
+  // The installer remains the documented fallback for the channels that cannot self-update.
+  // Assert the RETURNED LINES, not the file text: an earlier cut of this check read the source
+  // with `src.includes("install.sh")`, which the module's own header comment satisfied, so
+  // deleting the recovery command from the frozen-runtime branch left the suite green while a
+  // user with no npm-managed install was handed no way back.
+  const { manualUpdateInstruction } = await import("../../../capabilities/setup/cli-install-method.js");
+  for (const method of ["frozen-runtime", "unknown"] as const) {
+    const lines = manualUpdateInstruction(method, "Loomtide/loombridge").join("\n");
+    assert.match(
+      lines,
+      /install\.sh/,
+      `the ${method} instruction must name the GitHub-Releases installer fallback`,
+    );
+  }
+  assert.match(
+    manualUpdateInstruction("dev-clone", "Loomtide/loombridge").join("\n"),
+    /git pull/,
+    "a source checkout must be told to update from git",
   );
 });
 

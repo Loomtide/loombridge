@@ -93,8 +93,14 @@ test("nothing advertises get.loomtide.ai as the Loombridge installer", async () 
   // endpoint (the docs must be able to warn about it, and the code must be able to explain the
   // override); what it forbids is presenting it as a runnable install command.
   const offenders: string[] = [];
+  // The scan list must follow the CODE, not the filename it used to live in. The
+  // update-instruction printing moved out of `update.ts` into `cli-install-method.ts` when the
+  // npm channel landed, and for one commit the guard was scanning a file that no longer prints
+  // any install command: the precise defect it names was reachable again with the suite green.
   const files = [
     path.join(PKG_ROOT, "src", "capabilities", "setup", "update.ts"),
+    path.join(PKG_ROOT, "src", "capabilities", "setup", "cli-install-method.ts"),
+    path.join(PKG_ROOT, "src", "capabilities", "setup", "cli-self-update.ts"),
     path.join(REPO_ROOT, "scripts", "loombridge-release.sh"),
     path.join(REPO_ROOT, "scripts", "install.sh"),
   ];

@@ -24,9 +24,23 @@ import { spawnSync } from "node:child_process";
 import { childStepStdio, forwardCapturedOutput } from "../../shared/child-stdio.js";
 import { NPM_PACKAGE_NAME, type CliInstallMethod, selfUpdateCommandFor } from "./cli-install-method.js";
 
+/**
+ * A version string safe to interpolate into an install command. Rejects whitespace, which
+ * would re-split into EXTRA install targets downstream (`executeSelfUpdate` splits on spaces),
+ * and anything outside semver's character set.
+ */
+export function isValidVersionSpec(v: string): boolean {
+  // Must START with a digit (after an optional `v`), so a stray flag like `--check` can never
+  // be read as a version even if it reaches here past the argv-level guard.
+  return /^v?[0-9][0-9A-Za-z.\-+]*$/.test(v);
+}
+
 /** Split a semver-ish string into numeric core parts plus an optional prerelease tail. */
 function parseVersion(v: string): { core: number[]; prerelease: string[] } | null {
-  const trimmed = v.trim().replace(/^v/, "");
+  // Build metadata is ignored for precedence per semver. Stripping it also stops `0.3.0+ci.12`
+  // from parsing as core [0,3,0,12] and reporting itself as newer than the published 0.3.0,
+  // which would leave that build permanently refusing to update.
+  const trimmed = v.trim().replace(/^v/, "").split("+")[0] ?? "";
   if (trimmed.length === 0) return null;
   const [corePart, ...rest] = trimmed.split("-");
   const core = corePart.split(".").map((n) => Number.parseInt(n, 10));
@@ -77,12 +91,21 @@ export function compareVersions(a: string, b: string): number | null {
 /** Look up the latest published version. Returns `null` on ANY failure: offline, timeout, unpublished. */
 export type LatestVersionLookup = () => string | null;
 
+/**
+ * On Windows the npm launcher is `npm.cmd`, which `spawnSync` cannot resolve without a shell:
+ * it returns ENOENT with `status: null`. Every lookup would then report "could not reach the
+ * npm registry" on a machine that is online with npm installed, and every install would report
+ * a failure that never ran. The README promises Windows in any shell, so this is load-bearing.
+ */
+export const npmSpawnOptions = { shell: process.platform === "win32" } as const;
+
 export function npmRegistryLookup(timeoutMs = 8000): LatestVersionLookup {
   return () => {
     try {
       const result = spawnSync("npm", ["view", NPM_PACKAGE_NAME, "version"], {
         encoding: "utf8",
         timeout: timeoutMs,
+        ...npmSpawnOptions,
         // Never inherit: this runs inside a CLI whose stdout may be a structured channel,
         // and the value is parsed, not displayed.
         stdio: ["ignore", "pipe", "pipe"],
@@ -137,6 +160,21 @@ export function planSelfUpdate(params: {
   const { method, current, latest, pinnedVersion } = params;
 
   if (pinnedVersion && pinnedVersion.length > 0) {
+    // A pin that ALREADY matches the running version must not actuate. Reinstalling would
+    // print "CLI updated", and because a self-update always ends the run, the bridge phase
+    // would never execute. A CI job that pins for reproducibility (`update --version 0.2.0`
+    // while on 0.2.0) would then be unable to reconcile a bridge on any run, forever, while
+    // every run reported success. Nothing changed, so this is `already-current`.
+    if (compareVersions(current, pinnedVersion) === 0) {
+      return {
+        action: "already-current",
+        method,
+        current,
+        latest,
+        command: null,
+        message: `already on the pinned version (${current})`,
+      };
+    }
     const command = selfUpdateCommandFor(method, pinnedVersion);
     if (command) {
       return {
@@ -234,7 +272,7 @@ export function executeSelfUpdate(
   exec: (cmd: string, args: string[]) => { status: number | null; stdout?: string | Buffer | null; stderr?: string | Buffer | null } = (
     cmd,
     args,
-  ) => spawnSync(cmd, args, childStepStdio()),
+  ) => spawnSync(cmd, args, { ...childStepStdio(), ...npmSpawnOptions }),
 ): boolean {
   const parts = command.split(" ").filter((p) => p.length > 0);
   const [cmd, ...args] = parts;

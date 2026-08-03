@@ -4,12 +4,21 @@
  * `loombridge update` has to answer this before it can offer to update the CLI itself.
  * Only ONE of the install channels can be self-updated safely:
  *
- *  - `npm-package`    installed from the registry (`npm install -g loombridge`).
+ *  - `npm-package`    installed GLOBALLY from the registry (`npm install -g loombridge`).
  *                     Self-updatable: one portable command, no assumptions about the
- *                     shell or the node version manager.
- *  - `frozen-runtime` delivered by `install.sh`, which copies a built `dist/` into
- *                     `~/.loombridge/runtime`. A `git pull` does NOT update it; re-running
- *                     the installer does. Instruct, never self-run.
+ *                     shell or the node version manager. Note this covers `install.sh`
+ *                     users too: that script downloads the release asset and hands it to
+ *                     `npm install -g`, so it lands in the global prefix like any other
+ *                     registry install.
+ *  - `npm-local`      a project dependency (`node_modules` under a directory that has its
+ *                     own package.json) or an `npx` cache entry. `npm install -g` here
+ *                     would write to a DIFFERENT install than the one running, then claim
+ *                     success while the local copy stayed untouched: an update that never
+ *                     updates, repeated forever. Instruct.
+ *  - `frozen-runtime` a `dist/` copied into `~/.loombridge/runtime` by
+ *                     `scripts/loombridge-install-locally.sh` (a dev-only script). A
+ *                     `git pull` does NOT update it; re-running that script does.
+ *                     Instruct, never self-run.
  *  - `dev-clone`      running out of a source checkout (`npm link`, `npm run build`, tsx).
  *                     `npm install -g` here would REPLACE a developer's working tree with a
  *                     published build, which is destructive and never what they meant.
@@ -32,7 +41,12 @@ import path from "node:path";
 /** The published package name. Kept in one place so the update command cannot drift from it. */
 export const NPM_PACKAGE_NAME = "loombridge";
 
-export type CliInstallMethod = "npm-package" | "frozen-runtime" | "dev-clone" | "unknown";
+export type CliInstallMethod =
+  | "npm-package"
+  | "npm-local"
+  | "frozen-runtime"
+  | "dev-clone"
+  | "unknown";
 
 export interface InstallMethodProbe {
   exists(p: string): boolean;
@@ -92,10 +106,37 @@ export function classifyCliInstall(
   }
 
   if (hasPathSegment(resolvedRoot, "node_modules")) {
+    // A `node_modules` segment alone says "installed by a package manager", NOT "installed
+    // globally". Three layouts land here and only one may be self-updated with
+    // `npm install -g`, because that command writes to the GLOBAL prefix:
+    //   /usr/local/lib/node_modules/loombridge   global, safe to update in place
+    //   ~/work/MyGame/node_modules/loombridge    a project devDependency
+    //   ~/.npm/_npx/<hash>/node_modules/...      an ephemeral npx cache entry
+    // Updating either of the last two writes a different install, reports success, and stops
+    // the run, so the copy actually executing never changes and the next run repeats it.
+    const segments = resolvedRoot.split(path.sep);
+    if (segments.includes("_npx")) {
+      return {
+        method: "npm-local",
+        resolvedRoot,
+        reason: "running from an npx cache entry, which is ephemeral and not updated in place",
+      };
+    }
+    // The directory that OWNS the last node_modules. A project root has its own package.json;
+    // a global prefix directory (…/lib, …/node_modules on Windows) does not.
+    const lastIndex = segments.lastIndexOf("node_modules");
+    const owner = segments.slice(0, lastIndex).join(path.sep);
+    if (owner.length > 0 && probe.exists(path.join(owner, "package.json"))) {
+      return {
+        method: "npm-local",
+        resolvedRoot,
+        reason: `installed as a dependency of the project at ${owner}, not globally`,
+      };
+    }
     return {
       method: "npm-package",
       resolvedRoot,
-      reason: "installed from the npm registry (the resolved package root sits under node_modules)",
+      reason: "installed globally from the npm registry",
     };
   }
 
@@ -131,10 +172,18 @@ export function manualUpdateInstruction(method: CliInstallMethod, releaseRepo: s
   switch (method) {
     case "frozen-runtime":
       return [
-        "  This CLI came from install.sh (the frozen runtime), which a git pull does not update.",
-        `  Re-run the installer to update it:`,
-        `    gh release download -R ${releaseRepo} -p install.sh && sh install.sh`,
+        "  This CLI runs from a frozen runtime copy, which a git pull does not update.",
+        "  Re-run the local installer to refresh it:",
+        "    bash scripts/loombridge-install-locally.sh",
         `  Or switch to the npm channel:  npm install -g ${NPM_PACKAGE_NAME}`,
+        `  Or the release installer:      gh release download -R ${releaseRepo} -p install.sh && sh install.sh`,
+      ];
+    case "npm-local":
+      return [
+        "  This CLI is a LOCAL install (a project dependency or an npx cache entry), so a",
+        "  global install would update a different copy and leave this one unchanged.",
+        `  Update the dependency instead:  npm install ${NPM_PACKAGE_NAME}@latest`,
+        `  Or install globally and use that:  npm install -g ${NPM_PACKAGE_NAME}@latest`,
       ];
     case "dev-clone":
       return [

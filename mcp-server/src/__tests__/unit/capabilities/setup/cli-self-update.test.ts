@@ -27,6 +27,7 @@ import {
 import {
   compareVersions,
   executeSelfUpdate,
+  isValidVersionSpec,
   planSelfUpdate,
 } from "../../../../capabilities/setup/cli-self-update.js";
 
@@ -66,6 +67,25 @@ describe("compareVersions", () => {
   test("an unparseable version returns null rather than guessing a direction", () => {
     assert.equal(compareVersions("unknown", "1.0.0"), null);
     assert.equal(compareVersions("1.0.0", ""), null);
+  });
+
+  test("build metadata is IGNORED for precedence, per semver", () => {
+    // Without stripping `+...`, `0.3.0+ci.12` parses as core [0,3,0,12] and reports itself
+    // as NEWER than the published 0.3.0, so that build would refuse to update forever.
+    assert.equal(compareVersions("0.3.0+ci.12", "0.3.0"), 0);
+    assert.equal(compareVersions("0.3.0+ci.12", "0.4.0"), -1);
+  });
+});
+
+describe("isValidVersionSpec", () => {
+  test("accepts real versions and rejects anything that would split a command", () => {
+    for (const good of ["0.2.0", "v1.0.0", "1.0.0-rc.1", "1.0.0+build.5"]) {
+      assert.equal(isValidVersionSpec(good), true, good);
+    }
+    // The pin is interpolated into a command string that is later split on spaces.
+    for (const bad of ["1.0.0 evil-pkg", "--check", "", "1.0.0;rm -rf /", "$(whoami)"]) {
+      assert.equal(isValidVersionSpec(bad), false, bad);
+    }
   });
 });
 
@@ -121,6 +141,41 @@ describe("classifyCliInstall", () => {
     const info = classifyCliInstall("/home/dev/my_node_modules_backup/loombridge", probeFor({ home }));
     assert.notEqual(info.method, "npm-package");
   });
+
+  test("REGRESSION: a project-local install is npm-local, NOT globally self-updatable", () => {
+    // A team adds loombridge as a devDependency and runs `npx loombridge update`. Classifying
+    // this as a global install makes the CLI run `npm install -g`, which writes a DIFFERENT
+    // copy, prints "CLI updated", and stops the run. The local copy never changes, so the
+    // next run repeats it forever while reporting success every time.
+    const projectRoot = "/home/dev/work/MyGame";
+    const info = classifyCliInstall(`${projectRoot}/node_modules/loombridge`, probeFor({
+      home,
+      present: [`${projectRoot}/package.json`],
+    }));
+    assert.equal(info.method, "npm-local");
+    assert.equal(selfUpdateCommandFor(info.method), null, "a local copy is never globally updated");
+
+    // LITMUS: the SAME path with no owning package.json is a global install, so the rule is
+    // the package.json probe and not something incidental about the path shape.
+    const global = classifyCliInstall(`${projectRoot}/node_modules/loombridge`, probeFor({ home }));
+    assert.equal(global.method, "npm-package");
+  });
+
+  test("REGRESSION: an npx cache entry is npm-local", () => {
+    const info = classifyCliInstall(`${home}/.npm/_npx/8fa1b/node_modules/loombridge`, probeFor({ home }));
+    assert.equal(info.method, "npm-local", "an ephemeral npx entry is not updated in place");
+    assert.equal(selfUpdateCommandFor(info.method), null);
+  });
+
+  test("a real global prefix stays self-updatable (nvm, homebrew, /usr/local)", () => {
+    for (const root of [
+      "/usr/local/lib/node_modules/loombridge",
+      `${home}/.nvm/versions/node/v20.11.0/lib/node_modules/loombridge`,
+      "/opt/homebrew/lib/node_modules/loombridge",
+    ]) {
+      assert.equal(classifyCliInstall(root, probeFor({ home })).method, "npm-package", root);
+    }
+  });
 });
 
 describe("planSelfUpdate", () => {
@@ -164,6 +219,22 @@ describe("planSelfUpdate", () => {
     const plan = planSelfUpdate({ ...npm, latest: "0.3.0", pinnedVersion: "0.1.5" });
     assert.equal(plan.action, "self-update");
     assert.equal(plan.command, "npm install -g loombridge@0.1.5");
+  });
+
+  test("REGRESSION: a pin equal to the running version does NOT reinstall", () => {
+    // The pin branch used to run before any comparison, so `update --version 0.2.0` while on
+    // 0.2.0 reinstalled, printed "CLI updated", and (because a self-update always ends the
+    // run) left the bridge phase permanently unreachable. A CI job pinning for reproducibility
+    // could therefore never reconcile a bridge, on any run, while every run reported success.
+    const plan = planSelfUpdate({ ...npm, latest: "0.3.0", pinnedVersion: "0.2.0" });
+    assert.equal(plan.action, "already-current", "nothing changed, so nothing may be actuated");
+    assert.equal(plan.command, null);
+  });
+
+  test("a pin equal to the running version matches on VALUE, not string identity", () => {
+    // `v0.2.0` and `0.2.0` are the same version; reinstalling on a formatting difference would
+    // reintroduce the stranded-bridge loop above.
+    assert.equal(planSelfUpdate({ ...npm, latest: "0.3.0", pinnedVersion: "v0.2.0" }).action, "already-current");
   });
 
   test("a pin on a manual channel still refuses to run anything", () => {

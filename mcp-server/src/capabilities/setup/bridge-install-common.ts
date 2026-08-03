@@ -182,7 +182,7 @@ export interface BridgeFreshness {
  * The frozen runtime packs its bundled tarball from that vendored copy, so a mismatch
  * there is a real defect (a re-vendored source with a stale tarball), not a false alarm.
  *
- * An npm-installed CLI (`node_modules/@loomtide/loombridge/`) has no sibling `packages/`,
+ * An npm-installed CLI (`node_modules/loombridge/`) has no sibling `packages/`,
  * which is what makes it `unverifiable` rather than stale.
  *
  * packageRoot(), never `..` counting: a `..` count encodes how deep this module sits, and
