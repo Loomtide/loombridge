@@ -1,6 +1,8 @@
 # Loombridge
 
-**Loombridge is the open agent layer for Unity: your AI agent sees, builds, and plays your game through a typed MCP bridge, and a deterministic CLI proves the result is actually done.**
+### Agent layer to build and verify what was build along with feel. ###
+
+It enables agents to operate Unity via typed commands, deterministic CLI to record and replay the game. It can take snapshot and verify gameplay against it to detect the drift.
 
 [![CI](https://github.com/Loomtide/loombridge/actions/workflows/ci.yml/badge.svg)](https://github.com/Loomtide/loombridge/actions/workflows/ci.yml)
 [![Unity EditMode](https://github.com/Loomtide/loombridge/actions/workflows/unity-editmode.yml/badge.svg)](https://github.com/Loomtide/loombridge/actions/workflows/unity-editmode.yml)
@@ -19,23 +21,27 @@
 
 ## Install
 
-One command installs and updates (macOS / Linux / Windows via Git Bash; needs Node >= 18 and the [GitHub CLI](https://cli.github.com)):
+Needs Node >= 18. macOS, Linux, and Windows, in any shell:
 
 ```bash
-gh release download -R Loomtide/loombridge -p install.sh && sh install.sh
+npm install -g loombridge
 ```
 
 Then wire your Unity project and health-check it:
 
 ```bash
 loombridge install-bridge --project /path/to/UnityProject   # adds the bridge (a file: tarball dependency)
-# open the project in Unity, let it compile, then:
-loombridge doctor --project /path/to/UnityProject --live
+loombridge doctor --project /path/to/UnityProject           # every failed row prints its fix
 ```
 
-`doctor` prints `healthy`; every failed row prints the exact command that fixes it.
+To update later, run this from anywhere. Inside a Unity project it also reconciles that
+project's bridge, so the CLI and the bridge never drift apart:
 
-**Connect your agent** (Claude Code, Codex, Cursor, any MCP client): command `loombridge`, args `["mcp"]`.
+```bash
+loombridge update          # add --check to see what would change without installing
+```
+
+**Connect your agent** (Claude Code, Codex, Cursor, any MCP client): command `loombridge`.
 
 <details>
 <summary>Install from source / full setup notes</summary>

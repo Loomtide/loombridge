@@ -20,13 +20,19 @@ function readJson(rel: string): Record<string, unknown> {
   return JSON.parse(readFileSync(path.join(repoRoot, rel), "utf-8"));
 }
 
-test("RCL-O02: CLI package.json is the scoped public package that ships the bundled bridge", () => {
+test("RCL-O02: CLI package.json is the public npm package that ships the bundled bridge", () => {
   const pkg = readJson("mcp-server/package.json");
 
-  // The distribution decision: scoped `@loomtide/loombridge`, published with public
-  // access — the org owns the npm scope, and the bundled bridge stays UPM-resolvable
-  // for consumers.
-  assert.equal(pkg.name, "@loomtide/loombridge", "the scoped package name is @loomtide/loombridge");
+  // The distribution decision: the UNSCOPED `loombridge`, published with public access.
+  // The org reserved both `loombridge` and `@loomtide/loombridge`; the unscoped name won
+  // because the install line is the first thing a new developer reads, and the bundled
+  // bridge stays UPM-resolvable for consumers either way.
+  //
+  // This is pinned rather than left free because the name is wired into three places that
+  // cannot discover it at runtime: the README install line, `install.sh`, and the CLI's own
+  // self-update command (`cli-install-method.ts#NPM_PACKAGE_NAME`). A rename that missed any
+  // of them would print an install command for a package that is not this one.
+  assert.equal(pkg.name, "loombridge", "the published package name is the unscoped `loombridge`");
 
   const bin = pkg.bin as Record<string, string>;
   assert.equal(bin.loombridge, "dist/surfaces/cli.js", "the `loombridge` bin must point at the CLI dispatcher");
@@ -36,7 +42,7 @@ test("RCL-O02: CLI package.json is the scoped public package that ships the bund
   assert.equal(
     publishConfig?.access,
     "public",
-    "publishConfig.access must be public — a scoped package defaults to restricted, so publishing publicly requires this",
+    "publishConfig.access must be public: publishing publicly is explicit, never inferred",
   );
 
   const repo = pkg.repository as Record<string, unknown> | undefined;
@@ -57,6 +63,28 @@ test("RCL-O02: CLI package.json is the scoped public package that ships the bund
   assert.ok(
     scripts.prepack?.includes("loombridge-pack-bridge"),
     "prepack must (re)pack the bridge tarball into bridge/ so a fresh publish always carries it",
+  );
+});
+
+test("the CLI's self-update command names THIS package, not a different one", async () => {
+  // A declared path nothing walks, at the install layer: `loombridge update` builds its own
+  // `npm install -g <name>@latest` from a constant. If that constant and package.json ever
+  // disagree, the CLI cheerfully installs some OTHER package over itself, and every test
+  // that exercises the update flow still passes because they all read the same constant.
+  const pkg = readJson("mcp-server/package.json");
+  const { NPM_PACKAGE_NAME, selfUpdateCommandFor } = await import(
+    "../../../capabilities/setup/cli-install-method.js"
+  );
+
+  assert.equal(
+    NPM_PACKAGE_NAME,
+    pkg.name,
+    "cli-install-method.ts#NPM_PACKAGE_NAME must equal package.json#name",
+  );
+  assert.equal(
+    selfUpdateCommandFor("npm-package"),
+    `npm install -g ${pkg.name as string}@latest`,
+    "the printed self-update command must install the package this repo publishes",
   );
 });
 
@@ -82,15 +110,37 @@ test("release channel: one-command GitHub-Releases installer + release script ex
   assert.ok(release.includes("install.sh"), "the release must also publish the installer as an asset");
 });
 
-test("loombridge update points CLI self-update at the one-line installer, not an npm registry", () => {
-  const src = readFileSync(path.join(repoRoot, "mcp-server/src/capabilities/setup/update.ts"), "utf-8");
-  assert.ok(
-    src.includes("curl -fsSL") && src.includes("| sh"),
-    "the CLI self-update hint must be the curl|sh installer (the same command used to install)",
+test("loombridge update self-updates ONLY through the channel it owns", async () => {
+  // Supersedes the earlier decision that self-update must be instruct-only via install.sh.
+  // That held while the GitHub-Releases installer was the supported channel; npm is now the
+  // supported channel, and `npm install -g <pkg>@latest` is one portable command that does
+  // not care which node version manager is in play.
+  //
+  // What must NOT change is the other half: an install is run ONLY for a registry install.
+  // On a source checkout, `npm install -g` would replace a developer's working tree with a
+  // published build, and on a frozen runtime it would leave two CLIs on PATH. Those channels
+  // are instructed, never actuated. This asserts the real function, so a regression that
+  // widened the branch fails here rather than in prose.
+  const { selfUpdateCommandFor } = await import("../../../capabilities/setup/cli-install-method.js");
+
+  assert.ok(selfUpdateCommandFor("npm-package"), "the npm channel must be self-updatable");
+
+  for (const method of ["frozen-runtime", "dev-clone", "unknown"] as const) {
+    assert.equal(
+      selfUpdateCommandFor(method),
+      null,
+      `the ${method} channel must be INSTRUCTED, never self-updated by running an install`,
+    );
+  }
+
+  // The installer remains the documented fallback for the channels above.
+  const src = readFileSync(
+    path.join(repoRoot, "mcp-server/src/capabilities/setup/cli-install-method.ts"),
+    "utf-8",
   );
   assert.ok(
-    !/npm install -g @loombridge\/cli/.test(src),
-    "self-update must NOT instruct an npm-registry install — the supported channel is the GitHub-Releases installer",
+    src.includes("install.sh"),
+    "the manual-update instruction must still name the GitHub-Releases installer fallback",
   );
 });
 

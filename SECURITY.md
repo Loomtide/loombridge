@@ -2,7 +2,7 @@
 
 ## Supported Versions
 
-Loombridge (the `com.loomtide.loombridge` Unity package and the `@loomtide/loombridge` MCP
+Loombridge (the `com.loomtide.loombridge` Unity package and the `loombridge` MCP
 server/CLI) is pre-1.0. Only the **latest minor release** receives security fixes; older
 minors are not patched — upgrade to the newest release to stay supported.
 

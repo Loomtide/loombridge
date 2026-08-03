@@ -79,7 +79,7 @@ jobs:
             release-assets/*
 
       # npm publish via TRUSTED PUBLISHING (OIDC) — preferred: no token secret.
-      # Configure once on npmjs.com: package @loomtide/loombridge -> Settings ->
+      # Configure once on npmjs.com: package `loombridge` -> Settings ->
       # Trusted publisher -> GitHub Actions (Loomtide/loombridge, release.yml).
       # NPM_TOKEN remains an optional fallback. Until one of the two is
       # configured, the step notices-and-continues: the GitHub Release assets

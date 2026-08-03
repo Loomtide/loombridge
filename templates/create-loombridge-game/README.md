@@ -47,15 +47,11 @@ create-loombridge-game/
    `.mcp.json` here invokes `loombridge-mcp`). Per `Docs/Install.md`:
 
    ```bash
-   # tarball (works today, no registry):
-   #   cd <Loombridge>/mcp-server && npm ci && npm pack
-   #   npm i -g ./loombridge-cli-<version>.tgz
-   # or, once published to the @loomtide npm scope: npm i -g @loomtide/loombridge
+   npm install -g loombridge
    ```
 
    If you prefer not to install globally, switch `.mcp.json`'s server command to
-   the npx form once the package is published:
-   `"command": "npx", "args": ["-y", "-p", "@loomtide/loombridge", "loombridge-mcp"]`.
+   the npx form: `"command": "npx", "args": ["-y", "-p", "loombridge", "loombridge-mcp"]`.
 
 4. **Open the project in Unity** and wait for the `[Loombridge] Published
    endpoint discovery` console log (the bridge compiled + connected).

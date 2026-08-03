@@ -132,8 +132,9 @@ curl -fsSL https://get.loomtide.ai | sh -s -- --project /path/to/UnityProject --
 The choice lives in the committed `ProjectSettings/LoombridgeInstall.json`, so it is **team-wide + versioned**:
 one dev decides and everyone's `loombridge update` behaves identically after a pull.
 
-> A published npm package (`npm install -g @loomtide/loombridge`) is a parallel channel; the public GitHub
-> Releases command above is the supported install/update path and always resolves the latest release.
+> The GitHub Releases command above is the fallback channel, for a pinned release asset or a machine
+> without registry access. The supported install and update path is npm (`npm install -g loombridge`),
+> which is what `loombridge update` self-updates through.
 
 ---
 
@@ -260,7 +261,7 @@ scripts/loombridge-release.sh                 # tag defaults to v<version> from 
 scripts/loombridge-release.sh --dry-run       # pack only, no release (sanity check)
 ```
 
-It packs `@loomtide/loombridge` (whose `prepack` bundles the current bridge tarball) and uploads
+It packs `loombridge` (whose `prepack` bundles the current bridge tarball) and uploads
 `loombridge-cli-<ver>.tgz` **plus** `scripts/install.sh` as release assets. Developers pick it up automatically —
 `curl -fsSL https://get.loomtide.ai | sh` always resolves the latest release. (`LOOMBRIDGE_REPO=<owner/repo>`
 overrides the target for both the release script and the installer.)

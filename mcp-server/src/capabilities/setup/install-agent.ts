@@ -118,7 +118,7 @@ function resolvePayloadDir(): string {
   if (existsSync(candidate)) return candidate;
   throw new RuntimeFailure(
     "no agent-surface payload bundled with this CLI. In the dev repo, run scripts/build-agent-surface.mjs " +
-      "(CI's prepack builds it into @loomtide/loombridge).",
+      "(CI's prepack builds it into loombridge).",
   );
 }
 

@@ -98,7 +98,7 @@ function checkLocalInstall(checks: DoctorCheck[]): { bundledVersion?: string; bu
       label: "Bundled bridge tarball",
       status: "fail",
       detail: "no bridge tarball ships with this CLI build",
-      remediation: "In the dev repo, run scripts/loombridge-pack-bridge.sh (CI should bundle it into @loomtide/loombridge).",
+      remediation: "In the dev repo, run scripts/loombridge-pack-bridge.sh (CI should bundle it into loombridge).",
     });
     // The freshness row is pushed even here: a check that vanishes when its input is
     // missing reads, in the JSON report and to the eye, exactly like a check that passed.
