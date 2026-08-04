@@ -43,17 +43,25 @@ reference it; when they disagree, the ledger is the fresher truth.
    the gate cross-binds it against the CLI's own op log over a closed allowlist), the
    framing per-field checks with producer-pinned game view, and eventually the
    mutation-based per-field coverage guard the wave review scoped out.
-2. **CI robustness for verification.** The headless story: surviving domain reloads,
+2. **Shareable anchors (artifact storage).** A teammate or a CI runner cannot `git clone` a
+   project and verify it, in any configuration: the approved anchors live under
+   `~/.loombridge/projects/<id>/`, which no clone can reach, and the one project-local anchor
+   is gitignored by our own template. Move every project-specific artifact into the project,
+   split into a committed `anchors/` half and an ignored `run/` half, with portable bindings so
+   an anchor survives a different checkout path. This is a PREREQUISITE for the next item, not
+   a hygiene change: a gate whose evidence never leaves one machine is not a gate. Design:
+   [Docs/Design/ArtifactStorage.md](Docs/Design/ArtifactStorage.md).
+3. **CI robustness for verification.** The headless story: surviving domain reloads,
    first-import indexing, and unfocused editors without a human clicking a window
    (background throttling trips settle budgets today, measured live at ~10Hz). Includes
    the `UNITY_LICENSE` CI path for the EditMode gate.
-3. **Paused-stepped replay.** The measured next step for pixel baselines on animated
+4. **Paused-stepped replay.** The measured next step for pixel baselines on animated
    games: capture-aligned settles shipped in 0.2.0 and the idle-probe discriminator
    proved the residual drift is game-clock phase desync accumulating in the unaligned
    inter-segment windows, which only whole-run stepped execution closes. The
    preconditions are recorded in the aligned-wave review; either it ships, or a game
    stays honestly flow-green with a red pixel gate.
-4. **N-capture averaging for feel snapshots.** Some metrics are single-capture-noisy
+5. **N-capture averaging for feel snapshots.** Some metrics are single-capture-noisy
    (tail-of-trajectory derivations measured 2x spreads on real games). The manifest
    already reserves `captureRuns`; capture N times, freeze the aggregate, and surface
    per-metric stability at approve time. Independent of the chain above.
