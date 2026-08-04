@@ -532,25 +532,41 @@ test("PORTABLE BINDING: a feel snapshot stamped in one checkout still grades in 
   const dev = await tmpCheckout("unified-dev-", "git@github.com:Loomtide/game.git");
   const mate = await tmpCheckout("unified-mate-", "https://github.com/Loomtide/game"); // https at the teammate
   const otherRepo = await tmpCheckout("unified-otherrepo-", "https://github.com/Loomtide/other-game.git");
+  const nonGit = await tmpDir("unified-nongit-"); // deliberately NOT a git checkout
   const workspace = await tmpDir("unified-ws-");
   try {
     await plantSnapshot(workspace, dev);
 
     const home = rowFor((await discoverVerificationAssets({ root: dev, workspace })).assets, "feel-snapshot");
     assert.equal(home.runnable, "live", "the machine that approved it still grades, by the absolute rule");
+    assert.equal(home.reason, undefined, "…and it says nothing extra: this IS the path it was approved at");
 
     const teammate = rowFor((await discoverVerificationAssets({ root: mate, workspace })).assets, "feel-snapshot");
     assert.equal(teammate.runnable, "live", "THE POINT: a different absolute path, same repo, same position");
     assert.equal(teammate.notRunClass, undefined);
     assert.equal(teammate.broken, undefined);
+    // A PORTABLE match is never silent. Before S1 a second checkout read `broken`, which
+    // told the operator the anchor was not theirs; that signal has to survive as
+    // provenance now that the row grades, because two checkouts of one repo still share
+    // one home workspace (its id is the folder BASENAME) and an operator can be graded by
+    // an anchor frozen somewhere they have never looked.
+    assert.match(String(teammate.reason), /bound PORTABLY/);
+    assert.ok(teammate.reason?.includes(dev), `the row must name where it was approved: ${teammate.reason}`);
 
     // LITMUS 1: a genuinely different repository must stay tier-2 broken.
     const foreign = rowFor((await discoverVerificationAssets({ root: otherRepo, workspace })).assets, "feel-snapshot");
     assert.equal(foreign.runnable, "no");
     assert.equal(foreign.notRunClass, "broken");
     assert.ok(foreign.broken?.includes("github.com/Loomtide/game"), foreign.broken);
+
+    // LITMUS 2: a root in NO git tree derives no identity, so the portable arm cannot
+    // answer and must refuse. Without that refusal a portably-stamped anchor would grade
+    // every non-git directory on the machine.
+    const outside = rowFor((await discoverVerificationAssets({ root: nonGit, workspace })).assets, "feel-snapshot");
+    assert.equal(outside.runnable, "no", "no git tree, no portable identity, no match");
+    assert.equal(outside.notRunClass, "broken");
   } finally {
-    for (const d of [dev, mate, otherRepo, workspace]) await fs.rm(d, { recursive: true, force: true });
+    for (const d of [dev, mate, otherRepo, nonGit, workspace]) await fs.rm(d, { recursive: true, force: true });
   }
 });
 
@@ -579,6 +595,12 @@ test("LITMUS: a `basename:` identity never matches portably, and a LEGACY absolu
     );
     const namesake = rowFor((await discoverVerificationAssets({ root: bob, workspace: wsBasename })).assets, "feel-snapshot");
     assert.equal(namesake.notRunClass, "broken", "a directory-name coincidence is not an identity");
+    // The MESSAGE has its own job here. Bob sees an identity string identical to the one
+    // his own repo derives, so the generic wording reads as a contradiction, and the
+    // generic remedy (re-approve) cannot work: it would re-derive the same name. The
+    // `basename:` case says why, and names the remedy that does work.
+    assert.match(String(namesake.broken), /is a DIRECTORY NAME/);
+    assert.match(String(namesake.broken), /git remote add origin/, "the remedy that actually changes the identity");
 
     // A snapshot approved for a NON-git project has no portable pair at all: it keeps the
     // pre-portable behavior exactly, so nothing about S1 forces a re-approve.
@@ -593,11 +615,21 @@ test("LITMUS: a `basename:` identity never matches portably, and a LEGACY absolu
       "live",
       "an absolute-only stamp still grades at its own path: no re-approve is forced",
     );
+    const movedLegacy = rowFor(
+      (await discoverVerificationAssets({ root: elsewhere, workspace: wsLegacy })).assets,
+      "feel-snapshot",
+    );
     assert.equal(
-      rowFor((await discoverVerificationAssets({ root: elsewhere, workspace: wsLegacy })).assets, "feel-snapshot").notRunClass,
+      movedLegacy.notRunClass,
       "broken",
       "and it stays machine-bound elsewhere: portable binding is opt-in by re-approving",
     );
+    // This message is the operator's ONLY instruction on the legacy/non-git path, so it
+    // is asserted rather than assumed: it must say the stamp is absent, why, and the verb
+    // that fixes it.
+    assert.match(String(movedLegacy.broken), /no portable stamp/);
+    assert.match(String(movedLegacy.broken), /approved before portable binding, or a non-git project/);
+    assert.match(String(movedLegacy.broken), /re-approve with `loombridge feel snapshot approve`/);
   } finally {
     for (const d of [aliceParent, bobParent, legacyRoot, elsewhere, wsBasename, wsLegacy]) {
       await fs.rm(d, { recursive: true, force: true });
@@ -611,7 +643,14 @@ test("PORTABLE BINDING: an approved layout baseline travels too, and a HALF-stam
   const otherRepo = await tmpCheckout("unified-screens-other-", "https://github.com/Loomtide/other-game.git");
   const workspace = await tmpDir("unified-ws-");
   try {
-    await plantScreenContract(workspace, { id: "sc", baseline: { projectRoot: dev } });
+    // The stamp is HARD-CODED rather than taken from `deriveRepoIdentity`. Deriving it
+    // here would make the fixture and the production rule move together, so a change to
+    // what derivation MEANS (host folding, port handling, a new fallback) would still
+    // pass: the test could only ever detect a wiring break, never a semantics change.
+    await plantScreenContract(workspace, {
+      id: "sc",
+      baseline: { projectRoot: dev, override: { repoIdentity: "github.com/Loomtide/game", projectPath: "." } },
+    });
     assert.equal(
       rowFor((await discoverVerificationAssets({ root: dev, workspace })).assets, "screen-contract").runnable,
       "offline",
@@ -620,6 +659,8 @@ test("PORTABLE BINDING: an approved layout baseline travels too, and a HALF-stam
     const teammate = rowFor((await discoverVerificationAssets({ root: mate, workspace })).assets, "screen-contract");
     assert.equal(teammate.runnable, "offline", "THE POINT: the same repo at a different absolute path");
     assert.equal(teammate.broken, undefined);
+    assert.match(String(teammate.reason), /bound PORTABLY/, "a portable match names its provenance here too");
+    assert.ok(teammate.reason?.includes(dev), teammate.reason);
 
     // LITMUS: another repository is still tier-2 broken.
     const foreign = rowFor((await discoverVerificationAssets({ root: otherRepo, workspace })).assets, "screen-contract");
@@ -634,6 +675,7 @@ test("PORTABLE BINDING: an approved layout baseline travels too, and a HALF-stam
     const half = rowFor((await discoverVerificationAssets({ root: mate, workspace })).assets, "screen-contract");
     assert.equal(half.notRunClass, "broken", "a half pair is unreadable, never a wider match");
     assert.ok(half.broken?.includes(BASELINE_MANIFEST), half.broken);
+    assert.match(String(half.broken), /stamped together/, "the row names WHY, so 'unreadable' is not the whole answer");
   } finally {
     for (const d of [dev, mate, otherRepo, workspace]) await fs.rm(d, { recursive: true, force: true });
   }

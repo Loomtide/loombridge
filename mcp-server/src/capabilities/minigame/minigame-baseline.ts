@@ -145,6 +145,13 @@ export interface BaselineCompareResult {
   present: boolean;
   /** When the contract declares a ref but no approved bundle exists — advisory, not blocking. */
   note?: string;
+  /**
+   * Set IFF a manifest IS present at `ref` but was refused (unparseable, wrong kind, a
+   * half-stamped portable pair). Never a downgrade to advisory: every declared state
+   * becomes an incomplete, so the run lands in the harness tier instead of reporting
+   * "regression not enforced" over a baseline that exists.
+   */
+  refused?: string;
   capturedAt?: string;
   masks: string[];
   thresholds: BaselineThresholds;
@@ -358,22 +365,49 @@ export async function loadStateInputs(dir: string, stateId: string): Promise<Bas
   }
 }
 
-/** Read + shape-check a baseline manifest from `refDir`. Returns null when absent/invalid. */
-export async function loadBaselineManifest(refDir: string): Promise<BaselineManifest | null> {
+/**
+ * The outcome of reading a baseline manifest, DISCRIMINATED.
+ *
+ * `absent` and `refused` must never collapse into one value, because the three doors
+ * that read this loader disagree about what to do with each. "No baseline approved yet"
+ * is advisory on the compare and the status verb; "present but unreadable" is an anchor
+ * this run cannot grade against, and treating it as advisory converted a REAL detected
+ * pixel regression into "Baseline regression not enforced" with the run still green. A
+ * refused manifest is a hard failure on every door.
+ */
+export type BaselineManifestLoad =
+  | { status: "ok"; manifest: BaselineManifest }
+  | { status: "absent" }
+  | { status: "refused"; reason: string };
+
+/** Read + shape-check a baseline manifest from `refDir`. */
+export async function loadBaselineManifest(refDir: string): Promise<BaselineManifestLoad> {
+  let raw: string;
   try {
-    const raw = await fs.readFile(path.join(refDir, BASELINE_MANIFEST), "utf-8");
-    const m = JSON.parse(raw) as BaselineManifest;
-    if (!m || m.kind !== "minigame-baseline" || !Array.isArray(m.states)) return null;
-    // The portable binding pair is optional, but a HALF pair is refused rather than
-    // ignored: a repoIdentity with no projectPath would claim any position inside the
-    // repo, and dropping the odd field is exactly the "absent means skip the check"
-    // shape the ownership stamp exists to prevent. Unreadable here means broken (tier 2)
-    // at the unified door, never a silent pass.
-    if (projectBindingPairError(m) !== null) return null;
-    return m;
-  } catch {
-    return null;
+    raw = await fs.readFile(path.join(refDir, BASELINE_MANIFEST), "utf-8");
+  } catch (error) {
+    // Only a genuinely missing file is `absent`. Anything else (a permission error, a
+    // directory where the manifest belongs) is a manifest that IS there and cannot be
+    // read, which is a refusal rather than "not approved yet".
+    if (isEnoent(error)) return { status: "absent" };
+    return { status: "refused", reason: `${BASELINE_MANIFEST} could not be read: ${errorText(error)}` };
   }
+  let m: BaselineManifest;
+  try {
+    m = JSON.parse(raw) as BaselineManifest;
+  } catch (error) {
+    return { status: "refused", reason: `${BASELINE_MANIFEST} is not valid JSON: ${errorText(error)}` };
+  }
+  if (!m || m.kind !== "minigame-baseline" || !Array.isArray(m.states)) {
+    return { status: "refused", reason: `${BASELINE_MANIFEST} is not a minigame-baseline manifest` };
+  }
+  // The portable binding pair is optional, but a HALF pair is refused rather than
+  // ignored: a repoIdentity with no projectPath would claim any position inside the
+  // repo, and dropping the odd field is exactly the "absent means skip the check"
+  // shape the ownership stamp exists to prevent.
+  const pairError = projectBindingPairError(m);
+  if (pairError !== null) return { status: "refused", reason: `${BASELINE_MANIFEST}: ${pairError}` };
+  return { status: "ok", manifest: m };
 }
 
 function sha256(bytes: Uint8Array): string {
@@ -382,6 +416,10 @@ function sha256(bytes: Uint8Array): string {
 
 function isEnoent(error: unknown): boolean {
   return typeof error === "object" && error !== null && (error as { code?: unknown }).code === "ENOENT";
+}
+
+function errorText(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 /**
@@ -493,8 +531,28 @@ export async function compareToBaseline(
     thresholds,
   };
 
-  const manifest = await loadBaselineManifest(refDir);
-  if (!manifest) {
+  const load = await loadBaselineManifest(refDir);
+  // A manifest that is PRESENT but refused is NOT "not yet approved". Skipping it here
+  // would let hand-deleting one field off an approved manifest downgrade a real detected
+  // regression to "not enforced" and keep the run green, so every declared state becomes
+  // an incomplete instead: the harness tier (exit 2), never a pass and never a game bug.
+  if (load.status === "refused") {
+    return {
+      ...base,
+      present: false,
+      refused: load.reason,
+      note: `The approved baseline at '${refDir}' is REFUSED (${load.reason}): re-approve it with \`loombridge minigame baseline approve\`. Nothing was compared.`,
+      states: contract.states.map((cs) => ({
+        state: cs.id,
+        compared: false,
+        regressed: false,
+        incomplete: `the approved baseline manifest is refused (${load.reason}), so nothing can be compared; never a silent pass`,
+      })),
+      regressions: [],
+      incompleteStates: contract.states.map((cs) => cs.id),
+    };
+  }
+  if (load.status === "absent") {
     return {
       ...base,
       present: false,
@@ -504,6 +562,7 @@ export async function compareToBaseline(
       incompleteStates: [],
     };
   }
+  const manifest = load.manifest;
 
   const states: BaselineStateResult[] = [];
   const regressions: string[] = [];

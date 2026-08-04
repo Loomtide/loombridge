@@ -18,11 +18,16 @@
  * git installed, and a child process is not worth two file reads.
  *
  * HONEST SCOPE: like every stamp in this repo, this is anti-accident provenance, not
- * anti-forgery (the manifest is plain text; so was the absolute path). Two accidental
- * collisions remain and are stated rather than hidden: sibling clones of one template
- * repository share the template's origin until `git remote set-url` runs, and the
- * `basename:` fallback would collide on a directory name, which is why the matcher
- * refuses to match on it at all.
+ * anti-forgery (the manifest is plain text; so was the absolute path). It is also WEAKER
+ * anti-forgery than the absolute path it replaces: forging the old stamp meant guessing
+ * the victim's checkout path, while the clone URL is a public fact. That is the price of
+ * an anchor that can be committed at all, and it is stated rather than hidden.
+ *
+ * Two accidental collisions remain and are likewise stated: sibling clones of one
+ * template repository share the template's origin until `git remote set-url` runs, and
+ * any identity that is not a real `host/path` (the `basename:` fallback, a `../x.git`
+ * relative remote, a config shorthand) would collide on a name, which is why the matcher
+ * refuses to match on those at all.
  */
 
 import fsSync from "node:fs";
@@ -33,7 +38,9 @@ export interface RepoIdentity {
    * Canonicalized origin URL when the repo has one, else `basename:<toplevel basename>`.
    * The `basename:` form is PROVENANCE ONLY: two unrelated local repos trivially share
    * a directory name (and an empty `.git` marker suffices to derive one), so the
-   * matcher never accepts a portable match on it. Only a real origin identity matches.
+   * matcher never accepts a portable match on it. Nor does it accept an origin that is
+   * not a real `host/path` (see `isPortableRepoIdentity`): only a routable identity
+   * names one repository from two machines.
    *
    * HONEST LIMIT even for real origins: clones of one template repository share the
    * template's origin (and its history) until `git remote set-url` runs, and no git
@@ -106,27 +113,78 @@ export function readOriginUrl(toplevel: string): string | null {
  * checkout actions/checkout writes in CI: those MUST converge or the doc's flagship
  * tier-2 flow refuses on every runner (found by adversarial review before it shipped).
  */
+/** The port each transport implies, and therefore the only port that may be dropped. */
+const DEFAULT_PORT_BY_SCHEME: Record<string, string> = {
+  ssh: "22",
+  "git+ssh": "22",
+  git: "9418",
+  http: "80",
+  https: "443",
+};
+
 export function normalizeRepoUrl(url: string): string {
   let u = url.trim().replace(/^"(.*)"$/, "$1").trim();
+  let scheme: string | undefined;
   // scp-style: user@host:path (no scheme, single colon not followed by //)
   const scp = u.match(/^(?:[^@/]+@)?([^:/]+):(?!\/\/)(.+)$/);
   if (scp) {
     u = `${scp[1]}/${scp[2]}`;
   } else {
     // scheme://[user@]host[:port]/path
-    const schemed = u.match(/^[a-z+]+:\/\/(?:[^@/]+@)?([^/]+)(\/.*)?$/i);
-    if (schemed) u = `${schemed[1]}${schemed[2] ?? ""}`;
+    const schemed = u.match(/^([a-z+]+):\/\/(?:[^@/]+@)?([^/]+)(\/.*)?$/i);
+    if (schemed) {
+      scheme = schemed[1]!.toLowerCase();
+      u = `${schemed[2]}${schemed[3] ?? ""}`;
+    }
   }
   u = u.replace(/\/+$/, "").replace(/\.git$/, "");
   const slash = u.indexOf("/");
   if (slash > 0) {
-    const host = u.slice(0, slash).toLowerCase().replace(/:\d+$/, "");
+    let host = u.slice(0, slash).toLowerCase();
+    // A NON-DEFAULT port stays part of the identity. Dropping every port made
+    // `ssh://git@git.internal:2222/team/app` and `:2223/team/app` one repository, and two
+    // git services on one host at different ports is an ordinary self-hosted layout.
+    // Dropping only the scheme's own default keeps the convergence this function exists
+    // for: `ssh://git@host:22/p` and the scp-style `git@host:p` are one URL spelled twice.
+    const defaultPort = scheme !== undefined ? DEFAULT_PORT_BY_SCHEME[scheme] : undefined;
+    if (defaultPort !== undefined && host.endsWith(`:${defaultPort}`)) {
+      host = host.slice(0, host.length - defaultPort.length - 1);
+    }
     return `${host}${u.slice(slash)}`;
   }
   return u;
 }
 
 /**
+ * Is a canonicalized identity a real `host/path` one, and therefore capable of naming the
+ * SAME repository from two different machines?
+ *
+ * A remote does not have to be a URL. `git remote add origin ../template.git` and the
+ * `insteadOf` shorthands (`gh:acme/x`) are both legal, and both canonicalize to a short
+ * token that says nothing about which repository is meant: two unrelated projects each
+ * cloned from a sibling `../template.git` derive the identical string and would match.
+ * That is the same class of coincidence as the `basename:` fallback, so it gets the same
+ * answer. The test is a POSITIVE one ("this really is a host and a path") rather than a
+ * list of known-bad prefixes, because a prefix list only refuses the shapes someone
+ * thought of.
+ */
+export function isPortableRepoIdentity(identity: string): boolean {
+  if (identity.startsWith("basename:")) return false;
+  const slash = identity.indexOf("/");
+  if (slash <= 0 || slash === identity.length - 1) return false;
+  const host = identity.slice(0, slash);
+  // A dotted label (or a bracketed IPv6 literal), optionally with a port, is what
+  // separates a routable host from `..`, `gh`, or a bare drive letter.
+  return /^(?:[a-z0-9-]+(?:\.[a-z0-9-]+)+|\[[0-9a-f:]+\])(?::\d+)?$/i.test(host);
+}
+
+/**
+ * Is a canonicalized identity a real `host/path` one, and therefore capable of naming the
+ * SAME repository from two different machines?
+ *
+ * A remote does not have to be a URL. `git remote add origin ../template.git` and the
+ * `insteadOf` shorthands (`gh:acme/x`) are both legal, and both canonicalize to a short
+ * token that says nothing about which repository is meant: two unrelated projects each
  * Derive the portable identity for a project root, or null when the root is not inside
  * a git working tree (a non-git project has no portable identity; the absolute-path
  * binding remains the only one available and the caller says so).
@@ -177,13 +235,21 @@ export function projectBindingMatches(binding: ProjectBinding, root: string): bo
   // default (the falsy-field anti-pattern; every on-disk validator enforces the pairing
   // too, but this predicate is what gates, so the refusal lives here as well).
   if (binding.repoIdentity === undefined || binding.projectPath === undefined) return false;
-  // A `basename:` identity is a directory-name guess: two unrelated local repos (or two
-  // directories with an empty `.git` marker) trivially share one, so it never matches
-  // portably. Provenance only.
-  if (binding.repoIdentity.startsWith("basename:")) return false;
+  // ONE portability test, on the STAMPED side, and it covers both sides: the comparison
+  // below is a strict string equality, so a match forces the derived identity to be the
+  // SAME string and therefore the same verdict here. An earlier cut tested each side
+  // separately, which made each of the two lines individually deletable with the suite
+  // still green: two guards doing one job pin nothing.
+  //
+  // A non-host/path identity (the `basename:` fallback, a `../template.git` relative
+  // remote, an `insteadOf` shorthand) is a coincidence two unrelated repos share, so an
+  // equal pair of them is still a refusal. Provenance only.
+  if (!isPortableRepoIdentity(binding.repoIdentity)) return false;
   const derived = deriveRepoIdentity(root);
+  // No git working tree here means no portable identity to compare against, so the
+  // portable arm cannot answer and refuses. Without this a stamped anchor would claim
+  // every non-git root on the machine.
   if (derived === null) return false;
-  if (derived.repoIdentity.startsWith("basename:")) return false;
   return derived.repoIdentity === binding.repoIdentity && derived.projectPath === binding.projectPath;
 }
 

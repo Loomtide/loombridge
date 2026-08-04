@@ -228,11 +228,20 @@ async function runStatus(args: BaselineArgs): Promise<number> {
     console.error("[loombridge minigame] no baseline target — set contract.baseline.ref or pass --ref <dir>.");
     return 2;
   }
-  const manifest = await loadBaselineManifest(refDir);
-  if (!manifest) {
+  const load = await loadBaselineManifest(refDir);
+  // A manifest that is present but refused is not "none approved yet": reporting it as
+  // absent (exit 0) would tell an operator to approve a baseline that already exists and
+  // is silently ungradeable. Refused is its own exit.
+  if (load.status === "refused") {
+    console.error(`[loombridge minigame] the baseline at ${path.relative(args.root, refDir)} is REFUSED: ${load.reason}`);
+    console.error("[loombridge minigame] a refused baseline never grades; re-approve it with `loombridge minigame baseline approve`.");
+    return 2;
+  }
+  if (load.status === "absent") {
     console.error(`[loombridge minigame] no approved baseline at ${path.relative(args.root, refDir)} — run \`loombridge minigame baseline approve\`.`);
     return 0;
   }
+  const manifest = load.manifest;
   console.error(
     `[loombridge minigame] baseline for '${manifest.contractId}' @ ${path.relative(args.root, refDir)}`,
   );

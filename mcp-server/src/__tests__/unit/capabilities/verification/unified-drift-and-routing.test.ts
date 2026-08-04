@@ -25,6 +25,7 @@ import { FEEL_SNAPSHOT_MANIFEST } from "../../../../capabilities/feel/snapshot-m
 import { feelPaths } from "../../../../capabilities/feel/feel-workspace.js";
 import { BASELINE_MANIFEST } from "../../../../capabilities/minigame/minigame-baseline.js";
 import { standardReplayLayout } from "../../../../domain/state.js";
+import { plantGitRepo } from "../../../_support/git-repo-fixture.js";
 import type { UnifiedVerifyReport } from "../../../../capabilities/verification/unified/report.js";
 
 async function tmpDir(prefix: string): Promise<string> {
@@ -219,18 +220,31 @@ test("R3: a tier-2 unreadable keeps the S1 harness wording, never the drift word
 
 // ── R2/A5: the workspace routing note ────────────────────────────────────────
 
+/** The optional PORTABLE half of an ownership stamp, planted verbatim. */
+type PortablePair = { repoIdentity: string; projectPath: string };
+
 /** A workspace that STAMPS `projectRoot` through the feel snapshot's manifest. */
-async function stampFeelWorkspace(scanRoot: string, id: string, projectRoot: string): Promise<void> {
+async function stampFeelWorkspace(
+  scanRoot: string,
+  id: string,
+  projectRoot: string,
+  portable?: PortablePair,
+): Promise<void> {
   const dir = feelPaths(path.join(scanRoot, id)).snapshotCurrentDir;
   await fs.mkdir(dir, { recursive: true });
-  await fs.writeFile(path.join(dir, FEEL_SNAPSHOT_MANIFEST), JSON.stringify({ projectRoot }));
+  await fs.writeFile(path.join(dir, FEEL_SNAPSHOT_MANIFEST), JSON.stringify({ projectRoot, ...portable }));
 }
 
 /** …and one that stamps it through the screen-contract layout baseline instead. */
-async function stampScreensWorkspace(scanRoot: string, id: string, projectRoot: string): Promise<void> {
+async function stampScreensWorkspace(
+  scanRoot: string,
+  id: string,
+  projectRoot: string,
+  portable?: PortablePair,
+): Promise<void> {
   const dir = path.join(scanRoot, id, "baseline");
   await fs.mkdir(dir, { recursive: true });
-  await fs.writeFile(path.join(dir, BASELINE_MANIFEST), JSON.stringify({ projectRoot }));
+  await fs.writeFile(path.join(dir, BASELINE_MANIFEST), JSON.stringify({ projectRoot, ...portable }));
 }
 
 test("R2: a foreign-id workspace that STAMPS this root becomes a routing note, and adds no asset", async () => {
@@ -266,6 +280,43 @@ test("R2: a foreign-id workspace that STAMPS this root becomes a routing note, a
   } finally {
     await fs.rm(root, { recursive: true, force: true });
     await fs.rm(scanRoot, { recursive: true, force: true });
+  }
+});
+
+test("R2: the routing note binds by the SAME rule the anchors do, so a PORTABLE stamp still routes", async () => {
+  // The note compared raw absolute `projectRoot` strings, which left it blind exactly
+  // where portable binding now helps: the teammate whose anchor DOES bind gets "no assets
+  // found" and no hint about which `--id` to pass, while the author of the anchor gets
+  // the hint. Same rule, same answer, both sides.
+  const root = await tmpDir("unified-route-portable-");
+  const approvedAt = await tmpDir("unified-route-elsewhere-");
+  const scanRoot = await tmpDir("unified-route-scan-");
+  const derived = path.join(scanRoot, "derived-empty");
+  try {
+    await fs.mkdir(derived, { recursive: true });
+    await plantGitRepo(root, "https://github.com/Loomtide/routed-game"); // the teammate's checkout
+    await plantGitRepo(approvedAt, "git@github.com:Loomtide/routed-game.git"); // where it was approved
+
+    // The workspace's feel manifest is stamped at the OTHER absolute path, carrying the
+    // portable pair the writer derives there.
+    await stampFeelWorkspace(scanRoot, "renamed-game", approvedAt, {
+      repoIdentity: "github.com/Loomtide/routed-game",
+      projectPath: ".",
+    });
+    // …and a second workspace stamped for a DIFFERENT repository must NOT be routed to.
+    await stampScreensWorkspace(scanRoot, "someone-elses", approvedAt, {
+      repoIdentity: "github.com/Loomtide/other-game",
+      projectPath: ".",
+    });
+
+    const { assets, notes } = await discoverVerificationAssets({ root, workspace: derived, workspacesRoot: scanRoot });
+    assert.deepEqual(assets, [], "the note is still not an asset");
+    const note = notes.find((n) => n.includes("stamp"));
+    assert.ok(note, `a portably-bound workspace must route, got ${JSON.stringify(notes)}`);
+    assert.match(note, /workspace 'renamed-game' stamps this project root/);
+    assert.doesNotMatch(note, /someone-elses/, "a different repository is not a routing candidate");
+  } finally {
+    for (const d of [root, approvedAt, scanRoot]) await fs.rm(d, { recursive: true, force: true });
   }
 });
 

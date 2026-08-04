@@ -579,11 +579,41 @@ async function discoverSlicePlanAsset(root: string, paths: LoombridgePaths): Pro
  * Why a stamped anchor did not bind to this root, for the `broken` line. Message text
  * only: the DECISION is `projectBindingMatches` in `shared/repo-identity.ts`, shared with
  * the stamped test-results trio so one rule decides all three.
+ *
+ * The `basename:` case gets its own sentence because the generic one MISLEADS there. A
+ * no-remote repo stamps `basename:<dir>`, so a second no-remote repo of the same name
+ * reads back an identity string identical to the one it would derive itself, with no
+ * stated reason for the refusal and a remedy (re-approve) that cannot work: the identity
+ * would come out the same. `git remote add origin` is the fix, so the message says so.
  */
 function bindingDetail(binding: ProjectBinding, restamp: string): string {
-  return binding.repoIdentity !== undefined
-    ? ` (stamped repo ${binding.repoIdentity} at ${binding.projectPath})`
-    : ` (no portable stamp: approved before portable binding, or a non-git project; re-approve with \`${restamp}\` to re-stamp)`;
+  if (binding.repoIdentity === undefined) {
+    return ` (no portable stamp: approved before portable binding, or a non-git project; re-approve with \`${restamp}\` to re-stamp)`;
+  }
+  if (binding.repoIdentity.startsWith("basename:")) {
+    return (
+      ` (stamped repo ${binding.repoIdentity} at ${binding.projectPath}: a \`basename:\` identity is a DIRECTORY NAME, ` +
+      "which two unrelated repos share, so it never binds across checkouts. Give the repo an origin " +
+      `(\`git remote add origin <url>\`) and re-approve with \`${restamp}\`; re-approving alone re-derives the same name.)`
+    );
+  }
+  return ` (stamped repo ${binding.repoIdentity} at ${binding.projectPath})`;
+}
+
+/**
+ * How a matching binding matched, when the answer is not obvious from the row. Empty for
+ * the ordinary case (the anchor was approved at exactly this path), and a PROVENANCE
+ * sentence when it bound PORTABLY, naming the absolute path it was approved at.
+ *
+ * Silence here loses a signal that existed before portable binding: two checkouts of one
+ * repo share a home workspace (its id is the folder BASENAME), and the second checkout
+ * used to read `broken`, which told the operator the anchor was not theirs. It now grades
+ * live, correctly, but an operator who did not expect a shared anchor deserves to see
+ * that the thing grading them was frozen somewhere else.
+ */
+function portableProvenance(binding: ProjectBinding, root: string): string | undefined {
+  if (path.resolve(root) === path.resolve(binding.projectRoot)) return undefined;
+  return `bound PORTABLY: approved at ${binding.projectRoot}, graded here as the same repo (${binding.repoIdentity}) at ${binding.projectPath}`;
 }
 
 // ── feel snapshot ────────────────────────────────────────────────────────────
@@ -644,6 +674,9 @@ async function discoverFeelSnapshotAsset(root: string, workspace: string): Promi
   row.runnable = "live";
   row.approvedAt = manifest.approvedAt;
   row.approvedBy = manifest.note ?? "human approval";
+  // A portable match is never silent: the row names the path this anchor was frozen at.
+  const provenance = portableProvenance(binding, root);
+  if (provenance !== undefined) row.reason = provenance;
   return [row];
 }
 
@@ -720,13 +753,17 @@ async function discoverScreenContractAsset(root: string, workspace: string): Pro
       "(a contract graded against captures of itself is not a human anchor)";
     return [row];
   }
-  const manifest = await loadBaselineManifest(baselineDir);
-  if (!manifest) {
+  const load = await loadBaselineManifest(baselineDir);
+  if (load.status !== "ok") {
     row.notRunClass = "broken";
     row.reason = "the approved layout baseline cannot be read";
-    row.broken = `${path.join(baselineDir, BASELINE_MANIFEST)} is unreadable or not a screen-contract baseline`;
+    row.broken =
+      load.status === "refused"
+        ? `${path.join(baselineDir, BASELINE_MANIFEST)} is unreadable or not a screen-contract baseline: ${load.reason}`
+        : `${path.join(baselineDir, BASELINE_MANIFEST)} disappeared between the presence check and the read`;
     return [row];
   }
+  const manifest = load.manifest;
   const projectRoot = manifest.projectRoot;
   // An ABSENT stamp is a refusal (non-anchor), never a default: an unbound baseline
   // would grade whatever project it was found next to.
@@ -753,6 +790,9 @@ async function discoverScreenContractAsset(root: string, workspace: string): Pro
   row.approvedAt = manifest.capturedAt;
   row.approvedBy = `screen contract '${manifest.contractId}'`;
   row.runnable = "offline";
+  // A portable match is never silent: the row names the path this anchor was frozen at.
+  const provenance = portableProvenance(binding, root);
+  if (provenance !== undefined) row.reason = provenance;
   return [row];
 }
 
@@ -800,7 +840,11 @@ async function workspaceRoutingNotes(
     // assets, which is why we are here.
     if (path.resolve(dir) === path.resolve(usedWorkspace)) continue;
     const stamps = await stampedProjectRoots(dir);
-    if (stamps.some((stamp) => path.resolve(stamp) === root)) matches.push(id);
+    // The SAME rule the anchors themselves bind by. Comparing raw absolute paths made the
+    // note blind exactly where portable binding now helps: a teammate whose anchor DOES
+    // bind portably got "no assets found" and no hint about which `--id` to pass, while
+    // the author of the anchor got the hint.
+    if (stamps.some((stamp) => projectBindingMatches(stamp, root))) matches.push(id);
   }
   if (matches.length > 0) {
     notes.push(
@@ -821,23 +865,35 @@ async function workspaceRoutingNotes(
 }
 
 /**
- * The owning-project stamps a workspace declares, from AT MOST two declared files: the
+ * The owning-project BINDINGS a workspace declares, from AT MOST two declared files: the
  * frozen feel snapshot's manifest and the screen-contract layout baseline's manifest.
  * Read as raw JSON on purpose (never integrity-verified): this is routing, and a
  * workspace whose assets are broken is exactly the one an operator most needs pointing
  * at. Anything unreadable simply contributes no stamp.
+ *
+ * The whole binding travels, not just `projectRoot`, so the caller can ask the SAME
+ * question the anchors ask rather than a weaker absolute-path one.
  */
-async function stampedProjectRoots(workspace: string): Promise<string[]> {
+async function stampedProjectRoots(workspace: string): Promise<ProjectBinding[]> {
   const files = [
     path.join(feelPaths(workspace).snapshotCurrentDir, FEEL_SNAPSHOT_MANIFEST),
     path.join(workspace, "baseline", BASELINE_MANIFEST),
   ];
-  const stamps: string[] = [];
+  const stamps: ProjectBinding[] = [];
   for (const file of files) {
     try {
-      const parsed: unknown = JSON.parse(await fs.readFile(file, "utf-8"));
-      const stamp = (parsed as { projectRoot?: unknown } | null)?.projectRoot;
-      if (typeof stamp === "string" && stamp.length > 0) stamps.push(stamp);
+      const parsed = JSON.parse(await fs.readFile(file, "utf-8")) as {
+        projectRoot?: unknown;
+        repoIdentity?: unknown;
+        projectPath?: unknown;
+      } | null;
+      const stamp = parsed?.projectRoot;
+      if (typeof stamp !== "string" || stamp.length === 0) continue;
+      stamps.push({
+        projectRoot: stamp,
+        ...(typeof parsed?.repoIdentity === "string" ? { repoIdentity: parsed.repoIdentity } : {}),
+        ...(typeof parsed?.projectPath === "string" ? { projectPath: parsed.projectPath } : {}),
+      });
     } catch {
       /* unreadable or absent: no stamp, never a throw out of discovery */
     }

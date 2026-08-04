@@ -31,6 +31,7 @@ import {
   compareStateToBaseline,
   loadBaselineManifest,
   type BaselineManifest,
+  type BaselineManifestLoad,
   type BaselineStateInputs,
 } from "../../../../capabilities/minigame/minigame-baseline.js";
 import type { DecodedImage } from "../../../../capabilities/minigame/frame-facts.js";
@@ -171,6 +172,11 @@ async function tmp(prefix: string): Promise<string> {
 }
 async function readReport(file: string): Promise<MinigameVerifyReport> {
   return JSON.parse(await fs.readFile(file, "utf-8")) as MinigameVerifyReport;
+}
+/** Unwrap a load the test has already asserted is `ok`. */
+function okManifest(load: BaselineManifestLoad): BaselineManifest {
+  assert.equal(load.status, "ok", `expected a loadable manifest, got ${JSON.stringify(load)}`);
+  return (load as { status: "ok"; manifest: BaselineManifest }).manifest;
 }
 async function approve(root: string, contractPath: string, capturesDir: string, ref?: string): Promise<number> {
   return minigameRun(["baseline", "approve", "--contract", contractPath, "--captures", capturesDir, "--root", root, ...(ref ? ["--ref", ref] : [])]);
@@ -327,8 +333,8 @@ test("baseline approve: stamps the owning PROJECT root, and a legacy unstamped b
     delete (manifest as { projectRoot?: string }).projectRoot;
     await fs.writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf-8");
     const legacy = await loadBaselineManifest(ref);
-    assert.ok(legacy, "a legacy manifest still loads");
-    assert.equal(legacy.projectRoot, undefined);
+    assert.equal(legacy.status, "ok", "a legacy manifest still loads");
+    assert.equal(okManifest(legacy).projectRoot, undefined);
     const { code } = await verify(root, contractPath, caps, path.join(root, "r.json"));
     assert.equal(code, 0, "a legacy bundle still compares clean");
   } finally {
@@ -376,6 +382,83 @@ test("verify --minigame: a visible PNG mutation is a BASELINE REGRESSION (exit 1
     assert.equal(report.cr.blockingFailures.length, 0, "a regression is not a game defect");
     assert.ok(!report.cr.incompleteHarness.some((f) => f.state === "win"), "a regression is not a harness gap");
   } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test("LITMUS: a REFUSED baseline manifest cannot downgrade a real regression to 'not enforced'", async () => {
+  // The loader refuses a half-stamped pair. When "refused" and "absent" were one `null`,
+  // this door read it as "declared but not yet approved", printed "Baseline regression not
+  // enforced", and a genuine pixel regression graded PASS at exit 0. Hand-deleting one
+  // field off an approved manifest was therefore a way to switch the gate off silently.
+  const root = await tmp("s6e-refused-");
+  const ref = path.join(root, "baseline");
+  try {
+    await plantGitRepo(root, "git@github.com:Loomtide/game.git");
+    const contractPath = path.join(root, "c.json");
+    await writeJson(contractPath, makeContract(ref));
+    const caps = path.join(root, "caps");
+    await writeCleanPack(caps);
+    assert.equal(await approve(root, contractPath, caps), 0);
+
+    // A real, detected regression: the btn region of 'win' goes black, unmasked.
+    await fs.writeFile(path.join(caps, "win.png"), pngBuffer(W, H, paintRectBlack(BTN_RECT)));
+    const caught = await verify(root, contractPath, caps, path.join(root, "caught.json"));
+    assert.equal(caught.code, 1, "control: with the manifest intact the regression is caught");
+
+    // Now half-stamp the manifest, which is all it takes to make the loader refuse it.
+    const manifestPath = path.join(ref, BASELINE_MANIFEST);
+    const doc = JSON.parse(await fs.readFile(manifestPath, "utf-8")) as Record<string, unknown>;
+    delete doc.projectPath;
+    await fs.writeFile(manifestPath, JSON.stringify(doc, null, 2), "utf-8");
+
+    const { code, report } = await verify(root, contractPath, caps, path.join(root, "r.json"));
+    assert.notEqual(code, 0, "a refused anchor must never let the run come out green");
+    assert.equal(code, 2, "…and it is a harness fault (tier 2), not a game defect");
+    assert.equal(report.status, "incomplete");
+    assert.match(String(report.baseline?.refused), /stamped together/, "the report names WHY the anchor was refused");
+    assert.doesNotMatch(
+      String(report.baseline?.note),
+      /not yet approved/,
+      "a manifest that EXISTS is never reported as one nobody has approved",
+    );
+    assert.deepEqual(report.baseline?.incompleteStates.sort(), ["start", "win"]);
+    assert.equal(report.cr.blockingFailures.length, 0, "a refused anchor is not a game defect");
+    assert.ok(
+      report.cr.incompleteHarness.some((f) => f.source === "baseline" && /refused/.test(f.detail)),
+      JSON.stringify(report.cr.incompleteHarness),
+    );
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test("LITMUS: `baseline status` reports a REFUSED manifest as refused (exit 2), never as 'none approved'", async () => {
+  const root = await tmp("s6e-refused-status-");
+  const ref = path.join(root, "baseline");
+  const lines: string[] = [];
+  const orig = console.error;
+  console.error = (...a: unknown[]) => { lines.push(a.map(String).join(" ")); };
+  try {
+    await plantGitRepo(root, "git@github.com:Loomtide/game.git");
+    const contractPath = path.join(root, "c.json");
+    await writeJson(contractPath, makeContract(ref));
+    const caps = path.join(root, "caps");
+    await writeCleanPack(caps);
+    assert.equal(await approve(root, contractPath, caps), 0);
+    const manifestPath = path.join(ref, BASELINE_MANIFEST);
+    const doc = JSON.parse(await fs.readFile(manifestPath, "utf-8")) as Record<string, unknown>;
+    delete doc.repoIdentity;
+    await fs.writeFile(manifestPath, JSON.stringify(doc, null, 2), "utf-8");
+
+    lines.length = 0;
+    const code = await minigameRun(["baseline", "status", "--contract", contractPath, "--root", root]);
+    assert.equal(code, 2, "a baseline that exists and cannot be read is not an exit-0 'nothing approved'");
+    const out = lines.join("\n");
+    assert.match(out, /is REFUSED/);
+    assert.doesNotMatch(out, /no approved baseline/, "telling an operator to approve what already exists is a wrong answer");
+  } finally {
+    console.error = orig;
     await fs.rm(root, { recursive: true, force: true });
   }
 });
@@ -514,10 +597,10 @@ test("baseline approve inside a git checkout stamps the PORTABLE pair; a HALF pa
     await writeCleanPack(caps);
     assert.equal(await approve(root, contractPath, caps), 0);
 
-    const stamped = await loadBaselineManifest(ref);
-    assert.equal(stamped?.repoIdentity, "github.com/Loomtide/game");
-    assert.equal(stamped?.projectPath, ".", "the project IS the toplevel in this fixture");
-    assert.equal(stamped?.projectRoot, path.resolve(root), "the absolute stamp still travels with it");
+    const stamped = okManifest(await loadBaselineManifest(ref));
+    assert.equal(stamped.repoIdentity, "github.com/Loomtide/game");
+    assert.equal(stamped.projectPath, ".", "the project IS the toplevel in this fixture");
+    assert.equal(stamped.projectRoot, path.resolve(root), "the absolute stamp still travels with it");
 
     // LITMUS: drop ONE half of the pair. A repoIdentity with no projectPath would claim
     // any position inside the repo, so the loader must refuse the manifest outright
@@ -528,10 +611,16 @@ test("baseline approve inside a git checkout stamps the PORTABLE pair; a HALF pa
       const half = { ...doc };
       delete half[dropped];
       await fs.writeFile(manifestPath, JSON.stringify(half, null, 2), "utf-8");
-      assert.equal(await loadBaselineManifest(ref), null, `a manifest missing '${dropped}' is refused, not defaulted`);
+      const load = await loadBaselineManifest(ref);
+      assert.equal(load.status, "refused", `a manifest missing '${dropped}' is refused, not defaulted`);
+      assert.match(
+        String((load as { reason?: string }).reason),
+        /stamped together/,
+        "REFUSED is not ABSENT: the reason names the half pair so no caller can read it as 'not approved yet'",
+      );
     }
     await fs.writeFile(manifestPath, JSON.stringify(doc, null, 2), "utf-8");
-    assert.ok(await loadBaselineManifest(ref), "control: the complete pair loads");
+    assert.equal((await loadBaselineManifest(ref)).status, "ok", "control: the complete pair loads");
   } finally {
     await fs.rm(root, { recursive: true, force: true });
   }
@@ -603,14 +692,14 @@ test("baseline approve WARNS when it stamps a cwd-derived project root (the guid
     const warned = lines.filter((l) => /no --root given: stamping this baseline/.test(l));
     assert.equal(warned.length, 1, lines.join("\n"));
     assert.ok(warned[0]!.includes(process.cwd()), "the warning must name the root it is stamping");
-    const manifest = await loadBaselineManifest(ref);
-    assert.equal(manifest?.projectRoot, path.resolve(process.cwd()));
+    const manifest = okManifest(await loadBaselineManifest(ref));
+    assert.equal(manifest.projectRoot, path.resolve(process.cwd()));
 
     // With --root: no warning, and the stamp is the project that was named.
     lines.length = 0;
     assert.equal(await approve(root, contractPath, caps), 0);
     assert.ok(!lines.some((l) => /no --root given/.test(l)), lines.join("\n"));
-    assert.equal((await loadBaselineManifest(ref))?.projectRoot, path.resolve(root));
+    assert.equal(okManifest(await loadBaselineManifest(ref)).projectRoot, path.resolve(root));
   } finally {
     console.error = orig;
     await fs.rm(root, { recursive: true, force: true });

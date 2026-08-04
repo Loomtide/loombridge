@@ -407,6 +407,14 @@ async function runSnapshotStatus(cli: SnapshotCliArgs): Promise<number> {
   const paths = feelPaths(cli.workspace);
   const currentDir = paths.snapshotCurrentDir;
   const integrity = await verifySnapshotIntegrity(currentDir);
+  // A manifest that EXISTS and cannot be read is not "none approved": saying so would tell
+  // an operator to approve a snapshot that is already there and already ungradeable.
+  if (integrity.manifestRefused) {
+    console.error(`${TAG} snapshot NOT READY (the manifest is present but REFUSED):`);
+    for (const f of integrity.failures) console.error(`${TAG}   - ${f}`);
+    console.error(`${TAG} re-capture and re-approve to restore a trustworthy baseline.`);
+    return 2;
+  }
   if (!integrity.manifest) {
     console.error(`${TAG} no approved snapshot at ${currentDir}.`);
     console.error(`${TAG} create one: \`feel snapshot capture\` then \`feel snapshot approve\`.`);

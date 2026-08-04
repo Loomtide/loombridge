@@ -293,6 +293,13 @@ export interface SnapshotIntegrityResult {
   manifest?: FeelSnapshotManifest;
   /** The frozen measurements, parsed (present when readable). */
   measurements?: FeelMeasurementsFile;
+  /**
+   * True when a manifest FILE exists at `dir` but was refused (bad shape, a half-stamped
+   * portable pair). Distinct from "no snapshot approved yet", which is the same file being
+   * absent: a caller that collapses the two tells an operator to approve a snapshot that
+   * already exists, and reports an ungradeable anchor as an empty workspace.
+   */
+  manifestRefused?: boolean;
 }
 
 /**
@@ -310,7 +317,23 @@ export async function verifySnapshotIntegrity(dir: string): Promise<SnapshotInte
   const failures: string[] = [];
   const manifest = await loadSnapshotManifest(dir);
   if (!manifest) {
-    return { ok: false, failures: [`no readable feel-snapshot manifest at ${path.join(dir, FEEL_SNAPSHOT_MANIFEST)}`] };
+    const file = path.join(dir, FEEL_SNAPSHOT_MANIFEST);
+    // PRESENT-but-refused is not ABSENT. Both are `ok: false`, so no gate changes here,
+    // but the two need different words: one says "approve a snapshot", the other says
+    // "the snapshot you approved cannot be read", and only the second is a refusal.
+    const present = await fs
+      .access(file)
+      .then(() => true)
+      .catch(() => false);
+    return present
+      ? {
+          ok: false,
+          manifestRefused: true,
+          failures: [
+            `feel-snapshot manifest at ${file} is present but REFUSED (bad shape, or a half-stamped repoIdentity/projectPath pair)`,
+          ],
+        }
+      : { ok: false, failures: [`no readable feel-snapshot manifest at ${file}`] };
   }
 
   let measurementsBytes: Buffer | null = null;

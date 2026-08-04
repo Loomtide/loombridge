@@ -214,10 +214,23 @@ test("approving inside a git checkout stamps the PORTABLE pair; a HALF pair is r
     delete half[dropped];
     await fs.writeFile(manifestPath, JSON.stringify(half, null, 2), "utf-8");
     assert.equal(await loadSnapshotManifest(currentDir), null, `a manifest missing '${dropped}' is refused`);
-    assert.equal((await verifySnapshotIntegrity(currentDir)).ok, false, "and integrity refuses with it");
+    const integrity = await verifySnapshotIntegrity(currentDir);
+    assert.equal(integrity.ok, false, "and integrity refuses with it");
+    // REFUSED is not ABSENT. Both are `ok: false`, but only one of them means "there is no
+    // snapshot here", and `feel snapshot status` reported exactly that (exit 0) for a
+    // manifest sitting on disk and ungradeable.
+    assert.equal(integrity.manifestRefused, true, `a PRESENT manifest missing '${dropped}' is refused, not absent`);
+    assert.match(integrity.failures.join("; "), /present but REFUSED/);
   }
   await fs.writeFile(manifestPath, JSON.stringify(doc, null, 2), "utf-8");
   assert.ok(await loadSnapshotManifest(currentDir), "control: the complete pair loads");
+
+  // …and an ABSENT manifest keeps the other word, so the distinction is pinned from both
+  // sides rather than only from the refusal.
+  await fs.rm(manifestPath);
+  const absent = await verifySnapshotIntegrity(currentDir);
+  assert.equal(absent.manifestRefused, undefined);
+  assert.match(absent.failures.join("; "), /no readable feel-snapshot manifest/);
 });
 
 test("LITMUS: swapping the frozen capture contract fails the sha check (binding is to HOW it was measured)", async () => {
