@@ -3,7 +3,7 @@
 # DISTRIBUTION repo (Loomtide/loombridge — release assets only, no
 # source; partners get read access there, never on this monorepo).
 #
-# Packs @loomtide/loombridge (its `prepack` bundles the current bridge tarball) and
+# Packs loombridge (its `prepack` bundles the current bridge tarball) and
 # uploads the resulting loombridge-cli-<ver>.tgz PLUS scripts/install.sh as release
 # assets. Developers then install/update with a single command:
 #
@@ -43,10 +43,10 @@ done
 ver="$(node -p "require('$DIR/mcp-server/package.json').version")"
 TAG="${TAG:-v$ver}"
 
-echo "==> Packing @loomtide/loombridge@$ver (prepack bundles the bridge tarball)"
+echo "==> Packing loombridge@$ver (prepack bundles the bridge tarball)"
 ( cd "$DIR/mcp-server" && npm pack >/dev/null )
 
-# npm names the tarball after the PACKAGE NAME (@loomtide/loombridge -> loomtide-loombridge-<ver>.tgz),
+# npm names the tarball after the PACKAGE NAME (loombridge -> loomtide-loombridge-<ver>.tgz),
 # but the published ASSET name is a separate contract: scripts/install.sh fetches the release asset by
 # `ASSET_GLOB='loombridge-cli-*.tgz'`, and installers already deployed at get.loomtide.ai carry that
 # glob. So we pack, then RENAME to the asset name. Renaming the asset instead would silently break
@@ -54,7 +54,7 @@ echo "==> Packing @loomtide/loombridge@$ver (prepack bundles the bridge tarball)
 #
 # This step is why the script could not cut a release between the 2026-07-21 mechanical rename and
 # now: that rename rewrote a hard-coded `loomtide-cli-$ver.tgz` to `loombridge-cli-$ver.tgz` while the
-# package name became `@loomtide/loombridge`, so the script looked for a file npm never produces.
+# package name became `loombridge`, so the script looked for a file npm never produces.
 # Deriving the produced name from package.json (npm's own scope-flattening rule) keeps a future
 # rename from re-breaking it.
 produced="$DIR/mcp-server/$(node -p "const p=require('$DIR/mcp-server/package.json'); p.name.replace(/^@/, '').replace(/\//, '-') + '-' + p.version + '.tgz'")"

@@ -79,7 +79,7 @@ jobs:
             release-assets/*
 
       # npm publish via TRUSTED PUBLISHING (OIDC) — preferred: no token secret.
-      # Configure once on npmjs.com: package @loomtide/loombridge -> Settings ->
+      # Configure once on npmjs.com: package `loombridge` -> Settings ->
       # Trusted publisher -> GitHub Actions (Loomtide/loombridge, release.yml).
       # NPM_TOKEN remains an optional fallback. Until one of the two is
       # configured, the step notices-and-continues: the GitHub Release assets
@@ -102,6 +102,17 @@ jobs:
           PROV="true"; [ "$REPO_PRIVATE" = "true" ] && PROV="false"
           if npm publish --access public --provenance="$PROV"; then
             echo "npm publish succeeded (provenance=$PROV)."
-          else
-            echo "::warning::npm publish did not complete — trusted publishing not configured yet (or token missing/invalid). GitHub Release assets remain the primary install channel."
+            exit 0
           fi
+          # A release that did not reach npm must NOT report success. npm is now the primary
+          # install channel (README: `npm install -g loombridge`), so a silently skipped
+          # publish leaves every new user installing whatever `latest` already was, while the
+          # pipeline shows green: a false green on the one path a user actually follows.
+          # Set LOOMBRIDGE_ALLOW_PUBLISH_SKIP=1 as a repo variable to fall back to warn-only
+          # while credentials are being configured.
+          if [ "${{ vars.LOOMBRIDGE_ALLOW_PUBLISH_SKIP }}" = "1" ]; then
+            echo "::warning::npm publish did not complete, and the skip escape hatch is enabled. The GitHub Release assets are the only channel carrying this version."
+            exit 0
+          fi
+          echo "::error::npm publish FAILED. Configure trusted publishing for the 'loombridge' package (npmjs.com -> Settings -> Trusted publisher -> GitHub Actions, Loomtide/loombridge, release.yml) or set the NPM_TOKEN secret. The GitHub Release was created, but npm still serves the previous version, which is what 'npm install -g loombridge' resolves." >&2
+          exit 1

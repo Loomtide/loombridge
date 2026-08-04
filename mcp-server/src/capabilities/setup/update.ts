@@ -1,6 +1,20 @@
 /**
- * `loombridge update` — reconcile a project's Loombridge-owned bridge with the bridge
- * that ships with THIS CLI, then run `doctor`.
+ * `loombridge update`: update the CLI itself, then reconcile a project's Loombridge-owned
+ * bridge with the bridge that ships with THIS CLI, then run `doctor`.
+ *
+ * TWO THINGS need updating, unlike a single-binary tool: the CLI, and the bridge package
+ * inside each Unity project (a freshness gate already refuses when they disagree). The verb
+ * serves both without a mode flag:
+ *
+ *   loombridge update              CLI first; then the bridge, if cwd is a Unity project
+ *   loombridge update --project X  the same, targeting X
+ *   loombridge update --check      report only; install nothing, write nothing
+ *
+ * ORDERING IS LOAD-BEARING. The bridge tarball is bundled INSIDE the CLI, so a self-update
+ * replaces the bundle this process already resolved. Reconciling afterwards would deliver
+ * the previous bridge and print success, which is the "stale bundle looks healthy" failure
+ * the freshness gate below exists to close. So a self-update that actually ran ENDS the run
+ * and asks for a re-run; only an already-current CLI proceeds to the bridge.
  *
  * On the default tarball route this is a hash-checked file swap: drop the newer
  * `.tgz`, bump the `file:` line, prune the old one, rewrite `LoombridgeInstall.json`
@@ -9,23 +23,38 @@
  * so no `--force-bridge` dance — that flag matters only for the `--embedded`
  * fallback (a physical folder someone could have modified).
  *
- * The CLI itself is NOT self-updated (self-running an install is brittle across
- * nvm/volta/asdf/corepack), so we detect-and-instruct: print the single
- * install-or-update command, which is the same one a developer used to install
- * and re-runs to update. See `printCliSelfUpdateHint` for why that command is
- * the release's `install.sh` and not a get.loomtide.ai one-liner.
+ * Self-updating is offered only for the npm channel, which is one portable command.
+ * A frozen runtime or a source checkout is detected and INSTRUCTED, never self-run:
+ * `npm install -g` over a developer's checkout would replace their working tree with a
+ * published build. See `cli-install-method.ts` for the channel table.
  *
  * Exit codes: 0 up-to-date/updated + healthy · 1 update or health problem ·
- * 2 usage/precondition (bridge never installed here, or a bundle that does not match
- * this CLI's packaged sources and was therefore refused).
+ * 2 usage/precondition (an explicit --project that is not a Unity project or has no bridge
+ * installed, or a bundle that does not match this CLI's packaged sources and was therefore
+ * refused). Bare `update` outside a Unity project is NOT an error: updating the CLI is a
+ * complete, useful action on its own.
  */
 
 import { copyFileSync, existsSync, mkdirSync, rmSync } from "node:fs";
 import path from "node:path";
 
+import { packageRoot } from "../../shared/pkg-root.js";
+import { resolveBuildStamp } from "../../shared/build-stamp.js";
 import { installBridge } from "./install-bridge.js";
 import { reconcileAgentSurfaceForUpdate } from "./install-agent.js";
 import { run as doctorRun } from "./doctor.js";
+import {
+  type CliInstallInfo,
+  classifyCliInstall,
+  manualUpdateInstruction,
+} from "./cli-install-method.js";
+import {
+  type LatestVersionLookup,
+  executeSelfUpdate,
+  isValidVersionSpec,
+  npmRegistryLookup,
+  planSelfUpdate,
+} from "./cli-self-update.js";
 import {
   ALLOW_STALE_FLAG,
   METADATA_RELPATH,
@@ -39,64 +68,133 @@ import {
 } from "./bridge-install-common.js";
 
 interface UpdateArgs {
+  /** Empty when no project was given AND cwd is not a Unity project: a CLI-only run. */
   project: string;
   tarball?: string;
   forceBridge: boolean;
   allowStaleBridge: boolean;
   dryRun: boolean;
-  channel?: string;
+  checkOnly: boolean;
+  skipSelf: boolean;
   version?: string;
 }
 
 type ParseHelp = { help: true; usageError?: boolean };
 
-function parseArgs(args: string[]): UpdateArgs | ParseHelp {
+function usageError(message: string): ParseHelp {
+  console.error(`[loombridge update] ${message}`);
+  return { help: true, usageError: true };
+}
+
+/**
+ * Read the value that follows a value-taking flag.
+ *
+ * Returns `null` when the flag is last, or when the next token is itself a flag. Without the
+ * second check `--project --check` consumes `--check` as the project path: the operator gets a
+ * wrong target AND silently loses the no-write flag, which is the quiet-wrong-target class the
+ * refusal exists to close. `--version --check` was worse: it built and RAN
+ * `npm install -g loombridge@--check`.
+ */
+function valueAfter(args: string[], index: number): string | null {
+  const next = args[index + 1];
+  if (next === undefined || next.startsWith("-")) return null;
+  return next;
+}
+
+export function parseArgs(args: string[], cwd: string = process.cwd()): UpdateArgs | ParseHelp {
   let project = "";
+  let projectFlagSeen = false;
   let tarball: string | undefined;
   let forceBridge = false;
   let allowStaleBridge = false;
   let dryRun = false;
-  let channel: string | undefined;
+  let checkOnly = false;
+  let skipSelf = false;
   let version: string | undefined;
   for (let i = 0; i < args.length; i += 1) {
     const arg = args[i];
-    if (arg === "--project" || arg === "-p") project = args[(i += 1)] ?? "";
-    else if (arg === "--tarball") tarball = args[(i += 1)] ?? "";
+    if (arg === "--project" || arg === "-p") {
+      projectFlagSeen = true;
+      project = valueAfter(args, i) ?? "";
+      if (project.length > 0) i += 1;
+    }
+    else if (arg === "--tarball") {
+      tarball = valueAfter(args, i) ?? "";
+      if (tarball.length === 0) return usageError(`${arg} needs a path.`);
+      i += 1;
+    }
     else if (arg === "--force-bridge") forceBridge = true;
     else if (arg === ALLOW_STALE_FLAG) allowStaleBridge = true;
     else if (arg === "--dry-run") dryRun = true;
-    else if (arg === "--channel") channel = args[(i += 1)] ?? "";
-    else if (arg === "--version") version = args[(i += 1)] ?? "";
+    else if (arg === "--check") checkOnly = true;
+    else if (arg === "--no-self-update") skipSelf = true;
+    else if (arg === "--version") {
+      version = valueAfter(args, i) ?? "";
+      if (version.length === 0) return usageError(`${arg} needs a version.`);
+      // The pin is interpolated into an install command, so it is validated at the door.
+      // A value containing whitespace would re-split downstream into EXTRA install targets.
+      if (!isValidVersionSpec(version)) {
+        return usageError(`--version "${version}" is not a valid version.`);
+      }
+      i += 1;
+    }
     else if (arg === "--help" || arg === "-h") return { help: true };
     else {
       console.error(`[loombridge update] unknown argument "${arg}".`);
       return { help: true, usageError: true };
     }
   }
-  if (!project) {
-    console.error("[loombridge update] --project <unity-project-dir> is required.");
+
+  // A value-less `--project` is a USAGE ERROR, never a silent fallback to cwd: the operator
+  // named a target and got a different one, which is the quiet-wrong-target class.
+  if (projectFlagSeen && project.length === 0) {
+    console.error("[loombridge update] --project needs a directory.");
     return { help: true, usageError: true };
   }
-  return { project: path.resolve(project), tarball, forceBridge, allowStaleBridge, dryRun, channel, version };
+
+  // Default the project to cwd, but ONLY when cwd really is a Unity project. Resolving it
+  // to a non-project cwd would turn every `loombridge update` run in a random directory into
+  // a "not a Unity project" error, which is precisely the friction this defaulting removes.
+  if (!projectFlagSeen && looksLikeUnityProject(cwd)) project = cwd;
+
+  return {
+    project: project.length > 0 ? path.resolve(project) : "",
+    tarball,
+    forceBridge,
+    allowStaleBridge,
+    dryRun,
+    checkOnly,
+    skipSelf,
+    version,
+  };
 }
 
 function printUsage(): void {
   console.log(
     [
-      "Usage: loombridge update --project <unity-project-dir> [options]",
+      "Usage: loombridge update [--project <unity-project-dir>] [options]",
       "",
-      "Reconcile the project's bridge with the bridge bundled in this CLI, then run",
-      "doctor. Default (tarball) route is a hash-checked file swap.",
+      "Update Loombridge: the CLI itself first, then the bridge inside a Unity project,",
+      "then run doctor. With no --project, the current directory is used when it is a",
+      "Unity project; otherwise only the CLI is updated.",
+      "",
+      "The CLI is self-updated only for a GLOBAL npm install (one portable command). A",
+      "local/npx copy, a frozen runtime, or a source checkout is detected and the exact",
+      "command is printed instead, never run for you.",
       "",
       "Options:",
-      "  --project, -p <dir>   Target Unity project (required)",
+      "  --project, -p <dir>   Target Unity project (default: cwd when it is one)",
+      "  --check               Report what would happen; install nothing, write nothing",
+      "  --no-self-update      Skip the CLI check entirely; only touch the project bridge",
       "  --force-bridge        Overwrite an --embedded copy even if it may be edited",
       `  ${ALLOW_STALE_FLAG}  Deliver a bundle that does not match this CLI's sources`,
       "  --tarball <path>      Update to this bridge .tgz instead of the CLI-bundled one",
       "  --dry-run             Print the plan without writing any files",
-      "  --channel <name>      (advisory) shown in the CLI self-update instruction",
-      "  --version <x.y.z>     (advisory) shown in the CLI self-update instruction",
+      "  --version <x.y.z>     Pin the CLI update to an exact published version",
       "  -h, --help            Show this help",
+      "",
+      "A self-update ENDS the run: the bridge tarball ships inside the CLI, so the bridge",
+      "must be reconciled by the NEW binary. Re-run `loombridge update` afterwards.",
       "",
       "Exit codes: 0 up-to-date/updated + healthy · 1 problem · 2 usage/precondition.",
     ].join("\n"),
@@ -110,49 +208,156 @@ function printUsage(): void {
  */
 const RELEASE_REPO = process.env.LOOMBRIDGE_REPO || "Loomtide/loombridge";
 
+/** What the CLI phase decided, and whether the bridge phase may still run in THIS process. */
+type SelfUpdateOutcome =
+  /** Nothing was installed; the bridge phase may proceed with this CLI's bundled tarball. */
+  | { kind: "continue" }
+  /** The CLI on disk was replaced. The bundle this process holds is now the OLD one. */
+  | { kind: "stop-updated"; exitCode: number };
+
 /**
- * Detect-and-instruct: never self-run an install (brittle across node version
- * managers). Print the install-or-update command — the same one used to install;
- * re-running it pulls the latest release. `--version` maps to the installer's
- * `LOOMBRIDGE_VERSION` pin; `--channel` is advisory only.
+ * The CLI half of `update`: check the registry, then either install (npm channel) or print
+ * the exact command for this channel.
  *
- * IT MUST NOT ADVERTISE `get.loomtide.ai` BY DEFAULT. That endpoint does not serve Loombridge: it
- * currently returns the installer for a DIFFERENT product (`@loomtide/cli`), so the old default here
- * told every user running `loombridge update` to install something else entirely. Confirmed by
- * running it. `README.md` and `Docs/Install.md` already carried that warning; this code contradicted
- * them.
- *
- * The honest default is the channel that actually works today: `install.sh`, published as an asset
- * on each release. `LOOMBRIDGE_INSTALL_URL` stays as the override, so the one-liner returns as the
- * default the moment a Loombridge-specific endpoint is deployed, without another code change.
+ * `lookup` is injected so the whole table is testable without a network.
  */
-function printCliSelfUpdateHint(_channel?: string, version?: string): void {
-  const prefix = version ? `LOOMBRIDGE_VERSION=${version} ` : "";
-  const url = process.env.LOOMBRIDGE_INSTALL_URL;
-  if (url) {
-    console.log(`  note: to update the CLI itself, run:  ${prefix}curl -fsSL ${url} | sh`);
-  } else {
-    console.log("  note: to update the CLI itself, download install.sh from the latest release and run it:");
-    console.log(
-      `        ${prefix}gh release download -R ${RELEASE_REPO} -p install.sh && sh install.sh`,
-    );
+export function runCliSelfUpdatePhase(params: {
+  checkOnly: boolean;
+  pinnedVersion?: string | undefined;
+  lookup?: LatestVersionLookup;
+  installMethod?: CliInstallInfo;
+  currentVersion?: string;
+  runInstall?: (command: string) => boolean;
+}): SelfUpdateOutcome {
+  const info = params.installMethod ?? classifyCliInstall(packageRoot(import.meta.url));
+  const current = params.currentVersion ?? resolveBuildStamp().version;
+  const lookup = params.lookup ?? npmRegistryLookup();
+
+  console.log("==> Loombridge CLI");
+  console.log(`    running:  ${current}  (${info.reason})`);
+
+  const plan = planSelfUpdate({
+    method: info.method,
+    current,
+    latest: lookup(),
+    pinnedVersion: params.pinnedVersion,
+  });
+
+  switch (plan.action) {
+    case "already-current":
+      console.log(`  -> ${plan.message}`);
+      return { kind: "continue" };
+
+    case "ahead-of-registry":
+      console.log(`  -> ${plan.message}`);
+      return { kind: "continue" };
+
+    case "check-failed":
+      // NEVER "up to date": nothing was compared. Same refusal shape the gates use.
+      console.warn(`  !! ${plan.message}`);
+      return { kind: "continue" };
+
+    case "instruct":
+      console.log(`  -> ${plan.message}`);
+      for (const line of manualUpdateInstruction(info.method, RELEASE_REPO)) console.log(line);
+      return { kind: "continue" };
+
+    case "self-update": {
+      console.log(`  -> ${plan.message}`);
+      if (!plan.command) {
+        for (const line of manualUpdateInstruction(info.method, RELEASE_REPO)) console.log(line);
+        return { kind: "continue" };
+      }
+      if (params.checkOnly) {
+        console.log(`     would run:  ${plan.command}`);
+        console.log("     (--check: nothing was installed)");
+        return { kind: "continue" };
+      }
+      console.log(`     running:  ${plan.command}`);
+      const ok = (params.runInstall ?? ((c: string) => executeSelfUpdate(c)))(plan.command);
+      if (!ok) {
+        console.error("[loombridge update] the CLI update command failed.");
+        for (const line of manualUpdateInstruction(info.method, RELEASE_REPO)) console.error(line);
+        return { kind: "stop-updated", exitCode: 1 };
+      }
+      // Report the spec that was actually INSTALLED, never the registry's `latest`. With
+      // `--version 0.1.5` pinned, `latest` is a different version entirely, and printing it
+      // would be a verdict unbound to the run that produced it: the exact failure this repo's
+      // gates exist to refuse, in the install path.
+      console.log(`  -> CLI updated to ${params.pinnedVersion || plan.latest || "the latest published version"}.`);
+      console.log("");
+      console.log("     The bridge ships inside the CLI, so the newly installed binary must be the");
+      console.log("     one that delivers it. Re-run to reconcile a project's bridge:");
+      console.log("       loombridge update");
+      return { kind: "stop-updated", exitCode: 0 };
+    }
+
+    default: {
+      const exhaustive: never = plan.action;
+      throw new Error(`unhandled self-update action: ${String(exhaustive)}`);
+    }
   }
-  console.log(`        (needs 'gh auth login' or LOOMBRIDGE_TOKEN)`);
 }
 
-export async function run(args: string[]): Promise<number> {
-  const parsed = parseArgs(args);
+/**
+ * Test seam for `run`. Kept deliberately small: only the two things a unit test cannot control
+ * from outside (the working directory, and the phase that reaches the network and installs).
+ *
+ * It exists because the argv-to-actuator WIRING had no coverage, and that is exactly where a
+ * real defect hid: `--dry-run` was parsed correctly and then never forwarded, so a flag
+ * documented as write-free ran a global install. Every unit test passed, because they all
+ * called the phase directly with hand-supplied parameters and never walked argv into it.
+ */
+export interface UpdateRunDeps {
+  cwd?: string;
+  selfUpdatePhase?: typeof runCliSelfUpdatePhase;
+}
+
+export async function run(args: string[], deps: UpdateRunDeps = {}): Promise<number> {
+  const parsed = parseArgs(args, deps.cwd);
   if ("help" in parsed) {
     printUsage();
     return parsed.usageError ? 2 : 0;
   }
   const { project } = parsed;
 
-  if (!existsSync(project) || !looksLikeUnityProject(project)) {
+  // Validate an explicitly named project BEFORE phase 1. Phase 1 can end the run by
+  // self-updating and returning 0, so a typo'd `--project /typo/path` would exit 0 having
+  // never noticed the path is wrong, and the operator would believe that project was handled.
+  // Argument validity is a precondition, so it is checked before anything is actuated.
+  if (project.length > 0 && (!existsSync(project) || !looksLikeUnityProject(project))) {
     console.error(`[loombridge update] ${project} is not a Unity project.`);
     return 2;
   }
 
+  // Phase 1: the CLI itself. A successful self-update ends the run (see the header note on
+  // ordering): the replaced binary owns the bridge tarball the next phase would deliver.
+  if (!parsed.skipSelf) {
+    const outcome = (deps.selfUpdatePhase ?? runCliSelfUpdatePhase)({
+      // BOTH no-write flags gate the install. `--dry-run` is documented as "print the plan
+      // without writing any files"; forwarding only `--check` here meant `--dry-run` ran a
+      // real global `npm install -g`, and `--dry-run --version <x>` silently DOWNGRADED the
+      // CLI. A flag that promises to write nothing must reach every actuator, not just the
+      // one it was written alongside.
+      checkOnly: parsed.checkOnly || parsed.dryRun,
+      pinnedVersion: parsed.version,
+    });
+    if (outcome.kind === "stop-updated") return outcome.exitCode;
+    console.log("");
+  }
+
+  // Phase 2: the project bridge. No project in play is a COMPLETE run, not a usage error:
+  // updating the CLI is useful on its own, and demanding --project here is the friction this
+  // verb exists to remove.
+  if (project.length === 0) {
+    console.log("==> Unity project bridge");
+    console.log("  -> no Unity project here, so nothing else to update.");
+    console.log("     To update a project's bridge, run this from the project directory, or:");
+    console.log("       loombridge update --project /path/to/UnityProject");
+    return 0;
+  }
+
+  // (Project validity was already checked above, before anything could be actuated.)
   const meta = readInstallMetadata(project);
   if (!meta) {
     console.error(
@@ -199,14 +404,17 @@ export async function run(args: string[]): Promise<number> {
     }
   }
 
-  console.log(`==> Updating ${PKG_ID} in ${project}`);
+  console.log(`==> Unity project bridge: ${PKG_ID} in ${project}`);
   console.log(`    installed: ${meta.bridgeVersion} (${meta.installMode})`);
   console.log(`    bundled:   ${bundledVersion}`);
-  printCliSelfUpdateHint(parsed.channel, parsed.version);
+
+  // `--check` reports without writing. It reuses the dry-run path rather than adding a second
+  // no-write mode: one code path that never mutates is one path to keep honest.
+  const dryRun = parsed.dryRun || parsed.checkOnly;
 
   // Optional agent surface: UNSET → ONE hint, "declined" → silent, "enabled" → REFRESH to
   // this CLI's payload (same hash discipline as install-agent). Runs on every update path.
-  const surfaceCode = reconcileAgentSurfaceForUpdate(project, parsed.dryRun);
+  const surfaceCode = reconcileAgentSurfaceForUpdate(project, dryRun);
   if (surfaceCode !== 0) return surfaceCode;
 
   const isEmbedded = meta.installMode === "embedded-package";
@@ -234,7 +442,7 @@ export async function run(args: string[]): Promise<number> {
   // ProjectSettings/, where a stray `.bak` shows up as an untracked file in every
   // consumer's `git status` after every update. `.loombridge/` run artifacts are the
   // one Loombridge surface consumers never commit.
-  if (!parsed.dryRun) {
+  if (!dryRun) {
     const metaPath = path.join(project, METADATA_RELPATH);
     if (existsSync(metaPath)) {
       const backupDir = path.join(project, ".loombridge", "backups");
@@ -259,12 +467,12 @@ export async function run(args: string[]): Promise<number> {
     mode: isEmbedded ? "embedded" : "tarball",
     tarball: tgz.path,
     allowStaleBridge: parsed.allowStaleBridge,
-    dryRun: parsed.dryRun,
+    dryRun,
   });
   if (installCode !== 0) return installCode;
 
-  if (parsed.dryRun) {
-    console.log("  (--dry-run: skipped doctor)");
+  if (dryRun) {
+    console.log(parsed.checkOnly ? "  (--check: nothing was written; skipped doctor)" : "  (--dry-run: skipped doctor)");
     return 0;
   }
 

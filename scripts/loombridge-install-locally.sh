@@ -8,7 +8,7 @@
 # THE CORE CLI IS NOT INSTALLED HERE. `loombridge` / `loombridge-mcp` /
 # `loombridge-analyze-frames` come from the RELEASE channel:
 #
-#   curl -fsSL https://get.loomtide.ai | sh      # npm -g @loomtide/loombridge (install + update)
+#   curl -fsSL https://get.loomtide.ai | sh      # npm -g loombridge (install + update)
 #
 # This script must NEVER create ~/.local/bin wrappers with those names — ~/.local/bin
 # precedes the npm global bin on PATH, so a wrapper would silently shadow the released
@@ -23,7 +23,7 @@
 #   ~/.loombridge/asset-layer/          profiles + registry + fixtures (source PNG/WAV)
 #   ~/.local/bin/loombridge-*           AUX wrappers only (capture/tune/asset-prep/embed-bridge/
 #                                     checkpoint/restore/handoff-check) -> the frozen runtime;
-#                                     names the released @loomtide/loombridge provides are excluded
+#                                     names the released loombridge provides are excluded
 #   ~/.claude/commands/loombridge/      slash commands, repo paths scrubbed
 #   ~/.claude/skills/<name>/          consumer skills, repo paths scrubbed
 #
@@ -120,7 +120,7 @@ for sh in loombridge-checkpoint.sh loombridge-restore.sh; do
 done
 
 # 1. CLI wrappers — AUX verbs only, all pointing at the FROZEN RUNTIME, never the dev
-# repo. Names the released @loomtide/loombridge already provides (loombridge, loombridge-mcp,
+# repo. Names the released loombridge already provides (loombridge, loombridge-mcp,
 # loombridge-mcp-server, loombridge-analyze-frames, loombridge-capture-runner,
 # loombridge-run-gates) are NEVER created here: ~/.local/bin precedes the npm global bin
 # on PATH, so a wrapper would shadow the release install (see header). Heal machines
@@ -157,7 +157,7 @@ done
 
 # Additional internal dist wrappers (capture, handoff check, tuning) so agent-facing
 # command/skill content never has to spell out a node path. analyze-frames is NOT here —
-# the released @loomtide/loombridge ships a `loombridge-analyze-frames` bin (see the exclusion list
+# the released loombridge ships a `loombridge-analyze-frames` bin (see the exclusion list
 # above); only names the release does not provide may be wrapped.
 for wname in capture-runner:capture handoff-consistency:handoff-check tuning-runner:tune; do
   src_basename="${wname%%:*}"

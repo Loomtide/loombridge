@@ -1,13 +1,25 @@
 # Install Loombridge on a new machine
 
-The simplest end-to-end setup. There are two tracks:
+The simplest end-to-end setup is npm:
 
-- **Track B — From source** (clone + build). **This is the install path today** — use it until the
-  first Loombridge release is tagged.
-- **Track A — One-command install** via `get.loomtide.ai`. **Not live for Loombridge yet** (see the
-  warning under Track A); it becomes the recommended path from the first tagged release on.
+```bash
+npm install -g loombridge
+```
 
-Both end at the same place: a `loombridge` command on your PATH and the Unity bridge installed into your project as a
+That is the supported install and update path, and the one `loombridge update` self-updates
+through. The tracks below are the alternatives:
+
+- **Track A, the GitHub Releases installer** (`install.sh`). Fetches a pinned release asset and
+  hands it to `npm install -g`. Useful for pinning an exact release or for a machine without
+  direct registry access.
+- **Track B, from source** (clone + build). For contributors, and for running an unreleased
+  branch.
+
+> **Availability:** `npm install -g loombridge` resolves the published package. Until the first
+> `v0.2.0`+ release is tagged and published, npm still serves the 0.0.1 name-reservation stub,
+> which carries no `loombridge` binary. Use Track B until then.
+
+All three end at the same place: a `loombridge` command on your PATH and the Unity bridge installed into your project as a
 versioned tarball dependency, verified by `loombridge doctor`.
 
 ## Requirements (both tracks)
@@ -132,12 +144,13 @@ curl -fsSL https://get.loomtide.ai | sh -s -- --project /path/to/UnityProject --
 The choice lives in the committed `ProjectSettings/LoombridgeInstall.json`, so it is **team-wide + versioned**:
 one dev decides and everyone's `loombridge update` behaves identically after a pull.
 
-> A published npm package (`npm install -g @loomtide/loombridge`) is a parallel channel; the public GitHub
-> Releases command above is the supported install/update path and always resolves the latest release.
+> The GitHub Releases command above is the fallback channel, for a pinned release asset or a machine
+> without registry access. The supported install and update path is npm (`npm install -g loombridge`),
+> which is what `loombridge update` self-updates through.
 
 ---
 
-## Track B — From source (the install path today)
+## Track B: from source (contributors, and unreleased branches)
 
 This is how you install Loombridge until the first release is tagged: a clone builds the CLI, `npm link`
 puts it on your PATH, and you pack the bundled bridge tarball the install/health commands need.
@@ -209,16 +222,28 @@ the package, `Tests/` stripped).
 
 ## Keeping it up to date
 
-**Release path** (partners and everyday use) — two commands, always in this order:
+**One command, run it twice.** From inside the Unity project (or with `--project`):
 
 ```bash
-curl -fsSL https://get.loomtide.ai | sh              # 1. update the CLI (pulls the latest release)
-loombridge update --project /path/to/UnityProject      # 2. swap the project's bridge to the CLI-bundled one
+loombridge update
 ```
 
-`loombridge update` swaps in the bridge tarball bundled with your current CLI (backs up the install record, prunes the
-old tarball), then runs `doctor`. It never self-updates the CLI (self-running an install is unreliable across
-nvm/volta/asdf) — that's what the first command is for.
+It updates two things, in this order. First the CLI itself, when a global npm install is what
+is running: a local or `npx` copy, a frozen runtime, and a source checkout are each detected and
+told the exact command instead, because `npm install -g` would write to a different copy than
+the one executing. Second the project's bridge: a hash-checked tarball swap that backs up the
+install record, prunes the old tarball, then runs `doctor`.
+
+If the first phase actually installs a new CLI, the run STOPS and asks you to re-run. That is
+deliberate: the bridge tarball ships inside the CLI, so the freshly installed binary has to be
+the one that delivers it. Otherwise you would get the previous bridge with a success message.
+
+Useful flags:
+
+- `--check` reports what would change and installs nothing (it always exits 0; it reports, it
+  does not gate).
+- `--no-self-update` skips the CLI phase, for updating only a project's bridge.
+- `--version <x.y.z>` pins the CLI to an exact published version.
 
 **Dev short path** (from a checkout, no release needed) — push THIS clone's bridge into a project in two steps:
 
@@ -260,7 +285,7 @@ scripts/loombridge-release.sh                 # tag defaults to v<version> from 
 scripts/loombridge-release.sh --dry-run       # pack only, no release (sanity check)
 ```
 
-It packs `@loomtide/loombridge` (whose `prepack` bundles the current bridge tarball) and uploads
+It packs `loombridge` (whose `prepack` bundles the current bridge tarball) and uploads
 `loombridge-cli-<ver>.tgz` **plus** `scripts/install.sh` as release assets. Developers pick it up automatically —
 `curl -fsSL https://get.loomtide.ai | sh` always resolves the latest release. (`LOOMBRIDGE_REPO=<owner/repo>`
 overrides the target for both the release script and the installer.)

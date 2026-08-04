@@ -47,7 +47,7 @@ This writes the tarball to `<project>/Packages/tarballs/` and adds:
   "testable", so `UNITY_INCLUDE_TESTS` stays undefined and the `nunit`-referencing
   test asmdef never compiles into the consumer (proven live — see the decision doc).
 - **Ships only packaged bytes** — the versioned bridge tarball inside
-  `@loomtide/loombridge`, with no repo clone and no consumer git credentials.
+  `loombridge`, with no repo clone and no consumer git credentials.
 - **Read-only** ⇒ no "developer edited the embedded bridge" drift.
 - `loombridge update --project <p>` swaps the tarball and re-runs `doctor`.
 - Transitive UPM deps (`com.unity.ugui`, `com.unity.2d.sprite`,

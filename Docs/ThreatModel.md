@@ -2,7 +2,7 @@
 
 This document describes the security posture of Loombridge — the
 `com.loomtide.loombridge` Unity package (`packages/com.loomtide.loombridge/`) and
-the `@loomtide/loombridge` MCP server + `loombridge` CLI (`mcp-server/`). It is written for public consumption: what the attack surface is, what
+the `loombridge` MCP server + `loombridge` CLI (`mcp-server/`). It is written for public consumption: what the attack surface is, what
 the design deliberately refuses to offer an attacker, and what is explicitly out of
 scope. Statements below are grounded in the shipped code; file references point at the
 enforcing implementation.

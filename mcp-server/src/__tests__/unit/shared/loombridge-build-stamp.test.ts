@@ -30,7 +30,7 @@ async function fakeModule(opts: {
   if (opts.version !== null) {
     await fs.writeFile(
       path.join(dir, "package.json"),
-      JSON.stringify({ name: "@loomtide/loombridge", version: opts.version ?? "0.1.0" }),
+      JSON.stringify({ name: "loombridge", version: opts.version ?? "0.1.0" }),
       "utf-8",
     );
   }

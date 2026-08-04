@@ -13,7 +13,8 @@ import { PKG_ROOT, REPO_ROOT } from "../../_support/paths.js";
  * at the 2026-07-21 mechanical product rename: it rewrote a hard-coded `loomtide-cli-$ver.tgz` to
  * `loombridge-cli-$ver.tgz` while the package name became `@loomtide/loombridge`, which packs to
  * `loomtide-loombridge-<ver>.tgz`. From then on the release script looked for a file npm never
- * produced and exited 1.
+ * produced and exited 1. (The package has since been renamed again, to the unscoped
+ * `loombridge`; the asset name did not move, which is exactly why the two are asserted apart.)
  *
  * It went unnoticed for four days and across a shipped release because releases are rare and v0.3.2's
  * asset was evidently produced by hand. A path declared in a shell script that no test walks is
@@ -92,8 +93,14 @@ test("nothing advertises get.loomtide.ai as the Loombridge installer", async () 
   // endpoint (the docs must be able to warn about it, and the code must be able to explain the
   // override); what it forbids is presenting it as a runnable install command.
   const offenders: string[] = [];
+  // The scan list must follow the CODE, not the filename it used to live in. The
+  // update-instruction printing moved out of `update.ts` into `cli-install-method.ts` when the
+  // npm channel landed, and for one commit the guard was scanning a file that no longer prints
+  // any install command: the precise defect it names was reachable again with the suite green.
   const files = [
     path.join(PKG_ROOT, "src", "capabilities", "setup", "update.ts"),
+    path.join(PKG_ROOT, "src", "capabilities", "setup", "cli-install-method.ts"),
+    path.join(PKG_ROOT, "src", "capabilities", "setup", "cli-self-update.ts"),
     path.join(REPO_ROOT, "scripts", "loombridge-release.sh"),
     path.join(REPO_ROOT, "scripts", "install.sh"),
   ];
