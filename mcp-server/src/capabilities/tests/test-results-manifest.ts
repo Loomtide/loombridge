@@ -30,7 +30,7 @@ import { createHash } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 
-import { deriveRepoIdentity } from "../../shared/repo-identity.js";
+import { projectBindingMatches, projectBindingPairError } from "../../shared/repo-identity.js";
 
 import { LOOMBRIDGE_DIRNAME, TEST_RESULTS_DIRNAME, loombridgePaths } from "../../domain/state.js";
 import type { TestsSummary } from "./nunit-parse.js";
@@ -42,6 +42,15 @@ import type { TestsSummary } from "./nunit-parse.js";
  * path vocabulary in one place, without a second spelling existing anywhere.
  */
 export { TEST_RESULTS_DIRNAME };
+
+/**
+ * The portable-binding predicate lives in `shared/repo-identity.ts`: the feel snapshot
+ * and the screen layout baseline gate on the SAME rule, and a second copy of a rule that
+ * decides whether foreign evidence may grade this project is a second rule the day one
+ * copy is edited. Re-exported so a reader of this module still finds the whole binding
+ * vocabulary in one place, without a second implementation existing anywhere.
+ */
+export { projectBindingMatches };
 
 /** The NUnit3 result document Unity's `-testResults` writes. */
 export const TEST_RESULTS_FILE = "test-results.xml";
@@ -246,18 +255,10 @@ export async function loadTestResultsManifest(
   if (!isStringArray(parsed.command) || parsed.command.length === 0) {
     return { error: `${TEST_RESULTS_MANIFEST} 'command' is not a non-empty array of strings` };
   }
-  // The portable binding pair: optional (legacy and non-git manifests), but when present
-  // each must be a usable string, and they travel together (a repoIdentity with no
-  // projectPath would match any position inside the repo, which is a wider claim than
-  // the stamp ever made).
-  for (const field of ["repoIdentity", "projectPath"] as const) {
-    if (parsed[field] !== undefined && (typeof parsed[field] !== "string" || (parsed[field] as string).length === 0)) {
-      return { error: `${TEST_RESULTS_MANIFEST} '${field}' must be a non-empty string when present` };
-    }
-  }
-  if ((parsed.repoIdentity === undefined) !== (parsed.projectPath === undefined)) {
-    return { error: `${TEST_RESULTS_MANIFEST} 'repoIdentity' and 'projectPath' must be stamped together` };
-  }
+  // The portable binding pair: optional (legacy and non-git manifests), refused when it
+  // is half-stamped. One shared rule, so the three stamped artifacts cannot diverge.
+  const pairError = projectBindingPairError(parsed);
+  if (pairError !== null) return { error: `${TEST_RESULTS_MANIFEST} ${pairError}` };
   if (parsed.logSha256 !== null && typeof parsed.logSha256 !== "string") {
     return { error: `${TEST_RESULTS_MANIFEST} 'logSha256' must be a string or null` };
   }
@@ -300,38 +301,6 @@ export interface TestResultsIntegrityResult {
  *  - the log is verified ONLY when it still exists. It is large and disposable; its
  *    absence is not tampering, but its presence with the wrong bytes is.
  */
-/**
- * Does the stamped binding say these results belong to `root`?
- *
- * Two ways to match, either sufficient:
- *  1. ABSOLUTE: same resolved path (the pre-portable rule; always true on the machine
- *     that produced the stamp).
- *  2. PORTABLE: the manifest carries repoIdentity + projectPath, the current root
- *     derives the same pair (same repository, same position inside it), whatever the
- *     absolute checkout path is. A different repository cannot share an origin URL, and
- *     a second project inside the same monorepo differs in projectPath.
- * A manifest with NO portable stamp graded from a different absolute path refuses: the
- * failure message names the re-stamp command rather than guessing.
- */
-export function projectBindingMatches(
-  manifest: Pick<TestResultsManifest, "projectRoot" | "repoIdentity" | "projectPath">,
-  root: string,
-): boolean {
-  if (path.resolve(root) === path.resolve(manifest.projectRoot)) return true;
-  // BOTH portable fields must be present: an absent projectPath is a refusal, never a
-  // default (the falsy-field anti-pattern; the validator enforces the pairing on disk,
-  // and this predicate is exported, so the refusal lives here too, not one file away).
-  if (manifest.repoIdentity === undefined || manifest.projectPath === undefined) return false;
-  // A `basename:` identity is a directory-name guess: two unrelated local repos (or two
-  // directories with an empty `.git` marker) trivially share one, so it never matches
-  // portably. Provenance only; the failure message names the re-stamp path.
-  if (manifest.repoIdentity.startsWith("basename:")) return false;
-  const derived = deriveRepoIdentity(root);
-  if (derived === null) return false;
-  if (derived.repoIdentity.startsWith("basename:")) return false;
-  return derived.repoIdentity === manifest.repoIdentity && derived.projectPath === manifest.projectPath;
-}
-
 export async function verifyTestResults(
   dir: string,
   opts: { root?: string } = {},

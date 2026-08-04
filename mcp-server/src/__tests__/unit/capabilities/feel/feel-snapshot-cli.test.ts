@@ -188,6 +188,31 @@ test("feel snapshot status: absent is guidance (exit 0); tampered is NOT READY (
   assert.equal(await runFeelCli(["snapshot", "status", "--root", root, "--workspace", ws]), 2);
 });
 
+test("feel snapshot status: a REFUSED manifest is exit 2, never the exit-0 'no approved snapshot'", async () => {
+  // The refusal path (a half-stamped portable pair) produces no manifest object at all, and
+  // reading that as "nothing approved here" told an operator to approve a snapshot that is
+  // sitting on disk, unreadable. Absent and refused are different answers.
+  const { root, ws } = await scaffold();
+  await stageCandidate(ws, "feel.json");
+  assert.equal(await runFeelCli(["snapshot", "approve", "--root", root, "--workspace", ws]), 0);
+  const manifestPath = path.join(feelPaths(ws).snapshotCurrentDir, FEEL_SNAPSHOT_MANIFEST);
+  const doc = JSON.parse(await fs.readFile(manifestPath, "utf-8")) as Record<string, unknown>;
+  doc.repoIdentity = "github.com/Loomtide/game"; // …with no projectPath: a HALF pair
+  await fs.writeFile(manifestPath, JSON.stringify(doc, null, 2), "utf-8");
+
+  const lines: string[] = [];
+  const orig = console.error;
+  console.error = (...a: unknown[]) => { lines.push(a.map(String).join(" ")); };
+  try {
+    assert.equal(await runFeelCli(["snapshot", "status", "--root", root, "--workspace", ws]), 2);
+  } finally {
+    console.error = orig;
+  }
+  const out = lines.join("\n");
+  assert.match(out, /present but REFUSED/);
+  assert.doesNotMatch(out, /no approved snapshot/, "a manifest that exists is never reported as one that does not");
+});
+
 test("feel snapshot: a workspace inside the project is refused", async () => {
   const { root } = await scaffold();
   assert.equal(

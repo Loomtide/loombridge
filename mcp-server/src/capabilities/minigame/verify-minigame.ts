@@ -166,6 +166,8 @@ export interface MinigameBaselineSection {
   present: boolean;
   /** Advisory note when a baseline is declared but not yet approved (never blocks). */
   note?: string;
+  /** Set IFF a manifest is present at `ref` but REFUSED: every state is incomplete, never advisory. */
+  refused?: string;
   capturedAt?: string;
   masks: string[];
   thresholds: BaselineThresholds;
@@ -725,6 +727,7 @@ function buildBaselineSection(
     ref: relPathUnderRoot(root, result.ref),
     present: result.present,
     note: result.note,
+    refused: result.refused,
     capturedAt: result.capturedAt,
     masks: result.masks,
     thresholds: result.thresholds,

@@ -25,6 +25,8 @@ import { createHash } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 
+import { deriveRepoIdentity, projectBindingPairError } from "../../shared/repo-identity.js";
+
 import { rederiveFromSources } from "../verification/gates/feel-rederive.js";
 import { stimulusDistrust } from "../verification/gates/feel-provenance.js";
 import { parseMeasurements, type FeelMeasurementsFile } from "./measurements.js";
@@ -103,6 +105,17 @@ export interface FeelSnapshotManifest {
    * not tampering; it is a non-anchor ("re-approve to stamp") for the caller.
    */
   projectRoot?: string;
+  /**
+   * PORTABLE binding (optional; stamped at approve time when the project sits in a git
+   * working tree): the repository identity (origin URL, else a stated basename fallback
+   * that never matches portably) plus the project's path relative to the git toplevel.
+   * This is what lets a COMMITTED snapshot grade on a teammate's checkout at a different
+   * absolute path, while a snapshot from a DIFFERENT repository still reads broken.
+   * Absent on snapshots approved before portable binding and on non-git projects: those
+   * bind by absolute path only, and re-approving re-stamps them portably.
+   */
+  repoIdentity?: string;
+  projectPath?: string;
   engine: { engine: string | null };
   capturedAt: string;
   approvedAt: string;
@@ -159,6 +172,12 @@ export async function loadSnapshotManifest(dir: string): Promise<FeelSnapshotMan
   if (!isRecord(parsed.captureContract) || typeof parsed.captureContract.sha256 !== "string") return null;
   if (typeof parsed.approvedAt !== "string" || typeof parsed.capturedAt !== "string") return null;
   if (!isRecord(parsed.tolerancePolicy)) return null;
+  // The portable binding pair is optional, but a HALF pair is refused rather than
+  // ignored: a repoIdentity with no projectPath would claim any position inside the
+  // repo, and dropping the odd field is exactly the "absent means skip the check" shape
+  // the ownership stamp exists to prevent. A refused manifest reads as unreadable here,
+  // which discovery reports as broken (tier 2), never as a silent pass.
+  if (projectBindingPairError(parsed) !== null) return null;
   return parsed as unknown as FeelSnapshotManifest;
 }
 
@@ -217,7 +236,11 @@ export interface WriteSnapshotBundleArgs {
   coverageGaps?: FeelCaptureCoverageEntry[];
   rederivation: { pass: number; total: number };
   game?: string;
-  /** Absolute PROJECT root this approval is for (the ownership stamp). */
+  /**
+   * Absolute PROJECT root this approval is for (the ownership stamp). The portable
+   * pair is DERIVED from it here rather than passed in, so a caller cannot stamp half
+   * of it, and so every approve path is portable without having to remember to be.
+   */
   projectRoot?: string;
   contractStats: { interactions: number; metrics: number };
 }
@@ -234,6 +257,10 @@ export async function writeSnapshotBundle(args: WriteSnapshotBundleArgs): Promis
     kind: "feel-snapshot",
     ...(args.game !== undefined ? { game: args.game } : {}),
     ...(args.projectRoot !== undefined ? { projectRoot: args.projectRoot } : {}),
+    // The portable pair travels with the absolute stamp and only with it: without a
+    // projectRoot there is nothing for it to make portable. A non-git project derives
+    // null and stays absolute-path-bound, which is the pre-portable behavior.
+    ...(args.projectRoot !== undefined ? (deriveRepoIdentity(args.projectRoot) ?? {}) : {}),
     engine: args.engine,
     capturedAt: args.capturedAt,
     approvedAt: args.approvedAt,
@@ -266,6 +293,13 @@ export interface SnapshotIntegrityResult {
   manifest?: FeelSnapshotManifest;
   /** The frozen measurements, parsed (present when readable). */
   measurements?: FeelMeasurementsFile;
+  /**
+   * True when a manifest FILE exists at `dir` but was refused (bad shape, a half-stamped
+   * portable pair). Distinct from "no snapshot approved yet", which is the same file being
+   * absent: a caller that collapses the two tells an operator to approve a snapshot that
+   * already exists, and reports an ungradeable anchor as an empty workspace.
+   */
+  manifestRefused?: boolean;
 }
 
 /**
@@ -283,7 +317,23 @@ export async function verifySnapshotIntegrity(dir: string): Promise<SnapshotInte
   const failures: string[] = [];
   const manifest = await loadSnapshotManifest(dir);
   if (!manifest) {
-    return { ok: false, failures: [`no readable feel-snapshot manifest at ${path.join(dir, FEEL_SNAPSHOT_MANIFEST)}`] };
+    const file = path.join(dir, FEEL_SNAPSHOT_MANIFEST);
+    // PRESENT-but-refused is not ABSENT. Both are `ok: false`, so no gate changes here,
+    // but the two need different words: one says "approve a snapshot", the other says
+    // "the snapshot you approved cannot be read", and only the second is a refusal.
+    const present = await fs
+      .access(file)
+      .then(() => true)
+      .catch(() => false);
+    return present
+      ? {
+          ok: false,
+          manifestRefused: true,
+          failures: [
+            `feel-snapshot manifest at ${file} is present but REFUSED (bad shape, or a half-stamped repoIdentity/projectPath pair)`,
+          ],
+        }
+      : { ok: false, failures: [`no readable feel-snapshot manifest at ${file}`] };
   }
 
   let measurementsBytes: Buffer | null = null;

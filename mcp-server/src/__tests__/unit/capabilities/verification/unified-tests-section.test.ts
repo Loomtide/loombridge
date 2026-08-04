@@ -506,3 +506,27 @@ test("PORTABLE: a committed trio grades at a moved checkout of the SAME repo; a 
     for (const d of [devRoot, ciRoot, foreignRoot, workspace]) await fs.rm(d, { recursive: true, force: true });
   }
 });
+
+test("LITMUS: a HALF-stamped test-results manifest is BROKEN at the door, in either direction", async () => {
+  // `loadTestResultsManifest` calls `projectBindingPairError`, and deleting that call used
+  // to survive the whole suite: the fixture hard-coupled the two fields, so no test could
+  // plant the input the check exists for. A repoIdentity with no projectPath claims EVERY
+  // position inside the repo, which is wider than the stamp ever asserted.
+  for (const half of [
+    { repoIdentity: "github.com/Loomtide/portable-game" },
+    { projectPath: "." },
+  ] as const) {
+    const root = await tmpDir("tests-halfpair-");
+    const workspace = await tmpDir("tests-halfpair-ws-");
+    try {
+      await plantTestResults(root, { xml: greenNUnitXml(), ...half });
+      const run = await captured(() => runVerifyCli(["--root", root, "--workspace", workspace]));
+      const text = run.lines.join("\n");
+      assert.match(text, /BROKEN, will not run/, `${JSON.stringify(half)} must not grade: ${text}`);
+      assert.match(text, /stamped together/, "the refusal names the half pair rather than a generic parse error");
+      assert.equal(run.result, 2, "a refused stamp is a harness-tier refusal, never a pass");
+    } finally {
+      for (const d of [root, workspace]) await fs.rm(d, { recursive: true, force: true });
+    }
+  }
+});

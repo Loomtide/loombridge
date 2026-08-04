@@ -1,6 +1,6 @@
 # RFC: Artifact storage (where Loombridge writes, and what a team commits)
 
-**Status:** PROPOSED. **Date:** 2026-08-04.
+**Status:** PROPOSED; **S1 SHIPPED**. **Date:** 2026-08-04.
 Inherits from [Positioning.md](Positioning.md) and is a peer of
 [UnifiedVerify.md](UnifiedVerify.md): the front door cannot be a team gate until the anchors
 it reads can leave one machine.
@@ -15,7 +15,7 @@ forever after". Today that promise is scoped to the laptop that did the approvin
 Three mechanisms produce it, each verified in code:
 
 1. **The workspace path is unreachable from the repo.** It is computed as `os.homedir()` plus
-   the project folder's BASENAME (`unified/discovery.ts:234`). Nothing on disk in the project
+   the project folder's BASENAME (`unified/discovery.ts:235`). Nothing on disk in the project
    can point at it. On a fresh clone `~/.loombridge/projects/<id>/` does not exist, so the feel
    snapshot and screen-contract anchors return zero rows, silently.
 2. **The one project-local anchor is gitignored by our own template.**
@@ -23,10 +23,11 @@ Three mechanisms produce it, each verified in code:
    both the approved pixel baselines AND `traces/`, the recorded human demonstration. A trace is
    the single artifact in the system that CANNOT be regenerated without a human replaying the
    game, and the shipped default throws it away.
-3. **The home anchors are not portable even if copied.** The feel snapshot and the screen
-   layout baseline carry an ABSOLUTE-path `projectRoot` stamp compared with `!==`
-   (`unified/discovery.ts:612`, `:711`). A teammate whose checkout sits at a different path
-   reads `broken`, tier 2.
+3. **The home anchors were not portable even if copied.** The feel snapshot and the screen
+   layout baseline carried an ABSOLUTE-path `projectRoot` stamp compared with `!==`, so a
+   teammate whose checkout sat at a different path read `broken`, tier 2. **CLOSED by S1**
+   (see "Staged delivery"): both anchors now bind through `projectBindingMatches` in
+   `shared/repo-identity.ts`. Mechanisms 1 and 2 are still open.
 
 Consequence, stated plainly: a clone plus `loombridge verify` can never exit 0 today. With
 nothing committed it prints the on-ramp and exits 2. With the contract committed it refuses
@@ -51,8 +52,8 @@ govern heavy regenerable output. It must never govern ground truth.
 
 Collapsing to one project root also kills a live defect for free: the basename-derived
 workspace id means two checkouts of the same repo in different directories silently share one
-workspace, which is why `discovery.ts:743` already carries a routing note to detect it. That is
-the root cause of ledger backlog item 16 ("explicit `--id` workspaces invisible under the
+workspace, which is why `discovery.ts` already carries a `workspaceRoutingNotes` scan to detect
+it. That is the root cause of ledger backlog item 16 ("explicit `--id` workspaces invisible under the
 derived id") in
 [TideRunnerDoorOneLedger.md](TideRunnerDoorOneLedger.md); this RFC subsumes it, because a
 project-local root has no derived id to disagree with.
@@ -113,11 +114,13 @@ that cannot be shared is not an anchor. This is the single place an opt-out is d
 The move is not a file relocation. Two of the anchors would read `broken` on every teammate's
 machine the moment they are committed, so the ordering is a constraint, not a preference:
 
-1. **Make the binding portable.** Reuse the pattern that already solves this for test results:
-   `projectBindingMatches` (`tests/test-results-manifest.ts:316`) accepts an absolute-path match
-   OR a `repoIdentity` + `projectPath` pair, and deliberately refuses a `basename:` identity
-   because two unrelated directories trivially share one. Port it to the feel snapshot manifest
-   and the screen layout baseline.
+1. **Make the binding portable.** SHIPPED (S1). The rule that already solved this for test
+   results was extracted to `shared/repo-identity.ts`, where `projectBindingMatches` accepts an
+   absolute-path match OR a `repoIdentity` + `projectPath` pair, and all three stamped artifacts
+   (test results, feel snapshot, screen layout baseline) now gate on that one implementation. An
+   identity that is not a real `host/path` never matches portably: the `basename:` fallback, a
+   `../template.git` relative remote, and an `insteadOf` shorthand are all coincidences two
+   unrelated repos share.
 2. **Ship a migration.** `loombridge migrate-workspace` relocates an existing
    `~/.loombridge/projects/<id>/` into the project, sorts each artifact into `anchors/` or
    `run/`, and RE-STAMPS the bindings. Without this step the move silently invalidates anchors
@@ -150,12 +153,27 @@ reports "no assets found" rather than "your anchors are on another machine".
 - A run that compared nothing human-approved still cannot exit 0
   ([UnifiedVerify.md](UnifiedVerify.md)). Making anchors shareable makes that rule reachable
   rather than permanent.
-- Portable binding must never widen into no binding: a `basename:` identity stays a refusal.
+- Portable binding must never widen into no binding: an identity that is not a real `host/path`
+  stays a refusal.
+- **Portable binding CHANGES THE FORGERY COST, and the docs must not pretend otherwise.** The
+  stamp is anti-accident provenance, not anti-forgery, and it always was: the manifest is plain
+  text either way. But the old absolute-path stamp was accidentally hard to forge for the case
+  that matters here, because a forger had to guess the victim's checkout path, which is
+  unguessable for an artifact committed to a repo that reaches an unknown clone. The clone URL
+  is a public fact, so that accidental difficulty is gone. This is the price of an anchor that
+  can be committed at all, and it is the reason integrity (sha256 over the frozen bytes, and
+  re-derivation from the evidence) carries the weight rather than the binding.
 
 ## Staged delivery
 
-- **S1** Portable binding for the feel snapshot and screen layout baseline, plus tests. No
-  layout change; additive, and independently useful.
+- **S1** SHIPPED. Portable binding for the feel snapshot and screen layout baseline. No layout
+  change; additive, and independently useful. Delivered: `shared/repo-identity.ts` (the
+  derivation plus the one matching predicate); both approve paths derive the pair inside the
+  writer, so no caller can stamp half of it; a half pair is a REFUSAL at every reader, not a
+  field to ignore; the workspace routing note binds by the same rule, so a teammate whose
+  anchor binds portably is told which `--id` to pass; and a portable match is stated on the
+  plan row, naming the absolute path the anchor was approved at, because two checkouts of one
+  repo still share a home workspace until S2 lands.
 - **S2** The `anchors/` + `run/` layout, the single ignore rule, the write-path guard with its
   LITMUS, and the template `.gitignore` rewrite (including the two directories it misses today,
   `.loombridge-fixtures/` and top-level `captures/`).

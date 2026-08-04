@@ -18,6 +18,7 @@ import {
 } from "../../../../capabilities/feel/snapshot-manifest.js";
 import { loadMeasurements } from "../../../../capabilities/feel/measurements.js";
 import { REPO_ROOT } from "../../../_support/paths.js";
+import { plantGitRepo } from "../../../_support/git-repo-fixture.js";
 
 // The REAL S5c-b live-capture artifacts: feel.json re-derives cleanly (verified),
 // feel-tampered.json carries a hand-set jumpApex its own samples refute.
@@ -167,6 +168,69 @@ test("the ownership stamp: a new approval records the PROJECT root, and a legacy
   assert.equal(legacy.projectRoot, undefined);
   const integrity = await verifySnapshotIntegrity(legacyDir);
   assert.equal(integrity.ok, true, integrity.failures.join("; "));
+});
+
+test("approving inside a git checkout stamps the PORTABLE pair; a HALF pair is refused (LITMUS)", async () => {
+  // S1 of the artifact-storage RFC: a frozen snapshot has to survive being COMMITTED and
+  // read from a teammate's checkout, which the absolute `projectRoot` alone cannot do.
+  // The pair is derived by the writer from `projectRoot`, so no approve path can stamp
+  // half of it, and a non-git project simply stays absolute-path-bound.
+  const staging = await stageCandidate("feel.json");
+  const candidate = path.join(staging, "candidate");
+  const measurements = await loadMeasurements(path.join(candidate, SNAPSHOT_MEASUREMENTS_FILE));
+  const view = rederiveView(measurements);
+  const metrics: FeelSnapshotManifest["metrics"] = {};
+  for (const [id, value] of Object.entries(measurements.metrics)) {
+    metrics[id] = { value, confidence: view.verified.has(id) ? "verified" : "reported" };
+  }
+  const projectRoot = path.join(staging, "checkout", "unity", "MyGame");
+  await fs.mkdir(projectRoot, { recursive: true });
+  await plantGitRepo(path.join(staging, "checkout"), "https://github.com/Loomtide/game.git");
+
+  const currentDir = path.join(staging, "portable");
+  const written = await writeSnapshotBundle({
+    candidateDir: candidate,
+    currentDir,
+    engine: { engine: "unity" },
+    capturedAt: "2026-07-28T00:00:00.000Z",
+    approvedAt: "2026-07-28T00:00:00.000Z",
+    tolerancePolicy: DEFAULT_SNAPSHOT_TOLERANCES,
+    metrics,
+    rederivation: { pass: view.pass, total: view.total },
+    projectRoot,
+    contractStats: { interactions: 2, metrics: 3 },
+  });
+  assert.equal(written.repoIdentity, "github.com/Loomtide/game");
+  assert.equal(written.projectPath, "unity/MyGame", "the project's POSITION in the repo, so monorepo siblings differ");
+  assert.equal(written.projectRoot, projectRoot, "the absolute stamp still travels with it");
+
+  // LITMUS: drop ONE half of the pair. A repoIdentity with no projectPath would claim any
+  // position inside the repo, so the loader refuses the manifest rather than ignoring the
+  // odd field, and discovery reads that refusal as broken.
+  const manifestPath = path.join(currentDir, FEEL_SNAPSHOT_MANIFEST);
+  const doc = JSON.parse(await fs.readFile(manifestPath, "utf-8")) as Record<string, unknown>;
+  for (const dropped of ["projectPath", "repoIdentity"] as const) {
+    const half = { ...doc };
+    delete half[dropped];
+    await fs.writeFile(manifestPath, JSON.stringify(half, null, 2), "utf-8");
+    assert.equal(await loadSnapshotManifest(currentDir), null, `a manifest missing '${dropped}' is refused`);
+    const integrity = await verifySnapshotIntegrity(currentDir);
+    assert.equal(integrity.ok, false, "and integrity refuses with it");
+    // REFUSED is not ABSENT. Both are `ok: false`, but only one of them means "there is no
+    // snapshot here", and `feel snapshot status` reported exactly that (exit 0) for a
+    // manifest sitting on disk and ungradeable.
+    assert.equal(integrity.manifestRefused, true, `a PRESENT manifest missing '${dropped}' is refused, not absent`);
+    assert.match(integrity.failures.join("; "), /present but REFUSED/);
+  }
+  await fs.writeFile(manifestPath, JSON.stringify(doc, null, 2), "utf-8");
+  assert.ok(await loadSnapshotManifest(currentDir), "control: the complete pair loads");
+
+  // …and an ABSENT manifest keeps the other word, so the distinction is pinned from both
+  // sides rather than only from the refusal.
+  await fs.rm(manifestPath);
+  const absent = await verifySnapshotIntegrity(currentDir);
+  assert.equal(absent.manifestRefused, undefined);
+  assert.match(absent.failures.join("; "), /no readable feel-snapshot manifest/);
 });
 
 test("LITMUS: swapping the frozen capture contract fails the sha check (binding is to HOW it was measured)", async () => {
