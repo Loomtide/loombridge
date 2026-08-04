@@ -39,6 +39,8 @@ import { BASELINE_MANIFEST } from "../../../../capabilities/minigame/minigame-ba
 import { loombridgePaths, standardReplayLayout, updateState } from "../../../../domain/state.js";
 import { writeSlicePlan } from "../../../../capabilities/verification/slices.js";
 import { REPO_ROOT } from "../../../_support/paths.js";
+import { plantGitRepo } from "../../../_support/git-repo-fixture.js";
+import { deriveRepoIdentity } from "../../../../shared/repo-identity.js";
 import { greenNUnitXml, plantTestResults } from "../../../_support/test-results-fixture.js";
 import {
   TEST_RESULTS_MANIFEST,
@@ -147,9 +149,19 @@ async function plantSnapshot(workspace: string, projectRoot: string | undefined)
 
 // ── screen contract fixtures ─────────────────────────────────────────────────
 
+/**
+ * `baseline` shapes the approved layout baseline the row needs. A `{ projectRoot }` stamp
+ * derives the PORTABLE pair the same way `writeBaselineBundle` does (production
+ * derivation, not a hand-typed identity), and `override` is how a LITMUS plants a
+ * half-stamped manifest: a field set to `undefined` is dropped by `JSON.stringify`.
+ */
 async function plantScreenContract(
   workspace: string,
-  opts: { id: string; draft?: boolean; baseline?: "none" | "unstamped" | { projectRoot: string } | "malformed" },
+  opts: {
+    id: string;
+    draft?: boolean;
+    baseline?: "none" | "unstamped" | "malformed" | { projectRoot: string; override?: Record<string, unknown> };
+  },
 ): Promise<void> {
   await fs.mkdir(workspace, { recursive: true });
   const description = opts.draft ? "DRAFT: scaffolded by scan" : "Finalized from captures.";
@@ -176,7 +188,10 @@ async function plantScreenContract(
     approvedSummary: { pass: 1, warn: 0, fail: 0, notApplicable: 0 },
     states: [{ id: "active", pngSha256: "a".repeat(64), viewport: { width: 1, height: 1, aspect: 1 } }],
   };
-  if (baseline !== "unstamped") manifest.projectRoot = baseline.projectRoot;
+  if (baseline !== "unstamped") {
+    manifest.projectRoot = baseline.projectRoot;
+    Object.assign(manifest, deriveRepoIdentity(baseline.projectRoot) ?? {}, baseline.override ?? {});
+  }
   await fs.writeFile(path.join(dir, BASELINE_MANIFEST), JSON.stringify(manifest, null, 2), "utf-8");
 }
 
@@ -501,6 +516,126 @@ test("an UNSTAMPED feel snapshot is a non-anchor; one stamped for ANOTHER projec
     assert.ok(foreign.broken?.includes(other), foreign.broken);
   } finally {
     for (const d of [root, other, workspace]) await fs.rm(d, { recursive: true, force: true });
+  }
+});
+
+/** A tmp dir that is the toplevel of a git checkout (optionally with an origin). */
+async function tmpCheckout(prefix: string, origin?: string): Promise<string> {
+  return plantGitRepo(await tmpDir(prefix), origin);
+}
+
+test("PORTABLE BINDING: a feel snapshot stamped in one checkout still grades in ANOTHER checkout of the same repo", async () => {
+  // The S1 defect: both anchors compared `projectRoot` with `!==`, so an anchor committed
+  // by one teammate read `broken` (tier 2) on every other machine, and no anchor could
+  // ever be shared. The rule becomes "same repo, same position inside it" and NOTHING
+  // wider: the three LITMUS cases below are each a way it could have been widened.
+  const dev = await tmpCheckout("unified-dev-", "git@github.com:Loomtide/game.git");
+  const mate = await tmpCheckout("unified-mate-", "https://github.com/Loomtide/game"); // https at the teammate
+  const otherRepo = await tmpCheckout("unified-otherrepo-", "https://github.com/Loomtide/other-game.git");
+  const workspace = await tmpDir("unified-ws-");
+  try {
+    await plantSnapshot(workspace, dev);
+
+    const home = rowFor((await discoverVerificationAssets({ root: dev, workspace })).assets, "feel-snapshot");
+    assert.equal(home.runnable, "live", "the machine that approved it still grades, by the absolute rule");
+
+    const teammate = rowFor((await discoverVerificationAssets({ root: mate, workspace })).assets, "feel-snapshot");
+    assert.equal(teammate.runnable, "live", "THE POINT: a different absolute path, same repo, same position");
+    assert.equal(teammate.notRunClass, undefined);
+    assert.equal(teammate.broken, undefined);
+
+    // LITMUS 1: a genuinely different repository must stay tier-2 broken.
+    const foreign = rowFor((await discoverVerificationAssets({ root: otherRepo, workspace })).assets, "feel-snapshot");
+    assert.equal(foreign.runnable, "no");
+    assert.equal(foreign.notRunClass, "broken");
+    assert.ok(foreign.broken?.includes("github.com/Loomtide/game"), foreign.broken);
+  } finally {
+    for (const d of [dev, mate, otherRepo, workspace]) await fs.rm(d, { recursive: true, force: true });
+  }
+});
+
+test("LITMUS: a `basename:` identity never matches portably, and a LEGACY absolute-only stamp stays machine-bound", async () => {
+  const aliceParent = await tmpDir("unified-alice-");
+  const bobParent = await tmpDir("unified-bob-");
+  const legacyRoot = await tmpDir("unified-legacy-"); // deliberately NOT a git checkout
+  const elsewhere = await tmpDir("unified-elsewhere-");
+  const wsBasename = await tmpDir("unified-ws-");
+  const wsLegacy = await tmpDir("unified-ws-");
+  try {
+    // Two unrelated no-origin repos that share a directory NAME: the coincidence the
+    // basename fallback would launder into an identity if it were ever allowed to match.
+    const alice = await plantGitRepo(path.join(aliceParent, "demo-platformer"));
+    const bob = await plantGitRepo(path.join(bobParent, "demo-platformer"));
+    await plantSnapshot(wsBasename, alice);
+    const stamped = JSON.parse(
+      await fs.readFile(path.join(feelPaths(wsBasename).snapshotCurrentDir, FEEL_SNAPSHOT_MANIFEST), "utf-8"),
+    ) as FeelSnapshotManifest;
+    assert.ok(stamped.repoIdentity?.startsWith("basename:"), "the fixture really is the fallback case");
+
+    assert.equal(
+      rowFor((await discoverVerificationAssets({ root: alice, workspace: wsBasename })).assets, "feel-snapshot").runnable,
+      "live",
+      "the approving checkout still grades, by the absolute rule",
+    );
+    const namesake = rowFor((await discoverVerificationAssets({ root: bob, workspace: wsBasename })).assets, "feel-snapshot");
+    assert.equal(namesake.notRunClass, "broken", "a directory-name coincidence is not an identity");
+
+    // A snapshot approved for a NON-git project has no portable pair at all: it keeps the
+    // pre-portable behavior exactly, so nothing about S1 forces a re-approve.
+    await plantSnapshot(wsLegacy, legacyRoot);
+    const legacyManifest = JSON.parse(
+      await fs.readFile(path.join(feelPaths(wsLegacy).snapshotCurrentDir, FEEL_SNAPSHOT_MANIFEST), "utf-8"),
+    ) as FeelSnapshotManifest;
+    assert.equal(legacyManifest.repoIdentity, undefined, "no git tree, no portable stamp");
+    assert.equal(legacyManifest.projectPath, undefined);
+    assert.equal(
+      rowFor((await discoverVerificationAssets({ root: legacyRoot, workspace: wsLegacy })).assets, "feel-snapshot").runnable,
+      "live",
+      "an absolute-only stamp still grades at its own path: no re-approve is forced",
+    );
+    assert.equal(
+      rowFor((await discoverVerificationAssets({ root: elsewhere, workspace: wsLegacy })).assets, "feel-snapshot").notRunClass,
+      "broken",
+      "and it stays machine-bound elsewhere: portable binding is opt-in by re-approving",
+    );
+  } finally {
+    for (const d of [aliceParent, bobParent, legacyRoot, elsewhere, wsBasename, wsLegacy]) {
+      await fs.rm(d, { recursive: true, force: true });
+    }
+  }
+});
+
+test("PORTABLE BINDING: an approved layout baseline travels too, and a HALF-stamped pair is refused", async () => {
+  const dev = await tmpCheckout("unified-screens-dev-", "git@github.com:Loomtide/game.git");
+  const mate = await tmpCheckout("unified-screens-mate-", "https://github.com/Loomtide/game");
+  const otherRepo = await tmpCheckout("unified-screens-other-", "https://github.com/Loomtide/other-game.git");
+  const workspace = await tmpDir("unified-ws-");
+  try {
+    await plantScreenContract(workspace, { id: "sc", baseline: { projectRoot: dev } });
+    assert.equal(
+      rowFor((await discoverVerificationAssets({ root: dev, workspace })).assets, "screen-contract").runnable,
+      "offline",
+      "the machine that approved it still grades",
+    );
+    const teammate = rowFor((await discoverVerificationAssets({ root: mate, workspace })).assets, "screen-contract");
+    assert.equal(teammate.runnable, "offline", "THE POINT: the same repo at a different absolute path");
+    assert.equal(teammate.broken, undefined);
+
+    // LITMUS: another repository is still tier-2 broken.
+    const foreign = rowFor((await discoverVerificationAssets({ root: otherRepo, workspace })).assets, "screen-contract");
+    assert.equal(foreign.notRunClass, "broken");
+
+    // LITMUS: a half-stamped pair must be refused rather than silently ignored. A
+    // repoIdentity with no projectPath would claim EVERY position inside the repo.
+    await plantScreenContract(workspace, {
+      id: "sc",
+      baseline: { projectRoot: dev, override: { projectPath: undefined } },
+    });
+    const half = rowFor((await discoverVerificationAssets({ root: mate, workspace })).assets, "screen-contract");
+    assert.equal(half.notRunClass, "broken", "a half pair is unreadable, never a wider match");
+    assert.ok(half.broken?.includes(BASELINE_MANIFEST), half.broken);
+  } finally {
+    for (const d of [dev, mate, otherRepo, workspace]) await fs.rm(d, { recursive: true, force: true });
   }
 });
 

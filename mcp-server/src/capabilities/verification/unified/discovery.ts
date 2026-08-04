@@ -65,6 +65,7 @@ import {
   testRunLogPath,
   verifyTestResults,
 } from "../../tests/test-results-manifest.js";
+import { projectBindingMatches, type ProjectBinding } from "../../../shared/repo-identity.js";
 
 /**
  * The CLOSED inventory (RFC "The model: verification assets"). Order is the plan's
@@ -572,6 +573,19 @@ async function discoverSlicePlanAsset(root: string, paths: LoombridgePaths): Pro
   return [row];
 }
 
+// ── ownership stamps ─────────────────────────────────────────────────────────
+
+/**
+ * Why a stamped anchor did not bind to this root, for the `broken` line. Message text
+ * only: the DECISION is `projectBindingMatches` in `shared/repo-identity.ts`, shared with
+ * the stamped test-results trio so one rule decides all three.
+ */
+function bindingDetail(binding: ProjectBinding, restamp: string): string {
+  return binding.repoIdentity !== undefined
+    ? ` (stamped repo ${binding.repoIdentity} at ${binding.projectPath})`
+    : ` (no portable stamp: approved before portable binding, or a non-git project; re-approve with \`${restamp}\` to re-stamp)`;
+}
+
 // ── feel snapshot ────────────────────────────────────────────────────────────
 
 /**
@@ -580,9 +594,11 @@ async function discoverSlicePlanAsset(root: string, paths: LoombridgePaths): Pro
  *
  * Integrity is recomputed from disk (`verifySnapshotIntegrity`) rather than read off
  * the manifest, because a doctored baseline fails its own re-derivation. The ownership
- * stamp is checked on top of that: a snapshot approved for a DIFFERENT project root
- * is broken, because the workspace path is derived from the project's folder NAME
- * and two checkouts can collide on it.
+ * stamp is checked on top of that: a snapshot approved for a DIFFERENT project is
+ * broken, because the workspace path is derived from the project's folder NAME and two
+ * checkouts can collide on it. "Different project" is decided by the portable rule (same
+ * repo, same position inside it), so a snapshot COMMITTED by one teammate still binds on
+ * another's checkout at a different absolute path.
  */
 async function discoverFeelSnapshotAsset(root: string, workspace: string): Promise<DiscoveredAsset[]> {
   const dir = feelPaths(workspace).snapshotCurrentDir;
@@ -602,17 +618,27 @@ async function discoverFeelSnapshotAsset(root: string, workspace: string): Promi
     return [row];
   }
   const manifest = integrity.manifest!;
-  if (manifest.projectRoot === undefined) {
+  const projectRoot = manifest.projectRoot;
+  // An ABSENT stamp is a refusal (non-anchor), never a default: an unbound snapshot
+  // would grade whatever project it was found next to.
+  if (projectRoot === undefined) {
     row.notRunClass = "non-anchor";
     row.reason =
       "unstamped snapshot (approved before ownership stamping): re-approve with " +
       "`loombridge feel snapshot approve` so the verdict is bound to this project";
     return [row];
   }
-  if (path.resolve(manifest.projectRoot) !== root) {
+  const binding: ProjectBinding = {
+    projectRoot,
+    repoIdentity: manifest.repoIdentity,
+    projectPath: manifest.projectPath,
+  };
+  if (!projectBindingMatches(binding, root)) {
     row.notRunClass = "broken";
     row.reason = "the approved feel snapshot belongs to another project";
-    row.broken = `snapshot projectRoot is ${manifest.projectRoot}, verifying ${root}`;
+    row.broken =
+      `snapshot projectRoot is ${manifest.projectRoot}, verifying ${root}` +
+      bindingDetail(binding, "loombridge feel snapshot approve");
     return [row];
   }
   row.runnable = "live";
@@ -701,17 +727,27 @@ async function discoverScreenContractAsset(root: string, workspace: string): Pro
     row.broken = `${path.join(baselineDir, BASELINE_MANIFEST)} is unreadable or not a screen-contract baseline`;
     return [row];
   }
-  if (manifest.projectRoot === undefined) {
+  const projectRoot = manifest.projectRoot;
+  // An ABSENT stamp is a refusal (non-anchor), never a default: an unbound baseline
+  // would grade whatever project it was found next to.
+  if (projectRoot === undefined) {
     row.notRunClass = "non-anchor";
     row.reason =
       "unstamped layout baseline (approved before ownership stamping): re-approve with " +
       "`loombridge minigame baseline approve` so the verdict is bound to this project";
     return [row];
   }
-  if (path.resolve(manifest.projectRoot) !== root) {
+  const binding: ProjectBinding = {
+    projectRoot,
+    repoIdentity: manifest.repoIdentity,
+    projectPath: manifest.projectPath,
+  };
+  if (!projectBindingMatches(binding, root)) {
     row.notRunClass = "broken";
     row.reason = "the approved layout baseline belongs to another project";
-    row.broken = `baseline projectRoot is ${manifest.projectRoot}, verifying ${root}`;
+    row.broken =
+      `baseline projectRoot is ${manifest.projectRoot}, verifying ${root}` +
+      bindingDetail(binding, "loombridge minigame baseline approve");
     return [row];
   }
   row.approvedAt = manifest.capturedAt;

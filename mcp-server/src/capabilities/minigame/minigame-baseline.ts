@@ -34,6 +34,8 @@ import { createHash } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 
+import { deriveRepoIdentity, projectBindingPairError } from "../../shared/repo-identity.js";
+
 import type { MinigameContract } from "./profiles/types.js";
 import { readFrameImage, type DecodedImage } from "./frame-facts.js";
 import type { MinigameCaptureObject, MinigameRect, MinigameViewport } from "./types.js";
@@ -95,6 +97,17 @@ export interface BaselineManifest {
    * not tampering; it is a non-anchor ("re-approve to stamp") for the caller.
    */
   projectRoot?: string;
+  /**
+   * PORTABLE binding (optional; stamped at approve time when the project sits in a git
+   * working tree): the repository identity (origin URL, else a stated basename fallback
+   * that never matches portably) plus the project's path relative to the git toplevel.
+   * This is what lets a COMMITTED baseline grade on a teammate's checkout at a different
+   * absolute path, while a bundle from a DIFFERENT repository still reads broken.
+   * Absent on bundles approved before portable binding and on non-git projects: those
+   * bind by absolute path only, and re-approving re-stamps them portably.
+   */
+  repoIdentity?: string;
+  projectPath?: string;
   capturedAt: string;
   masks: string[];
   approvedStatus: "pass";
@@ -350,8 +363,14 @@ export async function loadBaselineManifest(refDir: string): Promise<BaselineMani
   try {
     const raw = await fs.readFile(path.join(refDir, BASELINE_MANIFEST), "utf-8");
     const m = JSON.parse(raw) as BaselineManifest;
-    if (m && m.kind === "minigame-baseline" && Array.isArray(m.states)) return m;
-    return null;
+    if (!m || m.kind !== "minigame-baseline" || !Array.isArray(m.states)) return null;
+    // The portable binding pair is optional, but a HALF pair is refused rather than
+    // ignored: a repoIdentity with no projectPath would claim any position inside the
+    // repo, and dropping the odd field is exactly the "absent means skip the check"
+    // shape the ownership stamp exists to prevent. Unreadable here means broken (tier 2)
+    // at the unified door, never a silent pass.
+    if (projectBindingPairError(m) !== null) return null;
+    return m;
   } catch {
     return null;
   }
@@ -384,7 +403,11 @@ export async function writeBaselineBundle(args: {
   refDir: string;
   capturedAt: string;
   approvedSummary: BaselineManifest["approvedSummary"];
-  /** Absolute PROJECT root this approval is for (the ownership stamp). */
+  /**
+   * Absolute PROJECT root this approval is for (the ownership stamp). The portable pair
+   * is DERIVED from it here rather than passed in, so a caller cannot stamp half of it,
+   * and so every approve path is portable without having to remember to be.
+   */
   projectRoot?: string;
 }): Promise<BaselineManifest> {
   const { contract, capturesDir, refDir, capturedAt, approvedSummary } = args;
@@ -435,6 +458,10 @@ export async function writeBaselineBundle(args: {
     kind: "minigame-baseline",
     contractId: contract.id,
     ...(args.projectRoot !== undefined ? { projectRoot: args.projectRoot } : {}),
+    // The portable pair travels with the absolute stamp and only with it: without a
+    // projectRoot there is nothing for it to make portable. A non-git project derives
+    // null and stays absolute-path-bound, which is the pre-portable behavior.
+    ...(args.projectRoot !== undefined ? (deriveRepoIdentity(args.projectRoot) ?? {}) : {}),
     capturedAt,
     masks: contract.baseline?.masks ?? [],
     approvedStatus: "pass",

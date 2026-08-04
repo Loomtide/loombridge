@@ -1,10 +1,12 @@
 /**
- * Portable evidence binding: the repo-identity derivation and the manifest matching rule.
+ * Portable evidence binding: the repo-identity derivation and the ONE matching rule every
+ * stamped artifact gates on (test results, the frozen feel snapshot, the approved screen
+ * layout baseline).
  *
- * The scenario the whole feature exists for: a dev stamps a test run on their machine,
- * COMMITS the trio, and CI (a different absolute path, a DIFFERENT REMOTE SPELLING, the
- * same repository) grades it. The scenarios it must never enable: a trio from a
- * different repository grading here, and a directory-name coincidence counting as
+ * The scenario the whole feature exists for: a human stamps evidence on their machine,
+ * COMMITS it, and a teammate or CI (a different absolute path, a DIFFERENT REMOTE
+ * SPELLING, the same repository) grades it. The scenarios it must never enable: evidence
+ * from a different repository grading here, and a directory-name coincidence counting as
  * identity (the adversarial review demonstrated both against the first cut).
  */
 
@@ -18,20 +20,18 @@ import {
   deriveRepoIdentity,
   findGitToplevel,
   normalizeRepoUrl,
+  projectBindingMatches,
+  projectBindingPairError,
   readOriginUrl,
 } from "../../../shared/repo-identity.js";
-import { projectBindingMatches } from "../../../capabilities/tests/test-results-manifest.js";
+import { plantGitRepo } from "../../_support/git-repo-fixture.js";
 
 async function tmpDir(): Promise<string> {
   return fs.mkdtemp(path.join(os.tmpdir(), "loombridge-repoid-"));
 }
 
 async function plantRepo(root: string, origin?: string): Promise<void> {
-  await fs.mkdir(path.join(root, ".git"), { recursive: true });
-  const config = origin
-    ? `[core]\n\trepositoryformatversion = 0\n[remote "origin"]\n\turl = ${origin}\n\tfetch = +refs/heads/*:refs/remotes/origin/*\n`
-    : `[core]\n\trepositoryformatversion = 0\n`;
-  await fs.writeFile(path.join(root, ".git", "config"), config);
+  await plantGitRepo(root, origin);
 }
 
 test("normalizeRepoUrl canonicalizes the SPELLING FAMILY of one repo to host/path", () => {
@@ -141,6 +141,23 @@ test("projectBindingMatches: ssh dev + https CI of the SAME repo matches; differ
   } finally {
     for (const d of [devCheckout, ciCheckout, otherRepo]) await fs.rm(d, { recursive: true, force: true });
   }
+});
+
+test("projectBindingPairError: absent is fine, HALF is refused, empty strings are refused", () => {
+  assert.equal(projectBindingPairError({}), null, "no portable stamp at all: legacy and non-git, allowed");
+  assert.equal(
+    projectBindingPairError({ repoIdentity: "github.com/Loomtide/game", projectPath: "." }),
+    null,
+    "the complete pair is the point of the feature",
+  );
+  assert.match(
+    String(projectBindingPairError({ repoIdentity: "github.com/Loomtide/game" })),
+    /stamped together/,
+    "a repoIdentity with no projectPath claims any position in the repo: refused, never defaulted",
+  );
+  assert.match(String(projectBindingPairError({ projectPath: "games/a" })), /stamped together/);
+  assert.match(String(projectBindingPairError({ repoIdentity: "", projectPath: "." })), /repoIdentity/);
+  assert.match(String(projectBindingPairError({ repoIdentity: "x", projectPath: 7 })), /projectPath/);
 });
 
 test("the basename fallback NEVER matches portably (two unrelated repos share a name), and projectPath is required", async () => {

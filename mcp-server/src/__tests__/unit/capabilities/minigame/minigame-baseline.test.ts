@@ -35,6 +35,7 @@ import {
 } from "../../../../capabilities/minigame/minigame-baseline.js";
 import type { DecodedImage } from "../../../../capabilities/minigame/frame-facts.js";
 import type { MinigameCaptureObject } from "../../../../capabilities/minigame/types.js";
+import { plantGitRepo } from "../../../_support/git-repo-fixture.js";
 
 // ── PNG writer (RGBA, lossless) — same shape as verification-analyze-frames.test ──
 function crc32(buf: Buffer): number {
@@ -494,6 +495,43 @@ test("baseline approve: an outcome-gated state with NO capture succeeds; manifes
     // The gated state was never bundled.
     await assert.rejects(fs.access(path.join(ref, "win.png")), "an uncaptured gated state is not bundled");
     await assert.rejects(fs.access(path.join(ref, "win.ui-rects.json")));
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test("baseline approve inside a git checkout stamps the PORTABLE pair; a HALF pair is refused (LITMUS)", async () => {
+  // S1 of the artifact-storage RFC: an approved layout baseline has to survive being
+  // COMMITTED and read from a teammate's checkout, which the absolute `projectRoot`
+  // alone cannot do. The pair is derived by the writer, so an approve cannot forget it.
+  const root = await tmp("s6e-portable-");
+  const ref = path.join(root, "baseline");
+  try {
+    await plantGitRepo(root, "git@github.com:Loomtide/game.git");
+    const contractPath = path.join(root, "c.json");
+    await writeJson(contractPath, makeContract(ref));
+    const caps = path.join(root, "caps");
+    await writeCleanPack(caps);
+    assert.equal(await approve(root, contractPath, caps), 0);
+
+    const stamped = await loadBaselineManifest(ref);
+    assert.equal(stamped?.repoIdentity, "github.com/Loomtide/game");
+    assert.equal(stamped?.projectPath, ".", "the project IS the toplevel in this fixture");
+    assert.equal(stamped?.projectRoot, path.resolve(root), "the absolute stamp still travels with it");
+
+    // LITMUS: drop ONE half of the pair. A repoIdentity with no projectPath would claim
+    // any position inside the repo, so the loader must refuse the manifest outright
+    // rather than ignore the odd field.
+    const manifestPath = path.join(ref, BASELINE_MANIFEST);
+    const doc = JSON.parse(await fs.readFile(manifestPath, "utf-8")) as Record<string, unknown>;
+    for (const dropped of ["projectPath", "repoIdentity"] as const) {
+      const half = { ...doc };
+      delete half[dropped];
+      await fs.writeFile(manifestPath, JSON.stringify(half, null, 2), "utf-8");
+      assert.equal(await loadBaselineManifest(ref), null, `a manifest missing '${dropped}' is refused, not defaulted`);
+    }
+    await fs.writeFile(manifestPath, JSON.stringify(doc, null, 2), "utf-8");
+    assert.ok(await loadBaselineManifest(ref), "control: the complete pair loads");
   } finally {
     await fs.rm(root, { recursive: true, force: true });
   }

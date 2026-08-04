@@ -25,6 +25,8 @@ import { createHash } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 
+import { deriveRepoIdentity, projectBindingPairError } from "../../shared/repo-identity.js";
+
 import { rederiveFromSources } from "../verification/gates/feel-rederive.js";
 import { stimulusDistrust } from "../verification/gates/feel-provenance.js";
 import { parseMeasurements, type FeelMeasurementsFile } from "./measurements.js";
@@ -103,6 +105,17 @@ export interface FeelSnapshotManifest {
    * not tampering; it is a non-anchor ("re-approve to stamp") for the caller.
    */
   projectRoot?: string;
+  /**
+   * PORTABLE binding (optional; stamped at approve time when the project sits in a git
+   * working tree): the repository identity (origin URL, else a stated basename fallback
+   * that never matches portably) plus the project's path relative to the git toplevel.
+   * This is what lets a COMMITTED snapshot grade on a teammate's checkout at a different
+   * absolute path, while a snapshot from a DIFFERENT repository still reads broken.
+   * Absent on snapshots approved before portable binding and on non-git projects: those
+   * bind by absolute path only, and re-approving re-stamps them portably.
+   */
+  repoIdentity?: string;
+  projectPath?: string;
   engine: { engine: string | null };
   capturedAt: string;
   approvedAt: string;
@@ -159,6 +172,12 @@ export async function loadSnapshotManifest(dir: string): Promise<FeelSnapshotMan
   if (!isRecord(parsed.captureContract) || typeof parsed.captureContract.sha256 !== "string") return null;
   if (typeof parsed.approvedAt !== "string" || typeof parsed.capturedAt !== "string") return null;
   if (!isRecord(parsed.tolerancePolicy)) return null;
+  // The portable binding pair is optional, but a HALF pair is refused rather than
+  // ignored: a repoIdentity with no projectPath would claim any position inside the
+  // repo, and dropping the odd field is exactly the "absent means skip the check" shape
+  // the ownership stamp exists to prevent. A refused manifest reads as unreadable here,
+  // which discovery reports as broken (tier 2), never as a silent pass.
+  if (projectBindingPairError(parsed) !== null) return null;
   return parsed as unknown as FeelSnapshotManifest;
 }
 
@@ -217,7 +236,11 @@ export interface WriteSnapshotBundleArgs {
   coverageGaps?: FeelCaptureCoverageEntry[];
   rederivation: { pass: number; total: number };
   game?: string;
-  /** Absolute PROJECT root this approval is for (the ownership stamp). */
+  /**
+   * Absolute PROJECT root this approval is for (the ownership stamp). The portable
+   * pair is DERIVED from it here rather than passed in, so a caller cannot stamp half
+   * of it, and so every approve path is portable without having to remember to be.
+   */
   projectRoot?: string;
   contractStats: { interactions: number; metrics: number };
 }
@@ -234,6 +257,10 @@ export async function writeSnapshotBundle(args: WriteSnapshotBundleArgs): Promis
     kind: "feel-snapshot",
     ...(args.game !== undefined ? { game: args.game } : {}),
     ...(args.projectRoot !== undefined ? { projectRoot: args.projectRoot } : {}),
+    // The portable pair travels with the absolute stamp and only with it: without a
+    // projectRoot there is nothing for it to make portable. A non-git project derives
+    // null and stays absolute-path-bound, which is the pre-portable behavior.
+    ...(args.projectRoot !== undefined ? (deriveRepoIdentity(args.projectRoot) ?? {}) : {}),
     engine: args.engine,
     capturedAt: args.capturedAt,
     approvedAt: args.approvedAt,
