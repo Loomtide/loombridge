@@ -16,13 +16,16 @@ so the two agents cannot drift.
 
 ## Process
 
-1. **Scaffold the contract + check readiness (deterministic).** Run the CLI **zero-param**
-   — the developer just runs `loombridge plan` from the project root; the engine is **auto-detected**
-   and the genre is **inferred** (there is a single genre pack today):
+1. **Scaffold the contract + check readiness (deterministic).** The engine is **auto-detected**;
+   the genre is **never guessed**. On a project's FIRST `plan` you must state the genre, so
+   **ask the developer before running anything** (see the genre bullet below), then run:
 
    ```bash
-   loombridge plan
+   loombridge plan --genre <id>
    ```
+
+   Every LATER `plan` on that project is **zero-param** (`loombridge plan`): the genre is recorded
+   in `STATE.md` and the recorded genre wins, so the developer never re-types the flag.
 
    This seeds `ACCEPTANCE.json` (from the genre template), `FEEL_SPEC.json`,
    `GAME_SPEC.md`, the `design/` folder, and `STATE.md`, then **checks the §3c Design
@@ -30,7 +33,10 @@ so the two agents cannot drift.
    approved + frozen hero shot exists, then exits non-zero until `.loombridge/ASSET_MANIFEST.json`
    is approved. **You don't need a flag**; the exit code is the cue to run step 3 and 4 below.
    (`--force` re-seeds; `--allow-missing-design-target` is an escape hatch for early
-   scaffolding only — `build` will still block.)
+   scaffolding only — `build` will still block.) `--force` **together with a different
+   `--genre`** also rewrites `.loombridge/SLICES.json` from the new genre's roadmap, printing what
+   it replaced, and **refuses (exit 2) if any slice already carries an approval proof**: withdraw
+   those first with `loombridge reopen <slice-id>`.
 
    **ASK THE DEVELOPER WHEN UNCLEAR (agent layer — the CLI never prompts).** The CLI is
    deterministic: it auto-detects the engine (Unity via `ProjectSettings/ProjectVersion.txt`)
@@ -42,8 +48,18 @@ so the two agents cannot drift.
      supported today.
    - If `plan` errors that it **detected a non-Unity engine** (Loombridge supports Unity only),
      tell the developer and stop — there is nothing to build here yet.
-   - **Genre:** with a single genre pack, `plan` infers it silently — do NOT ask. *If* more
-     than one genre pack ever exists, ask the developer which genre and pass `--genre <id>`.
+   - **Genre: ASK, always.** Several genre packs ship (run `loombridge plan --help` for the
+     current list). On a project with no genre recorded yet, bare `plan` **refuses with exit 2**
+     and names the registered ids, because a guessed genre seeds that genre's whole contract
+     (win rule, feel metrics, gate-tuning section) and still claims `graded`, so the build gets
+     graded against gates it was never designed for. Ask the developer what kind of game this is,
+     map their answer to one registered id, confirm it with them, then pass `--genre <id>`.
+   - **Genre with no pack:** if their game is not one of the registered genres, do NOT force-fit
+     it into the nearest pack. Author a Genre Contract (see the `genre-pack-authoring` skill) and
+     pass `--genre-contract <path>`, or point at an existing design-doc bundle with
+     `--brief <path>`. Either flag supplies the genre itself, so `--genre` is not needed with it;
+     the build then verifies as `partially-graded` with its ungraded gaps enumerated on the
+     verdict, which is an honest claim rather than a borrowed one.
 
 2. **Read back the state.** `cat .loombridge/STATE.md` to confirm genre/engine/phase.
 

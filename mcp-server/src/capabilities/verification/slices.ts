@@ -175,6 +175,22 @@ export const SLICE_APPROVAL_FIELDS = [
   "signoffSha256",
 ] as const;
 
+/**
+ * The subset of {@link SLICE_APPROVAL_FIELDS} that proves a HUMAN signed the slice off, i.e. the
+ * fields only the `plan --go` approval seam ever writes.
+ *
+ * `checkpointId` is deliberately excluded: a merely VERIFIED slice already carries one, so counting
+ * it as sign-off would treat "someone ran verify" as "someone approved this". Derived from
+ * `SLICE_APPROVAL_FIELDS` rather than re-listed, so a new approval artifact cannot be added to one
+ * list and forgotten in the other.
+ */
+export const SLICE_SIGNOFF_FIELDS: readonly Exclude<
+  (typeof SLICE_APPROVAL_FIELDS)[number],
+  "checkpointId"
+>[] = SLICE_APPROVAL_FIELDS.filter(
+  (f): f is Exclude<(typeof SLICE_APPROVAL_FIELDS)[number], "checkpointId"> => f !== "checkpointId",
+);
+
 /** The slice DAG written to `.loombridge/SLICES.json`. */
 export interface SlicePlan {
   schemaVersion: typeof SLICES_SCHEMA_VERSION;
@@ -710,6 +726,28 @@ function topoOrderIds(plan: SlicePlan, ids: string[]): string[] {
   }
 
   for (const slice of plan.slices) visit(slice.id);
+  return out;
+}
+
+/**
+ * The HUMAN sign-off a slice carries today, named field by field; `[]` when it carries none.
+ *
+ * Used by any caller about to DISCARD a slice (today: `plan --force` across a genre change). An
+ * approved slice is human-signed evidence, so replacing it silently would let a rewrite launder away
+ * a sign-off; the sanctioned way to withdraw one is `loombridge reopen`, which records the event.
+ *
+ * `state: "approved"` counts on its own: a hand-edited SLICES.json can claim the state without the
+ * proof block, and a rewrite must not be the cheap way to erase that claim rather than confront it.
+ */
+export function sliceApprovalEvidence(slice: SliceEntry): string[] {
+  const out: string[] = [];
+  if (slice.state === "approved") out.push('state: "approved"');
+  const proof = slice.proof;
+  if (proof) {
+    for (const field of SLICE_SIGNOFF_FIELDS) {
+      if (proof[field] !== undefined && proof[field] !== null) out.push(`proof.${field}`);
+    }
+  }
   return out;
 }
 

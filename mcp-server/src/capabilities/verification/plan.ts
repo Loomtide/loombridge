@@ -48,6 +48,7 @@ import {
   planDispatchMode,
   readSlicePlan,
   renderSliceSkill,
+  sliceApprovalEvidence,
   writeSlicePlan,
   type SlicePlan,
 } from "./slices.js";
@@ -123,6 +124,65 @@ async function loadSliceTemplate(genre: string): Promise<SlicePlan> {
   // to the genre the project was planned as, or the slice roll-up's plan-vs-STATE agreement check
   // (added in W1) would refuse every free-form project.
   return assertValidSlicePlan({ ...JSON.parse(raw), genre });
+}
+
+/**
+ * The genre a prior `STATE.md` supplies, or `undefined` when it supplies none.
+ *
+ * ONE definition, two readers: the re-plan preservation below and the refusal in `run` must agree
+ * about whether STATE answers "what genre is this project?", or bare `plan` would refuse on a
+ * project whose genre it was about to preserve anyway. `UNPLANNED_GENRE` is the sentinel a
+ * `target set` before any `plan` leaves behind, and it means "no genre chosen yet".
+ */
+function genreFromState(prev: LoombridgeState | null): string | undefined {
+  return prev?.genre && prev.genre !== UNPLANNED_GENRE ? prev.genre : undefined;
+}
+
+/**
+ * REFUSE to guess the genre. Returns the refusal message, or `null` when the genre IS stated.
+ *
+ * A guessed genre is the one route in the system to a wrong `graded` coverage claim: defaulting to
+ * the registry default seeds THAT genre's contract (its win rule, its feel metrics, its gate-tuning
+ * section) and, because the default resolves to a registered pack, the "unregistered genre" warning
+ * never fires and coverage still stamps `graded`. Observed live: a project named for an extraction
+ * shooter was seeded with a platformer contract, nine platformer feel metrics, and no
+ * `verification.gates` block, so the platformer-shaped gates stayed applicable.
+ *
+ * `loombridge adopt` already refuses on the same reasoning ("default to the registry default is
+ * WRONG (it would silently mis-genre the proposal), so require it"); this is the other front door.
+ *
+ * Three ways the genre IS stated, and each keeps working with no flag churn: `--genre`, a
+ * contract/brief that carries its own genre id, and the genre a prior `plan` already recorded in
+ * STATE (so re-planning an existing project never needs the flag).
+ */
+export function unstatedGenreRefusal(args: {
+  /** True when `--genre` was passed on the command line. */
+  genreExplicit: boolean;
+  /** True when `--genre-contract` / `--brief` was passed (the contract declares the genre). */
+  hasContractSource: boolean;
+  /** The genre a prior `STATE.md` supplies, if any (see {@link genreFromState}). */
+  stateGenre: string | undefined;
+  /**
+   * The registered genre ids. Injected so a test can exercise the single-registered-genre case
+   * without unregistering a real pack (which would weaken every other genre guard in the suite).
+   */
+  known?: readonly string[];
+}): string | null {
+  const known = args.known ?? knownGenreIds();
+  // Defaulting is only correct while there is exactly one thing to default TO. With a single
+  // registered pack the default IS the answer, so back-compat holds and `DEFAULT_GENRE_ID` stays.
+  if (known.length < 2) return null;
+  if (args.genreExplicit || args.hasContractSource || args.stateGenre) return null;
+  return (
+    "[loombridge plan] --genre is required: " +
+    `${known.length} genre packs are registered, and \`plan\` will not guess which one this project ` +
+    "is. A guessed genre seeds that genre's whole contract and still claims `graded`, so the build " +
+    "would be graded against gates it was never designed for. " +
+    `Known: ${known.join(", ")}. ` +
+    "Pass --genre <id> for a registered pack, or --genre-contract <path> / --brief <path> to plan a " +
+    "genre that has no pack. (Re-planning an existing project needs no flag: the genre already in " +
+    "STATE.md wins.)"
+  );
 }
 
 export interface PlanArgs {
@@ -437,8 +497,7 @@ export async function runPlan(args: PlanArgs): Promise<number> {
   //
   // The only value that must NOT stick is `UNPLANNED_GENRE`, the sentinel a `target set` before any
   // `plan` leaves behind — that one means "no genre chosen yet", so the default correctly wins.
-  const preservedGenre =
-    !args.genreExplicit && prev?.genre && prev.genre !== UNPLANNED_GENRE ? prev.genre : undefined;
+  const preservedGenre = !args.genreExplicit ? genreFromState(prev) : undefined;
   const genre = promoted?.report.sourceGenreId ?? preservedGenre ?? args.genre;
   const genrePack = resolveGenrePack(genre);
 
@@ -496,6 +555,49 @@ export async function runPlan(args: PlanArgs): Promise<number> {
   const created: string[] = [];
   const kept: string[] = [];
   const rel = (p: string) => path.relative(args.root, p);
+
+  // ── `--force` across a GENRE CHANGE: the roadmap moves with the contract ────────────────────────
+  // `--force` re-seeds ACCEPTANCE.json + FEEL_SPEC.json from the new genre, but on the non-promoted
+  // path SLICES.json is only written in `mode === "design"`, which an existing roadmap suppresses.
+  // A genre flip therefore left a stale slice DAG still DECLARING the old genre, and the
+  // disagreement surfaced much later as a `doneness` roll-up refusal about a genre mismatch: a
+  // half-changed project that looks changed.
+  //
+  // Rewrite it, LOUDLY. The exception is a slice that already carries human sign-off: replacing
+  // that would make a genre flip the cheap way to erase an approval. Refuse instead, and name the
+  // sanctioned withdrawal (`loombridge reopen`), which records the event and cascades.
+  const existingPlan = await readSlicePlan(paths);
+  if (existingPlan && existingPlan.genre !== genre && args.force) {
+    const signed = existingPlan.slices
+      .map((slice) => ({ id: slice.id, evidence: sliceApprovalEvidence(slice) }))
+      .filter((s) => s.evidence.length > 0);
+    if (signed.length > 0) {
+      console.error(
+        `[loombridge plan] NOT ready: --force would change the genre from "${existingPlan.genre}" to ` +
+          `"${genre}", which rewrites ${rel(paths.slices)}, but ${signed.length} slice(s) carry an ` +
+          "approval proof:",
+      );
+      for (const s of signed) console.error(`[loombridge plan]   ${s.id}: ${s.evidence.join(", ")}`);
+      console.error(
+        "[loombridge plan] An approved slice is human-signed evidence and is never discarded silently. " +
+          "Withdraw each approval with `loombridge reopen <slice-id>` (it clears the artifacts, cascades " +
+          "to dependents, and records the event), then re-run this command.",
+      );
+      return 2;
+    }
+    // The promoted path writes its own SLICES.json from the contract below, so rewriting from a pack
+    // template here would be overwritten a moment later by a better answer.
+    if (!promoted) {
+      const rebuilt = instantiateSlicePlan(await loadSliceTemplate(genre));
+      await writeSlicePlan(paths, rebuilt);
+      console.error(
+        `[loombridge plan] REWROTE ${rel(paths.slices)}: the roadmap declared genre ` +
+          `"${existingPlan.genre}" and --force re-seeds "${genre}". ${existingPlan.slices.length} ` +
+          `slice(s) replaced with ${rebuilt.slices.length} from the "${genre}" roadmap; all build ` +
+          "state on the old slices is discarded.",
+      );
+    }
+  }
 
   // 1. ACCEPTANCE.json — seed from the genre template (validated before write).
   //    Keep the contract object around so GAME_SPEC.md can be derived from it
@@ -883,11 +985,11 @@ export async function runPlan(args: PlanArgs): Promise<number> {
 type ParsedArgs = Omit<PlanArgs, "engine"> & { engine?: string };
 
 function parseArgs(args: string[]): ParsedArgs | { help: true } {
-  // Back-compat default: an omitted --genre plans the registry's default genre. The genre literal
-  // lives in the registry (the one genre-wiring point), not here — this core stays genre-neutral.
-  // Now that a second genre is registered, omitting --genre silently picks the default; callers
-  // building another genre must pass --genre explicitly. (Requiring an explicit genre when >1 is
-  // registered is a deliberate future behavior change, not made here to keep the happy path unchanged.)
+  // The registry default is the SEED value only. The genre literal lives in the registry (the one
+  // genre-wiring point), not here, so this core stays genre-neutral. With more than one pack
+  // registered this value is never reached: `run` refuses first (see `unstatedGenreRefusal`), and
+  // `runPlan` prefers a promoted contract's genre and then the genre already in STATE. It remains
+  // the correct answer in exactly the case it was written for: a single registered pack.
   let genre = defaultGenreId();
   let genreExplicit = false;
   let engine: string | undefined;
@@ -975,7 +1077,10 @@ function printUsage(): void {
       "a verified slice with `--go`.",
       "",
       "Options:",
-      `  --genre <id>    Genre pack — one of: ${knownGenreIds().join(", ")}. Defaults to ${defaultGenreId()} when omitted.`,
+      `  --genre <id>    Genre pack: one of ${knownGenreIds().join(", ")}. REQUIRED on a first`,
+      "                  `plan` while more than one pack is registered; `plan` refuses",
+      "                  rather than guess. A re-plan needs no flag (the genre in",
+      "                  STATE.md wins), and --genre-contract / --brief supply it too.",
       "                  These are the genres with a shipped pack template; a build",
       "                  planned from one verifies as `graded`. For any OTHER genre,",
       "                  author a genre contract and use --genre-contract / --brief:",
@@ -1027,5 +1132,21 @@ export async function run(args: string[]): Promise<number> {
   // PlanArgs `runPlan` consumes — keeping `runPlan` engine-resolved + unchanged.
   const resolved = resolveEngine(parsed);
   if ("exitCode" in resolved) return resolved.exitCode;
+  // Refuse an UNSTATED genre before anything is scaffolded or written: a refusal that has already
+  // left a half-scaffolded `.loombridge/` behind is not a refusal. Exit 2, because a missing
+  // required argument is a usage/precondition error, not a failed check.
+  //
+  // AFTER engine resolution on purpose. Both are exit-2 preconditions, but "you are not in a game
+  // project" is the more actionable answer when both are true: asking someone to name the genre of
+  // a directory that is not a project sends them to fix the wrong thing.
+  const refusal = unstatedGenreRefusal({
+    genreExplicit: parsed.genreExplicit === true,
+    hasContractSource: Boolean(parsed.genreContractPath ?? parsed.briefPath),
+    stateGenre: genreFromState(await readState(loombridgePaths(parsed.root))),
+  });
+  if (refusal) {
+    console.error(refusal);
+    return 2;
+  }
   return runPlan({ ...parsed, engine: resolved.engine });
 }
