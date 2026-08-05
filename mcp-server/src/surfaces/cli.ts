@@ -99,6 +99,8 @@ function printUsage(): void {
       "                   (UNVERIFIED, never green on its own).",
       "  assets         Deterministic Asset Manifest planning/approvals.",
       "  capture        Write framing-slice evidence from raw ops + provenance.",
+      "  genre          `genre init` scaffolds a Genre Contract for a genre with no shipped",
+      "                   pack, valid on the first run, ready for `plan --brief`.",
       "  minigame       Screen-contract helpers (setup/init/capture/finalize/baseline).",
       "  tuning-report  Deterministic telemetry run-set analysis (numbers only; humans judge fun).",
       "  mobile-audit   Advisory mobile-optimization audit (findings only, never a verdict).",
@@ -229,6 +231,10 @@ export async function loombridgeCli(argv: string[]): Promise<number> {
     }
     case "assets": {
       const { run } = await import("../capabilities/assets/assets.js");
+      return run(rest);
+    }
+    case "genre": {
+      const { run } = await import("../capabilities/genre/genre.js");
       return run(rest);
     }
     case "install-bridge": {

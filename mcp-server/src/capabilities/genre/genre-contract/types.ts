@@ -93,9 +93,18 @@ export interface TargetPlatform {
   session?: string; // session shape, e.g. "short-arena" | "campaign"
 }
 
+/**
+ * Network modes, as a closed vocabulary rather than a bare inline union. The validator and the
+ * published JSON Schema both bind to THIS array, so the schema's `networkModel.mode` enum cannot
+ * drift from what the validator accepts (the drift test derives it from here).
+ */
+export const NETWORK_MODES = ["single-player", "co-op", "pvp"] as const;
+export type NetworkMode = (typeof NETWORK_MODES)[number];
+export const NETWORK_MODE_SET: ReadonlySet<string> = new Set(NETWORK_MODES);
+
 /** Field 1 — Network model. Photon Fusion is the default netcode for any multiplayer. */
 export interface NetworkModel {
-  mode: "single-player" | "co-op" | "pvp";
+  mode: NetworkMode;
   netcode?: string; // e.g. "photon-fusion"; required when mode != single-player
   authority?: string; // e.g. "shared" | "host" | "server"
   tick?: string; // e.g. "fixed"

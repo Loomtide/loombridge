@@ -60,11 +60,49 @@ so the two agents cannot drift.
      graded against gates it was never designed for. Ask the developer what kind of game this is,
      map their answer to one registered id, confirm it with them, then pass `--genre <id>`.
    - **Genre with no pack:** if their game is not one of the registered genres, do NOT force-fit
-     it into the nearest pack. Author a Genre Contract (see the `genre-pack-authoring` skill) and
-     pass `--genre-contract <path>`, or point at an existing design-doc bundle with
-     `--brief <path>`. Either flag supplies the genre itself, so `--genre` is not needed with it;
-     the build then verifies as `partially-graded` with its ungraded gaps enumerated on the
-     verdict, which is an honest claim rather than a borrowed one.
+     it into the nearest pack. Take the any-genre path below. It plans, builds, and verifies; it
+     just says out loud what it cannot grade.
+
+   **1b. The any-genre path (no shipped pack).** A **Genre Contract** is one JSON file that `plan`
+   compiles into `ACCEPTANCE.json` + `SLICES.json`, with the platformer-shaped gates
+   (`platform-tiles`, `tile-render`, `parallax-motion`, `reachability`) marked **not applicable**
+   so the game is never graded on gates it was never designed for. Two ways to get one:
+
+   - **Scaffold it (fastest).** Writes a contract that passes the validator on the first run:
+
+     ```bash
+     loombridge genre init --genre <id> --class <twitch|systems|hybrid>
+     loombridge plan --brief .loombridge
+     ```
+
+     `genre init` writes `.loombridge/genre-contract.json`, which is exactly the name
+     `--brief <dir>` resolves, so the two compose with no paths to juggle. It prints the fields
+     that still say `REPLACE ME:`. **Edit those with the developer before running `plan`**; the
+     core loop, the art direction, and each feedback chain are theirs to state, not yours to
+     invent. `--class` is required when the genre ships no hint-card pack (run
+     `loombridge genre init --help` for the packs that exist) and is never guessed.
+   - **Interview for it.** Use the `genre-pack-authoring` skill when the genre is unfamiliar and a
+     human is in the loop; it elicits the same contract instead of scaffolding it. Then pass
+     `--genre-contract <path>`.
+
+   Either flag supplies the genre itself, so `--genre` is not needed with it.
+
+   **What `partially-graded` means, and what it costs.** A contract-planned build verifies as
+   `partially-graded` rather than `graded`, with its ungraded gaps enumerated on the verdict. That
+   is an honest claim rather than a borrowed one. It costs exactly two things: the registered feel
+   oracle (per-genre feel-profile code a pack ships and a contract cannot), and hero-shot fidelity,
+   **which you get back only if the contract declares `fidelityCriteria`.**
+
+   **`fidelityCriteria` is the field that buys the hero shot back.** `doneness` grades an approved
+   Design Target against the genre's fidelity criteria. A contract genre has none by default, so
+   **without this field `doneness` REFUSES any design-targeted build.** `genre init` seeds a
+   class-appropriate set; **review it with the developer** before building, because a criterion the
+   hero shot cannot satisfy makes doneness unreachable-green, and an id outside the gradable set is
+   refused outright. Do not delete the field to make a refusal go away.
+
+   `plan` also prints an advisory for what the contract omits (`productThesis`, `scaleModel`,
+   `requiredEvidenceClasses`). Those are non-blocking. Offer to fill them in; never fabricate them
+   to silence the warning. Full guide: `Docs/Profiles/GenreContractAuthoring.md`.
 
 2. **Read back the state.** `cat .loombridge/STATE.md` to confirm genre/engine/phase.
 

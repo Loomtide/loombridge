@@ -1,0 +1,180 @@
+{
+  "$comment": "Seed data for `loombridge genre init`. DATA, not code: the scaffolder must not carry genre vocabulary as TypeScript literals (genre-core-litmus.test.ts), and everything here is keyed by genreClass (twitch | systems | hybrid), never by a genre id. A genre WITH a hint-card pack seeds its subGenres, tunables, bands, asset roles, and exemplars from the card; the blocks here are what no card carries (the build plan) plus the fallback for a genre with no pack at all. Every seed must survive `validateGenreContract` unedited: the scaffolder re-validates before writing, and loombridge-genre-init.test.ts runs the REAL validator over every class and every shipped card.",
+
+  "placeholderPrefix": "REPLACE ME",
+
+  "shared": {
+    "targetPlatform": {
+      "device": "pc",
+      "inputScheme": "kb-mouse"
+    },
+    "verticalSliceBudget": {
+      "coreVerticalContent": {
+        "playable-scene": 1,
+        "core-mechanic": 1
+      },
+      "deferred": ["roster", "progression", "economy", "matchmaking", "campaign"]
+    },
+    "measurabilityMap": [
+      {
+        "target": "inputToSfxLatency",
+        "tag": "measurable-now",
+        "calculator": "inputToSfxLatency",
+        "bucket": "coreVertical",
+        "note": "Deliberately banded-LATER: a band needs an evidenceKind, and the honest provenance for a band nobody has anchored yet is none at all. Set min/max plus evidenceKind once you have a reference or an operator sign-off."
+      }
+    ],
+    "tunables": [
+      {
+        "id": "inputToSfxLatency",
+        "unit": "ms",
+        "description": "input onset to the sound that confirms it"
+      }
+    ],
+    "sliceDag": {
+      "coreVertical": [
+        {
+          "id": "scene",
+          "title": "Playable scene + camera framing",
+          "dependsOn": [],
+          "confidence": "experimental",
+          "gates": ["manifest", "framing", "console-clean"]
+        },
+        {
+          "id": "controller",
+          "title": "Player control: the primary verb responds",
+          "dependsOn": ["scene"],
+          "confidence": "experimental",
+          "gates": ["manifest", "console-clean"],
+          "gaps": ["control-feel-measurement"]
+        },
+        {
+          "id": "core-mechanic",
+          "title": "The mechanic the core loop is built on",
+          "dependsOn": ["controller"],
+          "confidence": "experimental",
+          "gates": ["manifest", "console-clean"],
+          "gaps": ["core-mechanic-measurement"]
+        },
+        {
+          "id": "feedback",
+          "title": "Feedback for every core verb (visual + audio)",
+          "dependsOn": ["core-mechanic"],
+          "confidence": "experimental",
+          "gates": ["manifest", "console-clean", "visual-artifacts"]
+        },
+        {
+          "id": "hud",
+          "title": "HUD: the state the player has to read",
+          "dependsOn": ["core-mechanic"],
+          "confidence": "experimental",
+          "gates": ["manifest", "ui-conformance", "console-clean"]
+        },
+        {
+          "id": "end-state",
+          "title": "End state: the run resolves and says so",
+          "dependsOn": ["core-mechanic"],
+          "confidence": "experimental",
+          "gates": ["manifest", "console-clean"]
+        }
+      ],
+      "deferredMeta": [
+        {
+          "id": "content-roster",
+          "title": "More content of every kind",
+          "dependsOn": [],
+          "confidence": "experimental",
+          "kind": "roster",
+          "gaps": ["deferred-meta"]
+        },
+        {
+          "id": "progression",
+          "title": "Progression, unlocks, economy",
+          "dependsOn": [],
+          "confidence": "experimental",
+          "kind": "progression",
+          "gaps": ["deferred-meta"]
+        }
+      ]
+    }
+  },
+
+  "classes": {
+    "twitch": {
+      "coreLoopSuffix": "the twitch loop the player repeats second by second",
+      "feedbackChains": [
+        {
+          "verb": "move",
+          "input": "REPLACE ME: the control that drives movement",
+          "response": "REPLACE ME: what the character does in response",
+          "feedback": "REPLACE ME: what the player sees and hears confirming it"
+        },
+        {
+          "verb": "REPLACE ME: the defining verb (fire, jump, dash, ...)",
+          "input": "REPLACE ME: the control that triggers it",
+          "response": "REPLACE ME: the immediate world response",
+          "feedback": "REPLACE ME: the visual + audio confirmation, and the on-hit/on-land payoff"
+        }
+      ],
+      "judgmentOnly": [
+        {
+          "target": "moment-to-moment-responsiveness",
+          "check": "does the core verb feel immediate and fair at speed?"
+        }
+      ],
+      "fidelityCriteria": ["composition-match", "rendering-artifacts", "hud-placement", "juice-cue-presence"]
+    },
+
+    "systems": {
+      "coreLoopSuffix": "the decision loop the player works through over a session",
+      "feedbackChains": [
+        {
+          "verb": "issue-command",
+          "input": "REPLACE ME: how the player expresses an intent",
+          "response": "REPLACE ME: what the simulation does about it",
+          "feedback": "REPLACE ME: how the player knows the intent was received and is being carried out"
+        }
+      ],
+      "judgmentOnly": [
+        {
+          "target": "core-loop-legibility",
+          "check": "can a first-time player read the state and tell what to do next?"
+        },
+        {
+          "target": "decision-tension",
+          "check": "does the player face a meaningful trade-off inside the first session?"
+        }
+      ],
+      "fidelityCriteria": ["composition-match", "rendering-artifacts", "hud-placement", "hud-crispness"]
+    },
+
+    "hybrid": {
+      "coreLoopSuffix": "the moment-to-moment loop and the decision loop that wraps it",
+      "feedbackChains": [
+        {
+          "verb": "move",
+          "input": "REPLACE ME: the control that drives movement",
+          "response": "REPLACE ME: what the character does in response",
+          "feedback": "REPLACE ME: what the player sees and hears confirming it"
+        },
+        {
+          "verb": "REPLACE ME: the defining moment-to-moment verb",
+          "input": "REPLACE ME: the control that triggers it",
+          "response": "REPLACE ME: the immediate world response",
+          "feedback": "REPLACE ME: the visual + audio confirmation and its payoff"
+        }
+      ],
+      "judgmentOnly": [
+        {
+          "target": "moment-to-moment-responsiveness",
+          "check": "does the core verb feel immediate and fair at speed?"
+        },
+        {
+          "target": "core-loop-legibility",
+          "check": "can a first-time player read the state and tell what to do next?"
+        }
+      ],
+      "fidelityCriteria": ["composition-match", "rendering-artifacts", "hud-placement", "juice-cue-presence"]
+    }
+  }
+}
