@@ -117,6 +117,22 @@ export interface LoombridgeStatusPayload {
   nextStep: string;
 }
 
+/**
+ * The next step for a project with NO acceptance contract: the exact state in which BARE
+ * `loombridge plan` exits 2.
+ *
+ * `plan` refuses to guess the genre (a guessed genre seeds that genre's whole contract and still
+ * claims `graded`), so this surface used to hand an agent a command guaranteed to fail on the one
+ * state it fires in. A `nextStep` that exits 2 trains an agent to stop trusting `nextStep`.
+ */
+const PLAN_NEXT_STEP = "loombridge plan --genre <id>";
+
+/** Where to find the id, and the route for a genre that has no shipped pack. */
+const PLAN_GENRE_HINT =
+  "`plan` refuses to guess the genre: run `loombridge plan --help` for the ids with a shipped pack, " +
+  "or `loombridge genre init --genre <your-id> --class <twitch|systems|hybrid>` then " +
+  "`loombridge plan --brief .loombridge` for a genre that has none.";
+
 function summarize(p: {
   loombridgeDirExists: boolean;
   contractExists: boolean;
@@ -131,15 +147,17 @@ function summarize(p: {
       return {
         summary:
           `Captures present under ${p.capturePresentDirs.map((d) => `.loombridge/${d}/`).join(", ")} but there is NO acceptance contract — ` +
-          "NOTHING has been verified. Captures are not a verification. Run `loombridge plan` to author a contract.",
-        nextStep: "loombridge plan",
+          `NOTHING has been verified. Captures are not a verification. Run \`${PLAN_NEXT_STEP}\` to author a contract. ${PLAN_GENRE_HINT}`,
+        nextStep: PLAN_NEXT_STEP,
       };
     }
     return {
-      summary: p.loombridgeDirExists
-        ? "No acceptance contract (.loombridge/ACCEPTANCE.json) yet — nothing has been verified. Run `loombridge plan`."
-        : "This project is not set up for Loombridge verification (no .loombridge/). Run `loombridge plan` (or `loombridge_project_init`).",
-      nextStep: "loombridge plan",
+      summary:
+        (p.loombridgeDirExists
+          ? `No acceptance contract (.loombridge/ACCEPTANCE.json) yet: nothing has been verified. Run \`${PLAN_NEXT_STEP}\`.`
+          : `This project is not set up for Loombridge verification (no .loombridge/). Run \`${PLAN_NEXT_STEP}\` (or \`loombridge_project_init\`).`) +
+        ` ${PLAN_GENRE_HINT}`,
+      nextStep: PLAN_NEXT_STEP,
     };
   }
   // Only claim green when the doneness gate actually certifies — NEVER from phase.

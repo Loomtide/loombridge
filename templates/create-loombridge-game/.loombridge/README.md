@@ -5,11 +5,24 @@ verify → doneness flow in this project: the acceptance contract, design target
 captures, reports, and replays all live here.
 
 It is intentionally near-empty in the template. Populate it by running `plan`
-from the project root:
+from the project root. `plan` REFUSES to guess the genre (a guessed genre seeds
+that genre's whole contract and still claims `graded`), so name one:
 
 ```bash
-loombridge plan        # scaffolds the contract + design target into this directory
+loombridge plan --genre <id>   # scaffolds the contract + design target into this directory
 ```
+
+`loombridge plan --help` lists the genres with a shipped pack. For a genre that
+has none, write a contract first and plan from it: `genre init` writes it into
+this directory, under the exact name `--brief` resolves:
+
+```bash
+loombridge genre init --genre <your-id> --class <twitch|systems|hybrid>
+# fill in every "REPLACE ME:" field: `plan` refuses a contract that still has one
+loombridge plan --brief .loombridge
+```
+
+A re-plan needs no flag: the genre already in `STATE.md` wins.
 
 After `plan`, expect files such as `contract.json`, `design-target.json`, and
 `status.json` to appear here (exact set depends on the genre). Do **not** hand-edit

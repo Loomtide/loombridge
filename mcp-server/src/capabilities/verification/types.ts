@@ -692,6 +692,21 @@ export interface AcceptanceContract {
   schemaVersion: typeof ACCEPTANCE_SCHEMA_VERSION;
   /** Game id, e.g. "tiderunner". */
   game: string;
+  /**
+   * The genre this contract WAS SEEDED FOR, stamped by `loombridge plan` (and by contract promotion)
+   * so the artifact whose contents ARE the grading says which genre it grades.
+   *
+   * WHY IT EXISTS. `plan`'s genre-flip guard reads the genres the project already records from disk,
+   * and it read SLICES.json, then FEEL_SPEC.json, then STATE. In the design phase: before any
+   * roadmap exists: deleting FEEL_SPEC.json and STATE.md left it with nothing to compare, so a
+   * platformer ACCEPTANCE.json (`win.rule: "all-fruit"`, no `verification` block) could be stamped
+   * `graded` under a completely different STATE genre. Nothing bound the contract to a genre at all.
+   *
+   * OPTIONAL, and absent means NO CLAIM, never a default. A hand-authored or legacy contract simply
+   * says nothing about its genre and the older evidence sources decide, exactly as before. What is
+   * not allowed is a PRESENT value that disagrees with the roadmap: `doneness` refuses on that.
+   */
+  genre?: string;
   /** Provenance: which sources this contract was authored from. */
   source?: {
     mock?: string;

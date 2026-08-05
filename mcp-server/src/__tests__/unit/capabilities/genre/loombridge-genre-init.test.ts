@@ -31,6 +31,7 @@ import {
   scaffoldGenreContract,
 } from "../../../../capabilities/genre/genre-contract/scaffold.js";
 import { DEFAULT_CONTRACT_FILENAME } from "../../../../capabilities/genre/genre.js";
+import { knownGenreIds } from "../../../../capabilities/genre/genre-registry.js";
 
 async function tmpRoot(): Promise<string> {
   return fs.mkdtemp(path.join(os.tmpdir(), "loombridge-genre-init-"));
@@ -147,6 +148,71 @@ test("an unknown genre class refuses and names the closed set", () => {
   const result = scaffoldGenreContract({ genreId: "fixture", genreClass: "arcade" });
   assert.ok(isScaffoldError(result));
   assert.match(result.error, /arcade/);
+});
+
+/* ------------------------------------------------------------------ the registered-id collision */
+
+test("scaffolding under a REGISTERED genre id warns loudly and names the tradeoff", () => {
+  // `2d-shooter` and `3d-shooter` are BOTH registered packs AND hint-card packs, so
+  // `genre init --genre <a shooter>` is the most natural "customise the shooter" invocation: and
+  // the one that silently does not do what it says. Planning from the result resolves coverage from
+  // the REGISTRY (`graded`, not `partially-graded`) and `doneness` grades the hero shot against the
+  // PACK's fidelityCriteria, discarding the contract's own. It succeeded with no notice at all.
+  const collisions = knownGenreIds().filter((id) => hintCardGenreIds().includes(id));
+  assert.ok(collisions.length > 0, "expected at least one id that is both registered and hint-carded");
+
+  for (const genreId of collisions) {
+    const result = scaffoldGenreContract({ genreId });
+    assert.ok(!isScaffoldError(result), `${genreId}: a registered id must still scaffold, not refuse`);
+    assert.equal(result.registeredPack, true, `${genreId}: the collision must be reported to the caller`);
+    const warning = result.warnings.find((w) => /ALREADY a REGISTERED genre pack/.test(w));
+    assert.ok(warning, `${genreId}: no collision warning; got ${result.warnings.join(" | ")}`);
+    // Naming the tradeoff, not merely the fact: both halves of what silently changes.
+    assert.match(warning!, /`graded`/, `${genreId}: the warning must say which claim is actually stamped`);
+    assert.match(warning!, /fidelityCriteria/, `${genreId}: the warning must say whose criteria win`);
+  }
+});
+
+test("an UNREGISTERED id scaffolds with no collision warning (the warning is a per-id answer)", () => {
+  // Non-vacuity: a warning that fired on every scaffold would train the author to ignore it.
+  const result = scaffoldGenreContract({ genreId: "definitely-not-a-registered-genre", genreClass: "systems" });
+  assert.ok(!isScaffoldError(result));
+  assert.equal(result.registeredPack, false);
+  assert.deepEqual(result.warnings.filter((w) => /ALREADY a REGISTERED/.test(w)), []);
+});
+
+test("`genre init` on a registered id does NOT close by promising partially-graded", async () => {
+  const root = await tmpRoot();
+  try {
+    const genreId = knownGenreIds().find((id) => hintCardGenreIds().includes(id))!;
+    const { code, out, err } = await capture(["genre", "init", "--genre", genreId, "--root", root]);
+    assert.equal(code, 0);
+    assert.match(err, /ALREADY a REGISTERED genre pack/, "the warning belongs on stderr");
+    // The closing line is the last thing an author reads, and it used to contradict the warning.
+    assert.doesNotMatch(out, /verifies as[\s\S]{0,40}`partially-graded`/);
+    assert.match(out, /`graded`/, "it must state the claim this genre actually earns");
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+/* ------------------------------------------------------------------ --out over a directory */
+
+test("--force over a DIRECTORY refuses cleanly instead of throwing EISDIR", async () => {
+  const root = await tmpRoot();
+  try {
+    const out = path.join(root, "a-directory");
+    await fs.mkdir(out, { recursive: true });
+    const { code, err } = await capture([
+      "genre", "init", "--genre", "temp-genre", "--class", "systems", "--out", out, "--force",
+    ]);
+    assert.equal(code, 2, "an unhandled EISDIR stack trace reads as a crash, not as a usage error");
+    assert.match(err, /DIRECTORY/);
+    assert.doesNotMatch(err, /EISDIR/, "the raw errno must not be the user-facing message");
+    assert.equal((await fs.stat(out)).isDirectory(), true, "the directory must be left alone");
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
 });
 
 /* ------------------------------------------------------------------ the CLI + the declared path */

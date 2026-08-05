@@ -59,11 +59,23 @@ create-loombridge-game/
 5. **Start your agent from this folder** (cwd binding) and run the flow:
 
    ```bash
-   loombridge plan          # scaffolds .loombridge/ contract + design target
-   loombridge build         # construct via Loombridge MCP, then verify + doneness
+   # `plan` REFUSES to guess the genre: name it, or hand it a genre contract.
+   loombridge plan --genre <id>   # scaffolds .loombridge/ contract + design target
+   loombridge build               # construct via Loombridge MCP, then verify + doneness
    loombridge verify
    loombridge doneness
    ```
+
+   `loombridge plan --help` lists the genres with a shipped pack (those verify as
+   `graded`). For any other genre, write a contract first and plan from it:
+
+   ```bash
+   loombridge genre init --genre <your-id> --class <twitch|systems|hybrid>
+   # fill in every "REPLACE ME:" field: `plan` refuses a contract that still has one
+   loombridge plan --brief .loombridge
+   ```
+
+   Re-runs need no flag at all: the genre in `.loombridge/STATE.md` wins.
 
 ## Why a template, not a generator
 

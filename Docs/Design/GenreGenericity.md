@@ -1,6 +1,6 @@
 # RFC: Plan and verify ANY genre
 
-**Status:** PROPOSED. **Date:** 2026-08-05.
+**Status:** IMPLEMENTED (all three open questions settled in code). **Date:** 2026-08-05.
 Inherits from [Positioning.md](Positioning.md). Related: [UnifiedVerify.md](UnifiedVerify.md)
 (the verify door this feeds) and [ArtifactStorage.md](ArtifactStorage.md) (a peer correctness
 wave).
@@ -145,13 +145,37 @@ rather than silently accepted.
 - Changing what `graded` / `partially-graded` / `ungraded` mean.
 - New genre packs. This wave makes authoring cheap; it does not author.
 
-## Open questions
+## Resolved questions
 
-1. **Should bare `plan` refuse, or prompt?** Leaning refuse: `plan` runs non-interactively under
-   agents, and a prompt has no answer there. The agent-facing fix is the instruction rewrite.
-2. **Does `--force` across a genre change rewrite `SLICES.json`, or refuse?** Leaning rewrite
-   with a loud notice, since the promoted path already rewrites and the asymmetry is the bug.
-   Refusing is defensible if any slice already carries an approval proof.
-3. **Where does `genre init` write?** Leaning `.loombridge/genre-contract.json`, which
-   `--brief <dir>` already resolves by name, so `init` then `plan --brief .loombridge` works
-   with no path juggling.
+Each of these was decided by the implementation, and each answer is now enforced by a test rather
+than by this document.
+
+1. **Should bare `plan` refuse, or prompt?** REFUSE. `plan` runs non-interactively under agents and
+   a prompt has no answer there, so the refusal names every registered id plus both escape hatches
+   AND the command that authors a contract (`loombridge genre init`). It refuses before anything is
+   scaffolded: a refusal that has already written half a `.loombridge/` is not a refusal.
+   (`unstatedGenreRefusal`, `loombridge-plan-genre-refusal.test.ts`.)
+2. **Does `--force` across a genre change rewrite `SLICES.json`, or refuse?** REWRITE, LOUDLY, and
+   REFUSE when any slice carries an approval proof. Two corrections landed on the second half. The
+   approval-proof bar binds to the ROADMAP REWRITE, not to the genre change: the promoted path
+   writes `SLICES.json` unconditionally, so re-promoting an edited contract under the same
+   `genreId` was erasing human sign-off silently. And `--force` at a promoted project's OWN genre is
+   refused outright, because it would replace the contract's acceptance with a template, discard its
+   `fidelityCriteria`, and leave the contract's slices behind.
+   (`loombridge-plan-genre-flip.test.ts`, `loombridge-plan-contract-project.test.ts`.)
+3. **Where does `genre init` write?** `.loombridge/genre-contract.json`, taken from
+   `CANONICAL_BRIEF_FILENAME` rather than spelled twice, so `init` then `plan --brief .loombridge`
+   composes with no path juggling and cannot be broken by renaming one side. `--out` overrides it.
+   (`loombridge-genre-init.test.ts` round-trips the name through `resolveBriefBundle`.)
+
+## Decided after the RFC (found by review, not by the plan)
+
+- **A scaffold is not a contract.** `plan` REFUSES a contract still carrying `genre init`'s
+  `REPLACE ME:` markers, following the mini-game pipeline's existing `DRAFT:`/`TODO:` convention
+  (`isDraftContract`) rather than inventing a second one.
+- **`ACCEPTANCE.json` states its own genre.** The artifact whose contents ARE the grading was the
+  one artifact not bound to a genre, which left the flip guard blind whenever `FEEL_SPEC.json` and
+  `STATE.md` were both absent. Absent is no claim; a present disagreement refuses at doneness.
+- **A registered genre's fidelity criteria beat a contract's, on purpose.** `GENRE_PROMOTION.json`
+  is project-editable and the registry is not, so preferring the report would let a project weaken a
+  shipped genre's criteria. `genre init` warns loudly when scaffolding under a registered id instead.

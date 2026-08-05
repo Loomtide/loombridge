@@ -272,6 +272,106 @@ test("LITMUS: the required derivation fires on a schema that under- or over-decl
   );
 });
 
+/* ------------------------------------------------------------------ reachability of the bindings */
+
+/**
+ * Every pointer REACHABLE from the schema root, where a `$defs` entry counts as reached ONLY by
+ * following a real `$ref` to it.
+ *
+ * WHY THIS EXISTS. Both binding tests above assert on absolute pointers like
+ * `$defs/sliceNode/properties/gates/items/enum`, and the `$ref` test below only asks whether refs
+ * RESOLVE, never whether the `$defs` those bindings check are the ones the schema actually USES.
+ * A reviewer added a `$defs/sliceNodeLax` and repointed three `items` at it: 7/7 stayed green while
+ * ajv accepted a bogus gate id, a missing slice `confidence`, and an invented measurability `tag`.
+ * The bindings were guarding a dead subtree.
+ *
+ * Skipping `$defs` during ordinary traversal is the whole trick: reached-because-it-is-declared is
+ * exactly the property that made the repoint invisible.
+ */
+function reachablePointers(schema: Json): Set<string> {
+  const seen = new Set<string>();
+  const visit = (pointer: string, node: unknown): void => {
+    if (seen.has(pointer)) return;
+    seen.add(pointer);
+    if (Array.isArray(node)) {
+      node.forEach((v, i) => visit(pointer ? `${pointer}/${i}` : String(i), v));
+      return;
+    }
+    if (!node || typeof node !== "object") return;
+    for (const [key, value] of Object.entries(node as Json)) {
+      if (pointer === "" && key === "$defs") continue;
+      if (key === "$ref" && typeof value === "string" && value.startsWith("#/")) {
+        const target = value.slice(2);
+        visit(target, at(schema, target));
+        continue;
+      }
+      visit(pointer ? `${pointer}/${key}` : key, value);
+    }
+  };
+  visit("", schema);
+  return seen;
+}
+
+test("every checked binding pointer is REACHED through the schema's real $ref graph", () => {
+  const schema = readSchema();
+  const reachable = reachablePointers(schema);
+  const orphans: string[] = [];
+  for (const pointer of [
+    ...ENUM_BINDINGS.map((b) => b.pointer),
+    ...REQUIRED_BINDINGS.map((b) => b.schemaPointer).filter((p) => p !== ""),
+  ]) {
+    if (!reachable.has(pointer)) orphans.push(pointer);
+  }
+  assert.deepEqual(
+    orphans,
+    [],
+    "these binding pointers exist in the schema but nothing $refs them, so the enum/required checks " +
+      `on them constrain no document ajv will ever validate:\n${orphans.join("\n")}`,
+  );
+});
+
+test("no $defs entry is dead: an unreferenced definition is a binding waiting to be orphaned", () => {
+  const schema = readSchema();
+  const reachable = reachablePointers(schema);
+  const defs = Object.keys((schema.$defs as Json | undefined) ?? {});
+  assert.ok(defs.length > 0, "expected the schema to declare $defs");
+  const dead = defs.filter((name) => !reachable.has(`$defs/${name}`));
+  assert.deepEqual(dead, [], `unreferenced $defs: ${dead.join(", ")}`);
+});
+
+test("LITMUS: reachability actually fires on a repointed $ref and on a dead $def", () => {
+  // The exact mutation that survived: clone a $def under a new name, repoint the refs at the clone,
+  // and confirm the ORIGINAL becomes unreachable: in memory, so the shipped schema is untouched.
+  const schema = readSchema();
+  assert.ok(reachablePointers(schema).has("$defs/sliceNode"), "the shipped schema must already reach sliceNode");
+
+  const mutated = JSON.parse(JSON.stringify(schema)) as Json;
+  const defs = mutated.$defs as Json;
+  defs.sliceNodeLax = JSON.parse(JSON.stringify(defs.sliceNode)) as Json;
+  let repointed = 0;
+  const repoint = (node: unknown): void => {
+    if (Array.isArray(node)) return node.forEach(repoint);
+    if (!node || typeof node !== "object") return;
+    for (const [k, v] of Object.entries(node as Json)) {
+      if (k === "$ref" && v === "#/$defs/sliceNode") {
+        (node as Json).$ref = "#/$defs/sliceNodeLax";
+        repointed += 1;
+      } else repoint(v);
+    }
+  };
+  repoint(mutated.properties);
+  assert.ok(repointed > 0, "the litmus must actually repoint something");
+
+  const after = reachablePointers(mutated);
+  assert.ok(!after.has("$defs/sliceNode"), "a repointed $ref must strand the definition the bindings check");
+  assert.ok(
+    !after.has("$defs/sliceNode/properties/gates/items/enum"),
+    "and therefore strand the enum binding built on it",
+  );
+  // The dead-$defs check is the other half: the clone is reachable, the original is not.
+  assert.ok(after.has("$defs/sliceNodeLax"), "the clone must be reachable, or the litmus proves nothing");
+});
+
 /* ------------------------------------------------------------------ structural sanity */
 
 test("every $ref in the schema resolves inside the schema", () => {

@@ -165,7 +165,15 @@ export const HERO_SHOT_FIDELITY_CRITERIA = [
  * Design Target (callers gate on that); otherwise hero-shot fidelity is N/A.
  *
  * Resolution order, in decreasing authority:
- *  1. a REGISTERED pack's criteria (unchanged shipped behavior);
+ *  1. a REGISTERED pack's criteria (unchanged shipped behavior). KNOWN, DELIBERATE LIMITATION: when a
+ *     project is planned from a genre CONTRACT whose `genreId` happens to name a registered pack
+ *     (`loombridge genre init --genre <a pack id>` makes that easy), the pack wins and the contract's
+ *     own `fidelityCriteria` are never consulted. That is the correct precedence and not an
+ *     oversight: `GENRE_PROMOTION.json` lives inside the project and is editable, the registry ships
+ *     with the tool and is not, so preferring the report would let any project WEAKEN a registered
+ *     genre's criteria by hand: a laundering route worse than the surprise. The surprise is closed
+ *     where it is created instead: `genre init` warns loudly on a registered id and its closing line
+ *     says the plan will verify as `graded` against the PACK (see `registeredPackWarning`);
  *  2. the criteria a PROMOTED genre contract declared, taken from the on-disk `GENRE_PROMOTION.json`
  *     and RE-VALIDATED here against the criterion allow-list. Re-validation is not belt-and-braces:
  *     the promotion report lives inside the project and is editable, so `plan`-time validation of the
@@ -1933,6 +1941,19 @@ export async function evaluateSliceDoneness(
         "(the roadmap being certified must be the roadmap this project was planned as)",
     );
   }
+  // ACCEPTANCE.json is the artifact whose CONTENTS ARE the grading, so once it states a genre that
+  // claim is checked here too. Before it carried one, the only two on-disk genre claims were
+  // SLICES.json and STATE, and a contract for another genre entirely could sit between them
+  // unremarked. ABSENT is no claim (legacy/hand-authored contracts), never a default: a PRESENT
+  // disagreement is what refuses.
+  const acceptanceGenre = await declaredAcceptanceGenre(paths.acceptance);
+  if (acceptanceGenre && acceptanceGenre !== plan.genre) {
+    coverageRefusals.push(
+      `ACCEPTANCE.json declares genre "${acceptanceGenre}" but SLICES.json declares "${plan.genre}": ` +
+        "refusing (the contract being graded against must be the contract this roadmap was planned " +
+        "from; re-run `loombridge plan` at one genre with --force, or restore the contract)",
+    );
+  }
   if (coverageRefusals.length) ok = false;
 
   // The unified `verify` roll-up (H3) applies to BOTH doneness paths: a slice-planned
@@ -1942,6 +1963,16 @@ export async function evaluateSliceDoneness(
   if (unifiedRefusals.length) ok = false;
 
   return { emptyRoadmap: false, slices, depRefusals, fidelityReasons, assetFidelityReasons, artRefusals: art.refusals, artDeferred: art.deferred, coverage, coverageRefusals, unifiedVerifyRefusals: unifiedRefusals, ok };
+}
+
+/** The non-empty `genre` ACCEPTANCE.json declares, or `null` (absent / unreadable / not a string). */
+async function declaredAcceptanceGenre(acceptancePath: string): Promise<string | null> {
+  try {
+    const doc = JSON.parse(await fs.readFile(acceptancePath, "utf-8")) as { genre?: unknown };
+    return typeof doc.genre === "string" && doc.genre.length > 0 ? doc.genre : null;
+  } catch {
+    return null;
+  }
 }
 
 /** True only when the acceptance contract PARSES as a valid contract (bare `{}` is rejected). */

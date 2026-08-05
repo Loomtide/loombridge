@@ -290,7 +290,9 @@ test("loombridge_status payload: no contract → run plan, never verifiedGreen o
     assert.equal(payload.contractExists, false);
     assert.equal(payload.capturesWithoutContract, true);
     assert.equal(payload.verifiedGreen, false);
-    assert.equal(payload.nextStep, "loombridge plan");
+    // `plan` REFUSES to guess the genre, so the no-contract nextStep must supply it: a nextStep
+    // that exits 2 in the one state it fires in trains an agent to stop trusting nextStep.
+    assert.match(payload.nextStep, /^loombridge plan --genre /);
     assert.match(payload.summary, /NO acceptance contract|not a verification/i);
     assert.equal(payload.contractPath, path.join(".loombridge", "ACCEPTANCE.json"));
   } finally {
@@ -319,7 +321,7 @@ test("loombridge_project_init scaffolds .loombridge/ idempotently without fabric
     // Init must NOT invent a contract or a verified state.
     assert.equal(first.contractExists, false);
     assert.equal(first.verifiedGreen, false);
-    assert.equal(first.nextStep, "loombridge plan");
+    assert.match(first.nextStep, /^loombridge plan --genre /);
     await fs.stat(path.join(root, ".loombridge"));
 
     const second = await runLoombridgeProjectInit(root);

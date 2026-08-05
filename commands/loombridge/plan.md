@@ -100,9 +100,15 @@ so the two agents cannot drift.
    hero shot cannot satisfy makes doneness unreachable-green, and an id outside the gradable set is
    refused outright. Do not delete the field to make a refusal go away.
 
-   `plan` also prints an advisory for what the contract omits (`productThesis`, `scaleModel`,
-   `requiredEvidenceClasses`). Those are non-blocking. Offer to fill them in; never fabricate them
-   to silence the warning. Full guide: `Docs/Profiles/GenreContractAuthoring.md`.
+   `plan` also prints non-blocking advisories. The ones that actually fire on a scaffolded contract
+   are `COVERAGE_PRODUCT_THESIS_ABSENT` (no `productThesis`), `SCALE_MODEL_ABSENT` (no
+   `scaleModel`), `COVERAGE_ACCEPTANCE_PROTOCOL_PARTIAL` (only one of
+   `measurabilityMap[].gateBand` / `humanOracleChecks` is declared), and
+   `COVERAGE_FEEDBACK_SOUND_PARTIAL` (no feedback chain names sound/SFX). An absent
+   `requiredEvidenceClasses` is NOT warned: it reports `[OK] proxied` because the per-slice
+   `gates` stand in for it, so declaring it is an opt-in nothing prompts; offer it anyway, since
+   `doneness` then enforces each class. Offer to fill any of these in; never fabricate a value to
+   silence a warning. Full guide: `Docs/Profiles/GenreContractAuthoring.md`.
 
 2. **Read back the state.** `cat .loombridge/STATE.md` to confirm genre/engine/phase.
 
@@ -120,9 +126,12 @@ so the two agents cannot drift.
      ```bash
      loombridge target set --image <path.png> [--html <path.html>] --mode provided
      ```
-   - **Generate (default):** produce an **annotated hero shot built from the genre's asset
-     registry** (Claude Design / frontend-design — a single in-game frame at native scale,
-     with callouts for HUD / camera / parallax / juice). Screenshot it to a PNG, then:
+   - **Generate (default):** produce an **annotated hero shot** (Claude Design / frontend-design:
+     a single in-game frame at native scale, with callouts for the things THIS genre reads by).
+     For a registered pack, build it from that genre's asset registry; for a **contract genre**
+     there is no asset registry, so build it from the contract's `artDirection.assetRoles` and
+     annotate the criteria the contract's own `fidelityCriteria` list (parallax and platform tiers
+     are platformer callouts, not universal ones). Screenshot it to a PNG, then:
      ```bash
      loombridge target set --image hero-shot.png --html hero-shot.html --mode generated
      ```

@@ -26,6 +26,7 @@ import fsSync from "node:fs";
 import path from "node:path";
 
 import { packageRoot } from "../../../shared/pkg-root.js";
+import { knownGenreIds, resolveGenrePack } from "../genre-registry.js";
 import { IMPLEMENTED_CALCULATOR_IDS, validateGenreContract } from "./validator.js";
 import { validateHintCard, type GenreHintCard } from "./hint-card.js";
 import {
@@ -159,6 +160,13 @@ export interface ScaffoldSuccess {
   warnings: string[];
   /** Dotted paths whose value still carries the placeholder marker. */
   placeholders: string[];
+  /**
+   * True when this genre id ALSO names a registered pack. The scaffold still succeeds (an author may
+   * legitimately want a pack genre's contract as a starting point), but the downstream claim is not
+   * the one the any-genre path advertises, so the caller must say so rather than print the generic
+   * "verifies as partially-graded" close. See the warning built in `registeredPackWarning`.
+   */
+  registeredPack: boolean;
 }
 
 export type ScaffoldResult = ScaffoldSuccess | { error: string };
@@ -177,6 +185,14 @@ export function scaffoldGenreContract(opts: ScaffoldOptions): ScaffoldResult {
 
   const card = loadHintCard(genreId);
   if (card !== null && "error" in card) return { error: card.error };
+
+  // A genre id can be BOTH a hint-card pack and a REGISTERED pack (the shooters are), which makes
+  // `genre init --genre <shooter>` the most natural "customise the shooter" invocation and the one
+  // that silently does not do what it says. Warn rather than refuse: scaffolding a registered
+  // genre's contract is a legitimate starting point (rename the id, keep the seeds), and refusing
+  // would take away the only ergonomic route to one.
+  const registeredPack = resolveGenrePack(genreId) !== null;
+  if (registeredPack) warnings.push(registeredPackWarning(genreId));
 
   // The class is AUTHORITATIVE (it selects the validator's completeness profile), so it is never
   // guessed: a genre with no pack must state it, and a genre with a pack may not contradict it.
@@ -378,10 +394,53 @@ export function scaffoldGenreContract(opts: ScaffoldOptions): ScaffoldResult {
     );
   }
 
-  return { contract, notes, warnings, placeholders: collectPlaceholderPaths(contract, marker) };
+  return { contract, notes, warnings, placeholders: collectPlaceholderPaths(contract, marker), registeredPack };
 }
 
 /* ------------------------------------------------------------------ helpers */
+
+/**
+ * The warning a scaffold under an ALREADY-REGISTERED genre id earns.
+ *
+ * Three things stop being true the moment the id is registered, and all three are silent:
+ *  - coverage resolves from the REGISTRY, not the promotion report, so the build stamps `graded`
+ *    rather than the `partially-graded` this path advertises (`genre-coverage.ts` step 1);
+ *  - `fidelityCriteriaForGenre` returns the PACK's criteria and never consults the contract's, so
+ *    the hero shot is graded on criteria this contract did not write (see the comment there: the
+ *    registry wins ON PURPOSE, because `GENRE_PROMOTION.json` is project-editable and the registry
+ *    is not, so preferring the report would let a project weaken a shipped genre's criteria);
+ *  - the pack's own ACCEPTANCE template is what `plan --genre <id>` seeds, so the two doors into
+ *    the same id produce different contracts.
+ *
+ * Built from `knownGenreIds()` rather than any literal: the genre-core litmus forbids registered
+ * genre ids as string literals under `capabilities/`.
+ */
+function registeredPackWarning(genreId: string): string {
+  return (
+    `"${genreId}" is ALREADY a REGISTERED genre pack (${knownGenreIds().join(", ")}), so this contract ` +
+    "will NOT be graded the way an unregistered genre is. Planning from it still resolves coverage " +
+    "from the REGISTRY: the build stamps `graded` (not `partially-graded`), and `loombridge doneness` " +
+    "grades the hero shot against the PACK's fidelityCriteria, silently discarding the ones below. " +
+    `To get a contract that actually governs its own grading, scaffold under a NEW id (e.g. ` +
+    `--genre ${genreId}-<your-variant>). To build the shipped ${genreId}, skip this file and run ` +
+    `\`loombridge plan --genre ${genreId}\`.`
+  );
+}
+
+/**
+ * Every dotted path in an ARBITRARY (possibly hand-edited, possibly `JSON.parse`d) genre contract
+ * whose string value still carries the scaffold's placeholder marker.
+ *
+ * ONE rule, two readers: `genre init` reporting what it left for the author, and `plan` REFUSING to
+ * plan on top of it: exactly the shape `minigame-draft.ts` uses for `DRAFT:`/`TODO:`. Anchored at
+ * the START of the value for the same reason: a real art-direction phrase that merely mentions the
+ * words must not trip it.
+ *
+ * Accepts `unknown` so it is safe over a parsed file before any validation has run.
+ */
+export function genreContractPlaceholderPaths(contract: unknown): string[] {
+  return collectPlaceholderPaths(contract, placeholderPrefix());
+}
 
 /**
  * The question a human answers for a judgment-only target. A hint card's qualitative band already

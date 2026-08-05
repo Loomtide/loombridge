@@ -45,18 +45,24 @@ async function unityRoot(): Promise<string> {
   return root;
 }
 
-/** Run the CLI entry point capturing console.error + the exit code. */
-async function runCli(args: string[]): Promise<{ code: number; err: string }> {
+/** Run the CLI entry point capturing console.error/console.log + the exit code. */
+async function runCli(args: string[]): Promise<{ code: number; err: string; out: string }> {
   const lines: string[] = [];
+  const outLines: string[] = [];
   const orig = console.error;
+  const origLog = console.log;
   console.error = (...parts: unknown[]) => {
     lines.push(parts.map(String).join(" "));
   };
+  console.log = (...parts: unknown[]) => {
+    outLines.push(parts.map(String).join(" "));
+  };
   try {
     const code = await run(args);
-    return { code, err: lines.join("\n") };
+    return { code, err: lines.join("\n"), out: outLines.join("\n") };
   } finally {
     console.error = orig;
+    console.log = origLog;
   }
 }
 
@@ -105,6 +111,24 @@ test("plan: the refusal names every registered id and both escape hatches", asyn
   } finally {
     await fs.rm(root, { recursive: true, force: true });
   }
+});
+
+test("plan: the refusal (and --help) name the COMMAND that authors a contract, not just the idea", async () => {
+  // "author a genre contract" is where both messages stopped, and it is the sentence that sends a
+  // reader off to read `validator.ts`. The command exists (`loombridge genre init`) and appeared
+  // only in the top-level help under a Reference group, i.e. nowhere a refused user lands.
+  const root = await unityRoot();
+  try {
+    const { err } = await runCli(["--root", root, "--allow-missing-design-target"]);
+    assert.match(err, /loombridge genre init/, "the refusal must name the authoring command");
+    assert.match(err, /--class/, "and the flag it requires for a genre with no pack");
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+
+  const help = await runCli(["--help"]);
+  assert.equal(help.code, 0);
+  assert.match(help.out, /loombridge genre init/, "`plan --help`'s --genre text must name it too");
 });
 
 // ── every path that legitimately needs no --genre ────────────────────────────

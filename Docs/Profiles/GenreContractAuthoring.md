@@ -120,8 +120,7 @@ to your game; add what does.
 
 `genre init` omits `productThesis`, `scaleModel`, and `requiredEvidenceClasses`, and it does not
 invent a `gateBand`. All four would have to be fabricated, and a fabricated value that passes a
-check is worse than an absent one that gets flagged. `plan` prints an advisory naming each absence
-and what it costs:
+check is worse than an absent one that gets flagged.
 
 - **`productThesis`** is the anti-drift boundary: what this game IS in one line, and what it is
   NOT. In dogfooding, this was the single most useful guardrail, because agents "improve" a
@@ -132,7 +131,22 @@ and what it costs:
   "console clean" can never stand in for "playtest verified". Declare only classes your build can
   actually produce: `doneness` enforces them.
 
-Add them once you can state them honestly. They are cheap, and each one is a real check that
+**Which of these `plan` actually warns about.** Only the first two. On a scaffolded contract `plan`
+prints three advisory `WARN`s and one of them is not on the list above:
+
+| code | fires when |
+|---|---|
+| `COVERAGE_PRODUCT_THESIS_ABSENT` | no `productThesis` |
+| `SCALE_MODEL_ABSENT` | no `scaleModel` |
+| `COVERAGE_ACCEPTANCE_PROTOCOL_PARTIAL` | only ONE of `measurabilityMap[].gateBand` / `humanOracleChecks` is present |
+| `COVERAGE_FEEDBACK_SOUND_PARTIAL` | feedback chains are declared but none names sound/SFX |
+
+An absent `requiredEvidenceClasses` is reported `[OK] proxied`, not warned: the coverage item falls
+back to the per-slice `gates`, and a scaffolded slice DAG binds them, so it scores `present`.
+Declaring the field is an OPT-IN that nothing prompts you to take, which is exactly why it is worth
+taking. Adding it flips the item to "first-class" and `doneness` starts enforcing each class.
+
+Add them all once you can state them honestly. They are cheap, and each one is a real check that
 switches on.
 
 ## Editor completion

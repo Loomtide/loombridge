@@ -26,12 +26,21 @@ import { CANONICAL_BRIEF_FILENAME } from "../../domain/brief-bundle.js";
 import { LOOMBRIDGE_DIRNAME } from "../../domain/state.js";
 import { GENRE_CLASSES } from "./genre-contract/types.js";
 import {
+  GENRE_CONTRACT_SCHEMA_FILE,
   hintCardGenreIds,
   isScaffoldError,
+  placeholderPrefix,
   scaffoldGenreContract,
 } from "./genre-contract/scaffold.js";
 
 const TAG = "[loombridge genre]";
+
+/**
+ * The marker string the scaffold leaves in every field a human still has to write, read from the
+ * template rather than spelled here: `plan`'s refusal keys off the SAME value, so a template rename
+ * must not be able to leave this prose pointing at a token nothing looks for any more.
+ */
+const PLACEHOLDER_LABEL = placeholderPrefix();
 
 /**
  * The default output filename. Taken from the brief-bundle resolver's own priority list rather than
@@ -86,11 +95,23 @@ export async function runInit(args: InitArgs): Promise<number> {
   }
 
   const outPath = args.outPath ?? path.join(args.root, LOOMBRIDGE_DIRNAME, DEFAULT_CONTRACT_FILENAME);
-  const exists = await pathExists(outPath);
+  const existing = await statKind(outPath);
+  const exists = existing !== "absent";
   if (exists && !args.force) {
     console.error(
       `${TAG} ${outPath} already exists. Re-run with --force to replace it, or pass --out <path> to ` +
         "write elsewhere. A scaffold never overwrites an authored contract by default.",
+    );
+    return 2;
+  }
+  // `--force` means "replace the contract at this path", never "replace whatever is at this path".
+  // Writing a file over a DIRECTORY is an EISDIR the CLI used to surface as an unhandled stack
+  // trace, which reads as a crash rather than as the usage error it is.
+  if (existing === "directory") {
+    console.error(
+      `${TAG} ${outPath} is a DIRECTORY, not a contract file: refusing to write over it (--force ` +
+        `replaces a contract, not a directory). Pass --out <dir>/${DEFAULT_CONTRACT_FILENAME}, or ` +
+        "point --out at a different path.",
     );
     return 2;
   }
@@ -102,15 +123,26 @@ export async function runInit(args: InitArgs): Promise<number> {
   for (const note of result.notes) console.log(`${TAG} ${note}`);
   if (result.placeholders.length > 0) {
     console.log(
-      `${TAG} ${result.placeholders.length} field(s) still say "REPLACE ME" and are yours to write: ` +
-        `${result.placeholders.join(", ")}`,
+      `${TAG} ${result.placeholders.length} field(s) still say "${PLACEHOLDER_LABEL}" and are yours to ` +
+        `write: ${result.placeholders.join(", ")}. \`loombridge plan\` REFUSES a contract that still ` +
+        "carries any of them.",
     );
   }
   for (const warning of result.warnings) console.error(`${TAG} ${warning}`);
+  // The close has to match the genre it just scaffolded. Promising `partially-graded` for an id that
+  // resolves to a REGISTERED pack is the closing line contradicting the warning above it: coverage
+  // comes from the registry, so the claim is `graded` against the PACK's oracle, not this contract's.
   console.log(
-    `${TAG} next: edit the contract, then \`loombridge plan --brief ${path.dirname(outPath)}\` ` +
-      "(or `--genre-contract <path>`). It plans and builds like any genre and verifies as " +
-      "`partially-graded`, with its ungraded gaps enumerated on the verdict.",
+    result.registeredPack
+      ? `${TAG} next: fill in every "${PLACEHOLDER_LABEL}" field (\`plan\` REFUSES a contract that still ` +
+          `carries one), then \`loombridge plan --brief ${path.dirname(outPath)}\`. NOTE: because ` +
+          `"${args.genreId}" is a registered pack, that plan verifies as \`graded\` against the PACK's ` +
+          "feel and fidelity oracle: this file's own `fidelityCriteria` are not what it is graded on. " +
+          "Rename `genreId` to an unregistered id to have this contract govern its own grading."
+      : `${TAG} next: fill in every "${PLACEHOLDER_LABEL}" field (\`plan\` REFUSES a contract that still ` +
+          `carries one), then \`loombridge plan --brief ${path.dirname(outPath)}\` ` +
+          "(or `--genre-contract <path>`). It plans and builds like any genre and verifies as " +
+          "`partially-graded`, with its ungraded gaps enumerated on the verdict.",
   );
   return 0;
 }
@@ -189,17 +221,25 @@ function printUsage(): void {
       "                  doneness` refuses any build of this genre that has an approved Design",
       "                  Target, which is the hero-shot half of the verification moat.",
       "",
-      "Then: `loombridge plan --brief <dir>` (or `--genre-contract <file>`).",
-      "See Docs/Profiles/GenreContractAuthoring.md for the decisions the contract asks you to make.",
+      "Then: `loombridge plan --brief <dir>` (or `--genre-contract <file>`). `plan` REFUSES a",
+      `contract that still carries a "${PLACEHOLDER_LABEL}" field, so fill them in first.`,
+      "",
+      // The npm package ships `dist` + `src` and NOT `Docs/`, so pointing a consumer at a
+      // Docs/ path is a dangling reference on every machine that installed from npm. Point at the
+      // schema that DOES ship (it is the field-by-field reference) and at the repo for the prose.
+      "Reference: the JSON Schema shipped beside the code,",
+      `  ${path.relative(process.cwd(), GENRE_CONTRACT_SCHEMA_FILE)}`,
+      "Full authoring guide (repo only, not shipped in the npm package):",
+      "  https://github.com/Loomtide/loombridge/blob/main/Docs/Profiles/GenreContractAuthoring.md",
     ].join("\n"),
   );
 }
 
-async function pathExists(p: string): Promise<boolean> {
+/** What is at `p` today: a regular file, a directory, or nothing. */
+async function statKind(p: string): Promise<"file" | "directory" | "absent"> {
   try {
-    await fs.stat(p);
-    return true;
+    return (await fs.stat(p)).isDirectory() ? "directory" : "file";
   } catch {
-    return false;
+    return "absent";
   }
 }

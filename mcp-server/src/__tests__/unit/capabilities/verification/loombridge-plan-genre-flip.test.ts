@@ -256,6 +256,34 @@ test("plan: an ALREADY desynced project refuses on a bare re-plan, and is repair
   }
 });
 
+test("when the artifacts disagree, the refusal offers EVERY recorded genre, not an arbitrary one", async () => {
+  // The suggestion used to be `--genre "${staleGenres[0]}"`: one arbitrary pick from a list it had
+  // just printed as multiple. Following it re-runs at whichever genre happened to sort first, which
+  // is the same coin-flip the refusal exists to avoid making.
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "loombridge-genre-multi-"));
+  await markUnity(root);
+  try {
+    const paths = loombridgePaths(root);
+    await cliWithLog(["--root", root, "--genre", "platformer-2d", "--allow-missing-design-target"]);
+    // Two artifacts, two DIFFERENT recorded genres: ACCEPTANCE.json keeps its stamp, FEEL_SPEC.json
+    // is edited to another. This is the shape a partly-applied older flip leaves behind.
+    const feel = JSON.parse(await fs.readFile(paths.feelSpec, "utf-8")) as Record<string, unknown>;
+    feel.genre = "3d-topdown-arena";
+    await fs.writeFile(paths.feelSpec, `${JSON.stringify(feel, null, 2)}\n`, "utf-8");
+
+    const { code, err } = await cliWithLog([
+      "--root", root, "--genre", "3d-shooter", "--allow-missing-design-target",
+    ]);
+    assert.equal(code, 2, err);
+    assert.match(err, /planned as "platformer-2d", "3d-topdown-arena"/, "both recorded genres must be listed");
+    // …and BOTH must be offered as the keep-what-is-on-disk exit.
+    assert.match(err, /--genre "platformer-2d"/);
+    assert.match(err, /--genre "3d-topdown-arena"/);
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
 test("plan re-run at the SAME genre (and BARE, with no flags at all) stays frictionless", async () => {
   // The regression that would hurt most. `plan` is re-run constantly through the slice loop with no
   // flags; if the genre-change guard fired on an UNCHANGED genre, every one of those runs would
