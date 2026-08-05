@@ -33,10 +33,15 @@ so the two agents cannot drift.
    approved + frozen hero shot exists, then exits non-zero until `.loombridge/ASSET_MANIFEST.json`
    is approved. **You don't need a flag**; the exit code is the cue to run step 3 and 4 below.
    (`--force` re-seeds; `--allow-missing-design-target` is an escape hatch for early
-   scaffolding only — `build` will still block.) `--force` **together with a different
-   `--genre`** also rewrites `.loombridge/SLICES.json` from the new genre's roadmap, printing what
-   it replaced, and **refuses (exit 2) if any slice already carries an approval proof**: withdraw
-   those first with `loombridge reopen <slice-id>`.
+   scaffolding only — `build` will still block.)
+
+   **CHANGING the genre of a planned project needs `--force`.** A genre change re-seeds the whole
+   contract, so a `--genre` that disagrees with the contract already on disk **refuses (exit 2)**
+   rather than record the new genre in `STATE.md` beside the old genre's `ACCEPTANCE.json`. That
+   half-changed project still claims coverage `graded`, over gates it was never designed for. With
+   `--force` the flip also rewrites `.loombridge/SLICES.json` from the new genre's roadmap, printing
+   what it replaced. Either way it **refuses if any slice already carries an approval proof**:
+   withdraw those first with `loombridge reopen <slice-id>`.
 
    **ASK THE DEVELOPER WHEN UNCLEAR (agent layer — the CLI never prompts).** The CLI is
    deterministic: it auto-detects the engine (Unity via `ProjectSettings/ProjectVersion.txt`)

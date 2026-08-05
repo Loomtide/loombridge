@@ -1010,7 +1010,7 @@ function parseArgs(args: string[]): VerifyArgs | ParseHelp {
       const value = args[(i += 1)] ?? "";
       if (!(VERIFY_STAGES as readonly string[]).includes(value)) {
         console.error(`[loombridge verify] invalid --stage "${value}". Known: ${VERIFY_STAGES.join(", ")}.`);
-        return { help: true };
+        return { help: true, usageError: true };
       }
       stage = value as VerifyStage;
     } else if (arg === "--help" || arg === "-h") return { help: true };

@@ -138,6 +138,53 @@ function genreFromState(prev: LoombridgeState | null): string | undefined {
   return prev?.genre && prev.genre !== UNPLANNED_GENRE ? prev.genre : undefined;
 }
 
+/** The `genre` FEEL_SPEC.json declares, or `undefined` when it is absent/unreadable. */
+async function genreFromFeelSpec(paths: LoombridgePaths): Promise<string | undefined> {
+  try {
+    const spec = JSON.parse(await fs.readFile(paths.feelSpec, "utf-8")) as { genre?: unknown };
+    return typeof spec.genre === "string" && spec.genre.length > 0 ? spec.genre : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * The genres this project ALREADY records, read from the artifacts a run KEEPS rather than re-seeds.
+ *
+ * Deliberately not "STATE.genre" alone. The failure being detected is exactly a STATE that no longer
+ * agrees with the contract beside it, so the check has to read the contract from DISK; trusting
+ * STATE would make an already-desynced project invisible to its own guard.
+ *
+ * Which artifacts count depends on what a no-`--force` run rewrites:
+ *  - SLICES.json is NEVER rewritten without `--force` (it is written only in `mode === "design"`,
+ *    which an existing roadmap suppresses), so its genre always counts.
+ *  - FEEL_SPEC.json is rewritten only when ACCEPTANCE.json is (re)seeded, so it counts only while
+ *    an ACCEPTANCE.json is on disk to be kept. With none, everything is re-seeded and nothing is
+ *    stale, which is why a first `plan` in a fresh project reaches no refusal at all.
+ *  - STATE.md is the LAST resort, used only when no contract artifact declares a genre of its own
+ *    (a project seeded before FEEL_SPEC.json carried one). It is the file the desync CORRUPTS, so
+ *    letting it speak while the contract can speak for itself would let a rewritten STATE.md hide
+ *    the change from its own guard, and it would break the repair path, where re-running at the
+ *    genre the contract actually describes must be accepted and must rewrite STATE back.
+ */
+async function recordedContractGenres(
+  paths: LoombridgePaths,
+  prev: LoombridgeState | null,
+  existingPlan: SlicePlan | null,
+): Promise<string[]> {
+  const found: string[] = [];
+  if (existingPlan) found.push(existingPlan.genre);
+  if (await fileExists(paths.acceptance)) {
+    const feelGenre = await genreFromFeelSpec(paths);
+    if (feelGenre) found.push(feelGenre);
+    if (found.length === 0) {
+      const stateGenre = genreFromState(prev);
+      if (stateGenre) found.push(stateGenre);
+    }
+  }
+  return [...new Set(found)];
+}
+
 /**
  * REFUSE to guess the genre. Returns the refusal message, or `null` when the genre IS stated.
  *
@@ -556,26 +603,43 @@ export async function runPlan(args: PlanArgs): Promise<number> {
   const kept: string[] = [];
   const rel = (p: string) => path.relative(args.root, p);
 
-  // ── `--force` across a GENRE CHANGE: the roadmap moves with the contract ────────────────────────
-  // `--force` re-seeds ACCEPTANCE.json + FEEL_SPEC.json from the new genre, but on the non-promoted
-  // path SLICES.json is only written in `mode === "design"`, which an existing roadmap suppresses.
-  // A genre flip therefore left a stale slice DAG still DECLARING the old genre, and the
-  // disagreement surfaced much later as a `doneness` roll-up refusal about a genre mismatch: a
-  // half-changed project that looks changed.
+  // ── a GENRE CHANGE moves the WHOLE contract, or it does not happen at all ───────────────────────
+  // One detection point and one policy for both halves of the same failure, so they cannot drift.
   //
-  // Rewrite it, LOUDLY. The exception is a slice that already carries human sign-off: replacing
-  // that would make a genre flip the cheap way to erase an approval. Refuse instead, and name the
-  // sanctioned withdrawal (`loombridge reopen`), which records the event and cascades.
+  // WITHOUT `--force` nothing under `.loombridge/` is re-seeded, so a flip wrote the NEW genre into
+  // STATE.md and left the OLD genre's ACCEPTANCE.json, FEEL_SPEC.json and SLICES.json exactly where
+  // they were. Observed live: `plan --genre 3d-shooter` on a project planned as platformer-2d
+  // printed no genre notice at all, kept `win.rule: "all-fruit"` in the contract, and recorded
+  // `Genre: 3d-shooter` in STATE. Because the new genre resolves to a REGISTERED pack, coverage
+  // still stamps `graded`: a second route to the wrong `graded` claim `unstatedGenreRefusal`
+  // exists to close, this time with the project graded against another genre's gates.
+  //
+  // REFUSE it rather than apply it. Applying the flip silently would let one mistyped flag destroy
+  // a contract and a roadmap the developer has been building against for hours, and `plan` is
+  // re-run constantly with no flags at all. `--force` is already the "overwrite existing seeded
+  // files" flag and already carries the approval-proof rule below, so the refusal points there
+  // instead of inventing a second policy.
+  //
+  // WITH `--force` the contract IS re-seeded, but on the non-promoted path SLICES.json is written
+  // only in `mode === "design"`, which an existing roadmap suppresses. That left a stale slice DAG
+  // still DECLARING the old genre, surfacing much later as a `doneness` roll-up refusal about a
+  // genre mismatch: a half-changed project that looks changed. Rewrite it, LOUDLY.
+  //
+  // Either way, a slice carrying human sign-off REFUSES: an approval is evidence, and a genre flip
+  // must never become the cheap way to erase one. `loombridge reopen` is the sanctioned withdrawal.
   const existingPlan = await readSlicePlan(paths);
-  if (existingPlan && existingPlan.genre !== genre && args.force) {
-    const signed = existingPlan.slices
-      .map((slice) => ({ id: slice.id, evidence: sliceApprovalEvidence(slice) }))
-      .filter((s) => s.evidence.length > 0);
+  const staleGenres = (await recordedContractGenres(paths, prev, existingPlan)).filter((g) => g !== genre);
+  if (staleGenres.length > 0) {
+    const roadmapMoves = existingPlan !== null && existingPlan.genre !== genre;
+    const signed = roadmapMoves
+      ? existingPlan.slices
+          .map((slice) => ({ id: slice.id, evidence: sliceApprovalEvidence(slice) }))
+          .filter((s) => s.evidence.length > 0)
+      : [];
     if (signed.length > 0) {
       console.error(
-        `[loombridge plan] NOT ready: --force would change the genre from "${existingPlan.genre}" to ` +
-          `"${genre}", which rewrites ${rel(paths.slices)}, but ${signed.length} slice(s) carry an ` +
-          "approval proof:",
+        `[loombridge plan] NOT ready: changing the genre from "${existingPlan!.genre}" to "${genre}" ` +
+          `rewrites ${rel(paths.slices)}, but ${signed.length} slice(s) carry an approval proof:`,
       );
       for (const s of signed) console.error(`[loombridge plan]   ${s.id}: ${s.evidence.join(", ")}`);
       console.error(
@@ -585,14 +649,29 @@ export async function runPlan(args: PlanArgs): Promise<number> {
       );
       return 2;
     }
+    if (!args.force) {
+      console.error(
+        `[loombridge plan] NOT ready: this project is planned as "${staleGenres.join('", "')}" and this ` +
+          `run resolves the genre to "${genre}". Without --force nothing is re-seeded, so STATE.md ` +
+          `would claim "${genre}" while ${rel(paths.acceptance)}, ${rel(paths.feelSpec)} and ` +
+          `${rel(paths.slices)} still describe the old genre. A registered genre still stamps ` +
+          "coverage `graded`, so the build would be graded against gates it was never designed for.",
+      );
+      console.error(
+        `[loombridge plan] Re-run with --force to re-seed the whole contract for "${genre}" (all build ` +
+          `state on the old slices is discarded), or with --genre "${staleGenres[0]}" to keep the ` +
+          "contract already on disk.",
+      );
+      return 2;
+    }
     // The promoted path writes its own SLICES.json from the contract below, so rewriting from a pack
     // template here would be overwritten a moment later by a better answer.
-    if (!promoted) {
+    if (roadmapMoves && !promoted) {
       const rebuilt = instantiateSlicePlan(await loadSliceTemplate(genre));
       await writeSlicePlan(paths, rebuilt);
       console.error(
         `[loombridge plan] REWROTE ${rel(paths.slices)}: the roadmap declared genre ` +
-          `"${existingPlan.genre}" and --force re-seeds "${genre}". ${existingPlan.slices.length} ` +
+          `"${existingPlan!.genre}" and --force re-seeds "${genre}". ${existingPlan!.slices.length} ` +
           `slice(s) replaced with ${rebuilt.slices.length} from the "${genre}" roadmap; all build ` +
           "state on the old slices is discarded.",
       );
@@ -984,7 +1063,16 @@ export async function runPlan(args: PlanArgs): Promise<number> {
  */
 type ParsedArgs = Omit<PlanArgs, "engine"> & { engine?: string };
 
-function parseArgs(args: string[]): ParsedArgs | { help: true } {
+/**
+ * A `--help`/parse outcome. `usageError` exits 2; a bare `help` exits 0.
+ *
+ * Same discriminator `update`/`verify`/`status` already carry, for the same reason: a malformed
+ * invocation that reports SUCCESS is a refusal that does not look like one, and a CI step or an
+ * agent branching on `$?` reads it as a pass.
+ */
+type ParseHelp = { help: true; usageError?: boolean };
+
+function parseArgs(args: string[]): ParsedArgs | ParseHelp {
   // The registry default is the SEED value only. The genre literal lives in the registry (the one
   // genre-wiring point), not here, so this core stays genre-neutral. With more than one pack
   // registered this value is never reached: `run` refuses first (see `unstatedGenreRefusal`), and
@@ -1021,14 +1109,14 @@ function parseArgs(args: string[]): ParsedArgs | { help: true } {
       const value = args[(i += 1)];
       if (!value || !ASSET_MANIFEST_MODES.has(value as AssetManifestMode)) {
         console.error("[loombridge plan] --asset-mode must be registry, generated, or hybrid.");
-        return { help: true };
+        return { help: true, usageError: true };
       }
       assetMode = value as AssetManifestMode;
     }
     else if (arg === "--help" || arg === "-h") return { help: true };
     else {
       console.error(`[loombridge plan] unknown argument "${arg}".`);
-      return { help: true };
+      return { help: true, usageError: true };
     }
   }
   return { root, genre, genreExplicit, engine, name, genreContractPath, briefPath, force, allowMissingDesignTarget, go, note, signoffPath, assetMode };
@@ -1101,7 +1189,10 @@ function printUsage(): void {
       "                  Resolves to the interview-equivalent GenreContract and",
       "                  promotes it exactly like --genre-contract.",
       "  --root <dir>    Project root (default: cwd)",
-      "  --force         Overwrite existing seeded files",
+      "  --force         Overwrite existing seeded files. REQUIRED to change the genre of an",
+      "                  already-planned project: without it a --genre that disagrees with the",
+      "                  contract on disk refuses, rather than record the new genre in STATE.md",
+      "                  beside the old genre's contract.",
       "  --asset-mode <registry|generated|hybrid>",
       "                  Record the developer-approved asset strategy as a draft",
       "                  .loombridge/ASSET_MANIFEST.json. Roadmap scaffolding still",
@@ -1126,7 +1217,7 @@ export async function run(args: string[]): Promise<number> {
   const parsed = parseArgs(args);
   if ("help" in parsed) {
     printUsage();
-    return 0;
+    return parsed.usageError ? 2 : 0;
   }
   // Resolve the engine (explicit override, else auto-detect) BEFORE building the
   // PlanArgs `runPlan` consumes — keeping `runPlan` engine-resolved + unchanged.

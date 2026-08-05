@@ -382,7 +382,10 @@ function hasApprovedDependent(plan: SlicePlan, sliceId: string): boolean {
   return plan.slices.some((entry) => entry.state === "approved" && entry.id !== sliceId && dependsTransitively(entry.id));
 }
 
-function parseArgs(args: string[]): BuildArgs | { help: true } {
+/** A `--help`/parse outcome. `usageError` exits 2; a bare `help` exits 0. See `update`/`verify`. */
+type ParseHelp = { help: true; usageError?: boolean };
+
+function parseArgs(args: string[]): BuildArgs | ParseHelp {
   let root = process.cwd();
   let allowUngroundedPrototype = false;
   const intentParts: string[] = [];
@@ -394,7 +397,7 @@ function parseArgs(args: string[]): BuildArgs | { help: true } {
     else if (arg === "--help" || arg === "-h") return { help: true };
     else if (arg.startsWith("--")) {
       console.error(`[loombridge build] unknown option "${arg}".`);
-      return { help: true };
+      return { help: true, usageError: true };
     } else {
       intentParts.push(arg);
     }
@@ -435,7 +438,7 @@ export async function run(args: string[]): Promise<number> {
   const parsed = parseArgs(args);
   if ("help" in parsed) {
     printUsage();
-    return 0;
+    return parsed.usageError ? 2 : 0;
   }
   try {
     return await runBuild(parsed);
