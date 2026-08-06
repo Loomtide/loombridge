@@ -43,8 +43,10 @@ create-loombridge-game/
    for the git-URL / scoped-registry / vendored options). `git` must be on PATH
    for the editor to resolve a git-URL dependency.
 
-3. **Install the CLI** so the `loombridge` / `loombridge-mcp` bins are available (the
-   `.mcp.json` here invokes `loombridge-mcp`). Per `Docs/Install.md`:
+3. **Install the CLI** so the `loombridge` bin is available (the `.mcp.json` here
+   invokes `loombridge mcp`, the exact entry `loombridge setup` / `install-mcp`
+   writes, so re-running either over this template is a no-op rather than a
+   refusal). Per `Docs/Install.md`:
 
    ```bash
    npm install -g loombridge
@@ -52,6 +54,9 @@ create-loombridge-game/
 
    If you prefer not to install globally, switch `.mcp.json`'s server command to
    the npx form: `"command": "npx", "args": ["-y", "-p", "loombridge", "loombridge-mcp"]`.
+   That entry is then YOURS: `loombridge install-mcp` (and `loombridge setup`)
+   refuse to overwrite an entry Loombridge did not write, and exit 2 rather than
+   replacing your choice. Keep it, or delete the entry to let Loombridge own it.
 
 4. **Open the project in Unity** and wait for the `[Loombridge] Published
    endpoint discovery` console log (the bridge compiled + connected).

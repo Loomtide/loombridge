@@ -21,9 +21,11 @@ import test, { after, describe } from "node:test";
 import {
   MCP_CONFIG_RELPATH,
   MCP_SERVER_KEY,
+  SUPERSEDED_SERVER_ENTRIES,
   canonicalJson,
   desiredServerEntry,
   entrySha,
+  isLoombridgeAuthoredEntry,
   resolveMcpConfigPath,
   runInstallMcp,
 } from "../../../../capabilities/setup/install-mcp.js";
@@ -303,6 +305,70 @@ describe("install-mcp: idempotence and ownership across upgrades", () => {
     assert.equal(code, 0);
     assert.equal(existsSync(configPath(project)), false, "--dry-run must not create the config");
     assert.equal(readInstallMetadata(project)?.mcpRegistration, undefined, "nor the ledger entry");
+  });
+});
+
+describe("install-mcp: entries Loombridge itself has shipped", () => {
+  test("a shape from our OWN scaffold is upgraded in place, not refused", () => {
+    // The defect: our project template wrote `loombridge-mcp` + [] while this verb writes
+    // `loombridge` + ["mcp"], so `setup` on a project scaffolded from it exited 2 and told
+    // the developer their config was theirs. The template is now canonical; this set is what
+    // rescues the projects already on disk, which no template edit can reach.
+    for (const shipped of SUPERSEDED_SERVER_ENTRIES) {
+      const project = unityProjectDir();
+      writeFileSync(configPath(project), `${JSON.stringify({ mcpServers: { loombridge: shipped } }, null, 2)}\n`);
+
+      assert.equal(install(project), 0, `a shape we shipped must not be refused: ${canonicalJson(shipped)}`);
+      const after = readConfig(project) as { mcpServers: Record<string, unknown> };
+      assert.deepEqual(after.mcpServers[MCP_SERVER_KEY], desiredServerEntry(), "it is ours, so it is ours to upgrade");
+      // Upgrading it means CLAIMING it: the ledger must now say we wrote these bytes, or the
+      // next run would read its own write as a hand edit and start refusing.
+      assert.equal(readInstallMetadata(project)?.mcpRegistration?.entrySha256, entrySha(desiredServerEntry()));
+    }
+  });
+
+  test("REFUSAL: a NEAR MISS of a shipped shape is still the developer's", () => {
+    // The set matches exact bytes by sha. A heuristic ("the command mentions loombridge")
+    // would adopt every one of these and defeat the guard the verb exists for.
+    const nearMisses = [
+      { type: "stdio", command: "loombridge-mcp", args: ["--port", "9999"] },
+      { type: "stdio", command: "/opt/custom/loombridge-mcp", args: [] },
+      { command: "npx", args: ["-y", "-p", "loombridge", "loombridge-mcp"] },
+    ];
+    for (const theirs of nearMisses) {
+      const project = unityProjectDir();
+      const bytes = `${JSON.stringify({ mcpServers: { loombridge: theirs } }, null, 2)}\n`;
+      writeFileSync(configPath(project), bytes);
+
+      assert.equal(quietly(() => runInstallMcp({ project, dryRun: false })), 2, `must refuse: ${canonicalJson(theirs)}`);
+      assert.equal(readFileSync(configPath(project), "utf8"), bytes, "not one byte may change");
+      assert.equal(readInstallMetadata(project)?.mcpRegistration, undefined, "and nothing may be claimed");
+    }
+  });
+
+  test("the shipped set is disjoint from the current entry, and no set member is empty", () => {
+    // A superseded shape that equalled the desired one would make the "already correct" branch
+    // and the "ours to upgrade" branch disagree about the same bytes; an empty/degenerate entry
+    // would adopt `{}`, which any tool could have left behind.
+    for (const shipped of SUPERSEDED_SERVER_ENTRIES) {
+      assert.notEqual(entrySha(shipped), entrySha(desiredServerEntry()), "a superseded shape is not the current one");
+      assert.ok(
+        typeof (shipped as { command?: unknown }).command === "string",
+        "every shipped shape must name a launch command",
+      );
+      assert.equal(isLoombridgeAuthoredEntry(shipped, undefined), true, "and must be recognised with NO ledger at all");
+    }
+  });
+
+  test("the ownership predicate is the one thing that decides, for install-mcp and for doctor", () => {
+    const ours = desiredServerEntry();
+    assert.equal(isLoombridgeAuthoredEntry(ours, entrySha(ours)), true, "the ledger proves ownership");
+    assert.equal(isLoombridgeAuthoredEntry(ours, undefined), false, "an unrecorded entry is NOT claimed by shape alone");
+    assert.equal(
+      isLoombridgeAuthoredEntry({ command: "/opt/custom/loombridge", args: ["mcp"] }, entrySha(ours)),
+      false,
+      "a ledger sha that does not match the bytes on disk proves nothing",
+    );
   });
 });
 

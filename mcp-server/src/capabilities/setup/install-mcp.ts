@@ -12,7 +12,9 @@
  *   - MERGE, never clobber. Other servers and other top-level keys are preserved verbatim.
  *   - A `loombridge` entry Loombridge did not write is REFUSED, never overwritten. Ownership
  *     is proven by a sha in `ProjectSettings/LoombridgeInstall.json`, the same hand-edit-safe
- *     ledger discipline `install-agent` uses for its managed files.
+ *     ledger discipline `install-agent` uses for its managed files, or by the entry matching
+ *     a shape Loombridge itself has shipped (see SUPERSEDED_SERVER_ENTRIES: our own project
+ *     template wrote one, and a project scaffolded from it must not be refused by us).
  *   - Malformed JSON is a REFUSAL, not a reason to start fresh: rewriting a file we could not
  *     parse would discard configuration we never read.
  *   - Nothing is ever written outside the project root.
@@ -55,6 +57,53 @@ export const MCP_SERVER_KEY = "loombridge";
  */
 export function desiredServerEntry(): Record<string, unknown> {
   return { command: "loombridge", args: ["mcp"] };
+}
+
+/**
+ * Entries LOOMBRIDGE ITSELF has shipped for this key, other than the current one. An entry
+ * whose bytes are exactly one of these was authored by our own scaffold, not by a developer,
+ * so it is upgraded in place rather than refused.
+ *
+ * The failure this closes: `templates/create-loombridge-game/.mcp.json` shipped
+ * `loombridge-mcp` + `[]` while this verb writes `loombridge` + `["mcp"]`, so
+ * `loombridge setup` on a project scaffolded from our OWN template hit the foreign-entry
+ * refusal and exited 2, telling the developer their config was theirs. The template is now
+ * the canonical entry (bound by distribution-metadata.test.ts), and this set is what rescues
+ * the projects already scaffolded from the old one, which no template edit can reach.
+ *
+ * Rewriting the old shape is behaviour-preserving, not a preference being overridden:
+ * `loombridge-mcp` and `loombridge` are two bins of the SAME npm package pointing at the same
+ * stdio server, so a machine that can launch one can launch the other.
+ *
+ * A CLOSED SET OF EXACT ENTRIES, matched by sha over canonical JSON, is the whole point. A
+ * heuristic ("the command mentions loombridge") would adopt `/opt/custom/loombridge --port
+ * 9999` and defeat the guard this verb exists for. Deliberately NOT listed: the npx form the
+ * template README offers (`npx -y -p loombridge …`). Choosing npx is a statement about how
+ * the binary is reachable on that machine, and rewriting it to a bare `loombridge` would
+ * break a developer who has no global install.
+ */
+export const SUPERSEDED_SERVER_ENTRIES: readonly Record<string, unknown>[] = [
+  // templates/create-loombridge-game/.mcp.json, as shipped before it was reconciled with
+  // this verb. `type: "stdio"` included: the set matches EXACT bytes, so the entry has to be
+  // listed exactly as the template wrote it.
+  { type: "stdio", command: "loombridge-mcp", args: [] },
+];
+
+/** Canonical shas of {@link SUPERSEDED_SERVER_ENTRIES}, computed once. */
+const supersededShas = new Set(SUPERSEDED_SERVER_ENTRIES.map((entry) => entrySha(entry)));
+
+/**
+ * Did LOOMBRIDGE author the entry on disk? Two proofs, and only two: the ledger says we wrote
+ * exactly these bytes, or the bytes are exactly a shape we have shipped ourselves.
+ *
+ * Exported because `doctor` grades the same entry: sharing the predicate is what stops doctor
+ * from advising `install-mcp` on an entry install-mcp would refuse, or calling an upgradable
+ * entry the developer's.
+ */
+export function isLoombridgeAuthoredEntry(entry: unknown, ledgerSha: string | undefined): boolean {
+  const onDiskSha = entrySha(entry);
+  if (ledgerSha !== undefined && onDiskSha === ledgerSha) return true;
+  return supersededShas.has(onDiskSha);
 }
 
 /**
@@ -176,7 +225,7 @@ export function installMcp(args: InstallMcpArgs): InstallMcpResult {
   if (existing !== undefined) {
     const onDiskSha = entrySha(existing);
     const ledgerSha = meta?.mcpRegistration?.entrySha256;
-    const ours = ledgerSha !== undefined && onDiskSha === ledgerSha;
+    const ours = isLoombridgeAuthoredEntry(existing, ledgerSha);
     if (onDiskSha === desiredSha) {
       // Already exactly what we would write. No bytes change either way, so there is
       // nothing to refuse, and nothing to claim: an entry we did not write stays

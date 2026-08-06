@@ -104,6 +104,34 @@ Because Loombridge should own its entry across upgrades but nothing else, record
 written in the same `ProjectSettings/LoombridgeInstall.json` ledger the agent surface uses, so a
 later `setup` can tell "we wrote this" from "a human wrote this".
 
+**The ledger is not the only proof of authorship, because Loombridge writes `.mcp.json` from two
+places.** `templates/create-loombridge-game/.mcp.json` shipped `loombridge-mcp` + `[]` while
+`install-mcp` writes `loombridge` + `["mcp"]`, so `setup` on a project scaffolded from our own
+template hit the foreign-entry refusal and exited 2, telling the developer their config was
+theirs. The guard was right; the inputs disagreed. Two fixes, closing two different holes: the
+template becomes the canonical entry (bound to `desiredServerEntry()` by a test, so the two can
+never describe different servers again), and `install-mcp` carries a CLOSED SET of entry shapes
+Loombridge has itself shipped, which it upgrades in place. The set exists for the projects
+already scaffolded from the old template, which no template edit can reach. It matches exact
+bytes by sha, never a heuristic on the command name: "the command mentions loombridge" would
+adopt `/opt/custom/loombridge --port 9999` and defeat the guard.
+
+### `doctor` must grade the MCP registration too
+
+Step 6 closes on evidence, so it has to have evidence about the step `setup` just performed.
+Grade the registration by RE-DERIVING it from `.mcp.json` on disk and only then comparing to the
+ledger, never by reporting the ledger back: `mcpRegistration: { state: "enabled" }` proves
+nothing once the developer has deleted the file or rewritten the entry, the same reason the
+tarball sha and the routing doc are recomputed at read.
+
+Absent is a **warn**, not a fail and not an info: an agent cannot drive Unity without it, so it
+is not as optional as the slash commands, but a developer who only ever runs the deterministic
+CLI never needs it, and doctor's exit code says whether the install is BROKEN. Malformed JSON is
+a **fail**: `install-mcp` refuses to rewrite a file it could not parse, so only doctor can tell
+the developer to fix it by hand. A hand-edited entry is **info**, reported as the developer's
+rather than as damage, matching what `install-agent` does with a managed file whose bytes have
+changed.
+
 ## Independent verbs stay
 
 `install-bridge`, `install-agent`, `doctor`, and `update` keep working and keep their help.
