@@ -291,6 +291,112 @@ describe("loombridge install-bridge + doctor (Phase 2)", { timeout: 60000 }, () 
     assert.match(r.stdout, /⚠ Agent routing.*cannot be read as a file/s);
   });
 
+  // --- MCP registration (.mcp.json) ---
+  //
+  // `setup`'s closing health check re-derived the bridge, the tarball, the routing doc, and
+  // the agent surface from disk, and said NOTHING about the one step setup had just
+  // performed: the MCP registration. The `mcpRegistration` ledger entry was believed rather
+  // than checked, against this repo's own rule that integrity is recomputed at read. Every
+  // row below is graded from `.mcp.json` ON DISK.
+
+  const mcpPath = (project: string) => path.join(project, ".mcp.json");
+
+  /** A wired project: bridge + MCP, exactly what `loombridge setup` leaves behind. */
+  async function wiredProject(name: string): Promise<string> {
+    const project = await makeProject(name);
+    assert.equal(cli(["install-bridge", "--project", project]).status, 0);
+    assert.equal(cli(["install-mcp", "--project", project]).status, 0);
+    return project;
+  }
+
+  test("doctor: registered by install-mcp → pass row", async () => {
+    const project = await wiredProject("mcp-doctor-ok");
+    const r = cli(["doctor", "--project", project]);
+    assert.equal(r.status, 0, r.stdout + r.stderr);
+    assert.match(r.stdout, /✓ MCP registration \(\.mcp\.json\): "loombridge": \{"args":\["mcp"\],"command":"loombridge"\}/);
+  });
+
+  test("doctor: no .mcp.json → warn (not a fail) with the install-mcp remediation", async () => {
+    // WARN, not FAIL: an agent cannot drive Unity without it, but a developer using only the
+    // deterministic CLI never needs it, and doctor's exit code says whether the install is
+    // BROKEN. Same grade as a missing routing doc.
+    const project = await makeProject("mcp-doctor-absent");
+    assert.equal(cli(["install-bridge", "--project", project]).status, 0);
+    const r = cli(["doctor", "--project", project]);
+    assert.equal(r.status, 0, "a missing registration is a warning, not a failure");
+    assert.match(r.stdout, /⚠ MCP registration.*no \.mcp\.json/s);
+    assert.match(r.stdout, /loombridge install-mcp --project/);
+  });
+
+  test("doctor: a .mcp.json with other servers but no loombridge entry → warn", async () => {
+    const project = await makeProject("mcp-doctor-nokey");
+    assert.equal(cli(["install-bridge", "--project", project]).status, 0);
+    await fsp.writeFile(mcpPath(project), `${JSON.stringify({ mcpServers: { github: { command: "gh-mcp" } } }, null, 2)}\n`);
+    const r = cli(["doctor", "--project", project]);
+    assert.equal(r.status, 0);
+    assert.match(r.stdout, /⚠ MCP registration.*no "loombridge" server/s);
+    assert.match(r.stdout, /loombridge install-mcp --project/);
+  });
+
+  test("doctor: a hand-edited entry is reported as the DEVELOPER'S, not as broken", async () => {
+    // Matches install-agent's stance toward a managed file whose bytes changed: it is theirs,
+    // it is left alone, and doctor does not nag about it.
+    const project = await wiredProject("mcp-doctor-handedit");
+    await fsp.writeFile(
+      mcpPath(project),
+      `${JSON.stringify({ mcpServers: { loombridge: { command: "loombridge", args: ["mcp", "--verbose"] } } }, null, 2)}\n`,
+    );
+    const r = cli(["doctor", "--project", project]);
+    assert.equal(r.status, 0, "a hand edit is not a broken install");
+    assert.match(r.stdout, /MCP registration.*left as authored/s);
+    assert.doesNotMatch(r.stdout, /⚠ MCP registration/, "and it is not nagged at either");
+  });
+
+  test("doctor: an entry LOOMBRIDGE shipped but no longer writes → warn with the upgrade", async () => {
+    // The old `templates/create-loombridge-game/.mcp.json` shape. install-mcp will upgrade it
+    // in place, so doctor must say so rather than call it the developer's.
+    const project = await wiredProject("mcp-doctor-superseded");
+    await fsp.writeFile(
+      mcpPath(project),
+      `${JSON.stringify({ mcpServers: { loombridge: { type: "stdio", command: "loombridge-mcp", args: [] } } }, null, 2)}\n`,
+    );
+    const r = cli(["doctor", "--project", project]);
+    assert.equal(r.status, 0);
+    assert.match(r.stdout, /⚠ MCP registration.*this CLI writes/s);
+    assert.match(r.stdout, /loombridge install-mcp --project/);
+  });
+
+  test("doctor: malformed .mcp.json → FAIL, never a silent pass", async () => {
+    // install-mcp refuses to rewrite a file it could not parse, so the developer has to fix it
+    // by hand, which they will only do if doctor says so. A check that cannot run must be loud.
+    const project = await wiredProject("mcp-doctor-malformed");
+    await fsp.writeFile(mcpPath(project), '{ "mcpServers": { "loombridge": }  // junk\n');
+    const r = cli(["doctor", "--project", project]);
+    assert.equal(r.status, 1, "an unreadable config is a failure, not a missing row");
+    assert.match(r.stdout, /✗ MCP registration.*not valid JSON/s);
+  });
+
+  test("doctor --ci carries the MCP row in the JSON report", async () => {
+    const project = await wiredProject("mcp-doctor-ci");
+    const r = cli(["doctor", "--project", project, "--ci"]);
+    assert.equal(r.status, 0, r.stderr);
+    const report = JSON.parse(r.stdout) as { checks: { id: string; status: string }[] };
+    const row = report.checks.find((c) => c.id === "mcp.registration");
+    assert.ok(row, "the --ci report is what pipelines read; a row missing there is a row that does not exist");
+    assert.equal(row!.status, "pass");
+  });
+
+  test("doctor: the MCP row survives a project with NO bridge install", async () => {
+    // The registration does not depend on the bridge, and a row that vanishes when a
+    // neighbouring check fails reads exactly like a row that passed.
+    const project = await makeProject("mcp-doctor-nobridge");
+    assert.equal(cli(["install-mcp", "--project", project]).status, 0);
+    const r = cli(["doctor", "--project", project, "--ci"]);
+    assert.equal(r.status, 1, "the missing bridge still fails the run");
+    const report = JSON.parse(r.stdout) as { checks: { id: string; status: string }[] };
+    assert.equal(report.checks.find((c) => c.id === "mcp.registration")?.status, "pass");
+  });
+
   // --- doctor ---
 
   test("doctor: healthy after install → exit 0", async () => {

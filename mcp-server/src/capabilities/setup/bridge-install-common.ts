@@ -64,6 +64,26 @@ export interface AgentSurfaceRecord {
   files: AgentSurfaceFile[];
 }
 
+/**
+ * What `install-mcp` wrote into the project's `.mcp.json`, so a later run can tell "we wrote
+ * this" from "a human wrote this" and refuse to overwrite the second.
+ *
+ * `entrySha256` covers ONLY the `mcpServers.loombridge` entry (canonical JSON, keys sorted),
+ * never the whole file: other tooling legitimately adds servers to `.mcp.json`, and a
+ * whole-file hash would read every unrelated addition as a hand edit and refuse from then on.
+ */
+export interface McpRegistrationRecord {
+  state: "enabled";
+  cliVersion: string;
+  installedAt: string;
+  /** Project-relative POSIX path of the config that was written (`.mcp.json` today). */
+  path: string;
+  /** The key inside `mcpServers` Loombridge owns. */
+  serverKey: string;
+  /** sha256 over the canonical JSON of the entry written for `serverKey`. */
+  entrySha256: string;
+}
+
 /** The record written to `<project>/ProjectSettings/LoombridgeInstall.json`. */
 export interface InstallMetadata {
   schemaVersion: number;
@@ -85,6 +105,8 @@ export interface InstallMetadata {
   routingDoc?: RoutingDocRecord;
   /** Optional agent surface preference + ledger (see AgentSurfaceRecord). */
   agentSurface?: AgentSurfaceRecord;
+  /** What `install-mcp` wrote into `.mcp.json` (see McpRegistrationRecord). */
+  mcpRegistration?: McpRegistrationRecord;
 }
 
 export const METADATA_RELPATH = path.join("ProjectSettings", "LoombridgeInstall.json");

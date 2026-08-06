@@ -57,8 +57,11 @@ Corollaries the repo already enforces and this doc makes official:
 The public story presents exactly three groups. Everything else still works but leaves the
 headline docs.
 
-1. **Setup:** `install-bridge`, `install-agent`, `doctor`, `update`, `mcp`. Wire in,
-   health-check, connect an agent.
+1. **Setup:** `setup`, `install-bridge`, `install-mcp`, `install-agent`, `doctor`, `update`,
+   `mcp`. Wire in, health-check, connect an agent. `setup` is the front door (one command from
+   a fresh Unity project to a wired one, per [OneCommandSetup.md](OneCommandSetup.md)); it
+   composes the individual verbs, which stay in the group because a developer who wants one
+   step should find it here rather than in the reference list.
 2. **Verify:** the anchor makers (`trace`, `feel snapshot`, `target`), the gates today
    (`trace replay`, `verify`, `verify --snapshot`), and `doneness`, the strict certificate
    for supervised builds. The end state is ONE front door, a bare `verify` that discovers a

@@ -5,7 +5,8 @@
  * Offline (always): CLI build stamp, Node version, the CLI-bundled bridge tarball.
  * With `--project`: the install metadata (`LoombridgeInstall.json`), the manifest
  * `file:` dependency, the dropped tarball's presence + sha integrity, drift of the
- * installed bridge vs the CLI-bundled bridge, and the expected protocol.
+ * installed bridge vs the CLI-bundled bridge, the expected protocol, and the MCP
+ * registration in `.mcp.json`.
  * With `--live` (and `--project`): connects to the running Unity bridge and runs
  * the SAME protocol preflight (`evaluatePrerequisiteChecks`) the capture path uses.
  *
@@ -32,6 +33,14 @@ import {
   readTarballVersion,
   sha256File,
 } from "./bridge-install-common.js";
+import {
+  MCP_CONFIG_RELPATH,
+  MCP_SERVER_KEY,
+  canonicalJson,
+  desiredServerEntry,
+  entrySha,
+  isLoombridgeAuthoredEntry,
+} from "./install-mcp.js";
 import { ROUTING_DOC_RELPATH, ROUTING_DOC_VERSION, parseRoutingDocVersion } from "./routing-doc.js";
 
 type CheckStatus = "pass" | "warn" | "fail" | "info";
@@ -195,6 +204,9 @@ function checkProjectWiring(
       detail: `no bridge in ${METADATA_RELPATH} — bridge not installed by Loombridge`,
       remediation: installCmd,
     });
+    // The MCP registration does not depend on the bridge install, and a row that vanishes
+    // when a NEIGHBOURING check fails reads exactly like a row that passed.
+    checkMcpRegistration(project, meta, checks);
     // Still surface the OPTIONAL agent-surface state if a record exists (install-agent may
     // have run first) — but never as a green bridge row.
     if (meta) checkAgentSurface(project, meta, checks);
@@ -238,6 +250,9 @@ function checkProjectWiring(
 
   // The agent-routing front door (LOOMBRIDGE.md) — present + our marker + current = healthy.
   checkRoutingDoc(project, checks, installCmd);
+
+  // The MCP registration (.mcp.json): the step that connects an agent to Unity at all.
+  checkMcpRegistration(project, meta, checks);
 
   // The OPTIONAL agent surface (commands + skills). Absence/decline is NEVER a failure.
   checkAgentSurface(project, meta, checks);
@@ -334,6 +349,103 @@ function checkRoutingDoc(project: string, checks: DoctorCheck[], installCmd: str
     status: "pass",
     detail: `v${onDisk}`,
   });
+}
+
+/** A plain JSON object (not an array, not null): the only shape `.mcp.json` may take. */
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/**
+ * The MCP registration in `.mcp.json`, the step that actually connects an agent to Unity,
+ * and the one thing `setup` performs that nothing here used to grade.
+ *
+ * DELIBERATELY re-derived from the file ON DISK, then compared to the ledger, never reported
+ * FROM the ledger. `mcpRegistration: { state: "enabled" }` proves nothing once the developer
+ * has deleted `.mcp.json` or rewritten the entry, the same reason the tarball sha and the
+ * routing doc are recomputed at read.
+ *
+ * WHY A MISSING REGISTRATION IS A WARN, not a fail and not an info. An agent cannot drive
+ * Unity without it, so it is not as optional as the slash commands (info, never a nag). But a
+ * developer who only ever runs the deterministic CLI never needs it, and doctor's exit code
+ * is the verdict on whether the install is BROKEN. Missing therefore grades exactly like a
+ * missing routing doc: loud, remediated, and not a failed install.
+ *
+ *   absent file / no `loombridge` key       → warn  + install-mcp
+ *   unreadable, malformed, or not a config  → fail  (a check that cannot run must be loud)
+ *   entry == what this CLI would write      → pass
+ *   ours (ledger or a shape we shipped)     → warn  + install-mcp will upgrade it in place
+ *   anything else                           → info  left as authored; the entry is theirs
+ *
+ * Ownership is decided by install-mcp's OWN predicate, never by a second copy of the rule
+ * here: doctor must not advise `install-mcp` on an entry install-mcp would refuse, nor call
+ * an entry the developer's that install-mcp is about to rewrite.
+ */
+function checkMcpRegistration(project: string, meta: InstallMetadata | null, checks: DoctorCheck[]): void {
+  const push = (status: CheckStatus, detail: string, remediation?: string) =>
+    checks.push({ id: "mcp.registration", label: `MCP registration (${MCP_CONFIG_RELPATH})`, status, detail, remediation });
+  const installCmd = `loombridge install-mcp --project ${project}`;
+
+  const configPath = path.join(project, MCP_CONFIG_RELPATH);
+  if (!existsSync(configPath)) {
+    push("warn", `no ${MCP_CONFIG_RELPATH}: no MCP client can reach Unity through this project`, installCmd);
+    return;
+  }
+  const raw = safe(() => readFileSync(configPath, "utf8"));
+  if (raw === undefined) {
+    push("fail", `${MCP_CONFIG_RELPATH} exists but cannot be read as a file`, `Remove/fix the path, then: ${installCmd}`);
+    return;
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (error) {
+    // NEVER a silent pass. A file no client can parse is a file no client is reading, and
+    // install-mcp refuses to rewrite it (that would discard servers it never read), so the
+    // developer has to fix it by hand, which they will only do if doctor says so.
+    push(
+      "fail",
+      `${MCP_CONFIG_RELPATH} is not valid JSON (${(error as Error).message.split("\n")[0]}): no MCP client can read it`,
+      `Fix the file by hand (install-mcp refuses to rewrite it), then: ${installCmd}`,
+    );
+    return;
+  }
+  if (!isPlainObject(parsed)) {
+    push("fail", `${MCP_CONFIG_RELPATH} is valid JSON but not an object, so it holds no servers`, `Fix the file by hand, then: ${installCmd}`);
+    return;
+  }
+  const servers = parsed.mcpServers;
+  if (servers !== undefined && !isPlainObject(servers)) {
+    push("fail", `${MCP_CONFIG_RELPATH} has an "mcpServers" key that is not an object`, `Fix the file by hand, then: ${installCmd}`);
+    return;
+  }
+  const entry = isPlainObject(servers) ? servers[MCP_SERVER_KEY] : undefined;
+  if (entry === undefined) {
+    push("warn", `no "${MCP_SERVER_KEY}" server in ${MCP_CONFIG_RELPATH}: an agent has no route to Unity`, installCmd);
+    return;
+  }
+
+  const ledgerSha = meta?.mcpRegistration?.entrySha256;
+  if (entrySha(entry) === entrySha(desiredServerEntry())) {
+    // Correct wiring is correct wiring whether or not the ledger claims it: an entry a human
+    // typed that happens to be exactly ours is adopted by nobody and works for everybody.
+    push("pass", `"${MCP_SERVER_KEY}": ${canonicalJson(entry)}${ledgerSha === undefined ? " (not recorded as ours)" : ""}`);
+    return;
+  }
+  if (isLoombridgeAuthoredEntry(entry, ledgerSha)) {
+    push(
+      "warn",
+      `registered as ${canonicalJson(entry)}; this CLI writes ${canonicalJson(desiredServerEntry())}`,
+      installCmd,
+    );
+    return;
+  }
+  // Hand-edited or hand-authored: honestly the developer's, exactly the stance install-agent
+  // takes toward a managed file whose bytes have changed. Not broken, not nagged at.
+  push(
+    "info",
+    `registered as ${canonicalJson(entry)}, left as authored (Loombridge does not manage an entry it did not write)`,
+  );
 }
 
 /**

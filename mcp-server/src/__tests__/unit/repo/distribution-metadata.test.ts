@@ -1,9 +1,16 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { cpSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import os from "node:os";
 import path from "node:path";
-import test from "node:test";
+import test, { after } from "node:test";
 import { fileURLToPath } from "node:url";
 import { REPO_ROOT } from "../../_support/paths.js";
+import {
+  MCP_CONFIG_RELPATH,
+  MCP_SERVER_KEY,
+  desiredServerEntry,
+  runInstallMcp,
+} from "../../../capabilities/setup/install-mcp.js";
 
 // Guards the distribution/onboarding invariants (findings RCL-O01/O02/O03):
 // an external consumer must be able to reach BOTH halves of Loombridge without a
@@ -195,11 +202,50 @@ test("RCL-O03: project template wires a RESOLVABLE bridge dep (not a machine-loc
   );
 });
 
+const TEMPLATE_DIR = "templates/create-loombridge-game";
+
+const temps: string[] = [];
+after(() => {
+  for (const dir of temps) rmSync(dir, { recursive: true, force: true });
+});
+
+/** A copy of the SHIPPED template on disk, i.e. what `cp -R` gives a new developer. */
+function scaffoldFromTemplate(): string {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "lb-template-scaffold-"));
+  temps.push(dir);
+  cpSync(path.join(repoRoot, TEMPLATE_DIR), dir, { recursive: true });
+  return dir;
+}
+
+function quietly<T>(fn: () => T): T {
+  const log = console.log;
+  const error = console.error;
+  console.log = () => {};
+  console.error = () => {};
+  try {
+    return fn();
+  } finally {
+    console.log = log;
+    console.error = error;
+  }
+}
+
 test("RCL-O03: project template ships a .mcp.json + .loombridge skeleton", () => {
-  const mcp = readJson("templates/create-loombridge-game/.mcp.json");
-  const servers = mcp.mcpServers as Record<string, { command?: string }>;
-  assert.ok(servers.loombridge, "the template .mcp.json must register a loombridge MCP server");
-  assert.ok(typeof servers.loombridge.command === "string", "the server entry needs a launch command");
+  const mcp = readJson(`${TEMPLATE_DIR}/.mcp.json`);
+  const servers = mcp.mcpServers as Record<string, unknown>;
+  assert.ok(servers[MCP_SERVER_KEY], "the template .mcp.json must register a loombridge MCP server");
+
+  // Bound to the INSTALLER'S OWN CONSTANT, not to a re-typed literal. The template shipped
+  // `{"type":"stdio","command":"loombridge-mcp","args":[]}` while install-mcp writes
+  // `{"command":"loombridge","args":["mcp"]}`, so `loombridge setup` on a project scaffolded
+  // from our own template hit the foreign-entry refusal and exited 2: the guard behaving
+  // exactly as specified over inputs that disagreed. Two files describing "the Loombridge MCP
+  // server" differently is the defect; this assertion is what makes that impossible again.
+  assert.deepEqual(
+    servers[MCP_SERVER_KEY],
+    desiredServerEntry(),
+    "the template entry must be EXACTLY what install-mcp writes",
+  );
 
   // The .loombridge skeleton + Unity version pin must exist as committed files.
   const skeleton = readFileSync(
@@ -213,4 +259,23 @@ test("RCL-O03: project template ships a .mcp.json + .loombridge skeleton", () =>
     "utf-8",
   );
   assert.ok(version.includes("m_EditorVersion:"), "the template must pin a Unity editor version");
+});
+
+test("RCL-O03: a project scaffolded from the SHIPPED template is wired by setup, never refused", () => {
+  // The deepEqual above binds the two constants; this runs the REAL verb over the REAL files.
+  // A committed template is a declared input nothing walked: it was JSON in a directory no
+  // test fed to the code that consumes it, so the collision was invisible to a green suite.
+  // `setup` reaches `.mcp.json` only through `runInstallMcp` (asserted by setup-compose's
+  // `_defaultDeps` test), so this is the same code path a developer's `loombridge setup` takes.
+  const project = scaffoldFromTemplate();
+
+  const before = readFileSync(path.join(project, MCP_CONFIG_RELPATH), "utf-8");
+  const code = quietly(() => runInstallMcp({ project, dryRun: false }));
+
+  assert.equal(code, 0, "our own scaffold must not trip our own foreign-entry refusal");
+  assert.equal(
+    readFileSync(path.join(project, MCP_CONFIG_RELPATH), "utf-8"),
+    before,
+    "and the template already being correct means not one byte needs to change",
+  );
 });

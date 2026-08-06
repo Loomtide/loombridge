@@ -6,6 +6,19 @@ The simplest end-to-end setup is npm:
 npm install -g loombridge
 ```
 
+Then wire a project with one command, run from inside it:
+
+```bash
+cd /path/to/UnityProject
+loombridge setup
+```
+
+**Which verb do I want?** `setup` on a NEW project: it is the front door that wires everything and
+is safe to re-run. `update` to keep an EXISTING one current: it updates the CLI itself and then
+reconciles that project's bridge. `setup` never self-updates the CLI, and `update` never installs
+the MCP registration or the agent surface from scratch. See
+[What `loombridge setup` does](#what-loombridge-setup-does) below.
+
 That is the supported install and update path, and the one `loombridge update` self-updates
 through. The tracks below are the alternatives:
 
@@ -83,10 +96,10 @@ form). The steps below are the **"I already have Node + gh"** path (or what the 
 # 1. Install the CLI — this same command UPDATES it later, just re-run it
 curl -fsSL https://get.loomtide.ai | sh
 
-# 2. Install the Unity bridge into YOUR Unity project (no repo clone, no git needed)
-loombridge install-bridge --project /path/to/UnityProject
+# 2. Wire YOUR Unity project (no repo clone, no git needed): bridge + MCP + doctor
+cd /path/to/UnityProject && loombridge setup
 
-# 3. Open that project in Unity, wait for it to finish compiling, then:
+# 3. Open that project in Unity and wait for it to finish compiling, then re-check:
 loombridge doctor --project /path/to/UnityProject
 ```
 
@@ -120,9 +133,10 @@ curl -fsSL https://get.loomtide.ai | sh -s -- --project /path/to/UnityProject
 
 ### Optional: agent commands + skills
 
-The bridge is all you need. If you also want Loombridge's agent surface — the `/loombridge:*` slash
-commands and the game-build/verify skills — **installed into your project repo** (so they're committed and
-your teammates get them on the next `git pull`), opt in:
+The bridge and the MCP registration are all you need. If you also want Loombridge's agent surface (the
+`/loombridge:*` slash commands and the game-build/verify skills) **installed into your project repo** (so
+they're committed and your teammates get them on the next `git pull`), opt in. `loombridge setup` offers
+this in an interactive terminal (and skips it in every non-interactive one); the verb does it directly:
 
 ```bash
 loombridge install-agent --project /path/to/UnityProject
@@ -173,9 +187,8 @@ bash ../scripts/loombridge-pack-bridge.sh   # writes dist/bridge/com.loomtide.lo
 cd ..
 ./scripts/loombridge-install-locally.sh
 
-# 5. Install the Unity bridge into YOUR Unity project + verify:
-loombridge install-bridge --project /path/to/UnityProject
-loombridge doctor --project /path/to/UnityProject
+# 5. Wire YOUR Unity project (bridge + MCP registration + doctor):
+cd /path/to/UnityProject && loombridge setup
 ```
 
 > **No Unity project handy?** `install-bridge` and offline `doctor` only touch three paths, so a
@@ -200,6 +213,62 @@ Notes for Track B:
 
 ---
 
+## What `loombridge setup` does
+
+`setup` is the front door for a new project. It **composes** the individual verbs below rather
+than reimplementing them, so each one keeps working on its own and the two can never disagree:
+
+```bash
+cd /path/to/UnityProject
+loombridge setup                      # or: loombridge setup --project /path/to/UnityProject
+```
+
+1. **Resolve the project.** The current directory by default. Not a Unity project is a refusal
+   (exit 2) naming `--project <dir>`, never a guess at a nearby directory.
+2. **Report the CLI's currency.** Report only: `setup` never self-updates. A self-update has to
+   END the run (the bridge tarball ships inside the CLI, so the new binary must be the one to
+   deliver it), and ending a first-time setup halfway is worse than telling you to run
+   `loombridge update`. A newer CLI is therefore a warning, not a refusal.
+3. **Bridge.** `install-bridge`'s installer, freshness gate and all: installed when absent,
+   reconciled when present. An `--embedded` bridge is left alone, because it may hold local
+   edits; reconcile that deliberately with `loombridge update --project <p> --force-bridge`.
+4. **MCP.** `install-mcp` (below). Default ON, because it is what connects an agent to Unity.
+5. **Agent commands + skills, LAST and confirmed.** Opinionated content committed into your repo,
+   so it stays opt-in. In a terminal it asks; **not a terminal, it is SKIPPED** and prints the
+   command to add it later. `--yes` installs without asking, `--no-agent-surface` skips without
+   asking, and a recorded opt-out is honored silently.
+6. **`doctor`**, so the run ends on evidence rather than on a claim.
+
+It is idempotent: a second run over a wired project changes nothing and exits 0.
+
+Exit codes: `0` wired and healthy (an OPTIONAL step that was skipped is still `0`), `1` a required
+step failed, `2` usage or precondition (not a Unity project, a refused stale bridge bundle, or a
+`.mcp.json` that could not be parsed or holds an entry Loombridge did not write).
+
+## What `install-mcp` does
+
+It registers the MCP server in the project's `.mcp.json`, the project-scoped config an MCP client
+reads from the repo root:
+
+```jsonc
+{ "mcpServers": { "loombridge": { "command": "loombridge", "args": ["mcp"] } } }
+```
+
+That file belongs to your project, so the verb touches exactly one key and nothing else:
+
+- **It MERGES.** Other servers and other top-level keys are preserved verbatim.
+- **It refuses rather than overwrites.** A `loombridge` entry Loombridge did not write is yours.
+  Ownership is proven by a sha recorded in `ProjectSettings/LoombridgeInstall.json` (the same
+  hand-edit-safe ledger `install-agent` uses), and it covers only that one entry, so adding
+  unrelated servers never trips it.
+- **Malformed JSON is a refusal**, not a reason to start fresh: rewriting a file it could not
+  parse would discard configuration it never read.
+- Nothing is written outside the project root, and a re-run over an entry it wrote is a no-op.
+
+Clients that do not read a project-scoped `.mcp.json` are documented, not written to: their config
+lives outside your project. Register Loombridge there by hand with command `loombridge` and args
+`["mcp"]`.
+
 ## What `install-bridge` does
 
 It adds the bridge to your project's `Packages/manifest.json` as a **`file:` immutable dependency** and drops the
@@ -221,6 +290,9 @@ Air-gapped / no manifest dependency wanted? Use `loombridge install-bridge --pro
 the package, `Tests/` stripped).
 
 ## Keeping it up to date
+
+`setup` wires a new project; `update` keeps an existing one current. Re-running `setup` is safe
+but it will not update the CLI, so `update` is the one to reach for after the first day.
 
 **One command, run it twice.** From inside the Unity project (or with `--project`):
 
