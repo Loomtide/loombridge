@@ -109,10 +109,29 @@ interface WebSelectionItems {
 
 const PACK_ID_PATTERN = /^[a-z0-9][a-z0-9.-]*$/;
 
-function printUsage(): void {
+/**
+ * The authoring block is printed ONLY when the private asset-authoring seam is actually present
+ * (see `resolveAssetsAuthoringCli`). In an open build the verbs always refuse, and naming a
+ * private publish mechanic ("publishes bytes to R2") in help an OSS consumer reads is an
+ * information leak in a smaller font. The SAME seam resolution decides what runs and what is
+ * advertised, so the two can never disagree; `parseArgs` still accepts the verbs, so someone who
+ * types one anyway gets the clear refusal rather than "unknown action".
+ */
+function printUsage(authoringAvailable: boolean): void {
+  const authoringVerbs = authoringAvailable ? "|pack-ingest|cover-build|discover" : "";
+  const authoringBlock = authoringAvailable
+    ? [
+      "Pack ingest (add a new pack to the hosted registry):",
+      "  pack-ingest     --manifest <path> [--public-base-url <url>] [--reviewer <name>] [--reviewed-at <iso>] [--output <path>]",
+      "                  [--apply --source-root <dir> [--progress <path>]]   # --apply publishes bytes to R2 (default dry-run)",
+      "  cover-build     --thumbs <dir> --out-dir <dir> [--columns N] [--rows N] [--cell N] [--sample-size N]   # compose preview.png (+ sample.png)",
+      "  discover        --candidates <path> --pack-id <provider.genre.slug> [--out <path>] [--allow-attribution]   # agent candidates -> gated DRAFT manifest (CC0 gate hard)",
+      "",
+    ]
+    : [];
   console.log(
     [
-      "Usage: loombridge assets <registry-plan|registry-apply|generated-plan|generated-apply|pack-ingest|cover-build|discover> [options]",
+      `Usage: loombridge assets <registry-plan|registry-apply|generated-plan|generated-apply${authoringVerbs}> [options]`,
       "",
       "Registry:",
       "  registry-plan   (--registry <path> | --catalog <path-or-url> | --catalog-api <baseUrl>) --profile <path> [--output <path>] [--preferred-license <spdx>]",
@@ -122,12 +141,7 @@ function printUsage(): void {
       "  generated-plan  --annotations <json> [--output <path>] [--generated-set-id <id>] [--produced-from-hash <sha256>]",
       "  generated-apply --annotations <json> --exports <json> --approved-at <iso> [--generated-set-id <id>] [--produced-from-hash <sha256>]",
       "",
-      "Pack ingest (add a new pack to the hosted registry):",
-      "  pack-ingest     --manifest <path> [--public-base-url <url>] [--reviewer <name>] [--reviewed-at <iso>] [--output <path>]",
-      "                  [--apply --source-root <dir> [--progress <path>]]   # --apply publishes bytes to R2 (default dry-run)",
-      "  cover-build     --thumbs <dir> --out-dir <dir> [--columns N] [--rows N] [--cell N] [--sample-size N]   # compose preview.png (+ sample.png)",
-      "  discover        --candidates <path> --pack-id <provider.genre.slug> [--out <path>] [--allow-attribution]   # agent candidates -> gated DRAFT manifest (CC0 gate hard)",
-      "",
+      ...authoringBlock,
       "Common:",
       "  --root <dir>     Project root (default: cwd)",
       "",
@@ -627,12 +641,20 @@ async function runGeneratedApply(parsed: ParsedArgs): Promise<number> {
 
 /**
  * OSS seam: the pack-authoring verbs (`pack-ingest` / `cover-build` / `discover`) are implemented on
- * the PRIVATE side of the asset-layer split (src/asset-authoring/assets-authoring-cli.ts) because
- * they drive hosted-registry authoring (R2 publish plans, draft pack manifests, pack covers). The
- * module specifier is deliberately a `string`-typed constant — NOT a string-literal import — so this
- * OPEN client entry compiles with no reference to the private sources. In a build that omits
- * `src/asset-authoring/`, invoking one of these verbs fails at runtime with a clear error; the
- * consumer verbs (registry-plan/apply, generated-plan/apply) are unaffected.
+ * the PRIVATE side of the asset-layer split (the specifier below resolves, relative to this file,
+ * to `src/capabilities/asset-authoring/assets-authoring-cli.ts`) because they drive hosted-registry
+ * authoring (R2 publish plans, draft pack manifests, pack covers). The module specifier is
+ * deliberately a `string`-typed constant, NOT a string-literal import, so this OPEN client entry
+ * compiles with no reference to the private sources, and no bundler, `tsc`, or dependency walker
+ * can follow an edge into them. In a build that omits the private directory, invoking one of these
+ * verbs fails at runtime with a clear error; the consumer verbs (registry-plan/apply,
+ * generated-plan/apply) are unaffected.
+ *
+ * The `: string` annotation is load-bearing, not decoration: without it TypeScript infers the
+ * LITERAL type, and a literal-typed constant is exactly the shape a bundler or dependency walker
+ * constant-folds back into a static edge into the private tree. Measured, so nobody has to guess:
+ * removing the annotation does NOT fail `tsc --noEmit` today, which is precisely why it needs a
+ * guard rather than a convention. `asset-registry-boundary.test.ts` walks both properties.
  */
 const ASSET_AUTHORING_CLI_MODULE: string = "../asset-authoring/assets-authoring-cli.js";
 
@@ -642,9 +664,19 @@ interface AssetsAuthoringCliModule {
   runCoverBuild(parsed: ParsedArgs): Promise<number>;
 }
 
-async function loadAssetsAuthoringCli(): Promise<AssetsAuthoringCliModule> {
+/** Present: the private side is installed. Absent: an open build, with the reason to report. */
+type AssetsAuthoringSeam =
+  | { present: true; module: AssetsAuthoringCliModule }
+  | { present: false; reason: string };
+
+/**
+ * The ONE mechanism that decides both what runs and what `--help` advertises. It reports absence
+ * rather than throwing so the help path can ask the same question the dispatch path asks, instead
+ * of a second hardcoded build flag that could drift out of agreement with reality.
+ */
+async function resolveAssetsAuthoringCli(): Promise<AssetsAuthoringSeam> {
   try {
-    return (await import(ASSET_AUTHORING_CLI_MODULE)) as AssetsAuthoringCliModule;
+    return { present: true, module: (await import(ASSET_AUTHORING_CLI_MODULE)) as AssetsAuthoringCliModule };
   } catch (error) {
     // Only the SEAM module itself being absent means "open build without the private side".
     // Anything else — a syntax error in it, or a missing TRANSITIVE module (e.g. a deleted
@@ -657,17 +689,23 @@ async function loadAssetsAuthoringCli(): Promise<AssetsAuthoringCliModule> {
     const seamModuleAbsent =
       code === "ERR_MODULE_NOT_FOUND" && /Cannot find module '[^']*assets-authoring-cli\.js'/.test(message);
     if (!seamModuleAbsent) throw error;
-    throw new Error(
-      "pack-ingest/cover-build/discover require the private asset-authoring tooling, which is not " +
-        `present in this build: ${message}`,
-    );
+    return { present: false, reason: message };
   }
+}
+
+async function loadAssetsAuthoringCli(): Promise<AssetsAuthoringCliModule> {
+  const seam = await resolveAssetsAuthoringCli();
+  if (seam.present) return seam.module;
+  throw new Error(
+    "pack-ingest/cover-build/discover require the private asset-authoring tooling, which is not " +
+      `present in this build: ${seam.reason}`,
+  );
 }
 
 export async function run(args: string[], options: RunAssetsOptions = {}): Promise<number> {
   const parsed = parseArgs(args);
   if (parsed.help || !parsed.action) {
-    printUsage();
+    printUsage((await resolveAssetsAuthoringCli()).present);
     return 0;
   }
 
