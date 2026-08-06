@@ -40,14 +40,15 @@ Read `.loombridge/ASSET_MANIFEST.json` before constructing. Slices consume the m
 their own.
 
 **Manifest first, primitives never (asset priority — `Docs/Assets/AssetPriority.md`).** The
-manifest is the resolved output of the plan-time asset stage (hosted Loomtide registry first;
-local fixtures only for offline/test; web discovery only when no hosted asset fits). At build
-time you **import/use exactly the manifest-bound assets** — do not re-resolve. If the manifest
-holds a placeholder, an unfilled/`needed` role, or a role still on a primitive, **STOP and go
-back to `loombridge assets`** (`loombridge plan` step 4 / the `asset-layer` skill) to resolve and
-approve that role from the hosted registry. **Do NOT substitute a Unity primitive** (a
-`GameObject.CreatePrimitive` cube/sphere/quad) as the final asset — primitives are construction
-scaffolding only, never final art for a role that has (or could have) an approved hosted asset.
+manifest is the resolved output of the plan-time asset stage (committed local registry packs and
+generated assets by default; the hosted catalog only if the developer opted into it; web
+discovery only when no asset in the chosen source fits). At build time you **import/use exactly
+the manifest-bound assets** and do not re-resolve. If the manifest holds a placeholder, an
+unfilled/`needed` role, or a role still on a primitive, **STOP and go back to `loombridge assets`**
+(`loombridge plan` step 4 / the `asset-layer` skill) to resolve and approve that role from the
+developer's chosen asset source. **Do NOT substitute a Unity primitive** (a
+`GameObject.CreatePrimitive` cube/sphere/quad) as the final asset: primitives are construction
+scaffolding only, never final art for a role that has (or could have) an approved registry asset.
 
 Canonical platformer slice bindings:
 

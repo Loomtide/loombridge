@@ -22,9 +22,15 @@ namespace UnityBridge.UI
     {
         private const string CategoryAll = "all";
 
-        // Hosted read-only catalog search API. Overridable via EditorPrefs.
-        private const string DefaultApiBaseUrl = "https://asset-api-production-59d9.up.railway.app";
+        // Hosted read-only catalog search API. The endpoint is CONFIGURATION, never a baked-in
+        // default: Loombridge ships no deployment hostname (see Docs/Design/AssetRegistryOssBoundary.md).
+        // Resolution order: EditorPrefs key, then the environment variable, then unconfigured.
+        // Unconfigured is a clean, named refusal in the window, never a silent reach at someone's host.
         private const string ApiBaseUrlPrefKey = "loombridge.assetApiBaseUrl";
+        private const string ApiBaseUrlEnvVar = "LOOMBRIDGE_ASSET_CATALOG_URL";
+        private const string ApiBaseUrlUnconfiguredMessage =
+            "hosted catalog not configured: set EditorPrefs '" + ApiBaseUrlPrefKey + "' or the " +
+            ApiBaseUrlEnvVar + " environment variable to the catalog API base URL";
 
         private readonly List<CategoryModel> _categories = new List<CategoryModel>();
         private readonly List<AssetModel> _assets = new List<AssetModel>();
@@ -505,12 +511,16 @@ namespace UnityBridge.UI
         // Live hosted-catalog fetch
         // =====================================================================
 
+        /// <summary>
+        /// The configured catalog API base, or an empty string when none is configured.
+        /// There is deliberately no fallback host.
+        /// </summary>
         private static string ApiBaseUrl()
         {
-            string configured = EditorPrefs.GetString(ApiBaseUrlPrefKey, DefaultApiBaseUrl);
+            string configured = EditorPrefs.GetString(ApiBaseUrlPrefKey, string.Empty);
             if (string.IsNullOrWhiteSpace(configured))
-                configured = DefaultApiBaseUrl;
-            return configured.TrimEnd('/');
+                configured = Environment.GetEnvironmentVariable(ApiBaseUrlEnvVar) ?? string.Empty;
+            return configured.Trim().TrimEnd('/');
         }
 
         /// <summary>
@@ -522,6 +532,15 @@ namespace UnityBridge.UI
         private void FetchAndApply(string profile, string kind, string primitive, string text, int limit = 120, string preserveCategory = null)
         {
             int generation = ++_fetchGeneration;
+
+            if (string.IsNullOrEmpty(ApiBaseUrl()))
+            {
+                Debug.LogWarning("[Loombridge] [LiveCatalog] " + ApiBaseUrlUnconfiguredMessage);
+                ApplyPayload(BuildFetchFailedPayload(ApiBaseUrlUnconfiguredMessage));
+                RefreshAll();
+                return;
+            }
+
             string url = BuildSearchUrl(profile, kind, primitive, text, limit);
 
             UnityWebRequest request = UnityWebRequest.Get(url);

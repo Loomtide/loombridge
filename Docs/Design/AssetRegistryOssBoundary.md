@@ -43,11 +43,16 @@ Three narrower problems sit on top:
    `asset-layer/schemas/asset-pack-manifest.schema.json` states the R2 key convention verbatim
    ("the packId is the binding R2-key convention: provider.genre.slug maps 1:1 to the R2
    directory provider/genre/slug") and names `src/asset-authoring/pack-ingest.ts`. Separately,
-   the production hostname `asset-api-production-59d9.up.railway.app` appears in seven files:
+   the production catalog-API hostname (a PaaS deployment host) appears in seven files:
    `ARCHITECTURE.md`, `mcp-server/README.md`, `Docs/Assets/AssetPriority.md`,
    `Docs/Assets/PublicCatalogQuickstart.md`, `commands/loombridge/plan.md`,
-   `.skills/asset-layer/SKILL.md`, and a test that ASSERTS it. It is prose-only (never a code
-   default), which makes it cheap to fix and embarrassing to leave.
+   `.skills/asset-layer/SKILL.md`, and a test that ASSERTS it. It is prose-only in the
+   TypeScript sources, which makes it cheap to fix and embarrassing to leave.
+
+   **Corrected on contact with the code (2026-08-06):** there is an EIGHTH occurrence, and it
+   is a real code default, not prose. `packages/com.loomtide.loombridge/Editor/UI/`
+   `LoombridgeAssetBrowser.cs` held the hostname in a `DefaultApiBaseUrl` constant. The
+   §1 endpoint guard only scans `mcp-server/src`, so the Unity package was outside it.
 3. **"Hosted registry FIRST" contradicts Positioning.md.** The positioning doc lists as a
    permanent non-goal: "No cloud requirement. Core CLI and bridge run fully local; the hosted
    asset catalog is an optional, read-only convenience." But `Docs/Assets/AssetPriority.md` makes

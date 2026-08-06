@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://loomtide.ai/schemas/asset-pack-manifest.schema.json",
   "title": "AssetPackManifest",
-  "description": "Human-authored manifest for ingesting a NEW asset pack into the hosted registry. Pack-level license/provider/source are declared once and inherited by every asset. Expanded into an AssetRegistryPack (then catalog records) by mcp-server/src/asset-authoring/pack-ingest.ts. The packId is the binding R2-key convention: provider.genre.slug maps 1:1 to the R2 directory provider/genre/slug.",
+  "description": "Human-authored manifest for ingesting a NEW asset pack into the hosted registry. Pack-level license/provider/source are declared once and inherited by every asset, and are expanded into an AssetRegistryPack (and then catalog records) by the pack-ingest tooling. The packId is the pack's stable identifier.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -20,7 +20,7 @@
     },
     "packId": {
       "type": "string",
-      "description": "provider.genre.slug \u2014 exactly three lowercase [a-z0-9-] segments, no dots within a segment (so the website can split it back into the R2 directory).",
+      "description": "provider.genre.slug: exactly three lowercase [a-z0-9-] segments, no dots within a segment, so the identifier can always be split back into its provider, genre, and slug parts.",
       "pattern": "^[a-z0-9][a-z0-9-]*\\.[a-z0-9][a-z0-9-]*\\.[a-z0-9][a-z0-9-]*$"
     },
     "name": {
@@ -147,7 +147,7 @@
           "file": {
             "type": "string",
             "minLength": 1,
-            "description": "Filename relative to the pack's local source directory; its basename becomes the R2 object name."
+            "description": "Filename relative to the pack's local source directory; its basename becomes the published object name."
           },
           "kind": {
             "enum": [

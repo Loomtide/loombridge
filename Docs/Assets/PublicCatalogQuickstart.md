@@ -3,11 +3,15 @@
 This is the external-developer quickstart for browsing and preparing **public** Loomtide hosted
 assets — with no private GitHub token and no checked-out private mirror.
 
-> **Live now:** the public catalog is published at scale (66,859 assets across sprite/audio/model/vector)
-> on R2, served by a company-run read-only search API
-> (`https://asset-api-production-59d9.up.railway.app/v1/assets/search`) with a live Unity asset browser
-> (`Window → Loombridge → Asset Browser`). Agent-side, source from the API with the `--catalog-api <baseUrl>`
-> flag on `browser-payload`/`prepare`.
+> **Live now:** the public catalog is published at scale (66,859 assets across sprite/audio/model/vector),
+> served by a company-run **read-only** search API exposing `/v1/assets/search`, with a live Unity asset
+> browser (`Window → Loombridge → Asset Browser`). Agent-side, source from the API with the
+> `--catalog-api <baseUrl>` flag on `browser-payload`/`prepare`.
+>
+> **The catalog is optional and its endpoint is configuration.** Loombridge bakes in no host: you name
+> one with `--catalog-api <baseUrl>` / `--catalog <url>`, or with the `LOOMBRIDGE_ASSET_CATALOG_URL`
+> environment variable. The current base URL is published alongside the asset store
+> (`https://assetstore.loomtide.ai/`); this repo deliberately does not name a deployment.
 
 For the catalog's architecture and publish pipeline, see the "Public Hosted Asset Catalog" section of
 [`ARCHITECTURE.md`](../../ARCHITECTURE.md). This doc only covers commands that exist **today** against the
@@ -31,11 +35,16 @@ https://catalog.loomtide.ai/v1/catalog/public/2d-platformer
 > An `index.json` is **informational only** — do not pass it as the catalog URL; the CLI would try
 > to parse it as a catalog and fail. Always point at the shard directory or a `part-*.jsonl` file.
 
-You can override the default in your environment:
+Record it in your environment so you do not retype it:
 
 ```bash
 export LOOMBRIDGE_ASSET_CATALOG_URL="https://catalog.loomtide.ai/v1/catalog/public/2d-platformer"
 ```
+
+> The CLI verbs read the **flag** (`--catalog` / `--catalog-api`), so pass
+> `--catalog "$LOOMBRIDGE_ASSET_CATALOG_URL"`. There is deliberately no built-in default:
+> with neither the flag nor an explicit URL, the catalog layer refuses with a named error
+> rather than silently reaching for someone's deployment.
 
 ## Do I need a token?
 
