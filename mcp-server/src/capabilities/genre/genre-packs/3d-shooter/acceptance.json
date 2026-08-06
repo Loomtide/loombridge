@@ -133,5 +133,17 @@
     "endStateMode": "modal",
     "restartAction": "R",
     "note": "Win when every reference enemy in the range is defeated; reaching a zero-enemy state flips the GameManager win flag."
+  },
+
+  "verification": {
+    "gates": {
+      "platform-tiles": "not_applicable",
+      "tile-render": "not_applicable",
+      "parallax-motion": "not_applicable",
+      "reachability": "not_applicable",
+      "placement": "not_applicable",
+      "prop-purpose": "not_applicable"
+    },
+    "note": "Derived from the sections this contract deliberately OMITS (platformer/reachability/placement/props), one gate per omitted section: platform-tiles + tile-render + parallax-motion walk `platformer`, reachability walks `reachability`, placement walks `placement`, prop-purpose walks `props` + `placement`. Same rule promote.ts applies to a promoted GenreContract, and the same set _generic declares. Without this block a WHOLE-GAME verify left the platformer-shaped gates APPLICABLE for a third-person 3D shooter: parallax layers and 2D tile seams are not merely absent here, they are unproducible, so the gates could only ever grade a capture the build cannot make. The slice DAG requests none of these six, so nothing here can make a slice unreachable-green."
   }
 }

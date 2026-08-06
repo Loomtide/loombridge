@@ -34,6 +34,8 @@ import {
   MEASURABILITY_TAG_SET,
   EVIDENCE_KIND_SET,
   CONTRACT_CONFIDENCE_SET,
+  NETWORK_MODES,
+  NETWORK_MODE_SET,
   type GenreClass,
   type GenreContract,
   type GenreContractIssue,
@@ -218,8 +220,8 @@ export function validateGenreContract(input: unknown): GenreContractValidationRe
   if (!isRecord(nm)) {
     push("NETWORK_MODEL", "networkModel must be an object", "networkModel");
   } else {
-    if (nm.mode !== "single-player" && nm.mode !== "co-op" && nm.mode !== "pvp") {
-      push("NETWORK_MODE", "networkModel.mode must be single-player | co-op | pvp", "networkModel.mode");
+    if (!isString(nm.mode) || !NETWORK_MODE_SET.has(nm.mode)) {
+      push("NETWORK_MODE", `networkModel.mode must be ${NETWORK_MODES.join(" | ")}`, "networkModel.mode");
     } else if (nm.mode !== "single-player" && !isNonEmptyString(nm.netcode)) {
       push("NETWORK_NETCODE", "multiplayer requires networkModel.netcode (e.g. photon-fusion)", "networkModel.netcode");
     }

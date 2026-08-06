@@ -9,6 +9,7 @@
   "properties": {
     "schemaVersion": { "const": "1" },
     "game": { "type": "string", "minLength": 1 },
+    "genre": { "type": "string", "minLength": 1 },
     "source": {
       "type": "object",
       "additionalProperties": false,

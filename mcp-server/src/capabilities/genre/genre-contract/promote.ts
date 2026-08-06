@@ -60,6 +60,18 @@ export interface GenrePromotionResult {
   acceptance: AcceptanceContract;
   slices: SlicePlan;
   report: GenrePromotionReport;
+  /**
+   * The values the promoter INVENTED because the GenreContract has no field for them, in prose the
+   * CLI prints verbatim.
+   *
+   * A GenreContract declares a core loop, feel bands and a slice DAG; it says nothing about a win
+   * rule, a font, a palette, or a native resolution. The promoter fills those from a pixel-art 2D
+   * template, and `GAME_SPEC.md` then states them as fact ("Objective: all-enemies-defeated") with
+   * nothing marking them as assumptions. Naming them once at promotion time is the difference
+   * between a default and a silent decision. Not persisted on the report: this is a fact about THIS
+   * promotion run, and a reader wants it while they still have the contract open.
+   */
+  defaults: string[];
 }
 
 export interface GenrePromotionOptions {
@@ -209,11 +221,35 @@ function buildSlice(node: SliceNode, template?: SlicePlan["slices"][number]) {
   };
 }
 
+/**
+ * The gates that walk a contract SECTION a non-platformer contract does not declare, one gate per
+ * omitted section: `platform-tiles` + `tile-render` + `parallax-motion` walk `platformer`,
+ * `reachability` walks `reachability`, `placement` walks `placement`, and `prop-purpose` walks
+ * `props` + `placement`.
+ *
+ * THE ONE LIST, exported so the three shipped non-platformer pack templates and `_generic` cannot
+ * drift from it (`pack-gate-applicability.test.ts` binds all five to this constant, with a LITMUS).
+ * Those packs' notes assert "the same set promote.ts applies", and until `prop-purpose` was added
+ * here that sentence was simply false: `prop-purpose` is pure 2D geometry with no `props` section
+ * defaults, so a contract-planned 3D game was graded on props it never declared.
+ *
+ * NOT a blanket off-switch: a contract whose slice DAG explicitly REQUESTS one of these keeps it
+ * applicable (the `gated` filter below), so a genre that really does own platform tiles still gets
+ * graded on them.
+ */
+export const CONTRACT_OMITTED_SECTION_GATES = [
+  "platform-tiles",
+  "tile-render",
+  "parallax-motion",
+  "reachability",
+  "placement",
+  "prop-purpose",
+] as const;
+
 function verificationOverrides(contract: GenreContract): AcceptanceContract["verification"] {
   const gated = new Set(contract.sliceDag.coreVertical.flatMap((slice) => slice.gates ?? []));
-  const platformerShaped = ["platform-tiles", "tile-render", "parallax-motion", "reachability", "placement"];
   const gates = Object.fromEntries(
-    platformerShaped
+    CONTRACT_OMITTED_SECTION_GATES
       .filter((gate) => !gated.has(gate))
       .map((gate) => [gate, "not_applicable" as const]),
   );
@@ -228,7 +264,7 @@ function verificationOverrides(contract: GenreContract): AcceptanceContract["ver
     ...(hasGates
       ? {
           gates,
-          note: "Promoted generic contract: omitted platformer-shaped gates are not applicable unless the contract slice DAG explicitly requests them.",
+          note: "Promoted generic contract: one gate per contract section this contract omits (platformer / reachability / placement / props) is not applicable unless the slice DAG explicitly requests it.",
         }
       : {}),
     ...(hasEvidence ? { requiredEvidenceClasses: [...evidence] } : {}),
@@ -242,6 +278,9 @@ export function promoteGenreContract(input: unknown, options: GenrePromotionOpti
   const acceptance: AcceptanceContract = {
     schemaVersion: ACCEPTANCE_SCHEMA_VERSION,
     game: contract.genreId,
+    // The promoted contract states its own genre, so the artifact that IS the grading is bound to a
+    // genre wherever it is written, including `adopt`'s proposal, which never goes through `plan`.
+    genre: contract.genreId,
     source: {
       note: `Promoted from GenreContract ${contract.genreId}; genreClass=${contract.coreLoop.genreClass}; confidence=${contract.confidence}.`,
     },
@@ -335,5 +374,19 @@ export function promoteGenreContract(input: unknown, options: GenrePromotionOpti
       : {}),
   };
 
-  return { acceptance: validAcceptance, slices, report };
+  return { acceptance: validAcceptance, slices, report, defaults: promotionDefaults(validAcceptance) };
+}
+
+/**
+ * The pixel-art-2D assumptions the promoter had to make, read back off the contract it just built so
+ * the prose cannot drift from the values. See {@link GenrePromotionResult.defaults}.
+ */
+function promotionDefaults(acceptance: AcceptanceContract): string[] {
+  const res = acceptance.framing.nativeResolution;
+  return [
+    `win.rule = "${acceptance.win.rule}" (a GenreContract declares no win condition; derived from the genre id / subGenre)`,
+    `fonts = "${acceptance.fonts.global?.family ?? "?"}" globally and per HUD role (a pixel-art 2D default)`,
+    `palette = the ${acceptance.palette.entries.length}-entry generic pixel-art palette (no artDirection.palette is read)`,
+    `framing.nativeResolution = ${res?.w ?? "?"}x${res?.h ?? "?"} (aspect x16: a pixel-art tile assumption)`,
+  ];
 }

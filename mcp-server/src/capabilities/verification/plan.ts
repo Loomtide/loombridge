@@ -48,12 +48,18 @@ import {
   planDispatchMode,
   readSlicePlan,
   renderSliceSkill,
+  sliceApprovalEvidence,
   writeSlicePlan,
   type SlicePlan,
 } from "./slices.js";
 import { computeStatusModel, renderPlanStatusEcho } from "./status-model.js";
 import { defaultGenreId, knownGenreIds, resolveGenrePack } from "../genre/genre-registry.js";
 import { promoteGenreContract, type GenrePromotionResult } from "../genre/genre-contract/promote.js";
+import {
+  genreContractPlaceholderPaths,
+  placeholderPrefix,
+} from "../genre/genre-contract/scaffold.js";
+import { readGenrePromotionReport } from "../genre/promotion-report.js";
 import { resolveBriefBundle } from "../../domain/brief-bundle.js";
 // Never count `..` to find the package root (CLAUDE.md) — re-nesting this file would repoint it.
 import { packageRoot } from "../../shared/pkg-root.js";
@@ -123,6 +129,140 @@ async function loadSliceTemplate(genre: string): Promise<SlicePlan> {
   // to the genre the project was planned as, or the slice roll-up's plan-vs-STATE agreement check
   // (added in W1) would refuse every free-form project.
   return assertValidSlicePlan({ ...JSON.parse(raw), genre });
+}
+
+/**
+ * The genre a prior `STATE.md` supplies, or `undefined` when it supplies none.
+ *
+ * ONE definition, two readers: the re-plan preservation below and the refusal in `run` must agree
+ * about whether STATE answers "what genre is this project?", or bare `plan` would refuse on a
+ * project whose genre it was about to preserve anyway. `UNPLANNED_GENRE` is the sentinel a
+ * `target set` before any `plan` leaves behind, and it means "no genre chosen yet".
+ */
+function genreFromState(prev: LoombridgeState | null): string | undefined {
+  return prev?.genre && prev.genre !== UNPLANNED_GENRE ? prev.genre : undefined;
+}
+
+/** The `genre` FEEL_SPEC.json declares, or `undefined` when it is absent/unreadable. */
+async function genreFromFeelSpec(paths: LoombridgePaths): Promise<string | undefined> {
+  return declaredGenre(paths.feelSpec);
+}
+
+/**
+ * The `genre` ACCEPTANCE.json declares, or `undefined` when it declares none.
+ *
+ * ACCEPTANCE.json is the artifact whose CONTENTS ARE THE GRADING, so it is the one that must be able
+ * to state its own genre. Legacy/hand-authored contracts carry no `genre` and correctly answer
+ * `undefined`: absent is no claim, never a default (see `AcceptanceContract.genre`).
+ */
+async function genreFromAcceptance(paths: LoombridgePaths): Promise<string | undefined> {
+  return declaredGenre(paths.acceptance);
+}
+
+/** The non-empty string `genre` a JSON artifact declares, or `undefined` (absent/unreadable/other). */
+async function declaredGenre(file: string): Promise<string | undefined> {
+  try {
+    const doc = JSON.parse(await fs.readFile(file, "utf-8")) as { genre?: unknown };
+    return typeof doc.genre === "string" && doc.genre.length > 0 ? doc.genre : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * The genres this project ALREADY records, read from the artifacts a run KEEPS rather than re-seeds.
+ *
+ * Deliberately not "STATE.genre" alone. The failure being detected is exactly a STATE that no longer
+ * agrees with the contract beside it, so the check has to read the contract from DISK; trusting
+ * STATE would make an already-desynced project invisible to its own guard.
+ *
+ * Which artifacts count depends on what a no-`--force` run rewrites:
+ *  - SLICES.json is NEVER rewritten without `--force` (it is written only in `mode === "design"`,
+ *    which an existing roadmap suppresses), so its genre always counts.
+ *  - ACCEPTANCE.json's OWN `genre` stamp counts whenever the file is on disk to be kept. This is the
+ *    artifact whose contents ARE the grading, and it was the one the guard never read. With
+ *    SLICES.json absent (the design phase, before any roadmap) and FEEL_SPEC.json + STATE.md deleted,
+ *    `found` was `[]` and the guard could not fire at all: a platformer ACCEPTANCE.json
+ *    (`win.rule: "all-fruit"`, no `verification` block) was stamped `graded` under a 3d-shooter
+ *    STATE. Reading the contract itself is what makes the guard independent of the two files the
+ *    desync destroys.
+ *  - FEEL_SPEC.json is rewritten only when ACCEPTANCE.json is (re)seeded, so it counts only while
+ *    an ACCEPTANCE.json is on disk to be kept. With none, everything is re-seeded and nothing is
+ *    stale, which is why a first `plan` in a fresh project reaches no refusal at all.
+ *  - STATE.md is the LAST resort, used only when no contract artifact declares a genre of its own
+ *    (a project seeded before FEEL_SPEC.json carried one). It is the file the desync CORRUPTS, so
+ *    letting it speak while the contract can speak for itself would let a rewritten STATE.md hide
+ *    the change from its own guard, and it would break the repair path, where re-running at the
+ *    genre the contract actually describes must be accepted and must rewrite STATE back.
+ */
+async function recordedContractGenres(
+  paths: LoombridgePaths,
+  prev: LoombridgeState | null,
+  existingPlan: SlicePlan | null,
+): Promise<string[]> {
+  const found: string[] = [];
+  if (existingPlan) found.push(existingPlan.genre);
+  if (await fileExists(paths.acceptance)) {
+    const acceptanceGenre = await genreFromAcceptance(paths);
+    if (acceptanceGenre) found.push(acceptanceGenre);
+    const feelGenre = await genreFromFeelSpec(paths);
+    if (feelGenre) found.push(feelGenre);
+    if (found.length === 0) {
+      const stateGenre = genreFromState(prev);
+      if (stateGenre) found.push(stateGenre);
+    }
+  }
+  return [...new Set(found)];
+}
+
+/**
+ * REFUSE to guess the genre. Returns the refusal message, or `null` when the genre IS stated.
+ *
+ * A guessed genre is the one route in the system to a wrong `graded` coverage claim: defaulting to
+ * the registry default seeds THAT genre's contract (its win rule, its feel metrics, its gate-tuning
+ * section) and, because the default resolves to a registered pack, the "unregistered genre" warning
+ * never fires and coverage still stamps `graded`. Observed live: a project named for an extraction
+ * shooter was seeded with a platformer contract, nine platformer feel metrics, and no
+ * `verification.gates` block, so the platformer-shaped gates stayed applicable.
+ *
+ * `loombridge adopt` already refuses on the same reasoning ("default to the registry default is
+ * WRONG (it would silently mis-genre the proposal), so require it"); this is the other front door.
+ *
+ * Three ways the genre IS stated, and each keeps working with no flag churn: `--genre`, a
+ * contract/brief that carries its own genre id, and the genre a prior `plan` already recorded in
+ * STATE (so re-planning an existing project never needs the flag).
+ */
+export function unstatedGenreRefusal(args: {
+  /** True when `--genre` was passed on the command line. */
+  genreExplicit: boolean;
+  /** True when `--genre-contract` / `--brief` was passed (the contract declares the genre). */
+  hasContractSource: boolean;
+  /** The genre a prior `STATE.md` supplies, if any (see {@link genreFromState}). */
+  stateGenre: string | undefined;
+  /**
+   * The registered genre ids. Injected so a test can exercise the single-registered-genre case
+   * without unregistering a real pack (which would weaken every other genre guard in the suite).
+   */
+  known?: readonly string[];
+}): string | null {
+  const known = args.known ?? knownGenreIds();
+  // Defaulting is only correct while there is exactly one thing to default TO. With a single
+  // registered pack the default IS the answer, so back-compat holds and `DEFAULT_GENRE_ID` stays.
+  if (known.length < 2) return null;
+  if (args.genreExplicit || args.hasContractSource || args.stateGenre) return null;
+  return (
+    "[loombridge plan] --genre is required: " +
+    `${known.length} genre packs are registered, and \`plan\` will not guess which one this project ` +
+    "is. A guessed genre seeds that genre's whole contract and still claims `graded`, so the build " +
+    "would be graded against gates it was never designed for. " +
+    `Known: ${known.join(", ")}. ` +
+    "Pass --genre <id> for a registered pack, or --genre-contract <path> / --brief <path> to plan a " +
+    "genre that has no pack. To WRITE that contract, run " +
+    "`loombridge genre init --genre <your-id> --class <twitch|systems|hybrid>`: it emits one that " +
+    "passes the validator unedited, at the path `--brief .loombridge` resolves. (Naming the command " +
+    'matters: "author a genre contract" on its own sends a reader off to study the validator.) ' +
+    "(Re-planning an existing project needs no flag: the genre already in STATE.md wins.)"
+  );
 }
 
 export interface PlanArgs {
@@ -381,6 +521,7 @@ function emitDesignHardeningAdvisory(contract: GenreContract): void {
  */
 export async function runPlan(args: PlanArgs): Promise<number> {
   const paths = loombridgePaths(args.root);
+  const rel = (p: string) => path.relative(args.root, p);
   // Read prior state once, up front: a re-plan must PRESERVE the genre it already promoted to.
   const prev = await readState(paths);
 
@@ -421,6 +562,33 @@ export async function runPlan(args: PlanArgs): Promise<number> {
       console.error(`[loombridge plan] invalid --genre-contract: ${message}`);
       return 2;
     }
+    // REFUSE A CONTRACT THAT IS STILL A SCAFFOLD. `genre init` seeds the fields no generator can
+    // know (the core loop, the art direction, each feedback chain) with its placeholder marker and
+    // says so ONCE on stdout, and nothing ever looked again. `validateGenreContract` cannot catch
+    // it either: a placeholder IS a non-empty string, so the contract is structurally valid and
+    // `plan` produced a full roadmap, a GAME_SPEC.md stating the placeholder as the pitch, and a
+    // `partially-graded` coverage stamp over fields nobody had written.
+    //
+    // Same convention as the mini-game pipeline's `isDraftContract` (`DRAFT:`/`TODO:` prefixes,
+    // `capabilities/minigame/minigame-draft.ts`), not a second one: a prefix-anchored check over
+    // the DESCRIPTIONS, and a draft is not runnable. Anchored at the start, so a real art-direction
+    // phrase that merely mentions the words never trips it.
+    //
+    // Refuses BEFORE `ensureScaffold`: a refusal that has already written half a `.loombridge/` is
+    // not a refusal.
+    const placeholders = genreContractPlaceholderPaths(genreContractInput);
+    if (placeholders.length > 0) {
+      console.error(
+        `[loombridge plan] NOT ready: ${path.relative(args.root, genreContractPath)} still carries ` +
+          `${placeholders.length} unwritten "${placeholderPrefix()}" field(s): ${placeholders.join(", ")}.`,
+      );
+      console.error(
+        "[loombridge plan] Each one is a decision `loombridge genre init` could not make for you, and " +
+          "planning on top of them would mint a roadmap, a GAME_SPEC.md, and a coverage claim over " +
+          "text nobody wrote. Fill them in and re-run.",
+      );
+      return 2;
+    }
   }
 
   // Genre resolution precedence: an explicit --genre-contract (its sourceGenreId) wins; then an
@@ -437,8 +605,7 @@ export async function runPlan(args: PlanArgs): Promise<number> {
   //
   // The only value that must NOT stick is `UNPLANNED_GENRE`, the sentinel a `target set` before any
   // `plan` leaves behind — that one means "no genre chosen yet", so the default correctly wins.
-  const preservedGenre =
-    !args.genreExplicit && prev?.genre && prev.genre !== UNPLANNED_GENRE ? prev.genre : undefined;
+  const preservedGenre = !args.genreExplicit ? genreFromState(prev) : undefined;
   const genre = promoted?.report.sourceGenreId ?? preservedGenre ?? args.genre;
   const genrePack = resolveGenrePack(genre);
 
@@ -459,13 +626,37 @@ export async function runPlan(args: PlanArgs): Promise<number> {
   // The pack's slice template stays OPTIONAL on the promoted path: when it exists, matching slice
   // ids keep pack-owned skill/gate guidance; when the genre is unregistered there is none, and the
   // promoter already accepts `sliceTemplate: undefined`.
+  // The promotion report ALREADY ON DISK. A project planned from a contract keeps one, and it is the
+  // artifact `deriveGenreCoverage` reads at verify/doneness time, so any message here that describes
+  // this project's coverage has to read it too, or the CLI narrates a state the gates do not agree
+  // with. Read before `ensureScaffold` (it only reads) and reused by the refusal below.
+  const priorPromotion = await readGenrePromotionReport(paths);
+  const priorPromotionForGenre = priorPromotion?.sourceGenreId === genre ? priorPromotion : null;
+
   if (!genrePack && !promoted) {
-    console.error(
-      `[loombridge plan] genre "${genre}" has no registered pack — seeding the GENERIC template. ` +
-        `Registered genres (${knownGenreIds().join(", ")}) plan as \`graded\`; this project will ` +
-        "verify as `ungraded` (genre-neutral gates only, no feel or fidelity oracle). For a stronger " +
-        "claim, author a genre contract and pass --genre-contract <file>.",
-    );
+    if (priorPromotionForGenre) {
+      // THE SECOND BARE `plan` ON A CONTRACT PROJECT. The old text fired here and was wrong three
+      // ways: it announced `ungraded` when `deriveGenreCoverage` reads GENRE_PROMOTION.json from
+      // disk and returns `partially-graded`; it prescribed "author a genre contract", which is what
+      // the developer had already done; and it claimed to be "seeding the GENERIC template" one line
+      // before reporting the contract's ACCEPTANCE.json as `kept (unchanged)`.
+      console.error(
+        `[loombridge plan] genre "${genre}" has no registered pack, and this project was planned from ` +
+          `a genre contract (${rel(paths.genrePromotion)}): nothing is re-seeded, and it verifies as ` +
+          "`partially-graded` with the contract's own gaps enumerated on the verdict. To change the " +
+          "contract, edit it and re-run `plan --brief <dir> --force` (or `--genre-contract <file> --force`).",
+      );
+    } else {
+      const seeds = args.force || !(await fileExists(paths.acceptance));
+      console.error(
+        `[loombridge plan] genre "${genre}" has no registered pack: ${seeds ? "seeding" : "keeping"} ` +
+          `the GENERIC template. Registered genres (${knownGenreIds().join(", ")}) plan as \`graded\`; ` +
+          "this project will verify as `ungraded` (genre-neutral gates only, no feel or fidelity " +
+          "oracle). For a stronger claim, author a genre contract with `loombridge genre init --genre " +
+          `${genre} --class <twitch|systems|hybrid>` +
+          "` and pass --genre-contract <file> (or --brief <dir>).",
+      );
+    }
   }
   if (genreContractInput) {
     promoted = promoteGenreContract(genreContractInput, {
@@ -493,9 +684,128 @@ export async function runPlan(args: PlanArgs): Promise<number> {
     }
   }
 
+  // ── --force ON A CONTRACT PROJECT, AT ITS OWN GENRE ────────────────────────────────────────────
+  // `plan --genre <the contract's own genre> --force` is reachable by combining two lines the flip
+  // refusal itself prints ("re-run with --force", "or with --genre <the genre on disk>"). It used to
+  // print "removed stale GENRE_PROMOTION.json, and it described the PREVIOUS promoted genre, not X"
+  // when `sourceGenreId` IS X, and say nothing about what it actually did: replace the promoted
+  // ACCEPTANCE.json with a TEMPLATE, discard the contract's `fidelityCriteria` (after which
+  // `doneness` refuses every design-targeted build), move coverage off the contract, and leave
+  // SLICES.json still carrying the contract's slices. A half-destroyed project, described as a
+  // cleanup.
+  //
+  // A re-promotion (`--brief` / `--genre-contract`) is the intended iteration loop and is unaffected
+  //: this only fires when NO contract was supplied on this run.
+  if (!promoted && priorPromotionForGenre && args.force) {
+    console.error(
+      `[loombridge plan] NOT ready: --force would re-seed ${rel(paths.acceptance)} for "${genre}" from ` +
+        `the ${genrePack ? "registered pack" : "genre-neutral"} template, but this project was planned ` +
+        `from a genre CONTRACT for that same genre (${rel(paths.genrePromotion)}). That discards the ` +
+        "contract's acceptance and its `fidelityCriteria` (after which `loombridge doneness` REFUSES " +
+        `every design-targeted build), stops coverage being derived from the contract, and leaves ` +
+        `${rel(paths.slices)} still carrying the contract's slices.`,
+    );
+    console.error(
+      "[loombridge plan] To re-promote an EDITED contract (the normal iteration loop): " +
+        "`loombridge plan --brief <dir> --force` (or --genre-contract <file> --force). To deliberately " +
+        `abandon the contract and seed the template instead: delete ${rel(paths.genrePromotion)} first.`,
+    );
+    return 2;
+  }
+
   const created: string[] = [];
   const kept: string[] = [];
-  const rel = (p: string) => path.relative(args.root, p);
+
+  // ── a GENRE CHANGE moves the WHOLE contract, or it does not happen at all ───────────────────────
+  // One detection point and one policy for both halves of the same failure, so they cannot drift.
+  //
+  // WITHOUT `--force` nothing under `.loombridge/` is re-seeded, so a flip wrote the NEW genre into
+  // STATE.md and left the OLD genre's ACCEPTANCE.json, FEEL_SPEC.json and SLICES.json exactly where
+  // they were. Observed live: `plan --genre 3d-shooter` on a project planned as platformer-2d
+  // printed no genre notice at all, kept `win.rule: "all-fruit"` in the contract, and recorded
+  // `Genre: 3d-shooter` in STATE. Because the new genre resolves to a REGISTERED pack, coverage
+  // still stamps `graded`: a second route to the wrong `graded` claim `unstatedGenreRefusal`
+  // exists to close, this time with the project graded against another genre's gates.
+  //
+  // REFUSE it rather than apply it. Applying the flip silently would let one mistyped flag destroy
+  // a contract and a roadmap the developer has been building against for hours, and `plan` is
+  // re-run constantly with no flags at all. `--force` is already the "overwrite existing seeded
+  // files" flag and already carries the approval-proof rule below, so the refusal points there
+  // instead of inventing a second policy.
+  //
+  // WITH `--force` the contract IS re-seeded, but on the non-promoted path SLICES.json is written
+  // only in `mode === "design"`, which an existing roadmap suppresses. That left a stale slice DAG
+  // still DECLARING the old genre, surfacing much later as a `doneness` roll-up refusal about a
+  // genre mismatch: a half-changed project that looks changed. Rewrite it, LOUDLY.
+  //
+  // Either way, a slice carrying human sign-off REFUSES: an approval is evidence, and a genre flip
+  // must never become the cheap way to erase one. `loombridge reopen` is the sanctioned withdrawal.
+  const existingPlan = await readSlicePlan(paths);
+  const roadmapMoves = existingPlan !== null && existingPlan.genre !== genre;
+
+  // ── THE APPROVAL-PROOF BAR APPLIES TO ANY ROADMAP REWRITE, NOT ONLY A GENRE CHANGE ────────────
+  // This guard used to be computed only when `roadmapMoves` was true, while the PROMOTED path writes
+  // SLICES.json UNCONDITIONALLY (see below). So re-promoting an edited contract under the SAME
+  // genreId: the ordinary iteration loop for the any-genre path: erased human sign-off with no
+  // refusal and no notice: a slice with `state: "approved"` plus a full proof block came back
+  // `pending`. The rewrite is what the rule is about, so the rule binds to the rewrite.
+  //
+  // The two rewrite paths, and nothing else writes SLICES.json before `mode === "design"`:
+  //   - promoted        `writeSlicePlan(paths, promoted.slices)` further down, every time;
+  //   - roadmapMoves    the `--force` genre-flip rebuild from the pack template.
+  const roadmapRewritten = existingPlan !== null && (promoted !== null || roadmapMoves);
+  if (roadmapRewritten) {
+    const signed = existingPlan.slices
+      .map((slice) => ({ id: slice.id, evidence: sliceApprovalEvidence(slice) }))
+      .filter((s) => s.evidence.length > 0);
+    if (signed.length > 0) {
+      const cause = roadmapMoves
+        ? `changing the genre from "${existingPlan.genre}" to "${genre}"`
+        : `re-promoting the "${genre}" genre contract`;
+      console.error(
+        `[loombridge plan] NOT ready: ${cause} rewrites ${rel(paths.slices)}, but ${signed.length} ` +
+          "slice(s) carry an approval proof:",
+      );
+      for (const s of signed) console.error(`[loombridge plan]   ${s.id}: ${s.evidence.join(", ")}`);
+      console.error(
+        "[loombridge plan] An approved slice is human-signed evidence and is never discarded silently. " +
+          "Withdraw each approval with `loombridge reopen <slice-id>` (it clears the artifacts, cascades " +
+          "to dependents, and records the event), then re-run this command.",
+      );
+      return 2;
+    }
+  }
+
+  const staleGenres = (await recordedContractGenres(paths, prev, existingPlan)).filter((g) => g !== genre);
+  if (staleGenres.length > 0) {
+    if (!args.force) {
+      console.error(
+        `[loombridge plan] NOT ready: this project is planned as "${staleGenres.join('", "')}" and this ` +
+          `run resolves the genre to "${genre}". Without --force nothing is re-seeded, so STATE.md ` +
+          `would claim "${genre}" while ${rel(paths.acceptance)}, ${rel(paths.feelSpec)} and ` +
+          `${rel(paths.slices)} still describe the old genre. A registered genre still stamps ` +
+          "coverage `graded`, so the build would be graded against gates it was never designed for.",
+      );
+      console.error(
+        `[loombridge plan] Re-run with --force to re-seed the whole contract for "${genre}" (all build ` +
+          "state on the old slices is discarded), or re-run at the genre the contract on disk already " +
+          `declares to keep it: ${staleGenres.map((g) => `--genre "${g}"`).join(" / ")}.`,
+      );
+      return 2;
+    }
+    // The promoted path writes its own SLICES.json from the contract below, so rewriting from a pack
+    // template here would be overwritten a moment later by a better answer.
+    if (roadmapMoves && !promoted) {
+      const rebuilt = instantiateSlicePlan(await loadSliceTemplate(genre));
+      await writeSlicePlan(paths, rebuilt);
+      console.error(
+        `[loombridge plan] REWROTE ${rel(paths.slices)}: the roadmap declared genre ` +
+          `"${existingPlan!.genre}" and --force re-seeds "${genre}". ${existingPlan!.slices.length} ` +
+          `slice(s) replaced with ${rebuilt.slices.length} from the "${genre}" roadmap; all build ` +
+          "state on the old slices is discarded.",
+      );
+    }
+  }
 
   // 1. ACCEPTANCE.json — seed from the genre template (validated before write).
   //    Keep the contract object around so GAME_SPEC.md can be derived from it
@@ -513,7 +823,10 @@ export async function runPlan(args: PlanArgs): Promise<number> {
       promoted?.acceptance ??
       (JSON.parse(await fs.readFile(acceptanceTemplatePath, "utf-8")) as AcceptanceContract);
     const seededGameName = args.name ?? (path.basename(args.root) || template.game);
-    contract = { ...template, game: seededGameName };
+    // STAMP THE GENRE INTO THE CONTRACT. The contract is the grading; it has to say which genre it
+    // grades, or the flip guard has nothing to read once FEEL_SPEC.json and STATE.md are gone. See
+    // `recordedContractGenres` and `AcceptanceContract.genre`.
+    contract = { ...template, game: seededGameName, genre };
     assertValidAcceptanceContract(contract); // fail fast if our seed is invalid
     await fs.writeFile(paths.acceptance, `${JSON.stringify(contract, null, 2)}\n`, "utf-8");
     acceptanceOutcome = "created";
@@ -534,6 +847,22 @@ export async function runPlan(args: PlanArgs): Promise<number> {
   (acceptanceOutcome === "created" ? created : kept).push(rel(paths.acceptance));
 
   if (promoted) {
+    // NAME WHAT WAS INVENTED. A GenreContract has no field for a win rule, a font, a palette or a
+    // native resolution, so the promoter fills all four from a pixel-art 2D template: and
+    // GAME_SPEC.md then prints them as fact ("Objective: all-enemies-defeated") with nothing
+    // marking them as assumptions. One line here is the difference between a default and a silent
+    // decision. Only on the run that actually promoted; a re-plan re-reads the contract from disk.
+    if (acceptanceOutcome === "created") {
+      console.error(
+        `[loombridge plan] promoted contract DEFAULTS (the GenreContract states none of these, and ` +
+          `${rel(paths.gameSpec)} prints them as fact):`,
+      );
+      for (const line of promoted.defaults) console.error(`[loombridge plan]   ${line}`);
+      console.error(
+        `[loombridge plan]   Edit ${rel(paths.acceptance)} directly if any of them is wrong for this game.`,
+      );
+    }
+
     await writeSlicePlan(paths, promoted.slices);
     created.push(rel(paths.slices));
 
@@ -882,12 +1211,21 @@ export async function runPlan(args: PlanArgs): Promise<number> {
  */
 type ParsedArgs = Omit<PlanArgs, "engine"> & { engine?: string };
 
-function parseArgs(args: string[]): ParsedArgs | { help: true } {
-  // Back-compat default: an omitted --genre plans the registry's default genre. The genre literal
-  // lives in the registry (the one genre-wiring point), not here — this core stays genre-neutral.
-  // Now that a second genre is registered, omitting --genre silently picks the default; callers
-  // building another genre must pass --genre explicitly. (Requiring an explicit genre when >1 is
-  // registered is a deliberate future behavior change, not made here to keep the happy path unchanged.)
+/**
+ * A `--help`/parse outcome. `usageError` exits 2; a bare `help` exits 0.
+ *
+ * Same discriminator `update`/`verify`/`status` already carry, for the same reason: a malformed
+ * invocation that reports SUCCESS is a refusal that does not look like one, and a CI step or an
+ * agent branching on `$?` reads it as a pass.
+ */
+type ParseHelp = { help: true; usageError?: boolean };
+
+function parseArgs(args: string[]): ParsedArgs | ParseHelp {
+  // The registry default is the SEED value only. The genre literal lives in the registry (the one
+  // genre-wiring point), not here, so this core stays genre-neutral. With more than one pack
+  // registered this value is never reached: `run` refuses first (see `unstatedGenreRefusal`), and
+  // `runPlan` prefers a promoted contract's genre and then the genre already in STATE. It remains
+  // the correct answer in exactly the case it was written for: a single registered pack.
   let genre = defaultGenreId();
   let genreExplicit = false;
   let engine: string | undefined;
@@ -919,14 +1257,14 @@ function parseArgs(args: string[]): ParsedArgs | { help: true } {
       const value = args[(i += 1)];
       if (!value || !ASSET_MANIFEST_MODES.has(value as AssetManifestMode)) {
         console.error("[loombridge plan] --asset-mode must be registry, generated, or hybrid.");
-        return { help: true };
+        return { help: true, usageError: true };
       }
       assetMode = value as AssetManifestMode;
     }
     else if (arg === "--help" || arg === "-h") return { help: true };
     else {
       console.error(`[loombridge plan] unknown argument "${arg}".`);
-      return { help: true };
+      return { help: true, usageError: true };
     }
   }
   return { root, genre, genreExplicit, engine, name, genreContractPath, briefPath, force, allowMissingDesignTarget, go, note, signoffPath, assetMode };
@@ -975,10 +1313,14 @@ function printUsage(): void {
       "a verified slice with `--go`.",
       "",
       "Options:",
-      `  --genre <id>    Genre pack — one of: ${knownGenreIds().join(", ")}. Defaults to ${defaultGenreId()} when omitted.`,
+      `  --genre <id>    Genre pack: one of ${knownGenreIds().join(", ")}. REQUIRED on a first`,
+      "                  `plan` while more than one pack is registered; `plan` refuses",
+      "                  rather than guess. A re-plan needs no flag (the genre in",
+      "                  STATE.md wins), and --genre-contract / --brief supply it too.",
       "                  These are the genres with a shipped pack template; a build",
-      "                  planned from one verifies as `graded`. For any OTHER genre,",
-      "                  author a genre contract and use --genre-contract / --brief:",
+      "                  planned from one verifies as `graded`. For any OTHER genre, run",
+      "                  `loombridge genre init --genre <your-id> --class <twitch|systems",
+      "                  |hybrid>` to write a contract, then --brief / --genre-contract:",
       "                  it plans and builds, and verifies as `partially-graded` with",
       "                  its ungraded gaps enumerated on the verdict.",
       "  --engine <id>   Target engine. Auto-detected from --root when omitted",
@@ -996,7 +1338,10 @@ function printUsage(): void {
       "                  Resolves to the interview-equivalent GenreContract and",
       "                  promotes it exactly like --genre-contract.",
       "  --root <dir>    Project root (default: cwd)",
-      "  --force         Overwrite existing seeded files",
+      "  --force         Overwrite existing seeded files. REQUIRED to change the genre of an",
+      "                  already-planned project: without it a --genre that disagrees with the",
+      "                  contract on disk refuses, rather than record the new genre in STATE.md",
+      "                  beside the old genre's contract.",
       "  --asset-mode <registry|generated|hybrid>",
       "                  Record the developer-approved asset strategy as a draft",
       "                  .loombridge/ASSET_MANIFEST.json. Roadmap scaffolding still",
@@ -1021,11 +1366,27 @@ export async function run(args: string[]): Promise<number> {
   const parsed = parseArgs(args);
   if ("help" in parsed) {
     printUsage();
-    return 0;
+    return parsed.usageError ? 2 : 0;
   }
   // Resolve the engine (explicit override, else auto-detect) BEFORE building the
   // PlanArgs `runPlan` consumes — keeping `runPlan` engine-resolved + unchanged.
   const resolved = resolveEngine(parsed);
   if ("exitCode" in resolved) return resolved.exitCode;
+  // Refuse an UNSTATED genre before anything is scaffolded or written: a refusal that has already
+  // left a half-scaffolded `.loombridge/` behind is not a refusal. Exit 2, because a missing
+  // required argument is a usage/precondition error, not a failed check.
+  //
+  // AFTER engine resolution on purpose. Both are exit-2 preconditions, but "you are not in a game
+  // project" is the more actionable answer when both are true: asking someone to name the genre of
+  // a directory that is not a project sends them to fix the wrong thing.
+  const refusal = unstatedGenreRefusal({
+    genreExplicit: parsed.genreExplicit === true,
+    hasContractSource: Boolean(parsed.genreContractPath ?? parsed.briefPath),
+    stateGenre: genreFromState(await readState(loombridgePaths(parsed.root))),
+  });
+  if (refusal) {
+    console.error(refusal);
+    return 2;
+  }
   return runPlan({ ...parsed, engine: resolved.engine });
 }

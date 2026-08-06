@@ -6,8 +6,16 @@ description: Interview for and emit a Genre Contract — the plan-time build con
 # Genre Pack Authoring
 
 Use this skill to run the plan-time **elicitation front-end**: turn a one-line game brief into a
-12-field **Genre Contract** that a deterministic validator accepts. The contract is the genre-agnostic
-build plan; this skill is the judgment half (the deterministic half is `validateGenreContract`).
+**Genre Contract** that a deterministic validator accepts: the 12-field required spine plus the
+optional fields in Group D, which are the ones that switch real checks on. The contract is the
+genre-agnostic build plan; this skill is the judgment half (the deterministic half is
+`validateGenreContract`).
+
+**Start from the scaffold, not from a blank file.** `loombridge genre init --genre <id> --class
+<twitch|systems|hybrid>` emits a contract that already passes the validator, seeded from the genre's
+hint-card when one exists, with the fields no generator can know marked `REPLACE ME:`. This skill is
+then the interview that replaces those markers. (`plan` REFUSES a contract that still carries one, so
+a scaffold is a starting point, never a deliverable.)
 
 The gate is `validateGenreContract` in
 `mcp-server/src/capabilities/genre/genre-contract/validator.ts`.
@@ -71,6 +79,37 @@ optional `subGenres`. Then:
   of `gates[]` (closed set) / `gaps[]`** — a slice with neither is refused. Optional `kind`.
 - **10 `refusalConditions[]`** — `condition` + `reason`: what is unverifiable, labeled honestly.
 - **11 `humanOracleChecks[]`** — `check` + `appliesTo`: required for every `judgment-only` target.
+
+### Group D: Optional, and the only fields that switch NEW checks on
+
+The spine above is what the validator REQUIRES. These are what a contract earns extra grading with,
+so treat them as part of the interview rather than as trimmings.
+
+- **`fidelityCriteria[]`: the highest-value field in the whole contract.** A build planned from a
+  contract verifies as **`partially-graded`**: the genre-neutral gates still gate, and the
+  genre-specific feel oracle does not exist, so the verdict passes with its gaps enumerated. The one
+  thing a contract can buy BACK is the hero shot. `loombridge doneness` grades an approved Design
+  Target against the genre's hero-shot fidelity criteria; a registered pack declares them, an
+  unregistered genre has none, so **without `fidelityCriteria` `doneness` REFUSES every
+  design-targeted build of this genre.** (The other exit is declaring `art: { "mode": "deferred" }`
+  in `ACCEPTANCE.json`, which is a different and louder trade: a gray-box build.)
+
+  Ids come from a closed set the schema enumerates, and an id outside it is refused rather than
+  dropped. Ask the human which of them THIS game's hero shot can actually satisfy: a criterion the
+  frame cannot meet makes their own doneness unreachable-green. Do not delete the field to make a
+  refusal go away.
+
+  A contract whose `genreId` names an ALREADY-REGISTERED pack is the one case where this field does
+  nothing: coverage resolves from the registry (`graded`), and doneness grades against the PACK's
+  criteria. Pick an unregistered id if the contract is meant to govern its own grading.
+- **`productThesis`**: what this game IS in one line and what it is NOT. The strongest anti-drift
+  guardrail in dogfooding; `plan` warns when it is absent.
+- **`scaleModel`**: `{ playerSpeedMps, targetRunSeconds, arenaWidthM }`. Without it the scale
+  sanity check cannot run at all; `plan` warns when it is absent.
+- **`requiredEvidenceClasses[]`**, which distinct evidence signals the build must gather, so
+  "console clean" can never stand in for "playtest verified". `plan` does NOT warn when it is
+  missing (the per-slice `gates` proxy for it), so it is an opt-in nobody prompts. Declaring it
+  makes `doneness` enforce each class. Declare only classes the build can actually produce.
 
 ## Vertical-first (enforced, not just encouraged)
 
@@ -181,6 +220,28 @@ pack-discovery refactor is a later milestone; here the hint-card is just a file 
 Absent a pack, the spine + your genre knowledge still emit a contract — lower default quality, more
 honest gaps.
 The hint-card's `genreClass` is only a SEED; field 2's `genreClass` is authoritative.
+
+## Hand it to `plan` (the step that makes the contract real)
+
+A contract nobody plans from is a document. Finish here:
+
+```bash
+# `genre init` writes .loombridge/genre-contract.json: the exact name `--brief <dir>` resolves.
+loombridge plan --brief .loombridge          # or: --genre-contract <path>
+```
+
+What to expect, and what to tell the human:
+
+- `plan` REFUSES if any field still carries the `REPLACE ME:` marker. That is the interview not being
+  finished, not a bug.
+- It writes `ACCEPTANCE.json`, `SLICES.json`, and `GENRE_PROMOTION.json`. The build then verifies as
+  **`partially-graded`**, with the contract's own gaps enumerated on the verdict.
+- It prints ADVISORY warnings for `productThesis` / `scaleModel` / the acceptance-protocol proxy.
+  Offer to fill them in; never fabricate a value to silence one.
+- **Re-promoting an edited contract needs `--force`** (`plan --brief <dir> --force`), and it REFUSES
+  if any slice already carries a human approval proof, withdraw those with `loombridge reopen
+  <slice-id>` first. Never reach for `plan --genre <id> --force` to "reset": that path is refused
+  precisely because it would replace the contract with a template.
 
 ## Boundaries
 

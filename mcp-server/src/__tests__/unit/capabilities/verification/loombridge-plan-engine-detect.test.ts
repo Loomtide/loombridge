@@ -98,7 +98,9 @@ test("run — engine omitted + Unity project → detects unity (note printed), p
     await approveDesignTarget(root);
     // No --engine; detection should pick unity and the plan should run (and,
     // design approved, scaffold the roadmap + announce the first slice).
-    const { code, err } = await runCli(["--root", root]);
+    // --genre is stated because this is an ENGINE test: a fresh project with no recorded genre
+    // refuses first (see `unstatedGenreRefusal`), which would test the wrong seam here.
+    const { code, err } = await runCli(["--root", root, "--genre", "platformer-2d"]);
     assert.equal(code, 0);
     assert.match(err, /detected engine: unity/);
     assert.match(err, /scaffolded roadmap: 9 slices/);
@@ -138,7 +140,7 @@ test("run — explicit --engine unity skips detection, works regardless of proje
   try {
     // No Unity marker at all — an explicit engine must NOT trigger detection.
     await approveDesignTarget(root);
-    const { code, err } = await runCli(["--root", root, "--engine", "unity"]);
+    const { code, err } = await runCli(["--root", root, "--engine", "unity", "--genre", "platformer-2d"]);
     assert.equal(code, 0);
     assert.doesNotMatch(err, /detected engine/);
     assert.doesNotMatch(err, /could not detect/);

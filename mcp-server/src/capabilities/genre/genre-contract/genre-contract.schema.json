@@ -1,0 +1,460 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://loombridge.dev/schemas/genre-contract.schema.json",
+  "title": "Loombridge Genre Contract",
+  "description": "The plan-time build contract that turns a one-line game brief into a fully-specified, measurable, vertical-first plan for ANY genre, registered or not. Fed to `loombridge plan --genre-contract <file>` or `--brief <dir>`. THE ERGONOMICS LAYER, NOT THE GATE: this schema gives editors completion and enables standalone linting; `validateGenreContract` (capabilities/genre/genre-contract/validator.ts) is what actually refuses a contract, and it enforces cross-field rules no JSON Schema can express (DAG cycles, calculator binding, band provenance sign-off, vertical-first budget counts, genre-class completeness). A file that satisfies this schema can still be refused; the CLI's refusal is authoritative. Scaffold a starting contract with `loombridge genre init --genre <id>`; see Docs/Profiles/GenreContractAuthoring.md.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "genreId",
+    "confidence",
+    "targetPlatform",
+    "networkModel",
+    "coreLoop",
+    "artDirection",
+    "verticalSliceBudget",
+    "feedbackChains",
+    "tunables",
+    "measurabilityMap",
+    "referenceAnchor",
+    "sliceDag",
+    "refusalConditions",
+    "humanOracleChecks"
+  ],
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "Optional editor pointer at this schema file. Documented because `additionalProperties` is false, so a contract that carries the usual editor hint would otherwise be flagged. `validateGenreContract` ignores it."
+    },
+    "schemaVersion": {
+      "const": "0.1.0",
+      "description": "Frozen contract version. Bound to GENRE_CONTRACT_SCHEMA_VERSION in types.ts."
+    },
+    "genreId": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Stable id for this genre. Open by design: an UNREGISTERED id is the whole point of the contract path."
+    },
+    "subGenres": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "confidence": {
+      "enum": ["experimental", "candidate", "hardened"],
+      "description": "Confidence in the contract as a whole. A first authored contract is `experimental`."
+    },
+
+    "targetPlatform": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["device", "inputScheme"],
+      "description": "Field 0. Strings are open by design; a genre pack or profile may constrain them.",
+      "properties": {
+        "device": { "type": "string", "minLength": 1 },
+        "inputScheme": { "type": "string", "minLength": 1 },
+        "aspect": { "type": "string" },
+        "session": { "type": "string" }
+      }
+    },
+
+    "networkModel": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode"],
+      "description": "Field 1. Anything but `single-player` also requires `netcode` (enforced by the validator, not here).",
+      "properties": {
+        "mode": { "enum": ["single-player", "co-op", "pvp"] },
+        "netcode": { "type": "string" },
+        "authority": { "type": "string" },
+        "tick": { "type": "string" },
+        "prediction": { "type": "string" },
+        "spPlayable": { "type": "boolean" }
+      }
+    },
+
+    "coreLoop": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["description", "genreClass"],
+      "description": "Field 2. `genreClass` is AUTHORITATIVE: it selects the validator's completeness profile.",
+      "properties": {
+        "description": { "type": "string", "minLength": 1 },
+        "perspective": { "type": "string" },
+        "subGenre": { "type": "string" },
+        "genreClass": {
+          "enum": ["twitch", "systems", "hybrid"],
+          "description": "twitch/hybrid must commit to at least one measurable feel target and at least one feedback chain; systems may be judgment-only but then carries the weight in humanOracleChecks."
+        }
+      }
+    },
+
+    "artDirection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["style"],
+      "description": "Field 3.",
+      "properties": {
+        "style": { "type": "string", "minLength": 1 },
+        "palette": { "type": "string" },
+        "assetRoles": { "type": "array", "items": { "type": "string" } },
+        "theme": { "type": "string" },
+        "heroShotMock": { "type": "string" }
+      }
+    },
+
+    "verticalSliceBudget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["coreVerticalContent"],
+      "description": "Field 4. Vertical-first by content COUNTS, not just bucket names.",
+      "properties": {
+        "coreVerticalContent": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": { "type": "integer", "minimum": 1 },
+          "description": "Minimal content counts for the core vertical, e.g. { \"weapon\": 1, \"enemy\": 1, \"arena\": 1 }. A coreVertical slice whose `kind` names one of these keys is counted against it."
+        },
+        "deferred": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "What is explicitly pushed to deferredMeta. Any kind named here is also forbidden in coreVertical."
+        }
+      }
+    },
+
+    "feedbackChains": {
+      "type": "array",
+      "description": "Field 5. One input -> response -> feedback chain per core verb.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["verb", "input", "response", "feedback"],
+        "properties": {
+          "verb": { "type": "string", "minLength": 1 },
+          "input": { "type": "string", "minLength": 1 },
+          "response": { "type": "string", "minLength": 1 },
+          "feedback": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+
+    "tunables": {
+      "type": "array",
+      "description": "Field 6. Named, runtime-tunable feel parameters: no magic constants in gameplay code.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "description": { "type": "string" },
+          "unit": { "$ref": "#/$defs/profileUnit" }
+        }
+      }
+    },
+
+    "measurabilityMap": {
+      "type": "array",
+      "minItems": 1,
+      "description": "Field 7. The honesty crux: one row per feel target saying how honestly it can be graded today.",
+      "items": { "$ref": "#/$defs/measurabilityEntry" }
+    },
+
+    "referenceAnchor": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Field 8. Where the bands came from, so they are anchored rather than invented.",
+      "properties": {
+        "clips": { "type": "array", "items": { "type": "string" } },
+        "exemplars": { "type": "array", "items": { "type": "string" } },
+        "notes": { "type": "string" }
+      }
+    },
+
+    "sliceDag": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["coreVertical", "deferredMeta"],
+      "description": "Field 9. The build order, split into the two vertical-first buckets. `plan` promotes this into .loombridge/SLICES.json.",
+      "properties": {
+        "coreVertical": { "type": "array", "items": { "$ref": "#/$defs/sliceNode" } },
+        "deferredMeta": { "type": "array", "items": { "$ref": "#/$defs/sliceNode" } }
+      }
+    },
+
+    "refusalConditions": {
+      "type": "array",
+      "description": "Field 10. What this build will NOT be able to prove, named up front instead of discovered as a false green.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["condition", "reason"],
+        "properties": {
+          "condition": { "type": "string", "minLength": 1 },
+          "reason": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+
+    "humanOracleChecks": {
+      "type": "array",
+      "description": "Field 11. Every `judgment-only` target needs a row here whose `appliesTo` matches it.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["check", "appliesTo"],
+        "properties": {
+          "check": { "type": "string", "minLength": 1 },
+          "appliesTo": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+
+    "productThesis": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["statement", "notThisGame", "deferredFeatures", "feelDamagingAdditions"],
+      "description": "OPTIONAL anti-drift guardrail. Absent is a `plan` WARN, never a refusal; present-but-malformed IS refused.",
+      "properties": {
+        "statement": { "type": "string", "minLength": 1 },
+        "notThisGame": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "deferredFeatures": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "feelDamagingAdditions": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+      }
+    },
+
+    "scaleModel": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["playerSpeedMps", "targetRunSeconds"],
+      "description": "OPTIONAL numeric inputs for the scale sanity check (geometry tied to speed and target run length). Absent means the check cannot run and says so; present-but-malformed IS refused.",
+      "properties": {
+        "playerSpeedMps": { "type": "number", "exclusiveMinimum": 0 },
+        "targetRunSeconds": { "type": "number", "exclusiveMinimum": 0 },
+        "arenaWidthM": { "type": "number", "exclusiveMinimum": 0 },
+        "arenaHeightM": { "type": "number", "exclusiveMinimum": 0 },
+        "cameraVisibleWidthM": { "type": "number", "exclusiveMinimum": 0 },
+        "firstLootSeconds": { "type": "number", "exclusiveMinimum": 0 }
+      }
+    },
+
+    "requiredEvidenceClasses": {
+      "type": "array",
+      "description": "OPTIONAL anti-compression declaration: the distinct evidence signals the build must gather, propagated verbatim into the acceptance contract and enforced by `loombridge doneness`. Declare only classes this build can actually produce.",
+      "items": {
+        "enum": [
+          "compile_import",
+          "console_clean",
+          "scene_validation",
+          "frame_evidence",
+          "input_exercised",
+          "play_trace",
+          "telemetry",
+          "human_notes"
+        ]
+      }
+    },
+
+    "fidelityCriteria": {
+      "type": "array",
+      "minItems": 1,
+      "description": "OPTIONAL but high-value: the hero-shot fidelity criteria `doneness` grades this genre's approved Design Target against. WITHOUT it, doneness REFUSES any design-targeted build of an unregistered genre. Every id must be gradable (the ids below are the only ones vlm-review.json may carry), and the list must be non-empty: an empty set would make the fidelity check pass vacuously. Declare only criteria this game's hero shot can actually satisfy, since an unsatisfiable criterion makes doneness unreachable-green.",
+      "items": {
+        "enum": [
+          "composition-centering",
+          "palette-adherence",
+          "font-rendering",
+          "juice-cue-presence",
+          "end-state-styling",
+          "hazard-readability",
+          "collectible-path",
+          "parallax",
+          "hud-crispness",
+          "props-grounded",
+          "platform-edge-to-edge",
+          "backdrop-seamless",
+          "palette-match",
+          "composition-match",
+          "rendering-artifacts",
+          "parallax-present",
+          "platform-tiers",
+          "element-placement-arc",
+          "arena-framing",
+          "enemy-readability",
+          "hud-placement"
+        ]
+      }
+    }
+  },
+
+  "$defs": {
+    "profileUnit": {
+      "enum": ["u", "u/s", "u/s^2", "s", "ms", "px", "x"],
+      "description": "The units a feel band or tunable may carry. A unit outside this set is refused: there is no calculator that could produce it."
+    },
+
+    "implementedCalculatorId": {
+      "enum": [
+        "aimTurnRateDegPerSec",
+        "coverBlocksDamage",
+        "coyoteTime",
+        "dashDistance",
+        "dashToGhostMs",
+        "enemyReactionLatencyMs",
+        "fallGravityMultiplier",
+        "fireInputToSpawnLatency",
+        "fireIntervalMs",
+        "groundContactToDustMs",
+        "hitscanImpactLatencyMs",
+        "hitstopMs",
+        "inputLatency",
+        "inputToAnimStateLatency",
+        "inputToSfxLatency",
+        "jumpApex",
+        "jumpBuffer",
+        "lookInputToYawLatencyMs",
+        "projectileSpeed",
+        "runAcceleration",
+        "runDeceleration",
+        "runSpeed",
+        "screenShakeMag",
+        "shortHopApex",
+        "shotAimAlignmentDeg",
+        "timeToApex",
+        "ttkMs",
+        "wallSlideTangentRatio",
+        "waveObjectiveComplete"
+      ],
+      "description": "The feel metrics with an ACTUALLY-IMPLEMENTED calculator today. A `measurable-now` row must name one of these; any other id belongs to `needs-new-calculator`."
+    },
+
+    "feelBand": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "A numeric range, a qualitative description, or both. At least one of min/max/qualitative is required by the validator.",
+      "properties": {
+        "min": { "type": "number" },
+        "max": { "type": "number" },
+        "unit": { "$ref": "#/$defs/profileUnit" },
+        "qualitative": { "type": "string" }
+      }
+    },
+
+    "operatorSignoff": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["signoffArtifact", "signoffSha256"],
+      "description": "Out-of-band operator confirmation. NOT a self-authored boolean: it names a durable artifact and its digest.",
+      "properties": {
+        "signoffArtifact": { "type": "string", "minLength": 1 },
+        "signoffSha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "note": { "type": "string" }
+      }
+    },
+
+    "measurabilityEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["target", "tag", "bucket"],
+      "properties": {
+        "target": { "type": "string", "minLength": 1 },
+        "tag": {
+          "enum": [
+            "measurable-now",
+            "needs-new-calculator",
+            "needs-new-bridge-capability",
+            "judgment-only",
+            "engine-unsupported-today"
+          ],
+          "description": "How honestly this target can be graded today. `measurable-now` binds to an implemented calculator; `judgment-only` binds to a humanOracleCheck. Both bindings are enforced by the validator, not here."
+        },
+        "calculator": {
+          "type": "string",
+          "minLength": 1,
+          "description": "For `measurable-now`: the implemented calculator id (see $defs.implementedCalculatorId for the current list). For the needs-* tags: a short note naming what has to be built. The two uses are why this stays a free string here; `validateGenreContract` is what refuses an unimplemented id on a measurable-now row.",
+          "$comment": "The anyOf below is a COMPLETION affordance, not a constraint: its second branch accepts any non-empty string, so it rejects nothing an editor would otherwise allow. It exists so an author gets the implemented calculator ids suggested inline instead of reading them out of validator.ts, which is the authoring cost this schema was added to remove. Binding the field to the enum outright would break the needs-new-calculator prose note, and conditioning it on `tag` would be this schema claiming to enforce R5, which belongs to the validator.",
+          "anyOf": [
+            { "$ref": "#/$defs/implementedCalculatorId" },
+            { "type": "string", "minLength": 1 }
+          ]
+        },
+        "band": {
+          "$ref": "#/$defs/feelBand",
+          "description": "The aspirational TARGET band. Recorded and surfaced; never gates a verdict on its own. Requires an evidenceKind."
+        },
+        "gateBand": {
+          "$ref": "#/$defs/feelBand",
+          "description": "The ENFORCED window: a passing metric-evidence row for this target must land inside it. The validator additionally requires a numeric min or max here, since a qualitative-only gateBand would enforce nothing."
+        },
+        "evidenceKind": {
+          "enum": ["reference-anchored", "pack-default", "agent-guess"],
+          "description": "Where the band came from. Required whenever `band` is present; `agent-guess` additionally requires a signoff."
+        },
+        "signoff": { "$ref": "#/$defs/operatorSignoff" },
+        "bucket": {
+          "enum": ["coreVertical", "deferredMeta"],
+          "description": "Which bucket the owning target lives in. Never inferred: the completeness rules key off it."
+        }
+      }
+    },
+
+    "sliceNode": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "title", "dependsOn", "confidence"],
+      "description": "One buildable slice. It must declare at least one of `gates`/`gaps` (both are allowed): every slice maps to a real proof and/or a named gap, never to nothing.",
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "title": { "type": "string", "minLength": 1 },
+        "dependsOn": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Slice ids within this contract. Unresolved ids and dependency cycles are refused by the validator."
+        },
+        "confidence": { "enum": ["experimental", "candidate", "hardened"] },
+        "gates": {
+          "type": "array",
+          "description": "The gate ids that prove this slice. Closed set: a gate that does not exist cannot prove anything.",
+          "items": {
+            "enum": [
+              "asset-source-fidelity",
+              "console-clean",
+              "coverage",
+              "feel",
+              "feel-provenance",
+              "feel-rederive",
+              "frame-integrity",
+              "framing",
+              "inputToSfxLatency",
+              "manifest",
+              "parallax-motion",
+              "physics-timestep",
+              "placement",
+              "platform-tiles",
+              "playability",
+              "prop-purpose",
+              "reachability",
+              "render-frame",
+              "sfx-fatigue",
+              "sfx-presence",
+              "sfx-runtime",
+              "tile-render",
+              "ui-conformance",
+              "visual-artifacts"
+            ]
+          }
+        },
+        "gaps": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "description": "Named gaps where no supported gate exists. Kept OUT of `gates` so they are never silently satisfied."
+        },
+        "kind": {
+          "type": "string",
+          "description": "Optional content-kind tag. A coreVertical slice may not carry a meta kind, and its kind is counted against verticalSliceBudget.coreVerticalContent."
+        }
+      }
+    }
+  }
+}

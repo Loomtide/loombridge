@@ -1,6 +1,7 @@
 {
   "schemaVersion": "1",
   "game": "2d-shooter",
+  "genre": "2d-shooter",
   "source": {
     "note": "Promoted from GenreContract 2d-shooter; genreClass=twitch; confidence=experimental."
   },
@@ -175,8 +176,9 @@
       "tile-render": "not_applicable",
       "parallax-motion": "not_applicable",
       "reachability": "not_applicable",
-      "placement": "not_applicable"
+      "placement": "not_applicable",
+      "prop-purpose": "not_applicable"
     },
-    "note": "Promoted generic contract: omitted platformer-shaped gates are not applicable unless the contract slice DAG explicitly requests them."
+    "note": "Promoted generic contract: one gate per contract section this contract omits (platformer / reachability / placement / props) is not applicable unless the slice DAG explicitly requests it."
   }
 }

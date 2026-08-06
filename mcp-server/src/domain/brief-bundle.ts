@@ -31,11 +31,18 @@ export interface BriefBundleResolution {
 }
 
 /**
+ * The name `loombridge genre init` writes by default. Named here, and spliced into the priority
+ * list below, so the scaffolder and the resolver cannot drift: `genre init` then
+ * `plan --brief <dir>` composes only while both sides agree on this string.
+ */
+export const CANONICAL_BRIEF_FILENAME = "genre-contract.json";
+
+/**
  * Convention names for the structured brief inside a docs directory, in priority
  * order. A bundle author drops the interview-equivalent GenreContract under one of
  * these names alongside the human design docs.
  */
-export const BRIEF_FILE_PRIORITY = ["brief.json", "genre-contract.json", "GENRE_CONTRACT.json"] as const;
+export const BRIEF_FILE_PRIORITY = ["brief.json", CANONICAL_BRIEF_FILENAME, "GENRE_CONTRACT.json"] as const;
 
 /**
  * Resolve a `--brief` / `--docs` path to the structured GenreContract JSON it

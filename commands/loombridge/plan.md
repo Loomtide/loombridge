@@ -16,13 +16,16 @@ so the two agents cannot drift.
 
 ## Process
 
-1. **Scaffold the contract + check readiness (deterministic).** Run the CLI **zero-param**
-   — the developer just runs `loombridge plan` from the project root; the engine is **auto-detected**
-   and the genre is **inferred** (there is a single genre pack today):
+1. **Scaffold the contract + check readiness (deterministic).** The engine is **auto-detected**;
+   the genre is **never guessed**. On a project's FIRST `plan` you must state the genre, so
+   **ask the developer before running anything** (see the genre bullet below), then run:
 
    ```bash
-   loombridge plan
+   loombridge plan --genre <id>
    ```
+
+   Every LATER `plan` on that project is **zero-param** (`loombridge plan`): the genre is recorded
+   in `STATE.md` and the recorded genre wins, so the developer never re-types the flag.
 
    This seeds `ACCEPTANCE.json` (from the genre template), `FEEL_SPEC.json`,
    `GAME_SPEC.md`, the `design/` folder, and `STATE.md`, then **checks the §3c Design
@@ -31,6 +34,14 @@ so the two agents cannot drift.
    is approved. **You don't need a flag**; the exit code is the cue to run step 3 and 4 below.
    (`--force` re-seeds; `--allow-missing-design-target` is an escape hatch for early
    scaffolding only — `build` will still block.)
+
+   **CHANGING the genre of a planned project needs `--force`.** A genre change re-seeds the whole
+   contract, so a `--genre` that disagrees with the contract already on disk **refuses (exit 2)**
+   rather than record the new genre in `STATE.md` beside the old genre's `ACCEPTANCE.json`. That
+   half-changed project still claims coverage `graded`, over gates it was never designed for. With
+   `--force` the flip also rewrites `.loombridge/SLICES.json` from the new genre's roadmap, printing
+   what it replaced. Either way it **refuses if any slice already carries an approval proof**:
+   withdraw those first with `loombridge reopen <slice-id>`.
 
    **ASK THE DEVELOPER WHEN UNCLEAR (agent layer — the CLI never prompts).** The CLI is
    deterministic: it auto-detects the engine (Unity via `ProjectSettings/ProjectVersion.txt`)
@@ -42,8 +53,62 @@ so the two agents cannot drift.
      supported today.
    - If `plan` errors that it **detected a non-Unity engine** (Loombridge supports Unity only),
      tell the developer and stop — there is nothing to build here yet.
-   - **Genre:** with a single genre pack, `plan` infers it silently — do NOT ask. *If* more
-     than one genre pack ever exists, ask the developer which genre and pass `--genre <id>`.
+   - **Genre: ASK, always.** Several genre packs ship (run `loombridge plan --help` for the
+     current list). On a project with no genre recorded yet, bare `plan` **refuses with exit 2**
+     and names the registered ids, because a guessed genre seeds that genre's whole contract
+     (win rule, feel metrics, gate-tuning section) and still claims `graded`, so the build gets
+     graded against gates it was never designed for. Ask the developer what kind of game this is,
+     map their answer to one registered id, confirm it with them, then pass `--genre <id>`.
+   - **Genre with no pack:** if their game is not one of the registered genres, do NOT force-fit
+     it into the nearest pack. Take the any-genre path below. It plans, builds, and verifies; it
+     just says out loud what it cannot grade.
+
+   **1b. The any-genre path (no shipped pack).** A **Genre Contract** is one JSON file that `plan`
+   compiles into `ACCEPTANCE.json` + `SLICES.json`, with the platformer-shaped gates
+   (`platform-tiles`, `tile-render`, `parallax-motion`, `reachability`) marked **not applicable**
+   so the game is never graded on gates it was never designed for. Two ways to get one:
+
+   - **Scaffold it (fastest).** Writes a contract that passes the validator on the first run:
+
+     ```bash
+     loombridge genre init --genre <id> --class <twitch|systems|hybrid>
+     loombridge plan --brief .loombridge
+     ```
+
+     `genre init` writes `.loombridge/genre-contract.json`, which is exactly the name
+     `--brief <dir>` resolves, so the two compose with no paths to juggle. It prints the fields
+     that still say `REPLACE ME:`. **Edit those with the developer before running `plan`**; the
+     core loop, the art direction, and each feedback chain are theirs to state, not yours to
+     invent. `--class` is required when the genre ships no hint-card pack (run
+     `loombridge genre init --help` for the packs that exist) and is never guessed.
+   - **Interview for it.** Use the `genre-pack-authoring` skill when the genre is unfamiliar and a
+     human is in the loop; it elicits the same contract instead of scaffolding it. Then pass
+     `--genre-contract <path>`.
+
+   Either flag supplies the genre itself, so `--genre` is not needed with it.
+
+   **What `partially-graded` means, and what it costs.** A contract-planned build verifies as
+   `partially-graded` rather than `graded`, with its ungraded gaps enumerated on the verdict. That
+   is an honest claim rather than a borrowed one. It costs exactly two things: the registered feel
+   oracle (per-genre feel-profile code a pack ships and a contract cannot), and hero-shot fidelity,
+   **which you get back only if the contract declares `fidelityCriteria`.**
+
+   **`fidelityCriteria` is the field that buys the hero shot back.** `doneness` grades an approved
+   Design Target against the genre's fidelity criteria. A contract genre has none by default, so
+   **without this field `doneness` REFUSES any design-targeted build.** `genre init` seeds a
+   class-appropriate set; **review it with the developer** before building, because a criterion the
+   hero shot cannot satisfy makes doneness unreachable-green, and an id outside the gradable set is
+   refused outright. Do not delete the field to make a refusal go away.
+
+   `plan` also prints non-blocking advisories. The ones that actually fire on a scaffolded contract
+   are `COVERAGE_PRODUCT_THESIS_ABSENT` (no `productThesis`), `SCALE_MODEL_ABSENT` (no
+   `scaleModel`), `COVERAGE_ACCEPTANCE_PROTOCOL_PARTIAL` (only one of
+   `measurabilityMap[].gateBand` / `humanOracleChecks` is declared), and
+   `COVERAGE_FEEDBACK_SOUND_PARTIAL` (no feedback chain names sound/SFX). An absent
+   `requiredEvidenceClasses` is NOT warned: it reports `[OK] proxied` because the per-slice
+   `gates` stand in for it, so declaring it is an opt-in nothing prompts; offer it anyway, since
+   `doneness` then enforces each class. Offer to fill any of these in; never fabricate a value to
+   silence a warning. Full guide: `Docs/Profiles/GenreContractAuthoring.md`.
 
 2. **Read back the state.** `cat .loombridge/STATE.md` to confirm genre/engine/phase.
 
@@ -61,9 +126,12 @@ so the two agents cannot drift.
      ```bash
      loombridge target set --image <path.png> [--html <path.html>] --mode provided
      ```
-   - **Generate (default):** produce an **annotated hero shot built from the genre's asset
-     registry** (Claude Design / frontend-design — a single in-game frame at native scale,
-     with callouts for HUD / camera / parallax / juice). Screenshot it to a PNG, then:
+   - **Generate (default):** produce an **annotated hero shot** (Claude Design / frontend-design:
+     a single in-game frame at native scale, with callouts for the things THIS genre reads by).
+     For a registered pack, build it from that genre's asset registry; for a **contract genre**
+     there is no asset registry, so build it from the contract's `artDirection.assetRoles` and
+     annotate the criteria the contract's own `fidelityCriteria` list (parallax and platform tiers
+     are platformer callouts, not universal ones). Screenshot it to a PNG, then:
      ```bash
      loombridge target set --image hero-shot.png --html hero-shot.html --mode generated
      ```

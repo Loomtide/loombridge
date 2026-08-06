@@ -348,7 +348,17 @@ export async function runAdopt(args: AdoptArgs): Promise<number> {
 
 type ParsedAdoptArgs = Omit<AdoptArgs, "engine"> & { engine?: string };
 
-function parseArgs(args: string[]): ParsedAdoptArgs | { help: true } {
+/**
+ * A `--help`/parse outcome. `usageError` exits 2; a bare `help` exits 0.
+ *
+ * Both outcomes print the usage text, which is exactly why they must be told apart at the exit
+ * code: every REFUSAL here (a missing `--genre`, an unknown flag) used to return 0 alongside the
+ * genuine `--help`, so `adopt`'s "I will not guess the genre" refusal reported SUCCESS and a CI
+ * step or an agent branching on `$?` read it as a pass. Same discriminator `update` already carries.
+ */
+type ParseHelp = { help: true; usageError?: boolean };
+
+function parseArgs(args: string[]): ParsedAdoptArgs | ParseHelp {
   let genre = "";
   let genreExplicit = false;
   let engine: string | undefined;
@@ -370,7 +380,7 @@ function parseArgs(args: string[]): ParsedAdoptArgs | { help: true } {
     else if (arg === "--help" || arg === "-h") return { help: true };
     else {
       console.error(`[loombridge adopt] unknown argument "${arg}".`);
-      return { help: true };
+      return { help: true, usageError: true };
     }
   }
 
@@ -385,7 +395,7 @@ function parseArgs(args: string[]): ParsedAdoptArgs | { help: true } {
         "[loombridge adopt] --genre is required (or pass --docs with a structured brief that declares its genre). " +
           `Known: ${knownGenreIds().join(", ")}.`,
       );
-      return { help: true };
+      return { help: true, usageError: true };
     }
     genre = ""; // resolved from the brief inside the docs bundle
   }
@@ -455,7 +465,7 @@ export async function run(args: string[]): Promise<number> {
   const parsed = parseArgs(args);
   if ("help" in parsed) {
     printUsage();
-    return 0;
+    return parsed.usageError ? 2 : 0;
   }
   const resolved = resolveEngine(parsed);
   if ("exitCode" in resolved) return resolved.exitCode;
