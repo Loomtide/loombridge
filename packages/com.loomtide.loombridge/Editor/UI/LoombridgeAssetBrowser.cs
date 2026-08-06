@@ -22,9 +22,23 @@ namespace UnityBridge.UI
     {
         private const string CategoryAll = "all";
 
-        // Hosted read-only catalog search API. Overridable via EditorPrefs.
-        private const string DefaultApiBaseUrl = "https://asset-api-production-59d9.up.railway.app";
+        // Hosted read-only catalog search API. The endpoint is CONFIGURATION, never a baked-in
+        // default: Loombridge ships no deployment hostname (see Docs/Design/AssetRegistryOssBoundary.md).
+        // Resolution order: EditorPrefs key, then the environment variable, then unconfigured.
+        // Unconfigured is a clean, named refusal in the window, never a silent reach at someone's host.
         private const string ApiBaseUrlPrefKey = "loombridge.assetApiBaseUrl";
+        private const string ApiBaseUrlEnvVar = "LOOMBRIDGE_ASSET_CATALOG_URL";
+        private const string ApiBaseUrlUnconfiguredMessage =
+            "hosted catalog not configured: paste a catalog API base URL into the Catalog field in " +
+            "this window's toolbar and press Save, or set it under Preferences > Loombridge";
+        // The environment variable is honoured, but it is NOT the documented path: a Unity Editor
+        // launched from the Hub or Finder on macOS inherits no shell environment, so for most users
+        // it is unreachable. The in-window field writes EditorPrefs, which the Editor always sees.
+        private const string ApiBaseUrlHelp =
+            "Base URL of the read-only hosted catalog search API (the CLI's --catalog-api value). " +
+            "Stored in EditorPrefs '" + ApiBaseUrlPrefKey + "'; the " + ApiBaseUrlEnvVar +
+            " environment variable is used as a fallback when the field is empty. Loombridge ships " +
+            "no default host.";
 
         private readonly List<CategoryModel> _categories = new List<CategoryModel>();
         private readonly List<AssetModel> _assets = new List<AssetModel>();
@@ -57,6 +71,7 @@ namespace UnityBridge.UI
         private readonly List<EditorApplication.CallbackFunction> _activePumps = new List<EditorApplication.CallbackFunction>();
 
         private TextField _searchField;
+        private TextField _catalogUrlField;
         private Label _resultCountLabel;
         private Label _gridTitleLabel;
         private Label _gridSubLabel;
@@ -505,12 +520,54 @@ namespace UnityBridge.UI
         // Live hosted-catalog fetch
         // =====================================================================
 
+        /// <summary>
+        /// The configured catalog API base, or an empty string when none is configured.
+        /// There is deliberately no fallback host.
+        /// </summary>
         private static string ApiBaseUrl()
         {
-            string configured = EditorPrefs.GetString(ApiBaseUrlPrefKey, DefaultApiBaseUrl);
+            string configured = EditorPrefs.GetString(ApiBaseUrlPrefKey, string.Empty);
             if (string.IsNullOrWhiteSpace(configured))
-                configured = DefaultApiBaseUrl;
-            return configured.TrimEnd('/');
+                configured = Environment.GetEnvironmentVariable(ApiBaseUrlEnvVar) ?? string.Empty;
+            return configured.Trim().TrimEnd('/');
+        }
+
+        /// <summary>
+        /// Persist the catalog API base URL. An empty value CLEARS the preference (falling back to
+        /// the environment variable, then to unconfigured); there is deliberately no default host.
+        /// </summary>
+        private static void SetApiBaseUrl(string value)
+        {
+            string trimmed = (value ?? string.Empty).Trim().TrimEnd('/');
+            if (string.IsNullOrEmpty(trimmed))
+                EditorPrefs.DeleteKey(ApiBaseUrlPrefKey);
+            else
+                EditorPrefs.SetString(ApiBaseUrlPrefKey, trimmed);
+        }
+
+        /// <summary>
+        /// A Preferences entry, so the setting is discoverable without opening the browser window
+        /// (and so a project can be configured before anyone fetches anything).
+        /// </summary>
+        [SettingsProvider]
+        public static SettingsProvider CreateCatalogSettingsProvider()
+        {
+            var provider = new SettingsProvider("Preferences/Loombridge", SettingsScope.User)
+            {
+                label = "Loombridge",
+                guiHandler = _ =>
+                {
+                    EditorGUILayout.LabelField("Asset catalog", EditorStyles.boldLabel);
+                    EditorGUILayout.HelpBox(ApiBaseUrlHelp, MessageType.Info);
+                    EditorGUI.BeginChangeCheck();
+                    string current = EditorPrefs.GetString(ApiBaseUrlPrefKey, string.Empty);
+                    string next = EditorGUILayout.TextField("Catalog API base URL", current);
+                    if (EditorGUI.EndChangeCheck())
+                        SetApiBaseUrl(next);
+                },
+                keywords = new HashSet<string> { "Loombridge", "asset", "catalog", "API", ApiBaseUrlEnvVar }
+            };
+            return provider;
         }
 
         /// <summary>
@@ -522,6 +579,15 @@ namespace UnityBridge.UI
         private void FetchAndApply(string profile, string kind, string primitive, string text, int limit = 120, string preserveCategory = null)
         {
             int generation = ++_fetchGeneration;
+
+            if (string.IsNullOrEmpty(ApiBaseUrl()))
+            {
+                Debug.LogWarning("[Loombridge] [LiveCatalog] " + ApiBaseUrlUnconfiguredMessage);
+                ApplyPayload(BuildFetchFailedPayload(ApiBaseUrlUnconfiguredMessage));
+                RefreshAll();
+                return;
+            }
+
             string url = BuildSearchUrl(profile, kind, primitive, text, limit);
 
             UnityWebRequest request = UnityWebRequest.Get(url);
@@ -1332,6 +1398,43 @@ namespace UnityBridge.UI
                 RefreshAll();
             });
             toolbar.Add(sort);
+
+            BuildCatalogConfigRow(toolbar);
+        }
+
+        /// <summary>
+        /// The catalog endpoint is CONFIGURATION and Loombridge ships no default host, so the
+        /// window has to carry a way to supply one. Without this the window opened, immediately
+        /// short-circuited to "not configured", and offered the user nothing to do about it: the
+        /// only documented alternative was an environment variable a Hub-launched Editor never
+        /// sees. Writes EditorPrefs and re-fetches, so the state the user is looking at is the
+        /// state they just configured.
+        /// </summary>
+        private void BuildCatalogConfigRow(VisualElement toolbar)
+        {
+            var row = Row();
+            row.style.alignItems = Align.Center;
+            row.style.marginLeft = 10;
+            toolbar.Add(row);
+
+            var label = LabelText("Catalog", 10, Fg3, true);
+            label.style.marginRight = 6;
+            row.Add(label);
+
+            _catalogUrlField = new TextField { value = EditorPrefs.GetString(ApiBaseUrlPrefKey, string.Empty) };
+            _catalogUrlField.style.width = 240;
+            _catalogUrlField.style.height = 24;
+            _catalogUrlField.tooltip = ApiBaseUrlHelp;
+            row.Add(_catalogUrlField);
+
+            var save = SecondaryButton("Save", () =>
+            {
+                SetApiBaseUrl(_catalogUrlField?.value);
+                FetchAndApply(profile: null, kind: null, primitive: null, text: null);
+            });
+            save.style.marginLeft = 6;
+            save.tooltip = "Store the catalog API base URL and reload the browser.";
+            row.Add(save);
         }
 
         private void BuildSidebar(VisualElement main)

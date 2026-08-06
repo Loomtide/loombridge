@@ -11,10 +11,13 @@ import { StubGenerationProvider } from "./providers/stub-generation-provider.js"
 import type { AssetProviderAdapter, AssetProviderResolution } from "./providers/types.js";
 import {
   ApiCatalogSource,
+  ASSET_CATALOG_URL_ENV_VAR,
+  catalogUrlFromEnv,
   HttpCatalogSource,
   LocalCatalogSource,
   selectAssetsFromCatalog,
 } from "./catalog-source.js";
+import { applyCatalogEnvFallback } from "./catalog-env.js";
 import { assetKindOf, loadAssetProfile, loadRegistryPack, selectAssets, validateRegistryPolicy } from "./registry.js";
 import { buildPrepareDiagnostics, computeSha256 } from "./reporting.js";
 import { validatePreparedAudio, validatePreparedNonImage, validatePreparedSprite } from "./validator.js";
@@ -104,8 +107,13 @@ function parseArgs(argv: string[]): CliArgs {
     }
   }
 
+  applyCatalogEnvFallback(args);
+
   if (!args.help && (!args.profilePath || (!args.registryPath && !args.catalogPath && !args.catalogApiUrl))) {
-    throw new Error("Missing required --profile plus --registry/--catalog/--catalog-api arguments.");
+    throw new Error(
+      "Missing required --profile plus --registry/--catalog/--catalog-api arguments " +
+        `(or set ${ASSET_CATALOG_URL_ENV_VAR}).`,
+    );
   }
 
   args.outputPath = path.resolve(process.cwd(), args.outputPath);
@@ -185,13 +193,13 @@ async function loadRegistryForPrepare(
     };
   }
 
-  if (!options.catalogPath) {
-    throw new Error("Missing required --registry, --catalog, or --catalog-api.");
-  }
+  // Nothing configured at all: refuse by NAME (see `catalogUrlFromEnv`), never by silently
+  // reaching for a built-in host.
+  const catalogPath = options.catalogPath ?? catalogUrlFromEnv();
 
-  const source = /^https?:\/\//.test(options.catalogPath)
-    ? new HttpCatalogSource(options.catalogPath)
-    : new LocalCatalogSource(options.catalogPath);
+  const source = /^https?:\/\//.test(catalogPath)
+    ? new HttpCatalogSource(catalogPath)
+    : new LocalCatalogSource(catalogPath);
   const entries = await selectAssetsFromCatalog(source, {
     genre: options.genre ?? profile.genre,
     primitives: options.primitives,
@@ -201,13 +209,13 @@ async function loadRegistryForPrepare(
   return {
     registry: {
       schemaVersion: "1",
-      packId: sourceLabel(options.catalogPath),
-      name: `Asset Catalog: ${sourceLabel(options.catalogPath)}`,
-      description: `Adapted from hosted asset catalog source ${options.catalogPath}.`,
+      packId: sourceLabel(catalogPath),
+      name: `Asset Catalog: ${sourceLabel(catalogPath)}`,
+      description: `Adapted from hosted asset catalog source ${catalogPath}.`,
       entries,
     },
-    sourcePath: options.catalogPath,
-    registryRoot: repoRootFromCatalog(options.catalogPath),
+    sourcePath: catalogPath,
+    registryRoot: repoRootFromCatalog(catalogPath),
   };
 }
 

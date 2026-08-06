@@ -16,11 +16,14 @@ import type {
 } from "./types.js";
 import {
   ApiCatalogSource,
+  ASSET_CATALOG_URL_ENV_VAR,
   catalogRecordsToRegistryPack,
   type CatalogFetch,
+  catalogUrlFromEnv,
   HttpCatalogSource,
   LocalCatalogSource,
 } from "./catalog-source.js";
+import { applyCatalogEnvFallback } from "./catalog-env.js";
 import { assetKindOf, loadAssetProfile, loadRegistryPack } from "./registry.js";
 import { reviewStatusForEntry, trustTierForEntry } from "./trust.js";
 
@@ -199,8 +202,13 @@ function parseArgs(argv: string[]): CliArgs {
     }
   }
 
+  applyCatalogEnvFallback(args);
+
   if (!args.help && !args.prepareReportPath && (!args.profilePath || (!args.registryPath && !args.catalogPath && !args.catalogApiUrl))) {
-    throw new Error("Missing required --profile plus --registry/--catalog/--catalog-api arguments, or --prepare-report.");
+    throw new Error(
+      "Missing required --profile plus --registry/--catalog/--catalog-api arguments, " +
+        `or --prepare-report (or set ${ASSET_CATALOG_URL_ENV_VAR}).`,
+    );
   }
 
   return args;
@@ -260,13 +268,13 @@ async function loadRegistryPackForBrowser(
     };
   }
 
-  if (!options.catalogPath) {
-    throw new Error("Missing required --registry, --catalog, or --catalog-api.");
-  }
+  // Nothing configured at all: refuse by NAME (see `catalogUrlFromEnv`), never by silently
+  // reaching for a built-in host.
+  const catalogPath = options.catalogPath ?? catalogUrlFromEnv();
 
-  const source = /^https?:\/\//.test(options.catalogPath)
-    ? new HttpCatalogSource(options.catalogPath)
-    : new LocalCatalogSource(options.catalogPath);
+  const source = /^https?:\/\//.test(catalogPath)
+    ? new HttpCatalogSource(catalogPath)
+    : new LocalCatalogSource(catalogPath);
   const records = await source.query({
     genre: profile.genre,
     preferredLicense: options.preferredLicense,
@@ -274,11 +282,11 @@ async function loadRegistryPackForBrowser(
   });
   return {
     registry: catalogRecordsToRegistryPack(records, {
-      packId: sourceLabel(options.catalogPath),
-      name: `Asset Catalog: ${sourceLabel(options.catalogPath)}`,
-      description: `Adapted from hosted asset catalog source ${options.catalogPath}.`,
+      packId: sourceLabel(catalogPath),
+      name: `Asset Catalog: ${sourceLabel(catalogPath)}`,
+      description: `Adapted from hosted asset catalog source ${catalogPath}.`,
     }),
-    registryRoot: repoRootFromCatalog(options.catalogPath),
+    registryRoot: repoRootFromCatalog(catalogPath),
   };
 }
 

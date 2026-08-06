@@ -185,23 +185,33 @@ so the two agents cannot drift.
 4. **Record and approve the asset strategy.** Before slices exist, ask the developer which
    asset source strategy they want. The asset source must never be an invisible agent choice.
 
-   **Follow the canonical asset priority (`Docs/Assets/AssetPriority.md`) — hosted registry
-   FIRST.** For every required role, resolve in this order: (1) the **hosted Loomtide
-   registry** (the default); (2) **local registry/profile fixtures** only for tests or
-   offline/air-gapped runs; (3) **online discovery / web search** only when no hosted asset
-   fits the role; (4) **never** ship placeholder primitives as final assets when an approved
-   hosted asset exists for that role. Humans browse + approve candidates at the web store
-   **https://assetstore.loomtide.ai/**; the CLI reads the hosted search API via `--catalog-api`
-   whose base is **`https://asset-api-production-59d9.up.railway.app`** (it appends
-   `/v1/assets/search`). The web-store domain serves `/api/...`, not `/v1/...`, so it is not
-   the `--catalog-api` base — do not pass it there.
+   **Follow the canonical asset priority (`Docs/Assets/AssetPriority.md`).** For every
+   required role, resolve in this order: (1) the **committed local registry / profile
+   fixtures and generated assets** (the default path: no network, no account, works
+   offline/air-gapped); (2) the **hosted Loomtide catalog**, an **optional** read-only
+   accelerator the developer may choose; (3) **online discovery / web search** only when no
+   asset in the chosen source fits the role; (4) **never** ship placeholder primitives as
+   final assets when an approved asset exists for that role.
 
-   - **Registry:** use the approved hosted registry; compose/build from recorded registry assets.
+   If the developer opts into the hosted catalog, humans browse + approve candidates at the
+   web store **https://assetstore.loomtide.ai/**, and the CLI reads the hosted search API via
+   `--catalog-api <baseUrl>` (it appends `/v1/assets/search`). The endpoint is configuration:
+   pass the flag, or set `LOOMBRIDGE_ASSET_CATALOG_URL` and pass no source flag at all (it is
+   the no-flag default for `--catalog`, a shard directory or `.jsonl` URL; with it unset the
+   verbs refuse by name). No deployment host is baked into Loombridge, and the current base URL is published alongside
+   the asset store. The web-store domain serves `/api/...`, not `/v1/...`, so it is not the
+   `--catalog-api` base: do not pass it there.
+
+   - **Registry:** compose/build from recorded registry assets (the committed
+     `asset-layer/registry/*.json` packs by default, or a hosted catalog if the developer
+     opts in).
    - **Generated:** generate/export assets from the approved hero-shot annotations.
    - **Hybrid:** use an approved registry base and generated/manual missing assets.
 
-   Default to **hybrid** only after saying that default out loud and getting approval. Record
-   the choice deterministically:
+   All three remain available. **Recommend the local-registry or generated path first**,
+   because it keeps the build reproducible with no cloud dependency; offer the hosted catalog
+   as the accelerator it is. Say the recommendation out loud and get approval before recording
+   it. Record the choice deterministically:
 
    ```bash
    loombridge plan --asset-mode hybrid
@@ -212,42 +222,44 @@ so the two agents cannot drift.
    the candidate list, selected IDs, output paths, licenses, source metadata, and provenance
    are all produced through validated code.
 
-   For registry roles, produce and review explicit candidates **from the hosted catalog**
-   (the default — `--catalog-api`):
+   For registry roles, produce and review explicit candidates. **The default source is a
+   checked-in registry pack** (`--registry`), which needs no network and no configuration:
 
    ```bash
    loombridge assets registry-plan \
-     --catalog-api https://asset-api-production-59d9.up.railway.app \
+     --registry asset-layer/registry/<pack>.json \
      --profile <asset-profile.json> \
      --preferred-license CC0-1.0 \
      --output .loombridge/reports/registry-selection-plan.json
    ```
 
    **Show the resulting slots/options to the developer and get explicit approval BEFORE
-   applying** — the candidate list is a human checkpoint, never an auto-pick. After they
+   applying.** The candidate list is a human checkpoint, never an auto-pick. After they
    choose, write a selections JSON object such as
    `{ "selections": { "player_character": "<candidate-id>" } }`, then apply it with an explicit
    approval timestamp:
 
    ```bash
    loombridge assets registry-apply \
-     --catalog-api https://asset-api-production-59d9.up.railway.app \
+     --registry asset-layer/registry/<pack>.json \
      --profile <asset-profile.json> \
      --selections .loombridge/reports/registry-selections.json \
      --approved-at "<ISO timestamp>"
    ```
 
-   **Offline / test runs only:** swap `--catalog-api <baseUrl>` for `--registry
-   <local-registry.json>` to read a checked-in `asset-layer/registry/*.json` fixture instead of
-   the hosted catalog (priority order step 2 — air-gapped CI or a fixture-pinned reproduction).
-   Do not default to a local registry for a real build when the hosted catalog is reachable.
+   **Optional hosted catalog:** if the developer chose it, swap `--registry <local-registry.json>`
+   for `--catalog-api <catalog-api-base>` on both commands. The base URL is configuration
+   (the `--catalog-api` flag, or `LOOMBRIDGE_ASSET_CATALOG_URL` with no source flag, which the
+   verbs read as `--catalog`); no deployment host is baked into Loombridge. Everything downstream, including license policy,
+   checksums, trust tiers, and the approval checkpoint, is identical either way, so the local
+   path is never the lesser option.
 
    If the developer selected assets in the web asset browser, apply its exported
    `selection.json` through the same manifest approval path:
 
    ```bash
    loombridge assets registry-apply \
-     --catalog-api https://asset-api-production-59d9.up.railway.app \
+     --catalog-api <catalog-api-base> \
      --profile <asset-profile.json> \
      --from-selection <web-selection.json> \
      --approved-at "<ISO timestamp>"

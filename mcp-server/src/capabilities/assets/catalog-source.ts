@@ -500,12 +500,26 @@ export class ApiCatalogSource implements CatalogSource {
 }
 
 /**
+ * The configured catalog URL, or `undefined` when the env var is unset or blank. Used by the
+ * argument parsers, which must decide whether a source is configured BEFORE they are allowed to
+ * refuse; `catalogUrlFromEnv` is the refusing form used at resolution time.
+ */
+export function optionalCatalogUrlFromEnv(env: NodeJS.ProcessEnv = process.env): string | undefined {
+  const url = (env[ASSET_CATALOG_URL_ENV_VAR] ?? "").trim();
+  return url.length > 0 ? url : undefined;
+}
+
+/**
  * Resolve the catalog URL from the environment. REFUSES (throws) when
  * `LOOMBRIDGE_ASSET_CATALOG_URL` is unset instead of falling back to a private mirror —
  * a clear error beats a default that 404s for every external developer.
+ *
+ * This is WIRED: `assets registry-plan/registry-apply`, `prepare-cli` and `browser-payload` all
+ * fall back to it when no `--registry` / `--catalog` / `--catalog-api` flag is passed, so the
+ * message below, and every doc that advertises the variable, describe what the CLI actually does.
  */
 export function catalogUrlFromEnv(env: NodeJS.ProcessEnv = process.env): string {
-  const url = env[ASSET_CATALOG_URL_ENV_VAR];
+  const url = optionalCatalogUrlFromEnv(env);
   if (!url) {
     throw new Error(
       `No asset catalog URL configured: set ${ASSET_CATALOG_URL_ENV_VAR} (or pass an explicit --catalog / --catalog-api URL). ` +

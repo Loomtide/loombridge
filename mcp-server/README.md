@@ -203,11 +203,19 @@ Boundary rule: registry/profile/scenario data can be genre-specific, but the MCP
 
 ## Hosted Asset Registry
 
-The hosted catalog is a company-run service, **live at scale** (66,859 records — PNG sprites / OGG audio
-/ self-contained GLB models / SVG vectors — on Cloudflare R2 + Railway Postgres behind a public read-only
-search API at `https://asset-api-production-59d9.up.railway.app/v1/assets/search`, with an in-Unity asset
-browser). The local registry remains supported; new asset-registry work targets the hosted catalog
-boundary. External developer quickstart (browse + prepare against the public catalog, no credentials):
+The hosted catalog is a company-run, **read-only** service, live at scale (66,859 records: PNG sprites,
+OGG audio, self-contained GLB models, SVG vectors) behind a public search API exposing
+`/v1/assets/search`, with an in-Unity asset browser (which you point at a catalog via **Preferences →
+Loombridge → Asset catalog** or the **Catalog** field in its toolbar). It is **optional**: the
+checked-in local registry is the default source and everything works with the catalog unreachable or
+never configured.
+
+**The endpoint is configuration, never a baked-in default.** Pass `--catalog-api <baseUrl>` /
+`--catalog <url>`, or set `LOOMBRIDGE_ASSET_CATALOG_URL` and pass no source flag at all: the verbs
+fall back to it and refuse by name when it is unset. This repo names no deployment host, and the
+current base URL is published alongside the asset store (`https://assetstore.loomtide.ai/`). There is no upload or publish
+path in this build: the authoring verbs live on the private side of the seam and refuse here.
+External developer quickstart (browse + prepare against the public catalog, no credentials):
 `../Docs/Assets/PublicCatalogQuickstart.md`.
 
 Catalog records include `localPath`, `githubRawUrl`, `githubBlobUrl`, checksum/size metadata,
@@ -236,8 +244,9 @@ Implementation rules:
 - Do not let slices silently search the registry or substitute assets outside the approved manifest.
 - Prefer GitHub raw/local cache for the current private seed; later hosted storage/CDN URLs can be added
   without changing asset ids or checksums.
-- Use `LOOMBRIDGE_ASSET_CATALOG_URL` to point hosted catalog reads at a private GitHub raw shard or
-  later backend endpoint without changing deterministic fixture tests.
+- `LOOMBRIDGE_ASSET_CATALOG_URL` is the no-flag default for `--catalog`. It is read only when no
+  `--registry` / `--catalog` / `--catalog-api` flag is present, so deterministic fixture tests that
+  pass an explicit source are unaffected by it.
 - Use `LOOMBRIDGE_ASSET_REGISTRY_TOKEN`, `GITHUB_TOKEN`, or `GH_TOKEN` for private GitHub catalog/file
   reads. Loombridge attaches the bearer token only to GitHub hosts, not arbitrary provider downloads.
 

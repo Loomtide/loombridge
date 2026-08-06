@@ -5,7 +5,7 @@ Loombridge is **the agent layer for building and verifying Unity games** ([loomt
 1. **The bridge** — a two-process MCP system: a Node.js MCP server (stdio) talks to a C# plugin inside the Unity Editor over WebSocket (IPC or TCP), exposing 121 generic `unity_*` tools across 12 op categories.
 2. **The `loombridge` CLI product layer** — a deterministic, agent-agnostic command set (`plan` / `build` / `verify` / `doneness` plus `minigame`, `trace`, `feel`, `design`, `assets`, `capture`, `status`, `ask`, and the setup verbs `install-bridge` / `doctor` / `update`) that owns project state in `.loombridge/`, enforces verification contracts, and supervises agent-driven builds so a "done" claim can never be self-graded.
 
-Around these sit two supporting subsystems: the **replay verification** engine (record-by-demonstration → deterministic trace replay → perceptual baseline diff) and the **asset layer** (a local curated registry plus a live public hosted asset catalog on R2 + Postgres with an in-Unity browser).
+Around these sit two supporting subsystems: the **replay verification** engine (record-by-demonstration → deterministic trace replay → perceptual baseline diff) and the **asset layer** (a committed curated registry, plus an optional read-only hosted asset catalog reachable through an in-Unity browser).
 
 ## Repository Topology
 
@@ -256,7 +256,7 @@ Record a human demonstration once, replay it deterministically forever (`src/cap
 
 The asset layer is data/tooling around Loombridge, not a new core protocol category — import always goes through generic `unity_*` tools.
 
-### Local Curated Layer (`asset-layer/` + `mcp-server/src/asset-layer/`)
+### Local Curated Layer (`asset-layer/` + `mcp-server/src/capabilities/assets/`)
 
 Registry packs + validation profiles (`2d-platformer`, `2d-topdown-arena`) with enforced license allow/deny, provenance, checksum, and trust-tier policy (trust is **re-derived locally** from license + review status, never trusted from the catalog's own assertion). Provider adapters (`LocalAssetProvider`, `HttpAssetProvider` with SSRF guard, `StubGenerationProvider`) sit behind a seam for future generation providers. The prepare pipeline (`prepare-cli.ts`) selects, downloads, sha256-verifies, caches deterministically, and emits a prepare report + attribution markdown; `loombridge assets registry-plan/apply` turns approved selections into `.loombridge/ASSET_MANIFEST.json`.
 
@@ -264,10 +264,10 @@ Registry packs + validation profiles (`2d-platformer`, `2d-topdown-arena`) with 
 
 A productionized, public, engine-neutral catalog — **66,859 records**: 55,502 PNG sprites, 1,342 OGG audio, 4,970 GLB models (self-contained; external textures embedded at publish), 5,045 SVG vectors.
 
-- **Storage**: Cloudflare R2 public bucket (sha256-pinned objects, idempotent resumable publish via `mcp-server/src/asset-authoring/r2-publish.ts`); model browse thumbnails from `Previews/*.png`.
-- **Database + API**: Railway Postgres (`assets` table, indexed id/primitive/kind/tags + full `record_json`) behind a company-run read-only search API (live at `https://asset-api-production-59d9.up.railway.app`, hosted separately from this repo): `/v1/assets/search`, `/v1/assets/:id`, `/v1/catalog/public/...` shards + index.
-- **Publish pipeline**: private mirror registry → `registry-scale-publish.ts` (public transform, per-format routing, validation, exclude-with-reason) → R2 upload → `public-catalog-build.ts` (deterministic shards + `index.json`; byte-identical across runs) → batched DB ingest. This authoring/publish tooling lives in `mcp-server/src/asset-authoring/` (the private side of the OSS seam); `mcp-server/src/asset-layer/` keeps only the export-bound client side (catalog sources, prepare pipeline, validation, registry-plan/apply support).
-- **Unity consumption**: the in-editor **Loombridge Asset Browser** (`Editor/UI/LoombridgeAssetBrowser.cs`, Window → Loombridge → Asset Browser) live-searches the hosted API with thumbnails; the picker handshake (`unity_asset_picker_open/state/close`, `unity_asset_browser_open`) lets an agent offer choices to a human. Per-engine import deps are validated, not assumed: GLB needs `com.unity.cloud.gltfast` + `imageconversion`; SVG needs `com.unity.vectorgraphics`; PNG/OGG are native.
+- **Storage**: object storage serving sha256-pinned public bytes; model browse thumbnails from `Previews/*.png`. The bucket, the publish tooling, and their layout are on the private side of the OSS seam and are deliberately not described here.
+- **Database + API**: Postgres (`assets` table, indexed id/primitive/kind/tags + full `record_json`) behind a company-run **read-only** search API hosted separately from this repo: `/v1/assets/search`, `/v1/assets/:id`, `/v1/catalog/public/...` shards + index. **Its base URL is configuration, not a Loombridge constant**: pass `--catalog-api <baseUrl>` or set `LOOMBRIDGE_ASSET_CATALOG_URL`. This repo deliberately names no deployment host; the current base URL is published alongside the asset store (`https://assetstore.loomtide.ai/`).
+- **Publish pipeline**: the authoring/publish side (public transform, per-format routing, validation, exclude-with-reason, deterministic shard build, batched DB ingest) lives on the PRIVATE side of the OSS seam and ships in no build here; its verbs refuse. `mcp-server/src/capabilities/assets/` keeps only the read-only client side (catalog sources, prepare pipeline, validation, registry-plan/apply support). See `Docs/Design/AssetRegistryOssBoundary.md`.
+- **Unity consumption**: the in-editor **Loombridge Asset Browser** (`Editor/UI/LoombridgeAssetBrowser.cs`, Window → Loombridge → Asset Browser) live-searches the hosted API with thumbnails once you give it a base URL (Preferences → Loombridge → Asset catalog, or the **Catalog** field in the window's toolbar; there is no default host); the picker handshake (`unity_asset_picker_open/state/close`, `unity_asset_browser_open`) lets an agent offer choices to a human. Per-engine import deps are validated, not assumed: GLB needs `com.unity.cloud.gltfast` + `imageconversion`; SVG needs `com.unity.vectorgraphics`; PNG/OGG are native.
 - **Agent consumption**: `ApiCatalogSource` / `HttpCatalogSource` / `LocalCatalogSource` feed the same prepare pipeline, so hosted assets get the same checksum/license/provenance enforcement as local ones.
 
 External developer quickstart (browse + prepare against the public catalog, no credentials): `Docs/Assets/PublicCatalogQuickstart.md`.
