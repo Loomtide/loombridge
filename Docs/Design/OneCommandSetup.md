@@ -1,0 +1,137 @@
+# Design: `loombridge setup`, one command from a Unity project
+
+**Status:** PROPOSED. **Date:** 2026-08-06.
+Inherits from [Positioning.md](Positioning.md) (the Setup surface group).
+
+## The finding
+
+Onboarding has three steps and ships an installer for only two of them. Observed live: a
+developer ran `loombridge install-bridge --project ..` on a fresh project, then opened an agent
+session in it and had neither the slash commands nor MCP.
+
+| Piece | Installer today | Result on that project |
+|---|---|---|
+| Unity bridge package | `install-bridge` | installed, 0.2.0 |
+| Slash commands + skills | `install-agent` | NOT installed (`agentSurface: UNSET`) |
+| MCP server registration | **none exists** | NOT wired |
+
+The third row is the important one: **nothing in Loombridge writes MCP config.** Confirmed by
+grep across the whole source. The README's "Connect your agent: command `loombridge`, args
+`["mcp"]`" is prose the developer is expected to translate into their client's config by hand.
+It is also the step that matters most, because without it an agent cannot touch Unity at all.
+The Unity half and the optional slash-command half each have a one-command installer; the half
+that actually connects the agent does not.
+
+The server itself is healthy, so this is purely a wiring gap:
+
+```
+$ loombridge mcp     (initialize handshake)
+{"result":{"protocolVersion":"2024-11-05","capabilities":{"tools":{}},
+ "serverInfo":{"name":"loombridge","version":"0.2.0"}},"jsonrpc":"2.0","id":1}
+```
+
+## Why not do it from `npm install -g`
+
+Rejected. An npm lifecycle script runs with its CWD inside the installed package, not the
+directory the developer typed the command in, so it cannot reliably learn which project they
+meant. Even if it could, a global install silently mutating a Unity project it inferred is the
+wrong shape for this repo: it is an unstated inference driving a write, which is the same class
+of defect the genre wave just closed. Installing the CLI and wiring a project stay separate
+acts, and the second one is explicit.
+
+## The command
+
+```bash
+npm install -g loombridge     # or re-run to update; npm owns this half
+cd /path/to/UnityProject
+loombridge setup              # everything else, idempotent
+```
+
+`setup` composes existing verbs rather than reimplementing them. It is the front door; the
+individual verbs stay, keep working, and stay documented for anyone who wants one step.
+
+### Order, and what each step does
+
+1. **Resolve the project.** Default to cwd, exactly as `update` already does. Refuse (exit 2)
+   when it is not a Unity project, naming `--project <dir>`. Never guess a different directory.
+2. **Report CLI currency.** Reuse the `update` machinery to say whether a newer `loombridge` is
+   published. REPORT ONLY, never self-update: a self-update has to end the run (the bridge
+   tarball ships inside the CLI, so the new binary must be the one to deliver it), and ending
+   `setup` halfway through is worse than telling the operator to run `loombridge update`.
+3. **Bridge.** Install when absent, reconcile when present. This is `install-bridge` /
+   `update`'s existing hash-checked path, including the freshness gate.
+4. **MCP.** Write the project's MCP registration. Default ON: this is the step that makes the
+   tool work at all, and it is not what the confirmation in step 5 is about.
+5. **Agent surface (LAST, and confirmed).** Slash commands and skills are opinionated content
+   committed into the developer's repo, so they stay opt-in. Prompt when interactive; skip when
+   not. See the rules below.
+6. **`doctor`.** Close with the existing health check so the run ends on evidence rather than on
+   a claim.
+
+### The confirmation rules
+
+The CLI is driven by agents as often as by humans, so a prompt has to be safe when nothing can
+answer it. Follow the precedent already in this repo (`minigame-setup.ts`,
+`minigame-declare-background.ts`): gate on `process.stdin.isTTY === true`, offer a `--yes`, and
+never block otherwise.
+
+- Interactive and no flag: prompt for the agent surface only.
+- **Not a TTY and no flag: SKIP the agent surface**, and say so with the command to add it
+  later. Skipping is already the documented default for that surface, so this changes nothing
+  about the policy; it only makes it visible.
+- `--yes` installs it without asking. `--no-agent-surface` skips it without asking. A recorded
+  `agentSurface: declined` in the install metadata is honored and stays silent, as `update`
+  already does.
+
+Steps 1 to 4 never prompt.
+
+### `.mcp.json` must MERGE, never clobber
+
+A project may already register other MCP servers, and overwriting that file would silently
+break unrelated tooling. So:
+
+- Merge into an existing file, preserving every other key and every other server.
+- Refuse rather than overwrite when a DIFFERENT `loombridge` entry is already present and was
+  not written by us, the same hand-edit-safe discipline `install-agent` uses for its 84 managed
+  files. A developer's edit is theirs.
+- Never write outside the project root.
+- Malformed JSON is a refusal, not a reason to start fresh: rewriting a file we could not parse
+  would discard configuration we never read.
+
+Because Loombridge should own its entry across upgrades but nothing else, record what was
+written in the same `ProjectSettings/LoombridgeInstall.json` ledger the agent surface uses, so a
+later `setup` can tell "we wrote this" from "a human wrote this".
+
+## Independent verbs stay
+
+`install-bridge`, `install-agent`, `doctor`, and `update` keep working and keep their help.
+`setup` is a composition, not a replacement, and the docs say which to reach for: `setup` on a
+new project, `update` to keep an existing one current.
+
+MCP wiring also gets its own verb so `setup` composes rather than special-cases it, and so a
+developer who wants only that step has it. Name it consistently with the existing pair
+(`install-bridge`, `install-agent` -> `install-mcp`).
+
+## Invariants
+
+- **Not a Unity project is a refusal**, never a guess at a nearby directory.
+- **No prompt blocks a non-interactive run.** A missing answer resolves to the documented
+  default (skip), never to a write.
+- **Nothing that was not written by Loombridge is overwritten**, in `.mcp.json` or anywhere.
+- `setup` is IDEMPOTENT: running it twice on a wired project changes nothing and still exits 0.
+- `setup` reports CLI staleness; it never self-updates mid-run.
+
+## Out of scope
+
+- Configuring MCP for clients other than the project-scoped `.mcp.json` convention. Other
+  clients are documented, not written to; their config lives outside the project.
+- Any change to what the bridge or the agent surface contain.
+- Doing project setup from an npm lifecycle script (rejected above).
+
+## Open questions
+
+1. **Should `setup` refuse or warn when the CLI is stale?** Leaning warn, because the bridge it
+   is about to install still matches the CLI it shipped with, so the run is internally
+   consistent. A refusal would block a first-time setup on an unrelated version check.
+2. **Does `install-mcp` belong in the headline Setup group or the reference list?** Leaning
+   headline, since it is a step every new project needs, which is exactly the finding.
