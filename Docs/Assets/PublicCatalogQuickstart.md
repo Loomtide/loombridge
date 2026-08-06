@@ -3,15 +3,14 @@
 This is the external-developer quickstart for browsing and preparing **public** Loomtide hosted
 assets — with no private GitHub token and no checked-out private mirror.
 
-> **Live now:** the public catalog is published at scale (66,859 assets across sprite/audio/model/vector),
-> served by a company-run **read-only** search API exposing `/v1/assets/search`, with a live Unity asset
-> browser (`Window → Loombridge → Asset Browser`). Agent-side, source from the API with the
-> `--catalog-api <baseUrl>` flag on `browser-payload`/`prepare`.
+> **The catalog is optional and its endpoint is configuration.** Loombridge bakes in no host, and this
+> doc deliberately names no deployment: every command below takes the base URL from you. The public
+> catalog is published at scale (66,859 assets across sprite/audio/model/vector) behind a company-run
+> **read-only** search API exposing `/v1/assets/search`, and the current base URL is published
+> alongside the asset store (`https://assetstore.loomtide.ai/`).
 >
-> **The catalog is optional and its endpoint is configuration.** Loombridge bakes in no host: you name
-> one with `--catalog-api <baseUrl>` / `--catalog <url>`, or with the `LOOMBRIDGE_ASSET_CATALOG_URL`
-> environment variable. The current base URL is published alongside the asset store
-> (`https://assetstore.loomtide.ai/`); this repo deliberately does not name a deployment.
+> **Everything here works without it.** The default asset path is the registry packs committed in
+> `asset-layer/registry/*.json`; see [`AssetPriority.md`](AssetPriority.md).
 
 For the catalog's architecture and publish pipeline, see the "Public Hosted Asset Catalog" section of
 [`ARCHITECTURE.md`](../../ARCHITECTURE.md). This doc only covers commands that exist **today** against the
@@ -22,34 +21,43 @@ read-only public catalog.
 ## What catalog URL should I use?
 
 A public catalog URL points at a **profile shard directory** (the CLI probes it for
-`part-00000.jsonl`, `part-00001.jsonl`, …) or directly at a single `.jsonl` / `.json` shard.
+`part-00000.jsonl`, `part-00001.jsonl`, …) or directly at a single `.jsonl` / `.json` shard. It has
+the shape `<base>/v1/catalog/public/<profile>`, e.g. `…/v1/catalog/public/2d-platformer` for the
+bundled first seed (a curated `2d-platformer` set of CC0 assets).
 
-For the bundled first seed (a curated `2d-platformer` set of CC0 assets), use the public catalog
-base for the `2d-platformer` profile, e.g.:
+**This repo does not name the `<base>`.** Get the current one from the asset store
+(`https://assetstore.loomtide.ai/`), or point at any catalog of your own that serves the same
+shards. Every command below reads it from your environment, so there is exactly one place to put it:
 
-```text
-https://catalog.loomtide.ai/v1/catalog/public/2d-platformer
+```bash
+export LOOMBRIDGE_ASSET_CATALOG_URL="<base>/v1/catalog/public/2d-platformer"
 ```
 
 > A single-file URL is also accepted: `…/2d-platformer/part-00000.jsonl`.
 > An `index.json` is **informational only** — do not pass it as the catalog URL; the CLI would try
 > to parse it as a catalog and fail. Always point at the shard directory or a `part-*.jsonl` file.
 
-Record it in your environment so you do not retype it:
+> `LOOMBRIDGE_ASSET_CATALOG_URL` is the **no-flag default** for `--catalog`: `assets
+> registry-plan` / `registry-apply`, `prepare-cli` and `browser-payload` fall back to it when you
+> pass no `--registry` / `--catalog` / `--catalog-api`. Passing `--catalog
+> "$LOOMBRIDGE_ASSET_CATALOG_URL"` explicitly does the same thing. With neither the flag nor the
+> variable set, the catalog layer refuses with a named error rather than silently reaching for
+> someone's deployment.
 
-```bash
-export LOOMBRIDGE_ASSET_CATALOG_URL="https://catalog.loomtide.ai/v1/catalog/public/2d-platformer"
-```
+## How do I browse in Unity?
 
-> The CLI verbs read the **flag** (`--catalog` / `--catalog-api`), so pass
-> `--catalog "$LOOMBRIDGE_ASSET_CATALOG_URL"`. There is deliberately no built-in default:
-> with neither the flag nor an explicit URL, the catalog layer refuses with a named error
-> rather than silently reaching for someone's deployment.
+`Window → Loombridge → Asset Browser` opens the in-editor browser. It ships with **no default host**,
+so give it the search-API base once: paste it into the **Catalog** field in the window's toolbar and
+press **Save**, or set it under **Preferences → Loombridge → Asset catalog**. Both write the
+`loombridge.assetApiBaseUrl` EditorPref. `LOOMBRIDGE_ASSET_CATALOG_URL` is honoured as a fallback,
+but a Unity Editor launched from the Hub or Finder inherits no shell environment, so the field is the
+reliable path. Note the browser wants the **search-API base** (it calls `<base>/v1/assets/search`),
+not the shard-directory URL the CLI's `--catalog` takes.
 
 ## Do I need a token?
 
 **No.** For the public seed, browse and prepare require zero credentials. Public catalog reads and
-public asset byte downloads (`https://assets.loomtide.ai/…`) are unauthenticated. Tokens are only
+public asset byte downloads (whatever host the records pin) are unauthenticated. Tokens are only
 ever used by internal publish/admin jobs, never on the developer happy path.
 
 ---
@@ -64,7 +72,7 @@ cd mcp-server
 npm run build   # one-time, produces dist/
 node dist/capabilities/assets/browser-payload.js \
   --profile 2d-platformer \
-  --catalog https://catalog.loomtide.ai/v1/catalog/public/2d-platformer \
+  --catalog "$LOOMBRIDGE_ASSET_CATALOG_URL" \
   --output payload.json
 ```
 
@@ -89,7 +97,7 @@ validates the sprite, and writes a deterministic project cache plus a prepare re
 cd mcp-server
 node dist/capabilities/assets/prepare-cli.js \
   --profile 2d-platformer \
-  --catalog https://catalog.loomtide.ai/v1/catalog/public/2d-platformer \
+  --catalog "$LOOMBRIDGE_ASSET_CATALOG_URL" \
   --primitive tile \
   --output assets.json \
   --cache .cache
@@ -172,13 +180,13 @@ cd mcp-server && npm run build
 # 1) Browse public candidates (no token).
 node dist/capabilities/assets/browser-payload.js \
   --profile 2d-platformer \
-  --catalog https://catalog.loomtide.ai/v1/catalog/public/2d-platformer \
+  --catalog "$LOOMBRIDGE_ASSET_CATALOG_URL" \
   --output payload.json
 
 # 2) Prepare the trusted-default tile (downloads + checksum-verifies into .cache).
 node dist/capabilities/assets/prepare-cli.js \
   --profile 2d-platformer \
-  --catalog https://catalog.loomtide.ai/v1/catalog/public/2d-platformer \
+  --catalog "$LOOMBRIDGE_ASSET_CATALOG_URL" \
   --primitive tile \
   --output assets.json \
   --cache .cache

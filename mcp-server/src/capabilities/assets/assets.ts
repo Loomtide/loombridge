@@ -9,6 +9,7 @@
 
 import fs from "node:fs/promises";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 import {
   applyGeneratedAssetExportsToManifest,
@@ -25,6 +26,7 @@ import {
   ApiCatalogSource,
   catalogRecordsToRegistryPack,
   type CatalogFetch,
+  catalogUrlFromEnv,
   HttpCatalogSource,
   LocalCatalogSource,
 } from "./catalog-source.js";
@@ -48,6 +50,12 @@ export interface RunAssetsOptions {
    * (src/asset-authoring/storage.ts).
    */
   storage?: unknown;
+  /**
+   * Environment consulted for the `LOOMBRIDGE_ASSET_CATALOG_URL` fallback. Injected by tests so a
+   * developer machine that happens to export the variable cannot change what the suite measures;
+   * production leaves it unset and `catalogUrlFromEnv` reads `process.env`.
+   */
+  env?: NodeJS.ProcessEnv;
 }
 
 export interface ParsedArgs {
@@ -248,7 +256,13 @@ function sourceLabel(value: string): string {
   return path.basename(value, path.extname(value)) || "asset-catalog";
 }
 
-async function loadRegistryOrCatalog(
+/**
+ * Resolve the registry/catalog a verb reads from. Exported so the boundary guard can bind its
+ * behavioural assertion to the REAL resolver: the previous guard tested `catalogUrlFromEnv` in
+ * isolation, which had no production callers, so it could not have caught a live fallback added
+ * right here (and did not).
+ */
+export async function loadRegistryOrCatalog(
   parsed: ParsedArgs,
   genre: string,
   options: RunAssetsOptions = {},
@@ -283,7 +297,12 @@ async function loadRegistryOrCatalog(
     });
   }
 
-  const catalogPath = requireOption(parsed.catalogPath, "--catalog-api, --catalog, or --registry");
+  // No source flag: fall back to the ONE documented environment variable. `catalogUrlFromEnv`
+  // throws a message naming `LOOMBRIDGE_ASSET_CATALOG_URL` when it is unset, so with nothing
+  // configured the verb still refuses by name rather than reaching for a built-in host. This is
+  // the production caller that makes the env var (and every doc that advertises it) true.
+  const configured = parsed.catalogPath ?? catalogUrlFromEnv(options.env);
+  const catalogPath = /^https?:\/\//.test(configured) ? configured : path.resolve(parsed.root, configured);
   const source = /^https?:\/\//.test(catalogPath)
     ? new HttpCatalogSource(catalogPath, options.catalogFetch)
     : new LocalCatalogSource(catalogPath);
@@ -693,19 +712,37 @@ async function resolveAssetsAuthoringCli(): Promise<AssetsAuthoringSeam> {
   }
 }
 
+/**
+ * Presence WITHOUT executing anything. `--help` is a pure, must-never-fail path: importing the
+ * seam there ran PRIVATE top-level code on it, and `resolveAssetsAuthoringCli` deliberately
+ * rethrows anything that is not the seam module itself being absent, so a private module with a
+ * broken transitive import turned `assets --help` into a raw ERR_MODULE_NOT_FOUND stack and exit
+ * 1. A file-existence check on the resolved specifier answers the only question help has to ask.
+ */
+export async function assetsAuthoringCliPresent(): Promise<boolean> {
+  try {
+    await fs.access(fileURLToPath(new URL(ASSET_AUTHORING_CLI_MODULE, import.meta.url)));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 async function loadAssetsAuthoringCli(): Promise<AssetsAuthoringCliModule> {
   const seam = await resolveAssetsAuthoringCli();
   if (seam.present) return seam.module;
+  // Deliberately terse. The refusal used to print the resolver's own message, which quoted the
+  // absolute path of the private module: more detail than the help text this branch removes.
   throw new Error(
-    "pack-ingest/cover-build/discover require the private asset-authoring tooling, which is not " +
-      `present in this build: ${seam.reason}`,
+    "The pack-authoring verbs require the private asset-authoring tooling, which is not present " +
+      "in this build.",
   );
 }
 
 export async function run(args: string[], options: RunAssetsOptions = {}): Promise<number> {
   const parsed = parseArgs(args);
   if (parsed.help || !parsed.action) {
-    printUsage((await resolveAssetsAuthoringCli()).present);
+    printUsage(await assetsAuthoringCliPresent());
     return 0;
   }
 

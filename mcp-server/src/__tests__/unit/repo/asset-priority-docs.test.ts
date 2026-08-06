@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import test from "node:test";
@@ -50,78 +51,73 @@ const SKILL = ".skills/asset-layer/SKILL.md";
 const DOC = "Docs/Assets/AssetPriority.md";
 
 // ---------------------------------------------------------------------------------------------
-// 1. No deployment hostname anywhere in the public surface
+// 1. No deployment hostname anywhere in the TRACKED tree
 // ---------------------------------------------------------------------------------------------
 
 /**
- * Ephemeral PaaS / preview-deployment host families. Object-storage hosts are deliberately NOT
- * in this list: a catalog record legitimately pins the public URL of an asset byte, and that is
- * data about an asset, not a Loombridge endpoint.
+ * Ephemeral PaaS / preview-deployment host families, plus the serverless families an adversarial
+ * review confirmed were missing (`*.a.run.app`, `*.deno.dev`, `*.pages.dev`, `*.supabase.co`).
+ * Object-storage hosts are deliberately NOT in this list: a catalog record legitimately pins the
+ * public URL of an asset byte, and that is data about an asset, not a Loombridge endpoint.
  *
  * The pattern is written with escaped slashes (`\/\/`) for the same reason `asset-registry-
  * boundary.test.ts` does: this file is itself inside the scanned tree, and a literal `//` here
  * would make the guard report itself.
  */
 const DEPLOYMENT_HOST_RE =
-  /\/\/[^/\s"'`]*\.(?:railway\.app|vercel\.app|fly\.dev|onrender\.com|herokuapp\.com|workers\.dev|netlify\.app|ngrok\.io|ngrok-free\.app|azurewebsites\.net|appspot\.com)(?=[:/\s"'`)\]]|$)/i;
+  /\/\/[^/\s"'`]*\.(?:railway\.app|vercel\.app|fly\.dev|onrender\.com|herokuapp\.com|workers\.dev|netlify\.app|ngrok\.io|ngrok-free\.app|azurewebsites\.net|appspot\.com|a\.run\.app|deno\.dev|pages\.dev|supabase\.co)(?=[:/\s"'`)\]]|$)/i;
 
 /**
- * The public surface a reader (or a scraper) actually sees. Explicit roots rather than a whole
- * -repo walk, so the guard cannot be quietly hollowed out by a generated or vendored directory
- * appearing under an excluded name.
+ * Loomtide-owned hostnames that may appear, each with the reason it is not a Loombridge ENDPOINT
+ * this repo is naming. Anything else under `loomtide.ai` is a finding, which is what makes the
+ * "this repo does not name a deployment" claim enforceable: `catalog.loomtide.ai` is not a PaaS
+ * family, so the host-family scan above never saw it, and six runnable commands in the quickstart
+ * pointed at it while the same doc said no deployment was named.
  */
-const SCAN_ROOTS = [
-  "README.md",
-  "ARCHITECTURE.md",
-  "AGENTS.md",
-  "CONTRIBUTING.md",
-  "mcp-server/README.md",
-  "Docs",
-  "commands",
-  ".skills",
-  "asset-layer/schemas",
-  "packages",
-  "mcp-server/src",
-  "scripts",
-];
-
-const SCAN_EXTS = new Set([".md", ".ts", ".cs", ".json", ".mjs", ".sh", ".yml", ".yaml", ".txt"]);
-const SCAN_SKIP_DIRS = new Set([
-  "node_modules",
-  "dist",
-  ".git",
-  "agent-surface",
-  "Library",
-  "Temp",
-  "Logs",
-  "obj",
-  "bin",
+const ALLOWED_LOOMTIDE_HOSTS = new Map<string, string>([
+  ["loomtide.ai", "the product homepage"],
+  ["assetstore.loomtide.ai", "the brand-owned human web store, a product URL"],
+  ["get.loomtide.ai", "the documented install channel"],
+  ["assets.loomtide.ai", "object storage for asset BYTES pinned by catalog records (data, not an endpoint)"],
+  ["registry.loomtide.ai", "an npm registry named in the bridge-distribution doc"],
 ]);
+const LOOMTIDE_HOST_RE = /\/\/([a-z0-9.-]*\bloomtide\.ai)\b/gi;
 
-function* walkFiles(absDir: string): Generator<string> {
-  for (const entry of fs.readdirSync(absDir, { withFileTypes: true })) {
-    if (entry.isDirectory()) {
-      if (SCAN_SKIP_DIRS.has(entry.name)) continue;
-      yield* walkFiles(path.join(absDir, entry.name));
-    } else if (entry.isFile() && SCAN_EXTS.has(path.extname(entry.name))) {
-      yield path.join(absDir, entry.name);
-    }
-  }
-}
+/**
+ * The scan walks the whole TRACKED tree with a small skip list, rather than an enumerated set of
+ * roots. Roots were the wrong shape: a real hostname planted in `demos/`, `unity-dev-project/`,
+ * `templates/`, `.claude-plugin/`, `mcp-server/TOOLS.md`, `.github/workflows/*.yml` (the most
+ * plausible home for a real deploy URL), an extensionless `scripts/` file, `Docs/**\/*.mdx`, or
+ * anything under a directory named `bin` at any depth all SURVIVED, because none of those was a
+ * scanned root or a scanned extension. `git ls-files` is the authority on what ships.
+ *
+ * LIMITS: only tracked files are scanned (an untracked file is not published), and binary
+ * extensions are skipped by extension. Both are stated rather than hidden.
+ */
+const BINARY_EXTS = new Set([
+  ".png", ".jpg", ".jpeg", ".gif", ".webp", ".ico", ".bmp", ".tif", ".tiff",
+  ".wav", ".ogg", ".mp3", ".aiff", ".glb", ".gltf", ".fbx", ".blend",
+  ".ttf", ".otf", ".woff", ".woff2", ".zip", ".gz", ".tgz", ".pdf", ".unitypackage", ".dll", ".so", ".dylib",
+]);
+const SCAN_SKIP_PREFIXES = ["node_modules/", "dist/", "Library/", "Temp/", "Logs/"];
 
-/** Every scannable file in the public surface, as repo-relative paths. */
-export function publicSurfaceFiles(): string[] {
-  const files: string[] = [];
-  for (const root of SCAN_ROOTS) {
-    const abs = path.join(repoRoot, root);
-    if (!fs.existsSync(abs)) continue;
-    if (fs.statSync(abs).isDirectory()) {
-      for (const file of walkFiles(abs)) files.push(path.relative(repoRoot, file));
-    } else {
-      files.push(root);
-    }
-  }
-  return files.sort();
+/** Every tracked, text-ish file, as repo-relative paths. */
+export function trackedTextFiles(): string[] {
+  const result = spawnSync("git", ["ls-files", "-z"], { cwd: repoRoot, encoding: "utf-8", maxBuffer: 64 * 1024 * 1024 });
+  assert.equal(result.status, 0, `git ls-files failed: ${result.stderr}`);
+  return (result.stdout ?? "")
+    .split("\0")
+    .filter((file) => file.length > 0)
+    .filter((file) => !BINARY_EXTS.has(path.extname(file).toLowerCase()))
+    .filter((file) => !SCAN_SKIP_PREFIXES.some((prefix) => file.startsWith(prefix) || file.includes(`/${prefix}`)))
+    // `lstat`, not `exists`: a tracked SYMLINK (`.claude/skills` -> `.skills`) resolves to a
+    // directory, and its target is tracked in its own right, so following it would both crash the
+    // read and double-report.
+    .filter((file) => {
+      const abs = path.join(repoRoot, file);
+      return fs.existsSync(abs) && fs.lstatSync(abs).isFile();
+    })
+    .sort();
 }
 
 /** Report `<file>:<line>` for every deployment hostname in the supplied texts. */
@@ -130,16 +126,28 @@ export function deploymentHostFindings(texts: Array<{ file: string; text: string
   for (const { file, text } of texts) {
     text.split("\n").forEach((line, index) => {
       if (DEPLOYMENT_HOST_RE.test(line)) findings.push(`${file}:${index + 1}`);
+      for (const m of line.matchAll(LOOMTIDE_HOST_RE)) {
+        const host = m[1]!.toLowerCase();
+        if (!ALLOWED_LOOMTIDE_HOSTS.has(host)) findings.push(`${file}:${index + 1} (${host})`);
+      }
     });
   }
   return findings;
 }
 
-test("no deployment hostname appears anywhere in the public doc/source surface", () => {
-  const scanned = publicSurfaceFiles().map((file) => ({ file, text: read(file) }));
-  assert.ok(scanned.length > 200, `scan looks vacuous: only ${scanned.length} files walked`);
+test("no deployment hostname appears anywhere in the tracked tree", () => {
+  const files = trackedTextFiles();
+  // Non-vacuity, in both directions: the walk must be broad, and it must include the places the
+  // enumerated-roots version could not see.
+  assert.ok(files.length > 800, `scan looks vacuous: only ${files.length} files walked`);
+  for (const required of [".github/workflows", "demos/", "templates/", "mcp-server/TOOLS.md"]) {
+    assert.ok(
+      files.some((file) => file.startsWith(required) || file === required),
+      `the tracked-tree scan must cover ${required}`,
+    );
+  }
 
-  const findings = deploymentHostFindings(scanned);
+  const findings = deploymentHostFindings(files.map((file) => ({ file, text: read(file) })));
   assert.deepEqual(
     findings,
     [],
@@ -148,23 +156,46 @@ test("no deployment hostname appears anywhere in the public doc/source surface",
   );
 });
 
-test("LITMUS: the deployment-host scan reports a planted hostname", () => {
-  // Assembled so this source file does not itself contain the literal host.
-  const host = ["asset-api-production-59d9", "up", "railway", "app"].join(".");
-  const planted = [
-    { file: "fake/doc.md", text: `see the search API at https:${"//"}${host}/v1/assets/search\n` },
+test("LITMUS: the deployment-host scan reports a planted hostname in every host family", () => {
+  // Assembled so this source file does not itself contain a literal host.
+  const families = [
+    ["asset-api-production-59d9", "up", "railway", "app"],
+    ["catalog", "example", "a", "run", "app"],
+    ["catalog", "example", "deno", "dev"],
+    ["catalog", "example", "pages", "dev"],
+    ["catalog", "example", "supabase", "co"],
   ];
-  assert.deepEqual(deploymentHostFindings(planted), ["fake/doc.md:1"]);
+  for (const parts of families) {
+    const host = parts.join(".");
+    const planted = [{ file: "fake/doc.md", text: `see the search API at https:${"//"}${host}/v1/assets/search\n` }];
+    assert.deepEqual(deploymentHostFindings(planted), ["fake/doc.md:1"], host);
+  }
+  // ...and a brand host that is NOT an allowlisted product URL.
+  const brand = ["catalog", "loomtide", "ai"].join(".");
+  assert.deepEqual(
+    deploymentHostFindings([{ file: "fake/doc.md", text: `--catalog https:${"//"}${brand}/v1/catalog/public/x\n` }]),
+    [`fake/doc.md:1 (${brand})`],
+  );
 });
 
-test("LITMUS: the deployment-host scan tolerates the brand-owned product URL", () => {
+test("LITMUS: the deployment-host scan tolerates the brand-owned product URLs", () => {
   // Negative control. An over-broad detector that flagged the asset store would push the docs
   // into naming nothing at all, which is a worse doc, not a safer one.
   const allowed = [
     { file: "fake/doc.md", text: `browse at ${HOSTED_STORE}/ and pick candidates\n` },
     { file: "fake/two.md", text: "assets download from https://assets.loomtide.ai/pack/a.png\n" },
+    { file: "fake/three.md", text: "curl https://get.loomtide.ai/install.sh\n" },
   ];
   assert.deepEqual(deploymentHostFindings(allowed), []);
+});
+
+test("LITMUS: the tracked-tree scan actually reaches a workflow file", () => {
+  // The most plausible home for a real deploy URL, and the one the enumerated-roots scan missed
+  // entirely. Proven by finding a known string in a file only this walk can see.
+  const files = trackedTextFiles();
+  const workflow = files.find((file) => file.startsWith(".github/workflows/") && file.endsWith(".yml"));
+  assert.ok(workflow, "no tracked workflow file was walked");
+  assert.match(read(workflow), /\bon\b|\bjobs\b/, `${workflow} was not readable as a workflow`);
 });
 
 // ---------------------------------------------------------------------------------------------
@@ -172,9 +203,19 @@ test("LITMUS: the deployment-host scan tolerates the brand-owned product URL", (
 // ---------------------------------------------------------------------------------------------
 
 /**
- * Each pattern is a phrasing the docs ACTUALLY carried before this change, kept tight (short
- * match windows on whitespace-flattened text) so it fires on a mandate and not on prose that
- * merely mentions the hosted catalog and the word "default" in the same paragraph.
+ * LIMIT, stated honestly because an adversarial review defeated the previous version of this
+ * detector: a phrase denylist locks VOCABULARY, not STANCE. Prepending "Always start with the
+ * hosted Loomtide catalog. Reach for a committed pack only when the run is explicitly offline."
+ * left every required phrase present and every banned phrase absent, and the suite stayed green.
+ *
+ * Two things narrow that, and neither closes it:
+ *
+ *   - the denylist now includes the SHAPES of a demotion, not only the historical wordings: an
+ *     imperative to start hosted, an ordering that puts hosted before the committed packs, and
+ *     the "committed packs are for offline only" reframing;
+ *   - `priorityOrderFindings` reads the canonical doc's numbered `## The order` list POSITIONALLY
+ *     and requires item 1 to be the committed/local path. Prose elsewhere can still contradict a
+ *     correct list; the list is what the rest of the doc set points at.
  */
 const HOSTED_FIRST_PATTERNS: Array<[string, RegExp]> = [
   ["hosted ... FIRST", /hosted[\s\S]{0,30}\bFIRST\b/i],
@@ -183,6 +224,11 @@ const HOSTED_FIRST_PATTERNS: Array<[string, RegExp]> = [
   ["hosted ... is the default", /hosted[\s\S]{0,40}\bis\s+the\s+default\b/i],
   ["hosted ... the canonical source", /hosted[\s\S]{0,40}\bthe\s+canonical\s+source\b/i],
   ["default ... hosted registry", /\bdefault\b[\s\S]{0,20}hosted\s+(?:Loomtide\s+)?registry/i],
+  ["start with the hosted ...", /\b(?:start|begin)\s+(?:with|at|from)\s+the\s+hosted\b/i],
+  ["prefer the hosted ...", /\b(?:prefer|favour|favor)\s+the\s+hosted\b/i],
+  ["hosted ... before ... committed/local", /hosted[\s\S]{0,60}\bbefore\b[\s\S]{0,40}(?:committed|checked-in|local registry)/i],
+  ["committed/local ... only ... offline", /(?:committed|checked-in|local registry)[\s\S]{0,60}\bonly\b[\s\S]{0,40}\boffline\b/i],
+  ["fall back to ... committed/local", /\bfall(?:s|ing)?\s+back\s+to\s+(?:the\s+)?(?:committed|checked-in|local registry)/i],
 ];
 
 /** Report `<file>: <label>` for every hosted-first mandate found. */
@@ -194,6 +240,28 @@ export function hostedFirstMandateFindings(texts: Array<{ file: string; text: st
       if (pattern.test(flat)) findings.push(`${file}: ${label}`);
     }
   }
+  return findings;
+}
+
+/**
+ * The POSITIONAL half: the canonical doc's `## The order` section is a numbered list, and which
+ * item is number 1 is the stance. Reading the ordinal is not defeated by rewording.
+ */
+export function priorityOrderFindings(doc: string): string[] {
+  const section = doc.split(/^##\s+The order\s*$/m)[1];
+  if (section === undefined) return ["canonical doc has no `## The order` section to read"];
+  const items = [...section.split(/^##\s/m)[0]!.matchAll(/^(\d+)\.\s+\*\*(.+?)\*\*/gm)]
+    .map((m) => ({ ordinal: Number(m[1]), title: m[2]! }));
+  if (items.length < 3) return [`the priority list has ${items.length} numbered items; expected at least 3`];
+  const first = items.find((item) => item.ordinal === 1);
+  if (!first) return ["the priority list has no item 1"];
+  const findings: string[] = [];
+  if (!/local registry|checked-in|committed|generated/i.test(first.title)) {
+    findings.push(`priority item 1 is not the committed/local path: "${first.title}"`);
+  }
+  if (/hosted/i.test(first.title)) findings.push(`priority item 1 is the hosted catalog: "${first.title}"`);
+  const hosted = items.find((item) => /hosted/i.test(item.title));
+  if (hosted && hosted.ordinal <= 1) findings.push(`the hosted catalog is item ${hosted.ordinal}`);
   return findings;
 }
 
@@ -209,6 +277,25 @@ test("the asset-priority doc set never mandates hosted-first", () => {
   );
 });
 
+test("the canonical priority list puts the committed/local path first, by ordinal", () => {
+  const findings = priorityOrderFindings(read(DOC));
+  assert.deepEqual(findings, [], findings.join("\n  "));
+});
+
+test("LITMUS: the positional prong fires when the list is reordered", () => {
+  const doc = read(DOC);
+  const swapped = doc
+    .replace("1. **Local registry / profile fixtures and generated assets (the default path).**",
+      "1. **Hosted Loomtide catalog (start here).**")
+    .replace("2. **Hosted Loomtide catalog (OPTIONAL accelerator, read-only).**",
+      "2. **Local registry / profile fixtures and generated assets.**");
+  const findings = priorityOrderFindings(swapped);
+  assert.ok(findings.length > 0, "swapping items 1 and 2 must be reported");
+  assert.ok(findings.some((f) => /item 1 is the hosted catalog/.test(f)), findings.join("; "));
+  // ...and a doc whose list has been deleted outright must not read as compliant.
+  assert.ok(priorityOrderFindings("# no list here\n").length > 0, "a missing list is a finding");
+});
+
 test("LITMUS: the hosted-first detector fires on each historical mandate wording", () => {
   // Verbatim shapes this repo shipped before the demotion.
   const regressions = [
@@ -222,6 +309,18 @@ test("LITMUS: the hosted-first detector fires on each historical mandate wording
     const findings = hostedFirstMandateFindings([{ file: "fake/doc.md", text }]);
     assert.ok(findings.length > 0, `detector missed a real regression:\n${text}`);
   }
+});
+
+test("LITMUS: the hosted-first detector fires on the reviewer's re-mandate", () => {
+  // The exact paragraph an adversarial review prepended to AssetPriority.md, which left the old
+  // phrase-presence detector 14/14 green.
+  const attack =
+    "Always start with the hosted Loomtide catalog. Reach for a committed pack only when the run " +
+    "is explicitly offline.";
+  const findings = hostedFirstMandateFindings([{ file: "fake/doc.md", text: attack }]);
+  assert.ok(findings.length > 0, "the re-mandate must be reported");
+  assert.ok(findings.some((f) => /start with the hosted/.test(f)), findings.join("; "));
+  assert.ok(findings.some((f) => /only \.\.\. offline/.test(f)), findings.join("; "));
 });
 
 test("LITMUS: the hosted-first detector accepts the current (optional) wording", () => {
@@ -387,4 +486,56 @@ test("no doc ever passes the web store as the --catalog-api base", () => {
       `${rel} should explain why the web store is not the --catalog-api base`
     );
   }
+});
+
+// ---------------------------------------------------------------------------------------------
+// 5. The README's licence counts are derived, not remembered
+// ---------------------------------------------------------------------------------------------
+
+/**
+ * A number in prose is a claim, and this one was wrong: the README said "the asset layer committed
+ * in this repo records 80 assets as CC0-1.0", but 80 is the count for `asset-layer/registry/**`
+ * alone, while the whole of `asset-layer/` records 85 CC0 plus one CC-BY-4.0 and one
+ * LicenseRef-Unknown. Either scope the claim or drop it; this guard makes the scoped claim true by
+ * deriving both numbers from the tree.
+ */
+export function spdxCounts(prefix: string): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const file of trackedTextFiles()) {
+    if (!file.startsWith(prefix)) continue;
+    for (const m of read(file).matchAll(/"spdx"\s*:\s*"([^"]+)"/g)) {
+      counts.set(m[1]!, (counts.get(m[1]!) ?? 0) + 1);
+    }
+  }
+  return counts;
+}
+
+test("the README's CC0 counts match what the tree actually records", () => {
+  const registry = spdxCounts("asset-layer/registry/");
+  const all = spdxCounts("asset-layer/");
+  const registryCc0 = registry.get("CC0-1.0") ?? 0;
+  const allCc0 = all.get("CC0-1.0") ?? 0;
+  assert.ok(registryCc0 > 0, "the licence scan found nothing: it is vacuous");
+
+  const readme = read("README.md");
+  assert.ok(
+    readme.includes(`**${registryCc0} assets as \`CC0-1.0\`**`),
+    `README must state the derived registry count (${registryCc0} CC0 in asset-layer/registry/**)`,
+  );
+  assert.ok(
+    readme.includes(`**${allCc0} \`CC0-1.0\`**`),
+    `README must state the derived tree-wide count (${allCc0} CC0 across asset-layer/)`,
+  );
+  // Every non-CC0 licence the tree records must be named, so "predominantly CC0" is checkable.
+  for (const spdx of [...all.keys()].filter((key) => key !== "CC0-1.0")) {
+    assert.ok(readme.includes(spdx), `README must name the non-CC0 licence ${spdx} it records`);
+  }
+});
+
+test("LITMUS: the licence scan is bound to the tree, not to a constant", () => {
+  const registry = spdxCounts("asset-layer/registry/");
+  const all = spdxCounts("asset-layer/");
+  assert.ok((all.get("CC0-1.0") ?? 0) >= (registry.get("CC0-1.0") ?? 0), "the tree-wide count must include the registry");
+  assert.ok(all.size > 1, "the tree records more than one licence; the scan must see all of them");
+  assert.deepEqual(spdxCounts("no-such-directory/"), new Map(), "an empty prefix must count nothing");
 });

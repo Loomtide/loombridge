@@ -18,8 +18,9 @@ Resolve every required role in this order, the same for 2D and 3D:
 2. **Hosted Loomtide catalog: an OPTIONAL, read-only accelerator** the developer may choose.
    Humans browse + approve candidates at **https://assetstore.loomtide.ai/**; the CLI reads a
    hosted search API via `--catalog-api <baseUrl>` (the CLI appends `/v1/assets/search`). The
-   endpoint is configuration, either the flag or the `LOOMBRIDGE_ASSET_CATALOG_URL`
-   environment variable, and no deployment host is baked into Loombridge; the current base URL
+   endpoint is configuration: pass `--catalog-api <baseUrl>` for the search API, or set
+   `LOOMBRIDGE_ASSET_CATALOG_URL` and pass no source flag at all (it is the no-flag default for
+   `--catalog`, a shard directory or `.jsonl` URL). No deployment host is baked into Loombridge; the current base URL
    is published alongside the asset store. The web-store domain serves `/api/...`, not
    `/v1/...`, so do not pass it to `--catalog-api`. When the developer has opted in, query the
    catalog per role, present candidates grouped by role, recommend a cohesive set, and STOP

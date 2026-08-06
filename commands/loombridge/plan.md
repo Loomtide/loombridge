@@ -196,8 +196,9 @@ so the two agents cannot drift.
    If the developer opts into the hosted catalog, humans browse + approve candidates at the
    web store **https://assetstore.loomtide.ai/**, and the CLI reads the hosted search API via
    `--catalog-api <baseUrl>` (it appends `/v1/assets/search`). The endpoint is configuration:
-   pass the flag, or set the `LOOMBRIDGE_ASSET_CATALOG_URL` environment variable. No
-   deployment host is baked into Loombridge, and the current base URL is published alongside
+   pass the flag, or set `LOOMBRIDGE_ASSET_CATALOG_URL` and pass no source flag at all (it is
+   the no-flag default for `--catalog`, a shard directory or `.jsonl` URL; with it unset the
+   verbs refuse by name). No deployment host is baked into Loombridge, and the current base URL is published alongside
    the asset store. The web-store domain serves `/api/...`, not `/v1/...`, so it is not the
    `--catalog-api` base: do not pass it there.
 
@@ -248,8 +249,8 @@ so the two agents cannot drift.
 
    **Optional hosted catalog:** if the developer chose it, swap `--registry <local-registry.json>`
    for `--catalog-api <catalog-api-base>` on both commands. The base URL is configuration
-   (the `--catalog-api` flag or the `LOOMBRIDGE_ASSET_CATALOG_URL` environment variable); no
-   deployment host is baked into Loombridge. Everything downstream, including license policy,
+   (the `--catalog-api` flag, or `LOOMBRIDGE_ASSET_CATALOG_URL` with no source flag, which the
+   verbs read as `--catalog`); no deployment host is baked into Loombridge. Everything downstream, including license policy,
    checksums, trust tiers, and the approval checkpoint, is identical either way, so the local
    path is never the lesser option.
 

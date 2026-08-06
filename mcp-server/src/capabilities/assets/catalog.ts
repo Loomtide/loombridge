@@ -143,6 +143,10 @@ function normalizeProvider(input: UnknownRecord): AssetCatalogRecord["provider"]
   const providerId = stringValue(input.providerId);
   return {
     name: stringValue(provider.name) ?? providerId ?? "",
+    // A BROWSE link recording where a compact record came from, and required non-empty by
+    // `validateCatalogRecord`. It is deliberately a deep `/tree/main/catalog/` path, and the
+    // endpoint guard allowlists only that exact prefix: a repo-root GitHub prefix used to be
+    // allowlisted, which permitted the exact private-mirror DEFAULT the guard exists to prevent.
     url: stringValue(provider.url) ?? (providerId ? `https://github.com/Loomtide/LoomtideAssetRegistry/tree/main/catalog/providers/${providerId}.json` : ""),
     type: stringValue(provider.type) as AssetCatalogRecord["provider"]["type"],
     acquisitionLane: stringValue(provider.acquisitionLane) as AssetAcquisitionLane | undefined,
@@ -159,6 +163,7 @@ function normalizeSource(input: UnknownRecord): AssetCatalogRecord["source"] {
   const fixture = firstString(input.localPath, input.githubRawUrl, input.relativePath, input.id) ?? "";
   return {
     title: stringValue(source.title) ?? titleFromInput(input) ?? "",
+    // As in `normalizeProvider`: a browse link, never an endpoint.
     url: stringValue(source.url) ?? (sourceId ? `https://github.com/Loomtide/LoomtideAssetRegistry/tree/main/catalog/sources/${sourceId}.json` : ""),
     downloadPage: stringValue(source.downloadPage),
     author: stringValue(source.author) ?? stringValue(input.providerId) ?? "",

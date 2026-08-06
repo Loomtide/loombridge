@@ -138,3 +138,57 @@ attribution flag (the current catalog records 80 assets as `CC0-1.0`), and how t
 2. **Should `assets --help` list the authoring verbs as "unavailable in this build", or omit them
    entirely?** Leaning omit: naming a private toolchain in an open build's help is the same
    information leak in a smaller font.
+
+## Revision: what the adversarial review changed
+
+The first implementation of §1 and §2 shipped guards that were true of today's build but defeated
+by ordinary refactors. A review built a WORKING `loombridge assets catalog-push` that POSTed to a
+catalog endpoint with every repo guard green. The guards were rebuilt around that evidence; the
+invariants above are unchanged, the enforcement is not.
+
+- **Denylists became allowlists.** The non-GET scan searched `capabilities/assets/**` for bad
+  strings, so moving `method: "POST"` one directory up into `shared/` left the scanned directory
+  holding nothing but a function call. Network egress is now an ALLOWLIST of the sites in all of
+  `mcp-server/src` that can put a byte on a socket, each with a stated reason; write verbs may not
+  be spelled anywhere in the package; a request `method` field may not appear anywhere the assets
+  code can REACH (its transitive import closure, which includes `shared/`); `node:child_process`
+  counts as a network client, closing `execFile("curl", ["-XPOST", ...])`; and
+  `capabilities/assets/**` may not read `process.env` off-allowlist, closing an env-supplied
+  request init.
+- **The seam is found by shape, not by name.** The old guard was bound to the identifier
+  `ASSET_AUTHORING_CLI_MODULE`, so a second seam (`PUBLISH_CLI_MODULE`) got zero coverage. Any
+  constant holding a relative specifier that resolves to nothing in this tree is now a seam, and
+  the set of seams is allowlisted.
+- **Dependency edges count as edges.** Adding `@loomtide/authoring-cli` to `dependencies` plus a
+  literal import compiled clean and passed every guard. The package's declared dependencies are
+  now allowlisted, and every bare import in `src/` must resolve to one of them or a Node builtin.
+  The literal-import walk covers `.mts`/`.cts`/`.js`/`.mjs`/`.cjs`, not `.ts` alone.
+- **The endpoint allowlist no longer permits the shape it exists to prevent.** A whole-org
+  `https://github.com/Loomtide/` prefix admitted the historical private-mirror default. The GitHub
+  entries are now deep, specific paths, and the load-bearing half is BEHAVIOURAL: the exported
+  `loadRegistryOrCatalog` must refuse by name, with no network call, when nothing is configured.
+  The old behavioural assertion tested `catalogUrlFromEnv`, which had no production callers.
+- **`LOOMBRIDGE_ASSET_CATALOG_URL` is wired.** Five docs and one error message promised it while
+  nothing read it. `assets registry-plan`/`registry-apply`, `prepare-cli` and `browser-payload`
+  now fall back to it as the `--catalog` default when no source flag is passed, so the promise,
+  the docs, and the guard are all true at once. Answers open question 1: no hostname is invented,
+  the variable is the documented single place to put one.
+- **`--help` no longer executes private code.** Gating the help text on `await import(seam)` put a
+  dynamic import of the private side on a pure help path, where a missing transitive import
+  produced a raw `ERR_MODULE_NOT_FOUND` stack and exit 1. Presence is a file-existence check on the
+  resolved specifier. The refusal message was also shortened: it named the private module path,
+  which is more than the help block was removed to hide.
+- **The Unity Asset Browser is configurable.** Removing the hardcoded default left the window
+  permanently short-circuited to "not configured": no `EditorPrefs.SetString` existed anywhere, and
+  a Hub-launched Editor on macOS inherits no shell environment. It now carries a Catalog field and
+  a Preferences entry, both writing `loombridge.assetApiBaseUrl`.
+- **The hostname scan walks the tracked tree.** An enumerated root list missed `demos/`,
+  `templates/`, `.github/workflows/*.yml`, `mcp-server/TOOLS.md`, extensionless `scripts/` files
+  and anything under a `bin` directory. It now walks `git ls-files` with a small skip list, covers
+  four more serverless host families, and refuses any `*.loomtide.ai` host outside a named
+  allowlist, which is what makes "this repo does not name a deployment" checkable.
+- **Documented limits instead of implied completeness.** The hosted-first detector locks
+  vocabulary, not stance: it gained the shapes of a demotion and a POSITIONAL check on the
+  canonical numbered list, and its header states plainly what it still cannot catch. Every scanner
+  now asserts non-vacuity (files walked, allowlist entries consumed), and the source lexer reports
+  when it loses track of a file rather than silently blanking the rest of it.

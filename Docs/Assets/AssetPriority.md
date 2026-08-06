@@ -22,8 +22,10 @@ inputs differ.
    upload or publish path.
    - **Humans browse + approve** candidates at the web store: **https://assetstore.loomtide.ai/**
    - **The CLI reads a hosted search API** via `--catalog-api <baseUrl>` (the CLI appends
-     `/v1/assets/search` and `/v1/packs/<id>/assets`); `LOOMBRIDGE_ASSET_CATALOG_URL` is the
-     environment variable that names the same catalog URL. **The endpoint is configuration,
+     `/v1/assets/search` and `/v1/packs/<id>/assets`), or a shard directory / `.jsonl` file via
+     `--catalog <url>`. `LOOMBRIDGE_ASSET_CATALOG_URL` is the no-flag default for `--catalog`:
+     with no `--registry` / `--catalog` / `--catalog-api` passed, the verbs read it, and with it
+     unset they refuse by name. **The endpoint is configuration,
      never a baked-in default, and this repo does not name a deployment.** The current base
      URL is published alongside the asset store. The web store at `assetstore.loomtide.ai`
      is a human surface and serves `/api/...`, **not** `/v1/...`, so it is **not** the
