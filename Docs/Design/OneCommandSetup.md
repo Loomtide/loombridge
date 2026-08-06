@@ -1,6 +1,8 @@
 # Design: `loombridge setup`, one command from a Unity project
 
-**Status:** PROPOSED. **Date:** 2026-08-06.
+**Status:** IMPLEMENTED. **Date:** 2026-08-06.
+Shipped as `loombridge setup` + `loombridge install-mcp`
+(`mcp-server/src/capabilities/setup/setup.ts`, `install-mcp.ts`).
 Inherits from [Positioning.md](Positioning.md) (the Setup surface group).
 
 ## The finding
@@ -128,10 +130,30 @@ developer who wants only that step has it. Name it consistently with the existin
 - Any change to what the bridge or the agent surface contain.
 - Doing project setup from an npm lifecycle script (rejected above).
 
-## Open questions
+## Open questions, resolved on implementation
 
-1. **Should `setup` refuse or warn when the CLI is stale?** Leaning warn, because the bridge it
-   is about to install still matches the CLI it shipped with, so the run is internally
-   consistent. A refusal would block a first-time setup on an unrelated version check.
-2. **Does `install-mcp` belong in the headline Setup group or the reference list?** Leaning
-   headline, since it is a step every new project needs, which is exactly the finding.
+1. **Should `setup` refuse or warn when the CLI is stale?** **WARN.** The bridge it is about to
+   install is the one this CLI shipped with, so the run is internally consistent either way, and
+   a refusal would block a first-time setup on an unrelated version check. `setup` passes
+   `checkOnly` to `update`'s phase unconditionally, so no flag can make it self-update.
+2. **Does `install-mcp` belong in the headline Setup group or the reference list?**
+   **HEADLINE**, alongside `setup`. It is a step every new project needs, which is the finding.
+
+Decided alongside them:
+
+3. **Exit codes.** `0` wired and healthy, and an OPTIONAL step that was skipped (the agent
+   surface, by flag, by a non-interactive run, or by a recorded "declined") is still `0`, because
+   skipping is that surface's documented default. `1` a REQUIRED step failed. `2` usage or
+   precondition: bad arguments, not a Unity project, a refused stale bridge bundle, or a
+   `.mcp.json` that could not be parsed or holds a foreign entry.
+4. **What the ledger records.** An `mcpRegistration` block beside `agentSurface` in
+   `ProjectSettings/LoombridgeInstall.json`, carrying the config path, the server key, and the
+   sha256 of the CANONICAL JSON of the entry that was written. The sha covers the ENTRY, never
+   the whole file: other tooling legitimately adds servers to `.mcp.json`, and a whole-file hash
+   would read every unrelated addition as a hand edit and refuse from then on.
+5. **An existing entry identical to ours, with no ledger.** Left alone AND not recorded. There is
+   nothing to refuse (no bytes would change) and nothing to claim: recording ownership of a line
+   a human typed would let a later version rewrite it.
+6. **An `--embedded` bridge.** `setup` refuses to reconcile it (exit 1) and names
+   `update --force-bridge`. It is a physical folder that may hold local edits, and "one command
+   for a new project" must not be the thing that clobbers them.

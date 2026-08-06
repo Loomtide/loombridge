@@ -26,12 +26,18 @@ Needs Node >= 18. macOS, Linux, and Windows, in any shell:
 npm install -g loombridge
 ```
 
-Then wire your Unity project and health-check it:
+Then wire your Unity project, in one command, from inside it:
 
 ```bash
-loombridge install-bridge --project /path/to/UnityProject   # adds the bridge (a file: tarball dependency)
-loombridge doctor --project /path/to/UnityProject           # every failed row prints its fix
+cd /path/to/UnityProject
+loombridge setup           # bridge + MCP registration + (optional) agent surface, then doctor
 ```
+
+`setup` installs the Unity bridge, registers the MCP server in the project's `.mcp.json` (merging
+into whatever servers are already there, and refusing to overwrite a `loombridge` entry it did not
+write), offers the optional slash commands + skills, and finishes with `doctor` so the run ends on
+evidence. It is idempotent, so re-run it any time. Every step is still its own verb if you want
+just one: `install-bridge`, `install-mcp`, `install-agent`, `doctor`.
 
 To update later, run this from anywhere. Inside a Unity project it also reconciles that
 project's bridge, so the CLI and the bridge never drift apart:
@@ -40,7 +46,8 @@ project's bridge, so the CLI and the bridge never drift apart:
 loombridge update          # add --check to see what would change without installing
 ```
 
-**Connect your agent** (Claude Code, Codex, Cursor, any MCP client): command `loombridge`, args `["mcp"]`.
+**Connecting an agent by hand** (any client that does not read a project-scoped `.mcp.json`):
+command `loombridge`, args `["mcp"]`.
 
 <details>
 <summary>Install from source / full setup notes</summary>

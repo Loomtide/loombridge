@@ -48,11 +48,17 @@ function printUsage(): void {
       "Usage: loombridge <command> [options]",
       "",
       "Setup (wire in, health-check, connect an agent):",
+      "  setup           ONE command from a fresh Unity project to a wired one (cwd by",
+      "                    default): bridge, MCP registration in .mcp.json, optionally the",
+      "                    agent commands + skills, then doctor. Idempotent; composes the",
+      "                    verbs below, which all keep working on their own.",
       "  install-bridge  Install the Unity bridge into a consumer project (file: tarball",
       "                    dependency by default; --embedded fallback). No repo clone.",
       "  install-agent   OPTIONAL: install Loombridge's agent commands + skills INTO the",
       "                    project repo (.claude/ + .codex/, committed/team-wide). --remove",
       "                    opts out (remembered). Skipping is the default: do nothing.",
+      "  install-mcp     Register the MCP server in the project's .mcp.json (MERGES: other",
+      "                    servers are preserved; an entry Loombridge did not write is refused).",
       "  doctor          Health-check the local install + a project's bridge wiring",
       "                    (--project, --live, --ci); every failed row prints its fix.",
       "  update          Update Loombridge in place: the CLI itself (npm channel), then the",
@@ -237,8 +243,17 @@ export async function loombridgeCli(argv: string[]): Promise<number> {
       const { run } = await import("../capabilities/genre/genre.js");
       return run(rest);
     }
+    case "setup": {
+      // The front door: composes install-bridge / install-mcp / install-agent / doctor.
+      const { run } = await import("../capabilities/setup/setup.js");
+      return run(rest);
+    }
     case "install-bridge": {
       const { run } = await import("../capabilities/setup/install-bridge.js");
+      return run(rest);
+    }
+    case "install-mcp": {
+      const { run } = await import("../capabilities/setup/install-mcp.js");
       return run(rest);
     }
     case "install-agent": {
