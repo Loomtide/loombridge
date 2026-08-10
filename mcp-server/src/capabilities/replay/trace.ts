@@ -95,6 +95,7 @@ import { readPng } from "../verification/analyze-frames.js";
 
 interface TraceArgs {
   sub: "replay" | "report" | "approve" | "replay-all" | "record" | "tolerance" | "mask";
+  /** Trace id. Empty on `record` when none was given: it is derived from the recorded scene. */
   id: string;
   root: string;
   /** Override the trace input path (default `.loombridge/replays/traces/<id>.trace.json`). */
@@ -139,7 +140,11 @@ interface TraceArgs {
   // ── record --observe ──
   /** Scene to reset to + record from (record only; optional: absent resolves the editor's current scene). */
   scene?: string;
-  /** Recording mode flag — v1 records by observing a human session. */
+  /**
+   * `--observe`: accepted and IGNORED. Observing a human session is the only recording mode
+   * there has ever been, so the flag selects nothing; it stays parseable (with no deprecation
+   * noise) because docs, scripts and muscle memory are full of it.
+   */
   observe?: boolean;
   /** Optional human-readable trace title/intent (record only). */
   title?: string;
@@ -156,9 +161,11 @@ interface TraceArgs {
    */
   stateSignal?: ObserveTraceMeta["stateSignal"];
   /**
-   * `--auto-state-signal`: ask the observer to AUTO-DETECT each scene's state signal live and switch
-   * on scene-change (Phase 2 / D1-B). The hands-off path for multi-gesture-scene games (e.g. the
-   * scene-agnostic `minigame check` passes it). Takes precedence over `--state-signal`.
+   * Whether the observer AUTO-DETECTS each scene's state signal live and switches on
+   * scene-change (Phase 2 / D1-B). The hands-off path for multi-gesture-scene games. ALREADY
+   * RESOLVED here (record only): default ON, OFF when `--state-signal` was declared, and
+   * whatever `--auto-state-signal` / `--no-auto-state-signal` said when either was typed. See
+   * {@link resolveAutoStateSignal} for the table.
    */
   autoStateSignal: boolean;
 }
@@ -179,6 +186,55 @@ export function parseStateSignal(
   const [path, component, property] = parts;
   if (!path || !component || !property) return null;
   return { locator: { path }, component, property };
+}
+
+/**
+ * Decide whether the observer AUTO-DETECTS each scene's state signal (`record` only).
+ *
+ * Auto detection is additive and best-effort: when it finds nothing the gesture is simply
+ * not phase-gated, which is exactly the pre-flag behaviour. So it defaults ON, which fixes
+ * the hub→game multi-scene recording with no flag typed. The one thing a default must never
+ * do is beat something the developer stated out loud, hence the table:
+ *
+ * | typed                                        | auto detection |
+ * |----------------------------------------------|----------------|
+ * | nothing                                      | ON (default)   |
+ * | `--state-signal <spec>`                      | OFF (the declared signal wins) |
+ * | `--auto-state-signal` (with or without the above) | ON (explicit, and it still takes precedence over a declared signal, as documented) |
+ * | `--no-auto-state-signal`                     | OFF (the explicit opt out, whatever else was typed) |
+ *
+ * `flag` is `undefined` when NEITHER auto flag was typed, and that absence is the whole point:
+ * so it must not be collapsed to `false` before it gets here. Pure; exported for unit tests.
+ */
+export function resolveAutoStateSignal(
+  flag: boolean | undefined,
+  hasDeclaredStateSignal: boolean,
+): boolean {
+  if (flag !== undefined) return flag; // an explicit flag wins in BOTH directions
+  return !hasDeclaredStateSignal; // the default never overrides a declaration
+}
+
+/**
+ * Derive a trace id from a scene path: basename without `.unity`, lower-cased, with every
+ * run of non-alphanumerics turned into a single `-` (`Assets/Scenes/KidsChef.unity` →
+ * `kidschef`, `Assets/Scenes/Count The Fruits.unity` → `count-the-fruits`). Word boundaries
+ * are the ones the scene NAME states (spaces, underscores, punctuation); a CamelCase hump is
+ * not treated as one, so `KidsChef` stays `kidschef` rather than becoming `kids-chef`.
+ *
+ * Returns null when nothing usable survives (e.g. a scene named entirely in non-ASCII), so
+ * the caller can REFUSE and ask for an explicit `--id`. There is deliberately no generic
+ * fallback name: the id becomes a filename and an anchor, and "recording" or "trace-1" would
+ * be a name nobody chose sitting on a verdict. The result is checked against the SAME
+ * `isSafePathSegment` the trace parser and `--id` use, so the sanitiser can never quietly
+ * emit something the validator would reject. Pure; exported for unit tests.
+ */
+export function traceIdFromScenePath(scenePath: string): string | null {
+  const base = path.basename(scenePath).replace(/\.unity$/i, "");
+  const id = base
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return id.length > 0 && isSafePathSegment(id) ? id : null;
 }
 
 /**
@@ -241,7 +297,7 @@ export async function run(args: string[], opts: TraceRunOpts = {}): Promise<numb
     if (parsed.sub === "approve") return await runApprove(parsed);
     if (parsed.sub === "tolerance") return await runTolerance(parsed);
     if (parsed.sub === "mask") return await runMask(parsed);
-    if (parsed.sub === "record") return await runRecord(parsed);
+    if (parsed.sub === "record") return await runRecord(parsed, opts);
     return await runReport(parsed);
   } catch (error) {
     const hint = unityConnectionHint(error) ?? unityConnectionLostHint(error);
@@ -281,14 +337,58 @@ async function runReplay(args: TraceArgs, opts: TraceRunOpts = {}): Promise<numb
 }
 
 /**
- * Record a human demonstration into a replayable trace. Resets to a clean
- * Play-Mode start at `--scene`, observes the human's clicks/drags until they
- * signal done (press Enter, or `--duration <sec>`), captures any `--outcomes`,
- * and writes `.loombridge/replays/traces/<id>.trace.json` (green by construction).
+ * Pick the trace id for a recording that was given no `--id`, from the scene the recorder
+ * RESOLVED (so the id names what was actually recorded).
+ *
+ * A DERIVED id never overwrites: on `<derived>.trace.json` already existing it takes
+ * `<derived>-2`, `-3`, … and says so, loudly, because nobody typed this name and a silent
+ * overwrite of a trace someone recorded earlier is the one outcome that cannot be undone.
+ * An EXPLICIT `--id` is untouched by this and still overwrites: that is the developer
+ * saying which trace they mean, and `approve` binds `traceSha256` so a stale baseline
+ * cannot grade a changed trace anyway.
  */
-async function runRecord(args: TraceArgs): Promise<number> {
+async function deriveRecordId(paths: ReplayLayout, scenePath: string): Promise<string> {
+  const base = traceIdFromScenePath(scenePath);
+  if (base === null) {
+    throw new Error(
+      `record: cannot derive a trace id from scene "${scenePath}". Pass --id <name> explicitly.`,
+    );
+  }
+  let chosen = base;
+  for (let n = 2; await fileExists(path.join(paths.replayTraces, `${chosen}.trace.json`)); n += 1) {
+    chosen = `${base}-${n}`;
+  }
+  console.error(`[loombridge trace] no --id given, recording as "${chosen}" (from ${scenePath}).`);
+  if (chosen !== base) {
+    console.error(
+      `[loombridge trace] "${base}" already exists and was left untouched; ` +
+        `re-record it with: --id ${base}`,
+    );
+  }
+  return chosen;
+}
+
+async function fileExists(target: string): Promise<boolean> {
+  try {
+    await fs.access(target);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Record a human demonstration into a replayable trace. Resets to a clean
+ * Play-Mode start at `--scene` (or the editor's current scene), observes the human's
+ * clicks/drags until they signal done (press Enter, or `--duration <sec>`), captures any
+ * `--outcomes`, and writes `.loombridge/replays/traces/<id>.trace.json` (green by
+ * construction). With no `--id`, the id is derived from the recorded scene.
+ */
+async function runRecord(args: TraceArgs, opts: TraceRunOpts = {}): Promise<number> {
   const paths = layoutFor(args);
   const meta: ObserveTraceMeta = {
+    // Empty when no --id was given ⇒ observeRecordLive calls `resolveId` below with the
+    // RESOLVED scene (the only place both facts exist at once).
     id: args.id,
     // Empty when no --scene was given ⇒ recordObservedTrace resolves the editor's active scene (#295).
     scene: args.scene ?? "",
@@ -297,7 +397,8 @@ async function runRecord(args: TraceArgs): Promise<number> {
     // The declared state signal (already validated/split in parseArgs): observe_start
     // samples it per gesture and the transform gates each gesture on it.
     ...(args.stateSignal ? { stateSignal: args.stateSignal } : {}),
-    // Phase 2 / D1-B: auto-detect each scene's signal live (overrides a declared signal).
+    // Phase 2 / D1-B: auto-detect each scene's signal live. Default ON, and it overrides a
+    // declared signal only when the developer asked for it (see `resolveAutoStateSignal`).
     ...(args.autoStateSignal ? { autoDetectStateSignal: true } : {}),
   };
   const outcomes = await loadOutcomes(args.outcomesPath);
@@ -321,16 +422,24 @@ async function runRecord(args: TraceArgs): Promise<number> {
   // announcing "resetting" before it exists reads as a step that never happened when the
   // editor is unreachable (S1 final test, LOW-3).
   console.error(
-    `[loombridge trace] recording "${args.id}": connecting to Unity, then resetting ${args.scene ?? "the current scene"} to a clean Play-Mode start…`,
+    `[loombridge trace] recording ${args.id ? `"${args.id}"` : "(id derived from the recorded scene)"}: connecting to Unity, then resetting ${args.scene ?? "the current scene"} to a clean Play-Mode start…`,
   );
   const { trace, droppedNoTarget, droppedUnfocused } = await observeRecordLive(meta, {
     waitForStop,
     outcomes,
     projectPathCanonical: resolveCliProjectPin({ root: args.root }),
+    // Passed ONLY when no --id was typed, so the explicit path provably never reaches the
+    // derivation (and never gets collision-suffixed).
+    ...(args.id ? {} : { resolveId: (scenePath: string) => deriveRecordId(paths, scenePath) }),
+    ...(opts.clientFactory ? { client: opts.clientFactory() } : {}),
   });
+  // The id the trace was actually built with: `args.id` when one was typed, the derived one
+  // otherwise. Reading it back off the trace means the file name and the trace's own `id`
+  // can never disagree.
+  const traceId = trace.id;
 
   await fs.mkdir(paths.replayTraces, { recursive: true });
-  const traceFile = path.join(paths.replayTraces, `${args.id}.trace.json`);
+  const traceFile = path.join(paths.replayTraces, `${traceId}.trace.json`);
   await fs.writeFile(traceFile, `${JSON.stringify(trace, null, 2)}\n`, "utf-8");
 
   const steps = trace.segments.length;
@@ -341,7 +450,7 @@ async function runRecord(args: TraceArgs): Promise<number> {
     console.error(notice);
   }
   console.error(
-    `[loombridge trace] recorded "${args.id}": ${steps} step(s), ${outcomeCount} outcome(s) → ${path.relative(args.root, traceFile)}`,
+    `[loombridge trace] recorded "${traceId}": ${steps} step(s), ${outcomeCount} outcome(s) → ${path.relative(args.root, traceFile)}`,
   );
   // In the mini-game workspace flow (--flat), print the EXACT next command to run (capture).
   // Otherwise give the generic replay hint (the standard-layout trace flow).
@@ -2094,7 +2203,8 @@ function parseArgs(args: string[]): TraceArgs | { help: true; usageError?: boole
   let durationSec: number | undefined;
   let outcomesPath: string | undefined;
   let stateSignal: ObserveTraceMeta["stateSignal"] | undefined;
-  let autoStateSignal = false;
+  /** undefined ⇒ NEITHER auto flag was typed (see `resolveAutoStateSignal`). */
+  let autoStateSignalFlag: boolean | undefined;
   let driftTolerance: number | undefined;
   let maskSet: MaskRect[] | undefined;
   let maskClear = false;
@@ -2152,7 +2262,9 @@ function parseArgs(args: string[]): TraceArgs | { help: true; usageError?: boole
       }
       stateSignal = parsed;
     } else if (arg === "--auto-state-signal") {
-      autoStateSignal = true;
+      autoStateSignalFlag = true;
+    } else if (arg === "--no-auto-state-signal") {
+      autoStateSignalFlag = false;
     } else if (arg === "--speed") {
       // Replay pacing only: record observes a HUMAN whose pacing IS the demonstration,
       // approve/tolerance/report never drive the editor at all.
@@ -2260,8 +2372,9 @@ function parseArgs(args: string[]): TraceArgs | { help: true; usageError?: boole
     }
   }
 
-  // `replay-all` runs every trace, so it needs no --id; the others require one.
-  if (sub !== "replay-all" && !id) {
+  // `replay-all` runs every trace and `record` DERIVES one from the scene it ends up
+  // recording (see `traceIdFromScenePath`), so neither needs --id; the others require one.
+  if (sub !== "replay-all" && sub !== "record" && !id) {
     console.error("[loombridge trace] --id <id> is required.");
     return { help: true, usageError: true };
   }
@@ -2301,12 +2414,11 @@ function parseArgs(args: string[]): TraceArgs | { help: true; usageError?: boole
       return { help: true, usageError: true };
     }
   }
-  // `record` needs a scene to reset to and (v1) the --observe mode flag.
+  // `record` takes NOTHING mandatory. `--observe` used to be required as "the only recording
+  // mode in v1", which is ceremony documenting an alternative nobody built; it is still
+  // ACCEPTED (every doc, script and muscle-memory invocation keeps working) and simply
+  // ignored, with no deprecation noise on the happy path.
   if (sub === "record") {
-    if (!observe) {
-      console.error("[loombridge trace] record requires --observe (the only recording mode in v1).");
-      return { help: true, usageError: true };
-    }
     // `--scene` is OPTIONAL: when omitted, the recorder resolves the editor's CURRENT scene and resets to
     // it (the scene-agnostic flow), or refuses if it's unsaved. When given, it must be a real scene path.
     if (scene !== undefined && !isScenePath(scene)) {
@@ -2329,7 +2441,12 @@ function parseArgs(args: string[]): TraceArgs | { help: true; usageError?: boole
     durationSec,
     outcomesPath,
     stateSignal,
-    autoStateSignal,
+    // Only `record` observes anything, so only `record` gets the default-ON resolution;
+    // everywhere else the field is a literal reading of what was typed.
+    autoStateSignal:
+      sub === "record"
+        ? resolveAutoStateSignal(autoStateSignalFlag, stateSignal !== undefined)
+        : autoStateSignalFlag === true,
     driftTolerance,
     maskSet,
     maskClear,
@@ -2428,9 +2545,13 @@ function printUsage(): void {
     [
       "Usage: loombridge trace <record|replay|replay-all|approve|tolerance|mask|report> [--id <id>] [options]",
       "",
-      "  record      Record a human demonstration into a replayable trace: reset to",
-      "              --scene, observe your clicks/drags until you press Enter (or",
-      "              --duration <sec>), and write .loombridge/replays/traces/<id>.trace.json.",
+      "  record      Record a human demonstration into a replayable trace: reset to --scene",
+      "              (or the editor's CURRENT scene), observe your clicks/drags until you",
+      "              press Enter (or --duration <sec>), and write",
+      "              .loombridge/replays/traces/<id>.trace.json. Takes no required flags:",
+      "              bare `trace record` records the current scene under an id derived from",
+      "              its name (Assets/Scenes/KidsChef.unity → kidschef), and a DERIVED id",
+      "              never overwrites: an existing kidschef becomes kidschef-2, printed.",
       "  replay      Drive .loombridge/replays/traces/<id>.trace.json against the running",
       "              editor and write .loombridge/replays/reports/<id>.report.{json,html},",
       "              diffing each capture against its approved baseline. --speed <1..8>",
@@ -2456,7 +2577,9 @@ function printUsage(): void {
       "  report      Re-render the HTML report from an existing <id>.report.json.",
       "",
       "Options:",
-      "  --id <id>         Trace id (required except for replay-all).",
+      "  --id <id>         Trace id. Required except for replay-all (runs every trace) and",
+      "                    record (derives one from the recorded scene when omitted). A",
+      "                    given --id records over that trace; a DERIVED one never does.",
       "  --root <dir>      Project root containing .loombridge/ (default: cwd).",
       "  --trace <path>    Override the trace input path (replay only).",
       "  --flat            Lay replay artifacts directly under --root (traces/, reports/,",
@@ -2490,7 +2613,9 @@ function printUsage(): void {
       "                    --set/--clear/--list are refused on every other subcommand: approve",
       "                    re-freezes frames, so widening the gate and re-approving in one command",
       "                    would destroy the anchor.",
-      "  --observe         record: record by observing a human session (required).",
+      "  --observe         record: accepted and ignored. Observing a human session is the only",
+      "                    recording mode, so there is nothing to select; older invocations",
+      "                    that pass it keep working unchanged.",
       "  --scene <path>    record: scene to reset to and record from (optional: when omitted,",
       "                    the recorder resolves the editor's CURRENT scene, refusing if unsaved).",
       "  --duration <sec>  record: auto-stop after N seconds instead of waiting for Enter.",
@@ -2499,10 +2624,17 @@ function printUsage(): void {
       "                    record: gate each gesture on this game state field (e.g.",
       "                    /Canvas/GM:ChefGameManager:phase) so replay waits for the game",
       "                    to reach the consumable state, not just for the target to appear.",
-      "  --auto-state-signal",
+      "                    Declaring one turns auto-detection OFF (see below).",
+      "  --auto-state-signal / --no-auto-state-signal",
       "                    record: AUTO-DETECT each scene's state signal live and switch on",
       "                    scene-change (per-scene gates for a hub→game recording, no manual",
-      "                    --state-signal). Takes precedence over --state-signal.",
+      "                    --state-signal). Detection is additive: finding nothing leaves the",
+      "                    gesture ungated, exactly as before. Precedence:",
+      "                      neither flag, no --state-signal  → auto detection ON (default)",
+      "                      --state-signal alone             → the declared signal wins, auto OFF",
+      "                      --auto-state-signal              → auto ON, and it still takes",
+      "                                                         precedence over --state-signal",
+      "                      --no-auto-state-signal           → auto OFF, whatever else is typed",
       "  --title <text>    record: human-readable trace title.",
       "  --intent <text>   record: what the trace is meant to verify.",
       "",

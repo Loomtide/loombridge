@@ -138,7 +138,7 @@ test("nextStepLinesFor (G6): the shared footer used by check/scan matches `minig
     const lines = await nextStepLinesFor(withSig);
     const joined = lines.join("\n");
     assert.match(joined, /^👉 Next — /m);
-    assert.match(joined, /loombridge trace record --observe/);
+    assert.match(joined, /loombridge trace record --flat/);
     assert.match(joined, /--state-signal \/Canvas\/ChefGameManager:ChefGameManager:phase/);
   } finally {
     await fs.rm(withSig, { recursive: true, force: true });
@@ -156,7 +156,7 @@ test("nextStepLinesFor (G6): the shared footer used by check/scan matches `minig
       }),
     );
     const joined = (await nextStepLinesFor(noSig)).join("\n");
-    assert.match(joined, /loombridge trace record --observe/);
+    assert.match(joined, /loombridge trace record --flat/);
     assert.doesNotMatch(joined, / --state-signal/);
     assert.match(joined, /--auto-state-signal/);
     assert.match(joined, /stateSignal/);

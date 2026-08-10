@@ -1023,7 +1023,7 @@ export function onRampLines(root: string, opts: { acceptanceAbsent: boolean } = 
     `${TAG} REFUSED: no verification assets found under ${root}, so nothing was checked.`,
     `${TAG} a run that checked nothing is not a pass (exit 2). No report was written.`,
     `${TAG} the cheapest universal anchor is a recorded demonstration, so ask your human to play the game once:`,
-    `${TAG}   1. loombridge trace record --observe --id <name>   (a HUMAN plays it; this session IS the approval)`,
+    `${TAG}   1. loombridge trace record --id <name>             (a HUMAN plays it; this session IS the approval)`,
     `${TAG}   2. loombridge trace replay --id <name>             (re-drive the demonstration and capture frames)`,
     `${TAG}   3. loombridge trace approve --id <name>            (freeze those frames as the baseline)`,
     `${TAG} then run: loombridge verify --live`,

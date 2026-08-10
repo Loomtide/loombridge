@@ -1,5 +1,5 @@
 /**
- * Replay Verification — observe-RECORD orchestration (`trace record --observe`).
+ * Replay Verification — observe-RECORD orchestration (`trace record`).
  *
  * Exercises `recordObservedTrace` over a fake `send`: the op sequence
  * (reset → observe_start → [human plays] → observe_stop → outcome reads), the

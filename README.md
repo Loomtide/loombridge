@@ -83,7 +83,7 @@ An AI agent can already build a Unity game. What it cannot do is tell you honest
 | Workflow | You start with | Commands | You get |
 |---|---|---|---|
 | **Build** a new game | An idea (or a design doc) | `plan` → `build` → agent constructs → `verify --slice` → `plan --go` | A game built slice by slice against a contract the agent cannot redefine |
-| **Verify** an existing game | A playable game | `trace record --observe` → `trace approve` → `verify` | Play once, approve once; deterministic pixel + flow + feel gates forever after |
+| **Verify** an existing game | A playable game | `trace record` → `trace approve` → `verify` | Play once, approve once; deterministic pixel + flow + feel gates forever after |
 | **Certify** it is done | Green gates | `doneness` | A certificate bound to the run, the evidence, and the frozen design target: or a refusal naming exactly why not |
 
 ## Build: the supervised loop
@@ -104,11 +104,11 @@ loombridge plan --go                                  # human checkpoint: approv
 
 ## Verify: record once, replay deterministically
 
-<!-- GIF placeholder: a human plays ~15s (`trace record --observe`), then `trace
+<!-- GIF placeholder: a human plays ~15s (`trace record`), then `trace
      replay` drives the game by itself and the report shows green flow + pixel rows. -->
 
 ```bash
-loombridge trace record --observe --id happy-path     # you play; Loombridge watches
+loombridge trace record --id happy-path               # you play; Loombridge watches
 loombridge trace replay --id happy-path               # it replays your run deterministically
 loombridge trace approve --id happy-path              # you approve the baseline once
 loombridge verify                                     # from now on: one command, exit by worst tier

@@ -575,7 +575,7 @@ export interface MinigameContract {
   baseline?: MinigameBaseline;
   /**
    * OPTIONAL declared state-signal — the game phase field capture can phase-align gestures
-   * against (a multi-screen/gesture game needs this so `trace record --observe` gates each
+   * against (a multi-screen/gesture game needs this so `trace record` gates each
    * gesture on the game's current phase). The `locator` is a BARE hierarchy path with NO
    * scene prefix and NO `:` — the CLI's `--state-signal` parses exactly
    * `<path>:<Component>:<property>` on `:`, so a `:` in the locator would corrupt the split.

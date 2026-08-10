@@ -479,7 +479,7 @@ test("runLoombridgeVerifyTool REFUSES (exit 2) with a verbatim headline when the
     assert.match(text, /loombridge plan is the other door/);
     assert.match(text, /no ACCEPTANCE\.json/);
     // …and the door-two on-ramp is still the primary answer for an EXISTING game.
-    assert.match(text, /loombridge trace record --observe/);
+    assert.match(text, /loombridge trace record --id <name>/);
     // A refused run writes NO verdict and NO unified report (never a fake pass).
     assert.equal(payload.verdictExists, false);
     assert.equal(payload.verdictStatus, null);

@@ -2,7 +2,7 @@
  * Auto-detect a mini-game's `stateSignal` during `scan` (phase-2 of the hands-off flow).
  *
  * A multi-screen/gesture game needs a declared `stateSignal` (a MonoBehaviour phase enum,
- * e.g. `ChefGameManager.phase`) so `trace record --observe --state-signal …` can phase-align
+ * e.g. `ChefGameManager.phase`) so `trace record --state-signal …` can phase-align
  * each gesture and capture can label each screen. In phase-1 the dev declared it by hand
  * (G1-lite threaded it into the printed record command; G6 surfaced the note). Phase-2 removes
  * even that: scan walks the scene for a likely state-manager component with a public enum field

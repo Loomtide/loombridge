@@ -3,7 +3,7 @@
  * `runSceneAgnosticCheck` by SHELLING the existing CLI verbs (so trace/scan/capture persistence stays
  * exactly as the normal flow writes it) + a short-lived bridge connection for scene name→path lookup:
  *
- *   record   → `trace record --observe --flat` with NO --scene (resolves the active scene, #295) → read
+ *   record   → `trace record --flat` with NO --scene (resolves the active scene, #295) → read
  *              the persisted trace from the flat layout;
  *   build    → `buildContractFromTrace` with per-scene scan IO: `minigame scan --scene <path>` per scene
  *              (path from `scene.find_by_name` over a fresh bridge connection) + the single-scene fallback;

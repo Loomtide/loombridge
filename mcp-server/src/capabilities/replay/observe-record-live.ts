@@ -1,6 +1,6 @@
 /**
- * Replay Verification — observe-a-human-session live RECORDER (the `record
- * --observe` wiring).
+ * Replay Verification — observe-a-human-session live RECORDER (the `trace record`
+ * wiring).
  *
  * Composes the existing observe pieces into one flow: reset to a clean Play-Mode
  * start at the scene (so the human demonstrates from the SAME start replay will
@@ -23,8 +23,8 @@ import {
   type OutcomeSpec,
 } from "./observe.js";
 import { captureOutcomes, observeLive } from "./observe-live.js";
-import { resilientSend } from "./resilient-send.js";
-import { endLiveSession } from "./session.js";
+import { resilientSend, type ReconnectableClient } from "./resilient-send.js";
+import { endLiveSession, type LiveSessionClient } from "./session.js";
 import type { ReplayTrace } from "./types.js";
 import { UnityDriver, type BridgeSend } from "./unity-driver.js";
 import { isScenePath } from "../minigame/profiles/types.js";
@@ -58,6 +58,25 @@ export interface ObserveRecordResult {
   droppedUnfocused: number;
 }
 
+/**
+ * Turn the RESOLVED scene path into the trace id, for a recording that was given no id.
+ *
+ * The recorder cannot do this itself: the id has to be unique against the traces
+ * DIRECTORY, and that directory belongs to the CLI layout (`layoutFor(args)` in
+ * `trace.ts`), not to the bridge wiring. So the filesystem concern stays with its owner
+ * and only the derived name crosses back. Called at most once, and only when no id was
+ * given, so an explicit `--id` never reaches it.
+ */
+export type ResolveTraceId = (scenePath: string) => string | Promise<string>;
+
+/**
+ * The client this flow needs: reconnect-capable for the resilient send, disconnectable
+ * for the cleanup. Structural rather than the concrete `UnityClient` (the `run-live`
+ * precedent) so a test can drive the WHOLE record verb against a scripted bridge instead
+ * of routing around the live wiring. `UnityClient` satisfies it unchanged.
+ */
+export interface ObserveRecordClient extends ReconnectableClient, LiveSessionClient {}
+
 export interface ObserveRecordOptions {
   /**
    * Resolves when the human signals the demonstration is done (→ stop observing).
@@ -70,8 +89,10 @@ export interface ObserveRecordOptions {
    * Omitted ⇒ flow-only (verify the UI flow ran, not the resulting game state).
    */
   outcomes?: OutcomeSpec[];
+  /** Derive the trace id from the resolved scene when `meta.id` is empty. See {@link ResolveTraceId}. */
+  resolveId?: ResolveTraceId;
   /** Inject a client (tests); defaults to a fresh auto-discovering `UnityClient`. */
-  client?: UnityClient;
+  client?: ObserveRecordClient;
   /**
    * Unity project to pin. Without it the client follows the shared
    * endpoint-discovery-latest.json pointer, which every running editor overwrites on its
@@ -88,7 +109,11 @@ export interface ObserveRecordOptions {
 export async function recordObservedTrace(
   send: BridgeSend,
   meta: ObserveTraceMeta,
-  options: { waitForStop: () => Promise<void>; outcomes?: OutcomeSpec[] },
+  options: {
+    waitForStop: () => Promise<void>;
+    outcomes?: OutcomeSpec[];
+    resolveId?: ResolveTraceId;
+  },
 ): Promise<ObserveRecordResult> {
   const driver = new UnityDriver(send);
   // The recorded trace is a `ui-events` (action) trace — gate the backend the same
@@ -106,6 +131,17 @@ export async function recordObservedTrace(
       throw new Error(`record: ${resolution.message}`);
     }
     meta = { ...meta, scene: resolution.scene };
+  }
+  // `--id` is OPTIONAL too, and it hangs off the SAME resolution: with no id given, the
+  // caller's resolver names the trace after the scene that was actually resolved above.
+  // Deriving it any earlier would mean either a second `scene.get_active` round trip or an
+  // id that does not match what got recorded. Inert when an id was given (an explicit
+  // `--id` never reaches the resolver, so its overwrite behaviour is untouched).
+  if (!meta.id) {
+    if (!options.resolveId) {
+      throw new Error("record: no trace id was given and no id resolver was provided; pass --id <name>.");
+    }
+    meta = { ...meta, id: await options.resolveId(meta.scene) };
   }
   // Clean Play-Mode start at the scene: the human demonstrates from the same state
   // replay will reset to, so a mid-game recording can't drift from replay's start.
@@ -147,7 +183,7 @@ export async function observeRecordLive(
   meta: ObserveTraceMeta,
   options: ObserveRecordOptions,
 ): Promise<ObserveRecordResult> {
-  const client =
+  const client: ObserveRecordClient =
     options.client
     ?? new UnityClient(
       options.projectPathCanonical
@@ -160,6 +196,7 @@ export async function observeRecordLive(
     return await recordObservedTrace(send, meta, {
       waitForStop: options.waitForStop,
       outcomes: options.outcomes,
+      resolveId: options.resolveId,
     });
   } finally {
     await endLiveSession(send, client);

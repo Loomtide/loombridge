@@ -48,19 +48,18 @@ What each verb does:
   record it. The demonstration is what fixes the *order* of screens (and feeds capture + role binding later):
 
   ```bash
-  loombridge trace record --observe --flat \
+  loombridge trace record --flat \
     --id my-game-happy-path \
     --scene Assets/Scenes/MyGame.unity \
-    --root ~/.loombridge/projects/my-game \
-    --auto-state-signal
+    --root ~/.loombridge/projects/my-game
   ```
 
-  `--auto-state-signal` makes the observer detect each scene's state signal live and gate
-  every recorded gesture on it, so capture later waits for the game to be CONSUMABLE, not
-  merely for a target to be visible (a gesture racing an activation animation stalls the
-  whole flow otherwise). The guided flows (`minigame run` / `check` / `next`) add this
-  automatically whenever the contract declares no explicit `stateSignal`; a declared
-  `stateSignal` takes precedence.
+  The observer detects each scene's state signal live and gates every recorded gesture on it,
+  so capture later waits for the game to be CONSUMABLE, not merely for a target to be visible
+  (a gesture racing an activation animation stalls the whole flow otherwise). That detection
+  is the default: pass `--state-signal <path>:<Component>:<property>` to declare one signal
+  instead (which turns detection off), `--auto-state-signal` to keep detection even alongside
+  a declared signal, or `--no-auto-state-signal` to switch it off entirely.
 
   Re-running `scan` with `--trace` (pointed at the workspace where you recorded) will order the proposed
   states from this demonstration:
@@ -270,8 +269,7 @@ Then it prints the next commands with your chosen paths.
 Run the two commands printed by setup. They will look like:
 
 ```bash
-loombridge trace record \
-  --observe --flat \
+loombridge trace record --flat \
   --id count-the-fruits-happy-path \
   --scene Assets/Scenes/CountTheFruits.unity \
   --root ~/.loombridge/projects/count-the-fruits

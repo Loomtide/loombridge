@@ -403,7 +403,7 @@ test("an EMPTY project prints the on-ramp, writes nothing at all, and exits 2", 
 
     const text = lines.join("\n");
     // The real three-command sequence, in order, and the tail that says what to do after.
-    assert.match(text, /loombridge trace record --observe --id <name>/);
+    assert.match(text, /loombridge trace record --id <name>/);
     assert.match(text, /loombridge trace replay --id <name>/);
     assert.match(text, /loombridge trace approve --id <name>/);
     assert.match(text, /loombridge verify --live/);

@@ -190,7 +190,7 @@ test("setup prints just the FIRST command (record) + the guided-next pointer, no
   // The single first step: record (flat workspace layout).
   assert.ok(
     out.includes(
-      `loombridge trace record --observe --flat --id count-the-fruits-happy-path --scene Assets/Scenes/count-the-fruits.unity --root ${ws}`,
+      `loombridge trace record --flat --id count-the-fruits-happy-path --scene Assets/Scenes/count-the-fruits.unity --root ${ws}`,
     ),
     `record line missing:\n${out}`,
   );
