@@ -6,7 +6,7 @@
  * Regenerates the byte-derived metadata (sha256 checksum, sizeBytes,
  * technical.width/height) of every record in a public catalog shard by reading
  * the BUNDLED asset files committed in-repo — it never reaches for the private
- * `Loomtide/LoomtideAssetRegistry` mirror.
+ * non-public asset mirror.
  *
  * An external maintainer can drop fresh CC0 bytes (e.g. re-downloaded from
  * kenney.nl) into `--assets-dir` and re-run this to refresh the shard. The byte

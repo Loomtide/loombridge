@@ -93,9 +93,32 @@ async function baseRecord(): Promise<AssetCatalogRecord> {
 
 test("REJECTS a record whose only file url is a private raw.githubusercontent.com url", async () => {
   const record = await baseRecord();
-  record.files[0]!.url = "https://raw.githubusercontent.com/Loomtide/LoomtideAssetRegistry/main/tile.png";
+  record.files[0]!.url = "https://raw.githubusercontent.com/example-org/private-asset-mirror/main/tile.png";
   const result = validatePublicCatalogRecord(record);
   assert.equal(result.status, "rejected");
+  assert.ok(
+    result.issues.some((issue) => issue.code === "PRIVATE_URL"),
+    `expected a PRIVATE_URL issue, got ${JSON.stringify(result.issues)}`,
+  );
+});
+
+/**
+ * REGRESSION: the mirror-PATH branch, isolated from the private-HOST branch.
+ *
+ * `looksLikePrivateMirrorPath` matched `Loombridge/LoomtideAssetRegistry` while the owning org is
+ * `Loomtide`, so it could never fire. Every existing case was on `raw.githubusercontent.com`,
+ * which `hostIsPrivate` rejects first, so the dead branch read as covered. This host is public
+ * and passes `hostIsPrivate`, which leaves the path check as the only thing that can reject it.
+ */
+test("REJECTS a mirror-repo path served from a PUBLIC host (path branch, not host branch)", async () => {
+  const record = await baseRecord();
+  record.files[0]!.url = "https://cdn.example.com/LoomtideAssetRegistry/main/tile.png";
+  const result = validatePublicCatalogRecord(record);
+  assert.equal(
+    result.status,
+    "rejected",
+    `a public CDN path embedding the mirror repo must reject: ${JSON.stringify(result.issues)}`,
+  );
   assert.ok(
     result.issues.some((issue) => issue.code === "PRIVATE_URL"),
     `expected a PRIVATE_URL issue, got ${JSON.stringify(result.issues)}`,
@@ -313,7 +336,7 @@ test("LocalCatalogSource(enforcePublicPolicy:true) THROWS on a hostile shard", a
   const records = await loadSeed();
   const hostile = JSON.parse(JSON.stringify(records[0]));
   hostile.id = "hostile.private.tile";
-  hostile.files[0].url = "https://raw.githubusercontent.com/Loomtide/LoomtideAssetRegistry/main/tile.png";
+  hostile.files[0].url = "https://raw.githubusercontent.com/example-org/private-asset-mirror/main/tile.png";
 
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), "loombridge-hostile-shard-"));
   const shardPath = path.join(dir, "part-00000.jsonl");

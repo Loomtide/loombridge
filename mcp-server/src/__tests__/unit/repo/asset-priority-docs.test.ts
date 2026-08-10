@@ -79,7 +79,9 @@ const ALLOWED_LOOMTIDE_HOSTS = new Map<string, string>([
   ["assetstore.loomtide.ai", "the brand-owned human web store, a product URL"],
   ["get.loomtide.ai", "the documented install channel"],
   ["assets.loomtide.ai", "object storage for asset BYTES pinned by catalog records (data, not an endpoint)"],
-  ["registry.loomtide.ai", "an npm registry named in the bridge-distribution doc"],
+  // `registry.loomtide.ai` was here for a scoped-registry example in the bridge-distribution doc.
+  // The host does not resolve, so the example named a registry nobody could add; the doc now shows
+  // OpenUPM's real URL instead. Re-add this entry only alongside a registry that actually serves.
 ]);
 const LOOMTIDE_HOST_RE = /\/\/([a-z0-9.-]*\bloomtide\.ai)\b/gi;
 

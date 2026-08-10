@@ -107,9 +107,11 @@ registry + dependency:
 {
   "scopedRegistries": [
     {
-      "name": "Loombridge",
-      "url": "https://registry.loomtide.ai",
-      "scopes": ["com.loombridge"]
+      "name": "package.openupm.com",
+      "url": "https://package.openupm.com",
+      // Must be a PREFIX of the package name. `com.loombridge` matches nothing:
+      // the package id is `com.loomtide.loombridge`.
+      "scopes": ["com.loomtide"]
     }
   ],
   "dependencies": {
@@ -118,10 +120,11 @@ registry + dependency:
 }
 ```
 
-> **Status: needs a publish step.** No public scoped registry hosts the package
-> yet, so this path is documented but not usable until `com.loomtide.loombridge`
-> is published (OpenUPM build pipeline, or a self-hosted Verdaccio/registry at the
-> URL above). Until then, use Option A (git-URL) — it requires no registry.
+> **Status: needs a publish step.** No scoped registry hosts the package yet, so this
+> path is documented but not usable until `com.loomtide.loombridge` is published. The
+> URL above is OpenUPM's, shown as the concrete example; a self-hosted Verdaccio works
+> the same way with its own URL substituted. Until then use Option A (git-URL), which
+> requires no registry.
 
 ## Option D — Vendored / embedded copy (offline, no git/registry)
 

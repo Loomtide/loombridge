@@ -466,7 +466,7 @@ trials each), a hand-written `assemble.mjs` that produced `feel.json`, `capture`
 ## Interval 3: mined 2026-07-30, byte range 0 to 1840174 (JSONL lines 0 to 340)
 
 **Source transcript for this interval is a NEW file** (the builder was resumed as a fresh agent):
-`/Users/avinash/.claude/projects/-Users-avinash-Projects-AI-loombridge/b1457f72-3c28-433d-9ca8-66162d4a4087/subagents/agent-a2ddc366844afab06.jsonl`
+`~/.claude/projects/<loombridge-project-slug>/b1457f72-3c28-433d-9ca8-66162d4a4087/subagents/agent-a2ddc366844afab06.jsonl`
 (symlinked as `tasks/a2ddc366844afab06.output`). Offsets below are into that file, not the
 interval 1/2 transcript.
 

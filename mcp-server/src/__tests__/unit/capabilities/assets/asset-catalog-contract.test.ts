@@ -36,7 +36,7 @@ function kenneyHostedRecord(overrides: Partial<AssetCatalogRecord> = {}): unknow
       verified: true,
       provenance: {
         verifiedAt: "2026-06-05T00:00:00.000Z",
-        origin: "Purchased Kenney All-in-1 3.5.0 bytes mirrored in Loomtide/LoomtideAssetRegistry.",
+        origin: "Kenney All-in-1 3.5.0 bytes (CC0) mirrored into the asset registry.",
         fixture: "assets/providers/kenney/all-in-one/3.5.0/2D assets/Pixel Platformer/Tiles/tilemap.png",
       },
     },
@@ -270,7 +270,7 @@ test("compact Kenney seed records backfill source, provider, license, and generi
   assert.equal(record.source.title, "Preview");
   assert.equal(record.source.author, "kenney");
   assert.equal(record.source.provenance.verifiedAt, "2026-06-05T00:00:00.000Z");
-  assert.equal(record.source.provenance.origin, "Loomtide/LoomtideAssetRegistry:kenney-all-in-one-3.5.0");
+  assert.equal(record.source.provenance.origin, "loomtide-asset-store:kenney-all-in-one-3.5.0");
   assert.equal(record.source.provenance.fixture, "assets/providers/kenney/all-in-one/3.5.0/2D assets/1-Bit Pack/Preview.png");
   assert.equal(record.provider.name, "kenney");
   assert.equal(record.license.name, "Creative Commons CC0 1.0 Universal");

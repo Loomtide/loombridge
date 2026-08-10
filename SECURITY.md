@@ -8,7 +8,7 @@ minors are not patched — upgrade to the newest release to stay supported.
 
 | Version | Supported |
 |---------|-----------|
-| Latest minor (currently 0.3.x) | Yes |
+| Latest minor (currently 0.2.x) | Yes |
 | Any earlier minor | No |
 
 ## Reporting a Vulnerability
@@ -16,13 +16,13 @@ minors are not patched — upgrade to the newest release to stay supported.
 Please report vulnerabilities privately — do **not** open a public GitHub issue for a
 security problem.
 
-- **Primary channel:** GitHub private vulnerability reporting — "Report a
-  vulnerability" under this repository's **Security** tab. This channel becomes
-  available when the repository goes public, and enabling it is a launch gate for the
-  open-source release.
-- **Secondary channel:** email **security@loomtide.ai**
-  > **PLACEHOLDER — this mailbox is pending setup.** Until it is live, use the GitHub
-  > channel above.
+- **Primary channel (preferred):** GitHub private vulnerability reporting, via "Report a
+  vulnerability" under this repository's **Security** tab. It gives us a private thread
+  with you and keeps the report attached to the code.
+- **Secondary channel:** email **security@loomtide.ai**.
+
+If the email bounces or you get no acknowledgement, use the GitHub channel: it is the one
+we monitor first.
 
 What to include: an affected version, a reproduction (or proof-of-concept), and your
 assessment of impact. Please give us a reasonable disclosure window before publishing.
