@@ -18,7 +18,9 @@ function fakeDriver(
             ? a.key
             : a.do === "wait"
               ? `wait-${a.durationMs}`
-              : a.locator.path;
+              : a.do === "capture"
+                ? `capture-${a.id}`
+                : a.locator.path;
       return opts.failTap === path ? { ok: false, detail: "not found" } : { ok: true };
     },
     waitForAnchor: async (anchor: Anchor) => {

@@ -36,11 +36,21 @@ export function isContinuousGesture(action: Action | undefined | null): action i
  * gate it advances). Any DISCRETE INPUT in between (a tap, a key, a position drag) means the gate is
  * advanced by THAT input, not the earlier scrub — so the caller must clear `lastGesture`, or a gate
  * whose real advancing input is a tap could be falsely "recovered" by re-driving a stale, unrelated
- * gesture (masking a broken tap transition + driving the wrong screen). Default-deny: only the two
- * waits preserve; everything else (incl. an unknown future input kind) clears.
+ * gesture (masking a broken tap transition + driving the wrong screen). Default-deny: only the waits
+ * and the interleaved capture preserve; everything else (incl. an unknown future input kind) clears.
+ *
+ * `capture` preserves because it is NOT an input: it settles and takes a frame, so it cannot be the
+ * thing that advanced a later gate. Clearing on it would mean that grafting per-gesture captures onto
+ * a recorded timeline silently switched gesture recovery off for that trace — the recovery would
+ * simply stop happening, with nothing in the report saying why.
  */
 export function preservesPendingGesture(action: Action): boolean {
-  return action.do === "wait" || action.do === "wait-for-visible" || action.do === "wait-for-condition";
+  return (
+    action.do === "wait" ||
+    action.do === "wait-for-visible" ||
+    action.do === "wait-for-condition" ||
+    action.do === "capture"
+  );
 }
 
 export interface GestureRecoveryOptions {

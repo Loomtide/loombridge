@@ -82,7 +82,9 @@ function fakeDriver(opts: FakeOptions = {}): ReplayDriver {
         ? a.key
         : a.do === "wait"
           ? `wait-${a.durationMs}`
-          : a.locator.path;
+          : a.do === "capture"
+            ? `capture-${a.id}`
+            : a.locator.path;
   return {
     async capabilityCheck(backend) {
       const supported = opts.capabilitySupported ?? backend === "ui-events";

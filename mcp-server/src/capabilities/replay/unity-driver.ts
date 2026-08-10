@@ -287,6 +287,17 @@ export class UnityDriver implements ReplayDriver {
   }
 
   async dispatch(action: Action): Promise<DispatchResult> {
+    if (action.do === "capture") {
+      // A `capture` action is taken through the `capture` SEAM, by the engine, never
+      // dispatched as input. REFUSED rather than allowed to reach the fall-through below,
+      // which builds `{ action: "click", locator: action.locator }` from whatever the action
+      // has: a capture has no locator, so it would dispatch a pointer click at an undefined
+      // target and report `ok` if the bridge happened to tolerate it.
+      return {
+        ok: false,
+        detail: `capture "${action.id}" reached driver.dispatch; an interleaved capture is taken through driver.capture`,
+      };
+    }
     if (action.do === "wait-for-visible") {
       const startedAt = Date.now();
       const result = await this.pollVisible(
