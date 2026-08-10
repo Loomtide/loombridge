@@ -9,6 +9,7 @@ import { deflateSync } from "node:zlib";
 import {
   applyVisualDiff,
   discoverTraces,
+  mostRecentTraceId,
   observeDropNotices,
   parseStateSignal,
   readEnter,
@@ -542,6 +543,219 @@ test("trace record precedence (wired): --no-auto-state-signal forces auto OFF", 
     component: "ChefGameManager",
     property: "phase",
   });
+});
+
+// ─────────────── `trace replay` ergonomics: bare replay defaults to the most recent trace ───────────────
+//
+// These drive the WHOLE verb (argv → runReplay → the real id resolution → the real
+// replayOneTrace → the real engine/driver) against a scripted bridge injected through the
+// existing `clientFactory` door, so no Unity editor is ever reachable: `runLiveReplay` only
+// constructs a discovering `UnityClient` when neither `client` nor `clientFactory` is given.
+//
+// The bridge REFUSES the reset's `scene.open_scene`, so the engine reports `blocked` before
+// driving a single segment, and `replayOneTrace` still writes `<chosen-id>.report.json`. That
+// file is the observable: it is written by production code and NAMED by the id the CLI chose,
+// so nothing here re-implements the selection it is checking.
+
+/** The scripted bridge above: everything default-answered except a refused scene open. */
+function replayBridge(): ReturnType<typeof recordBridge> {
+  return recordBridge({ "scene.open_scene": () => ({ error: "scripted: reset refused" }) });
+}
+
+function reportsDir(root: string): string {
+  return standardReplayLayout(root).replayReports;
+}
+
+/** Write `<id>.trace.json` and stamp its mtime `minutesAgo` minutes into the past. */
+async function writeTraceAged(root: string, id: string, minutesAgo: number): Promise<void> {
+  const file = await writeTrace(root, id);
+  const when = new Date(Date.now() - minutesAgo * 60_000);
+  await fs.utimes(file, when, when);
+}
+
+test("trace replay: bare, with several traces on disk, replays the NEWEST by mtime", async () => {
+  // LITMUS: flip the mtime comparison in `mostRecentTraceId` to `a.mtimeMs - b.mtimeMs`
+  // (the reversed sort) and this fails, observed verbatim:
+  //   AssertionError [ERR_ASSERTION]: The input did not match the regular expression
+  //   /no --id given, replaying the most recent trace "newest"/. Input:
+  //   '[loombridge trace] no --id given, replaying the most recent trace "oldest".\n' +
+  //     '[loombridge trace] oldest: BLOCKED (reset-unavailable)\n' + …
+  // Verified by doing exactly that, then restoring it and watching it pass.
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "trace-recent-"));
+  try {
+    await writeTraceAged(root, "oldest", 30);
+    await writeTraceAged(root, "newest", 1);
+    await writeTraceAged(root, "middle", 10);
+
+    const bridge = replayBridge();
+    const { exit, err } = await capturedRun(["replay", "--root", root], {
+      clientFactory: bridge.factory,
+    });
+    assert.match(err, /no --id given, replaying the most recent trace "newest"/);
+    // The scripted reset refuses, so the run is BLOCKED: the harness tier (2), which is
+    // exactly what a replay that never formed an opinion about the game must report.
+    assert.equal(exit, 2, err);
+
+    const report = JSON.parse(
+      await fs.readFile(path.join(reportsDir(root), "newest.report.json"), "utf8"),
+    ) as { traceId: string; status: string };
+    assert.equal(report.traceId, "newest", "the report names the trace the CLI chose");
+    assert.equal(report.status, "blocked");
+    // The losers were never driven: no report exists under their names.
+    await assert.rejects(fs.access(path.join(reportsDir(root), "oldest.report.json")));
+    await assert.rejects(fs.access(path.join(reportsDir(root), "middle.report.json")));
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test("trace replay: IDENTICAL mtimes tie-break by name, the same way on every call", async () => {
+  // A fresh `git clone` writes every trace in one burst, so equal mtimes are the normal
+  // case. An arbitrary pick that varied between two runs of the same command would make
+  // "replay, then read the report" unreproducible, so the tie-break is deterministic.
+  //
+  // LITMUS (two steps, because a stable sort hides a missing tie-break): drop the
+  // `|| (a.id < b.id ? …)` clause from `mostRecentTraceId` AND reverse `discoverTraces`'
+  // ordering (`.sort().reverse()`). This then fails, observed verbatim:
+  //   AssertionError [ERR_ASSERTION]: tie-break winner on call 0
+  //   'charlie' !== 'alpha'
+  // Step two: restore the tie-break clause alone, LEAVING `discoverTraces` reversed, and
+  // this passes again (only the unrelated `discoverTraces` ordering test still fails).
+  // That second step is the real assertion: the winner must not depend on the discovery
+  // order, so the tie-break has to be explicit rather than inherited from sort stability.
+  // Verified by doing exactly that, then restoring both.
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "trace-tie-"));
+  try {
+    const same = new Date(Date.now() - 5 * 60_000);
+    for (const id of ["charlie", "alpha", "bravo"]) {
+      await fs.utimes(await writeTrace(root, id), same, same);
+    }
+    const traces = standardReplayLayout(root).replayTraces;
+    for (let call = 0; call < 5; call += 1) {
+      assert.equal(await mostRecentTraceId(traces), "alpha", `tie-break winner on call ${call}`);
+    }
+
+    // …and the wired verb agrees with the function (no second, divergent selection path).
+    const { err } = await capturedRun(["replay", "--root", root], {
+      clientFactory: replayBridge().factory,
+    });
+    assert.match(err, /no --id given, replaying the most recent trace "alpha"/);
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test("trace replay: bare with NO traces REFUSES (exit 2), names `trace record`, never touches the bridge", async () => {
+  // LITMUS: delete the `if (recent === null) { … return null; }` refusal from
+  // `resolveReplayTargetId` (`if (recent === null) return "";` instead) and this fails: the
+  // empty id falls through to the loader, which opens a path nobody typed. Observed verbatim:
+  //   AssertionError [ERR_ASSERTION]: missing traces dir: [loombridge trace] fatal: ENOENT:
+  //   no such file or directory, open '/…/trace-none-g2TFyf/.loombridge/replays/traces/.trace.json'
+  //   1 !== 2
+  // Verified by doing exactly that, then restoring it and watching it pass.
+  const missing = await fs.mkdtemp(path.join(os.tmpdir(), "trace-none-"));
+  const empty = await fs.mkdtemp(path.join(os.tmpdir(), "trace-none-"));
+  try {
+    // (a) the traces directory does not exist at all, and (b) it exists and is empty:
+    // both are "nothing to replay", and both must refuse identically.
+    await fs.mkdir(standardReplayLayout(empty).replayTraces, { recursive: true });
+
+    for (const [label, root] of [["missing traces dir", missing], ["empty traces dir", empty]] as const) {
+      const bridge = replayBridge();
+      const { exit, err } = await capturedRun(["replay", "--root", root], {
+        clientFactory: bridge.factory,
+      });
+      assert.equal(exit, 2, `${label}: ${err}`);
+      assert.match(err, /there is nothing to replay/, label);
+      assert.match(err, /loombridge trace record/, `${label}: the refusal names the recording verb`);
+      assert.deepEqual(bridge.calls, [], `${label}: refuses before any bridge call`);
+    }
+  } finally {
+    await fs.rm(missing, { recursive: true, force: true });
+    await fs.rm(empty, { recursive: true, force: true });
+  }
+});
+
+test("trace replay --id: an explicit id is replayed as-is and the most-recent search never runs", async () => {
+  // The whole default path must be INERT for existing callers, so the trace asked for here
+  // is deliberately NOT the newest one on disk.
+  //
+  // LITMUS: drop the `if (args.id) return args.id;` short-circuit from
+  // `resolveReplayTargetId` and this fails, observed verbatim:
+  //   AssertionError [ERR_ASSERTION]: nothing was defaulted
+  //   actual: '[loombridge trace] no --id given, replaying the most recent trace "newest".\n…'
+  //   expected: /no --id given/  operator: 'doesNotMatch'
+  // (the report also lands under "newest" rather than the "oldest" that was asked for).
+  // Verified by doing exactly that, then restoring it and watching it pass.
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "trace-explicit-"));
+  try {
+    await writeTraceAged(root, "oldest", 30);
+    await writeTraceAged(root, "newest", 1);
+
+    const { exit, err } = await capturedRun(["replay", "--id", "oldest", "--root", root], {
+      clientFactory: replayBridge().factory,
+    });
+    assert.equal(exit, 2, err);
+    assert.doesNotMatch(err, /no --id given/, "nothing was defaulted");
+    const report = JSON.parse(
+      await fs.readFile(path.join(reportsDir(root), "oldest.report.json"), "utf8"),
+    ) as { traceId: string };
+    assert.equal(report.traceId, "oldest");
+    await assert.rejects(fs.access(path.join(reportsDir(root), "newest.report.json")));
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test("trace replay --trace: an explicit file wins over the most-recent search; the trace names its own report", async () => {
+  // `--trace` names an exact file, which is a stronger statement than "the newest one", so
+  // the search must not run. With no --id the trace's OWN id names the output, which is
+  // what `--id <that id>` would have produced.
+  //
+  // LITMUS: delete the `if (args.tracePath !== undefined)` branch from
+  // `resolveReplayTargetId` and this fails: the search runs, picks the newer in-directory
+  // trace, and the report lands under the wrong name. Observed verbatim:
+  //   AssertionError [ERR_ASSERTION]: The input did not match the regular expression
+  //   /no --id given, replaying "external-trace" from/. Input:
+  //   '[loombridge trace] no --id given, replaying the most recent trace "in-dir".\n' +
+  //     '[loombridge trace] warning: trace id "external-trace" != "in-dir"; using "in-dir"
+  //      for output paths.\n' + …
+  // Verified by doing exactly that, then restoring it and watching it pass.
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "trace-explicit-file-"));
+  try {
+    // A NEWER trace inside the traces directory: the one the search would have picked.
+    await writeTraceAged(root, "in-dir", 0);
+    // The explicitly named file lives outside the traces directory and is OLDER.
+    const outsideRoot = await fs.mkdtemp(path.join(os.tmpdir(), "trace-outside-"));
+    const outside = await writeTrace(outsideRoot, "external-trace");
+
+    const { exit, err } = await capturedRun(["replay", "--trace", outside, "--root", root], {
+      clientFactory: replayBridge().factory,
+    });
+    try {
+      assert.equal(exit, 2, err);
+      assert.match(err, /no --id given, replaying "external-trace" from/);
+      assert.doesNotMatch(err, /most recent/, "the search must not have run");
+      const report = JSON.parse(
+        await fs.readFile(path.join(reportsDir(root), "external-trace.report.json"), "utf8"),
+      ) as { traceId: string };
+      assert.equal(report.traceId, "external-trace");
+      await assert.rejects(fs.access(path.join(reportsDir(root), "in-dir.report.json")));
+
+      // …and `--trace` WITH `--id` is unchanged: the id still names the output paths and the
+      // mismatch against the file's own id is still warned about, exactly as before.
+      const explicit = await capturedRun(
+        ["replay", "--trace", outside, "--id", "renamed", "--root", root],
+        { clientFactory: replayBridge().factory },
+      );
+      assert.match(explicit.err, /trace id "external-trace" != "renamed"/);
+      await fs.access(path.join(reportsDir(root), "renamed.report.json"));
+    } finally {
+      await fs.rm(outsideRoot, { recursive: true, force: true });
+    }
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
 });
 
 test("discoverTraces: only *.trace.json with safe ids, sorted; missing dir → []", async () => {
