@@ -1,7 +1,7 @@
 /**
  * `loombridge trace` — Replay Verification product surface.
  *
- *   loombridge trace replay --id <id> [--root <dir>] [--trace <path>] [--no-html]
+ *   loombridge trace replay [--id <id>] [--root <dir>] [--trace <path>] [--no-html]
  *   loombridge trace report --id <id> [--root <dir>]
  *   loombridge trace tolerance --id <id> --set <fraction>
  *
@@ -95,7 +95,11 @@ import { readPng } from "../verification/analyze-frames.js";
 
 interface TraceArgs {
   sub: "replay" | "report" | "approve" | "replay-all" | "record" | "tolerance" | "mask";
-  /** Trace id. Empty on `record` when none was given: it is derived from the recorded scene. */
+  /**
+   * Trace id. Empty when none was given, which only `record` and `replay` allow: `record`
+   * derives one from the recorded scene, `replay` falls back to the most recent trace
+   * (see {@link resolveReplayTargetId}). Every other subcommand still requires it.
+   */
   id: string;
   root: string;
   /** Override the trace input path (default `.loombridge/replays/traces/<id>.trace.json`). */
@@ -336,7 +340,12 @@ export async function run(args: string[], opts: TraceRunOpts = {}): Promise<numb
 
 async function runReplay(args: TraceArgs, opts: TraceRunOpts = {}): Promise<number> {
   const paths = layoutFor(args);
-  const { artifact, reportJson, htmlPath } = await replayOneTrace(paths, args.id, {
+  const id = await resolveReplayTargetId(paths, args);
+  // Nothing to replay, and the refusal has already been printed. Exit 2, NOT 1: the tier
+  // is the one `--id <id> is required` used to exit with on this exact argv, and no game
+  // was ever driven, so the game-defect tier (1) would be a verdict about nothing.
+  if (id === null) return 2;
+  const { artifact, reportJson, htmlPath } = await replayOneTrace(paths, id, {
     tracePath: args.tracePath,
     html: args.html,
     projectPathCanonical: resolveCliProjectPin({ root: args.root }),
@@ -344,10 +353,103 @@ async function runReplay(args: TraceArgs, opts: TraceRunOpts = {}): Promise<numb
     alignedCaptureFps: args.alignedCaptureFps,
     ...(opts.clientFactory ? { clientFactory: opts.clientFactory } : {}),
   });
-  printSummary(args.root, args.id, artifact, reportJson, htmlPath, args.strictVisual);
+  printSummary(args.root, id, artifact, reportJson, htmlPath, args.strictVisual);
   // In the mini-game workspace flow (--flat), print the EXACT next command to run.
   if (args.flat) await printNextStep(args.root);
   return replayExitCode(artifact, args.strictVisual);
+}
+
+/**
+ * Which trace this `replay` drives. An EXPLICIT `--id` is returned untouched, so every
+ * existing invocation walks the same path it always did; everything below is reached only
+ * when nobody named a trace. Returns null after printing the refusal when there is nothing
+ * to pick.
+ *
+ * WHY `replay` DEFAULTS AND `approve` / `tolerance` / `mask` NEVER WILL. Those three are
+ * ANCHOR operations: `approve` FREEZES a human-approved baseline, and `tolerance` / `mask`
+ * WIDEN the gate on an existing one. An action that freezes or loosens an anchor has to NAME
+ * the anchor it touches, because a wrong pick leaves a verdict standing that nobody consented
+ * to and that no later output ever contradicts. `replay` is different in kind: it is
+ * re-runnable, it produces a REPORT rather than an anchor, and a wrong pick costs exactly one
+ * re-run with an explicit `--id`. Do NOT "simplify" this asymmetry away by extending the
+ * default to the anchor verbs: it is the point, not an oversight.
+ *
+ * Precedence, and `--trace` comes FIRST for a reason: it names an exact file, which is the
+ * strongest statement of intent available, so the most-recent search must not run at all.
+ */
+async function resolveReplayTargetId(
+  paths: ReplayLayout,
+  args: TraceArgs,
+): Promise<string | null> {
+  if (args.id) return args.id;
+
+  if (args.tracePath !== undefined) {
+    // With `--trace` and no `--id`, the trace NAMES ITSELF: its own `id` field becomes the
+    // output name, which is exactly what `--id <that id>` would have produced (and
+    // `parseTrace` has already proven it is a safe path segment). Deriving from the FILENAME
+    // instead would let a copied file write its report under a name the trace disagrees with.
+    // The file is read again by `replayOneTrace`; a trace is small, and the alternative is
+    // threading an already-parsed trace through the path `replay-all` shares.
+    const trace = parseTrace(JSON.parse(await fs.readFile(args.tracePath, "utf8")));
+    console.error(
+      `[loombridge trace] no --id given, replaying "${trace.id}" from ${args.tracePath}.`,
+    );
+    return trace.id;
+  }
+
+  const recent = await mostRecentTraceId(paths.replayTraces);
+  if (recent === null) {
+    // REFUSE HERE, not in the loader. Falling through with an empty id would read
+    // `traces/.trace.json` and report "no such file", which names a path nobody typed and
+    // says nothing about what to do next.
+    console.error(
+      `[loombridge trace] no --id given and no traces in ` +
+        `${path.relative(args.root, paths.replayTraces)}/: there is nothing to replay.`,
+    );
+    console.error(
+      "[loombridge trace]   record one first: `loombridge trace record` (then bare `loombridge trace " +
+        "replay` replays it), or point at an existing trace with --id <id> / --trace <path>.",
+    );
+    return null;
+  }
+  console.error(`[loombridge trace] no --id given, replaying the most recent trace "${recent}".`);
+  return recent;
+}
+
+/**
+ * The most recently recorded trace under `dir`, or null when there is none.
+ *
+ * "Most recent" is the newest FILE MTIME among `<id>.trace.json`, because that is what
+ * "the one I just recorded" means to the human typing this: `record` wrote it seconds ago.
+ *
+ * TIES BREAK BY NAME, and that is a correctness requirement rather than tidiness. A fresh
+ * `git clone` (or a copied workspace) writes every file in one burst, so identical mtimes are
+ * the normal case, not the exotic one. An arbitrary pick that varies between two runs of the
+ * same command would be worse than a wrong-but-stable one: it makes "replay, then look at the
+ * report" unreproducible for the operator AND for whoever reads the report afterwards. Name
+ * order is stable, so the same directory always yields the same choice.
+ *
+ * Only ids `discoverTraces` accepts are candidates, so the winner is always a safe path
+ * segment. Exported for unit tests.
+ */
+export async function mostRecentTraceId(dir: string): Promise<string | null> {
+  const ids = await discoverTraces(dir);
+  const stamped: { id: string; mtimeMs: number }[] = [];
+  for (const id of ids) {
+    try {
+      const stat = await fs.stat(path.join(dir, `${id}.trace.json`));
+      stamped.push({ id, mtimeMs: stat.mtimeMs });
+    } catch {
+      // Unreadable or gone between the listing and the stat: not a candidate. A trace
+      // whose mtime cannot be read has no claim to being the most recent one.
+    }
+  }
+  if (stamped.length === 0) return null;
+  // The name comparison is the EXPLICIT tie-break, not a side effect of the input order:
+  // relying on `discoverTraces` sorting plus a stable sort would make this correct by
+  // coincidence, and one refactor of the discovery order away from being correct at all.
+  stamped.sort((a, b) => b.mtimeMs - a.mtimeMs || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  return stamped[0]!.id;
 }
 
 /**
@@ -471,7 +573,12 @@ async function runRecord(args: TraceArgs, opts: TraceRunOpts = {}): Promise<numb
   if (args.flat) {
     await printNextStep(args.root);
   } else {
-    console.error(`[loombridge trace] replay it: loombridge trace replay --id ${args.id}`);
+    // `traceId`, never `args.id`: with no --id typed the latter is EMPTY, and this line was
+    // printing `trace replay --id ` with nothing after it. Bare `trace replay` now replays
+    // the most recent trace, which is this one, so both halves of the hint are runnable.
+    console.error(
+      `[loombridge trace] replay it: loombridge trace replay (or --id ${traceId} to name it).`,
+    );
   }
   return 0;
 }
@@ -2386,9 +2493,12 @@ function parseArgs(args: string[]): TraceArgs | { help: true; usageError?: boole
     }
   }
 
-  // `replay-all` runs every trace and `record` DERIVES one from the scene it ends up
-  // recording (see `traceIdFromScenePath`), so neither needs --id; the others require one.
-  if (sub !== "replay-all" && sub !== "record" && !id) {
+  // `replay-all` runs every trace, `record` DERIVES one from the scene it ends up recording
+  // (see `traceIdFromScenePath`), and `replay` falls back to the most recent trace (see
+  // `resolveReplayTargetId`), so none of the three needs --id. The rest still require one,
+  // deliberately: `approve`, `tolerance` and `mask` all touch an ANCHOR, and an operation
+  // that freezes or widens an anchor must name the anchor it touches.
+  if (sub !== "replay-all" && sub !== "record" && sub !== "replay" && !id) {
     console.error("[loombridge trace] --id <id> is required.");
     return { help: true, usageError: true };
   }
@@ -2568,9 +2678,12 @@ function printUsage(): void {
       "              id never overwrites: an existing kids-chef becomes kids-chef-2, printed.",
       "  replay      Drive .loombridge/replays/traces/<id>.trace.json against the running",
       "              editor and write .loombridge/replays/reports/<id>.report.{json,html},",
-      "              diffing each capture against its approved baseline. --speed <1..8>",
-      "              replays faster than the demonstration (recorded settles divided,",
-      "              floored at 250ms); the pacing is stamped into the report and, at",
+      "              diffing each capture against its approved baseline. Takes no required",
+      "              flags: bare `trace replay` replays the MOST RECENT trace (newest mtime,",
+      "              ties broken by name), announced before it drives, so `trace record` then",
+      "              `trace replay` is the whole loop; --trace <path> wins over that search.",
+      "              --speed <1..8> replays faster than the demonstration (recorded settles",
+      "              divided, floored at 250ms); the pacing is stamped into the report and, at",
       "              approve, into the baseline, and a replay at a pacing other than the",
       "              baseline's REFUSES the pixel comparison (phase skew is not drift).",
       "  replay-all  Replay EVERY trace under .loombridge/replays/traces/ and write a",
@@ -2591,11 +2704,17 @@ function printUsage(): void {
       "  report      Re-render the HTML report from an existing <id>.report.json.",
       "",
       "Options:",
-      "  --id <id>         Trace id. Required except for replay-all (runs every trace) and",
-      "                    record (derives one from the recorded scene when omitted). A",
-      "                    given --id records over that trace; a DERIVED one never does.",
+      "  --id <id>         Trace id. Required except for replay-all (runs every trace),",
+      "                    record (derives one from the recorded scene when omitted) and",
+      "                    replay (replays the most recent trace when omitted). A given --id",
+      "                    records over that trace; a DERIVED one never does. approve,",
+      "                    tolerance and mask ALWAYS require it: they freeze or widen an",
+      "                    anchor, and that must name the anchor it touches. replay defaults",
+      "                    because it is re-runnable and produces a report, not an anchor.",
       "  --root <dir>      Project root containing .loombridge/ (default: cwd).",
-      "  --trace <path>    Override the trace input path (replay only).",
+      "  --trace <path>    Override the trace input path (replay only). It names an exact",
+      "                    file, so it wins over the most-recent search; with no --id the",
+      "                    trace's own id names the report.",
       "  --flat            Lay replay artifacts directly under --root (traces/, reports/,",
       "                    baseline/) with no nested .loombridge/ — the mini-game workspace layout.",
       "  --no-html         Skip the HTML report.",
