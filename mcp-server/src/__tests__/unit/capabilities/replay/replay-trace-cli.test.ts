@@ -8,9 +8,11 @@ import { deflateSync } from "node:zlib";
 
 import {
   applyVisualDiff,
+  captureCoverageNotices,
   discoverTraces,
   mostRecentTraceId,
   observeDropNotices,
+  traceDemonstration,
   parseStateSignal,
   readEnter,
   replayExitCode,
@@ -1175,4 +1177,119 @@ test("trace report: renders self-contained HTML from a valid report (exit 0)", a
   } finally {
     await fs.rm(root, { recursive: true, force: true });
   }
+});
+
+// ─────────────── capture coverage: the summary line, and the under-capture warning ───────────────
+//
+// The defect these cover, observed on a real 62-action consumer recording: six incidental key
+// edges routed the whole session onto the merged keyboard timeline, which emits ONE segment
+// with ONE trailing capture, and `trace record` reported "1 step(s)" because it counted
+// SEGMENTS. The human lost 13 of 14 frames and nothing said so.
+
+/** A scripted `input.observe_stop` payload: `n` pointer gestures plus `keys` key edges. */
+function observedSession(n: number, keys: number): { data: unknown } {
+  const clicks = Array.from({ length: n }, (_, i) => ({
+    tMs: i * 1000,
+    locator: { path: `/HUD/Button${i}` },
+    button: 0,
+    kind: "ui",
+  }));
+  const keyEdges = Array.from({ length: keys }, (_, i) => ({
+    key: "D",
+    edge: i % 2 === 0 ? "down" : "up",
+    tMs: 500 + i * 100,
+  }));
+  return { data: { clicks, keyEdges, observed: true } };
+}
+
+test("trace record: the summary counts GESTURES and key edges, not segments", async () => {
+  // LITMUS: replace the summary's `shape.gestures` with `trace.segments.length` (the old
+  // count) and this fails on the match:
+  //   AssertionError [ERR_ASSERTION]: The input did not match the regular expression
+  //   /recorded "kids-chef": 3 gesture\(s\), 4 key edge\(s\)/. Input:
+  //   '…recorded "kids-chef": 1 gesture(s), 4 key edge(s), 1 capture(s), 0 outcome(s) → …'
+  // Restored, it passes. Driven through the REAL verb (argv → runRecord → the real transform).
+  const root = await recordRoot();
+  try {
+    const { factory } = recordBridge({ "input.observe_stop": () => observedSession(3, 4) });
+    const { exit, err } = await capturedRun(["record", "--root", root, "--duration", "0.01"], {
+      clientFactory: factory,
+    });
+    assert.equal(exit, 0, err);
+    assert.match(err, /recorded "kids-chef": 3 gesture\(s\), 4 key edge\(s\)/);
+    assert.doesNotMatch(err, /step\(s\)/, "the segment-count phrasing is gone");
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test("trace record: WARNS when the trace takes fewer captures than the human demonstrated gestures", async () => {
+  // LITMUS: delete the `for (const notice of captureCoverageNotices(shape))` loop in runRecord
+  // and this fails:
+  //   AssertionError [ERR_ASSERTION]: The input did not match the regular expression
+  //   /WARNING: 3 gesture\(s\) were demonstrated but this trace takes only 1 capture\(s\)/.
+  // Restored, it passes.
+  const root = await recordRoot();
+  try {
+    const { factory } = recordBridge({ "input.observe_stop": () => observedSession(3, 4) });
+    const { exit, err } = await capturedRun(["record", "--root", root, "--duration", "0.01"], {
+      clientFactory: factory,
+    });
+    assert.equal(exit, 0, err);
+    assert.match(err, /WARNING: 3 gesture\(s\) were demonstrated but this trace takes only 1 capture\(s\)/);
+    assert.match(err, /2 gesture\(s\) get no frame of their own/);
+    assert.match(err, /re-record the flow without touching the keyboard/);
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test("trace record: a pointer-only recording captures every gesture, so NO warning is printed", async () => {
+  const root = await recordRoot();
+  try {
+    const { factory } = recordBridge({ "input.observe_stop": () => observedSession(3, 0) });
+    const { exit, err } = await capturedRun(["record", "--root", root, "--duration", "0.01"], {
+      clientFactory: factory,
+    });
+    assert.equal(exit, 0, err);
+    assert.match(err, /recorded "kids-chef": 3 gesture\(s\), 0 key edge\(s\), 3 capture\(s\)/);
+    assert.doesNotMatch(err, /WARNING/, "captures == gestures, so there is nothing to warn about");
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test("captureCoverageNotices: bound to the COUNTS, not to which transform ran", () => {
+  // The warning must silence itself when a transform starts capturing per gesture, and must
+  // still fire for a keyboard-free path that under-captures for some other reason.
+  assert.deepEqual(captureCoverageNotices({ gestures: 14, keyEdges: 0, captures: 14 }), []);
+  assert.deepEqual(captureCoverageNotices({ gestures: 0, keyEdges: 40, captures: 1 }), []);
+  const noKeys = captureCoverageNotices({ gestures: 14, keyEdges: 0, captures: 1 });
+  assert.equal(noKeys.length, 2, "under-captured with no key edges still warns");
+  assert.doesNotMatch(noKeys.join("\n"), /keyboard/, "…without blaming a keyboard that was not used");
+  const withKeys = captureCoverageNotices({ gestures: 14, keyEdges: 6, captures: 1 });
+  assert.equal(withKeys.length, 4, "key edges add the cause + the remedy");
+  assert.match(withKeys.join("\n"), /6 recorded key edge\(s\)/);
+});
+
+test("traceDemonstration: counts gestures, key edges, and captures across every segment", () => {
+  const shape = traceDemonstration({
+    segments: [
+      {
+        actions: [
+          { do: "wait-for-visible" },
+          { do: "tap" },
+          { do: "key-down" },
+          { do: "wait" },
+          { do: "key-up" },
+          { do: "drag" },
+          { do: "world-tap" },
+        ],
+        captures: [{ id: "final" }],
+      },
+      { actions: [{ do: "tap" }], captures: [{ id: "step-1" }] },
+      { actions: [{ do: "wait" }] },
+    ],
+  });
+  assert.deepEqual(shape, { gestures: 4, keyEdges: 2, captures: 2 });
 });

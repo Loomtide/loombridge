@@ -288,6 +288,93 @@ export function observeDropNotices(counts: {
   return lines;
 }
 
+/**
+ * WHAT A RECORDING ACTUALLY DEMONSTRATED, read back off the built trace rather than
+ * off the transform that built it.
+ *
+ * The summary line used to report `trace.segments.length`, which is a count of the
+ * transform's internal packaging and not of anything the human did. The pointer
+ * transform emits one segment per gesture, so the two happened to agree; the merged
+ * keyboard transform emits ONE segment carrying the whole timeline, so a 62-action
+ * demonstration printed "1 step(s)". Counting the gestures and key edges IN THE
+ * TRACE is accurate for both, because both transforms emit the same action
+ * vocabulary and only differ in how they group it.
+ *
+ * `captures` is the number of frames a replay of this trace will take. It is counted
+ * from the trace too, so it tracks whatever the transforms do next without this
+ * function being told.
+ */
+export interface TraceDemonstration {
+  /** Pointer gestures: taps, drags, and world taps. */
+  gestures: number;
+  /** Keyboard edges: `key-down` / `key-up` (a `key-tap`/`key-hold` counts as one). */
+  keyEdges: number;
+  /** Frames a replay will capture. */
+  captures: number;
+}
+
+export function traceDemonstration(trace: {
+  segments: { actions: { do: string }[]; captures?: unknown[] }[];
+}): TraceDemonstration {
+  let gestures = 0;
+  let keyEdges = 0;
+  let captures = 0;
+  for (const segment of trace.segments) {
+    captures += segment.captures?.length ?? 0;
+    for (const action of segment.actions) {
+      if (action.do === "tap" || action.do === "drag" || action.do === "world-tap") gestures += 1;
+      else if (
+        action.do === "key-down" ||
+        action.do === "key-up" ||
+        action.do === "key-tap" ||
+        action.do === "key-hold"
+      ) {
+        keyEdges += 1;
+      }
+    }
+  }
+  return { gestures, keyEdges, captures };
+}
+
+/**
+ * THE HONEST WARNING FOR A RECORDING THAT WILL BE UNDER-CAPTURED, bound to the
+ * observable fact and nothing else: this trace takes FEWER frames than the human
+ * demonstrated gestures.
+ *
+ * Why it matters beyond ergonomics. Approving such a trace freezes a baseline of
+ * however many frames it takes, so the pixel ratchet guards nothing about the
+ * gestures that produced them. A human who recorded 14 gestures and got 1 frame has
+ * a green trace that would stay green through a regression in 13 of them.
+ *
+ * Deliberately NOT keyed on "which transform ran". The keyboard timeline is the
+ * reason today, and the key-edge count is mentioned only when the trace actually
+ * carries key edges, but the CONDITION is the count comparison — so the warning
+ * disappears on its own the moment a transform starts emitting a frame per gesture,
+ * and would reappear for any future path that under-captures for a different reason.
+ * Pure; exported for unit tests.
+ */
+export function captureCoverageNotices(shape: TraceDemonstration): string[] {
+  if (shape.captures >= shape.gestures) return [];
+  const uncaptured = shape.gestures - shape.captures;
+  const lines = [
+    `[loombridge trace] WARNING: ${shape.gestures} gesture(s) were demonstrated but this trace takes only ` +
+      `${shape.captures} capture(s) — ${uncaptured} gesture(s) get no frame of their own.`,
+    "[loombridge trace]   Approving it freezes a baseline over those few frames, so the pixel ratchet guards " +
+      "nothing about the gestures that produced them.",
+  ];
+  if (shape.keyEdges > 0) {
+    lines.push(
+      `[loombridge trace]   Cause: the ${shape.keyEdges} recorded key edge(s) put this recording on the merged ` +
+        "keyboard timeline, which is captured as one continuous run.",
+    );
+    lines.push(
+      "[loombridge trace]   If the keys were incidental, re-record the flow without touching the keyboard and " +
+        "each gesture gets its own capture.",
+    );
+  }
+  return lines;
+}
+
 /** Resolve the replay layout from `--root` + the `--flat` flag. */
 function layoutFor(args: TraceArgs): ReplayLayout {
   return args.flat ? flatReplayLayout(args.root) : standardReplayLayout(args.root);
@@ -558,15 +645,25 @@ async function runRecord(args: TraceArgs, opts: TraceRunOpts = {}): Promise<numb
   const traceFile = path.join(paths.replayTraces, `${traceId}.trace.json`);
   await fs.writeFile(traceFile, `${JSON.stringify(trace, null, 2)}\n`, "utf-8");
 
-  const steps = trace.segments.length;
+  // WHAT WAS DEMONSTRATED, not how the transform packaged it. `trace.segments.length`
+  // is the segment count, which equals the gesture count only on the pointer path; the
+  // merged keyboard timeline is one segment, so it reported "1 step(s)" for a 62-action
+  // recording. See `traceDemonstration`.
+  const shape = traceDemonstration(trace);
   const outcomeCount = trace.assertions?.length ?? 0;
   // Honest, not silent: gestures the observer saw but did not record (inert target, or a
   // tap the editor swallowed while the Game view was unfocused) are reported, not a mystery.
   for (const notice of observeDropNotices({ droppedNoTarget, droppedUnfocused })) {
     console.error(notice);
   }
+  // Loud, before the success line: a trace that captures fewer frames than the human
+  // demonstrated gestures freezes a baseline that guards almost none of them.
+  for (const notice of captureCoverageNotices(shape)) {
+    console.error(notice);
+  }
   console.error(
-    `[loombridge trace] recorded "${traceId}": ${steps} step(s), ${outcomeCount} outcome(s) → ${path.relative(args.root, traceFile)}`,
+    `[loombridge trace] recorded "${traceId}": ${shape.gestures} gesture(s), ${shape.keyEdges} key edge(s), ` +
+      `${shape.captures} capture(s), ${outcomeCount} outcome(s) → ${path.relative(args.root, traceFile)}`,
   );
   // In the mini-game workspace flow (--flat), print the EXACT next command to run (capture).
   // Otherwise give the generic replay hint (the standard-layout trace flow).
