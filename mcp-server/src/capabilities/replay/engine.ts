@@ -13,7 +13,7 @@
  *   before any driving.
  */
 
-import type { ReplayDriver } from "./driver.js";
+import type { DispatchResult, ReplayDriver } from "./driver.js";
 import { dispatchConditionWithGestureRecovery, isContinuousGesture, preservesPendingGesture } from "./gesture-recovery.js";
 import type {
   Action,
@@ -92,18 +92,43 @@ async function runReplay(
     const anchorsReached: string[] = [];
     let segmentFailed = false;
     let segmentBlocked = false;
+    // Declared before the action loop because an INTERLEAVED capture (`{ do: "capture" }`)
+    // appends to it from inside that loop, where the frame it names is actually on screen.
+    const captures: SegmentResult["captures"] = [];
 
     // 3a. Actions.
     for (let i = 0; i < segment.actions.length; i++) {
       const action = segment.actions[i];
-      // A phase gate (`wait-for-condition`) is driven with adaptive gesture recovery: if it fails, the
-      // preceding continuous gesture (a stir/scrub) is re-driven with escalating travel until the
-      // game's phase signal advances or a bounded budget is spent — so an under-reproduced gesture on
-      // an extreme aspect self-corrects instead of stalling the run.
-      const result =
-        action.do === "wait-for-condition"
-          ? await dispatchConditionWithGestureRecovery(driver, action, lastGesture)
-          : await driver.dispatch(action);
+      let result: DispatchResult;
+      if (action.do === "capture") {
+        // AN INTERLEAVED CAPTURE IS NOT DISPATCHED, it is captured — the driver's `capture`
+        // seam, the same one a segment-end capture uses, so the wall-clock settle, the
+        // aligned settle inside the bridge's pinned tick loop, the harness-fault evidence,
+        // and the frame count all behave identically wherever the capture sits.
+        //
+        // Every action BEFORE this one succeeded (a failure or a block breaks the loop), so
+        // the frame on screen IS the state this id names. That is why it is kept even if a
+        // LATER action fails: it is honest evidence of a moment the run really reached, and
+        // it matches what the per-gesture pointer path already does across segments.
+        const outcome = await driver.capture(action.id, action.settleMs);
+        captures.push({
+          id: action.id,
+          artifact: outcome.artifact,
+          sha256: outcome.sha256,
+          ...(outcome.harnessFault !== undefined ? { harnessFault: outcome.harnessFault } : {}),
+          ...(outcome.framesElapsed !== undefined ? { framesElapsed: outcome.framesElapsed } : {}),
+        });
+        result = { ok: true };
+      } else {
+        // A phase gate (`wait-for-condition`) is driven with adaptive gesture recovery: if it fails, the
+        // preceding continuous gesture (a stir/scrub) is re-driven with escalating travel until the
+        // game's phase signal advances or a bounded budget is spent — so an under-reproduced gesture on
+        // an extreme aspect self-corrects instead of stalling the run.
+        result =
+          action.do === "wait-for-condition"
+            ? await dispatchConditionWithGestureRecovery(driver, action, lastGesture)
+            : await driver.dispatch(action);
+      }
       // Adjacency guard: arm on a continuous gesture; CLEAR on any discrete input between it and a gate
       // (incl. across a segment boundary) so a gate advanced by a tap can't recover a stale, far-earlier
       // gesture; only the waits preserve it.
@@ -164,7 +189,9 @@ async function runReplay(
     // an approved one and report the gap as pixel drift, turning a missing capability into
     // a game defect. (Blocked segments used to fall through this gate: only `segmentFailed`
     // was checked.)
-    const captures: SegmentResult["captures"] = [];
+    //
+    // This gate covers the segment's TRAILING captures only. An interleaved `capture` action
+    // already ran, above, at a point where every action before it had succeeded.
     if (!segmentFailed && !segmentBlocked) {
       for (const capture of segment.captures ?? []) {
         if (capture.atAnchor && !anchorsReached.includes(capture.atAnchor)) {
@@ -316,6 +343,8 @@ function describeAction(action: Action): string {
       return `key-up ${action.key}`;
     case "wait":
       return `wait ${action.durationMs}ms`;
+    case "capture":
+      return `capture ${action.id}`;
     case "drag":
       return `drag ${action.from.path} → ${action.to.path}`;
     case "wait-for-visible":

@@ -1223,12 +1223,20 @@ test("trace record: the summary counts GESTURES and key edges, not segments", as
   }
 });
 
-test("trace record: WARNS when the trace takes fewer captures than the human demonstrated gestures", async () => {
-  // LITMUS: delete the `for (const notice of captureCoverageNotices(shape))` loop in runRecord
-  // and this fails:
+test("trace record: a KEYBOARD recording captures every gesture, so the under-capture warning stays silent", async () => {
+  // This is the end-to-end proof for BOTH halves: the merged keyboard timeline now takes one
+  // frame per gesture plus the final one, and the warning that used to fire for it silences
+  // itself because it is bound to the counts.
+  //
+  // LITMUS (piece 2): in `observedEdgesToTrace`, delete the `actions.push({ do: "capture", … })`
+  // that follows each gesture — i.e. go back to the single trailing `final` capture. Observed:
   //   AssertionError [ERR_ASSERTION]: The input did not match the regular expression
-  //   /WARNING: 3 gesture\(s\) were demonstrated but this trace takes only 1 capture\(s\)/.
-  // Restored, it passes.
+  //   /recorded "kids-chef": 3 gesture\(s\), 4 key edge\(s\), 4 capture\(s\)/. Input:
+  //   '…[loombridge trace] WARNING: 3 gesture(s) were demonstrated but this trace takes only
+  //     1 capture(s) — 2 gesture(s) get no frame of their own.\n
+  //     …[loombridge trace] recorded "kids-chef": 3 gesture(s), 4 key edge(s), 1 capture(s), …'
+  // Restored, it passes. The same failure output is the wiring proof for piece 1's warning:
+  // the notices really are printed by the verb, not just returned by a pure function.
   const root = await recordRoot();
   try {
     const { factory } = recordBridge({ "input.observe_stop": () => observedSession(3, 4) });
@@ -1236,9 +1244,19 @@ test("trace record: WARNS when the trace takes fewer captures than the human dem
       clientFactory: factory,
     });
     assert.equal(exit, 0, err);
-    assert.match(err, /WARNING: 3 gesture\(s\) were demonstrated but this trace takes only 1 capture\(s\)/);
-    assert.match(err, /2 gesture\(s\) get no frame of their own/);
-    assert.match(err, /re-record the flow without touching the keyboard/);
+    assert.match(err, /recorded "kids-chef": 3 gesture\(s\), 4 key edge\(s\), 4 capture\(s\)/);
+    assert.doesNotMatch(err, /WARNING/, "every gesture has a frame, so there is nothing to warn about");
+
+    const written = JSON.parse(
+      await fs.readFile(path.join(tracesDir(root), "kids-chef.trace.json"), "utf8"),
+    ) as { segments: { id: string; actions: { do: string; id?: string }[]; captures: { id: string }[] }[] };
+    assert.equal(written.segments.length, 1, "still ONE segment: held keys must not be split");
+    assert.deepEqual(
+      written.segments[0]!.actions.filter((a) => a.do === "capture").map((a) => a.id),
+      ["step-1", "step-2", "step-3"],
+      "one interleaved capture per gesture, ids stable and per-gesture",
+    );
+    assert.deepEqual(written.segments[0]!.captures.map((c) => c.id), ["final"], "the end state is still captured");
   } finally {
     await fs.rm(root, { recursive: true, force: true });
   }

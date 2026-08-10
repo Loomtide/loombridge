@@ -493,7 +493,9 @@ test("observedEdgesToTrace: declared signal + sampled value → wait-for-conditi
   ];
   const trace = observedEdgesToTrace(clicks, [], STATE_META);
   const actions = trace.segments[0].actions;
-  assert.deepEqual(actions.map((a) => a.do), ["wait-for-visible", "wait-for-condition", "tap"]);
+  // The gesture's own capture follows it; the gate still sits between the visibility wait
+  // and the tap, which is what this test is about.
+  assert.deepEqual(actions.map((a) => a.do), ["wait-for-visible", "wait-for-condition", "tap", "capture"]);
   assert.deepEqual(actions[1], {
     do: "wait-for-condition",
     locator: { path: "/Canvas/GM" },

@@ -117,12 +117,15 @@ test("observedEdgesToTrace: a key still held at stop is released with a trailing
 test("observedEdgesToTrace: clicks and key edges merge on one timeline by tMs", () => {
   const click = { tMs: 500, locator: { path: "/HUD/Pause" }, button: 0, kind: "ui" as const };
   const trace = observedEdgesToTrace([click], [edge("D", "down", 0), edge("D", "up", 1000)], meta);
+  // The gesture's capture SPENDS the 500ms dwell that would otherwise have become the next
+  // `wait`, so the following wait is 0 and vanishes. D is therefore still held for exactly
+  // the 1000ms the human held it: the interleaved frame costs the timeline nothing.
   assert.deepEqual(trace.segments[0].actions, [
     { do: "key-down", key: "D" },
     { do: "wait", durationMs: 500 },
     { do: "wait-for-visible", locator: { path: "/HUD/Pause" }, timeoutMs: 4000 },
     { do: "tap", locator: { path: "/HUD/Pause" } },
-    { do: "wait", durationMs: 500 },
+    { do: "capture", id: "step-1", settleMs: 500 },
     { do: "key-up", key: "D" },
   ]);
 });

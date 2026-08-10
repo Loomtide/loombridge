@@ -151,7 +151,28 @@ export type Action =
       expected: unknown;
       tolerance?: number;
       timeoutMs?: number;
-    };
+    }
+  /**
+   * TAKE A FRAME HERE, at this exact point in the action timeline — the same capture a
+   * {@link Capture} takes at segment end, but positioned INSIDE the sequence.
+   *
+   * It exists for the merged keyboard timeline. Keyboard gameplay is continuous and
+   * CONCURRENT (a key stays held across waits while a pointer gesture happens), so that
+   * timeline cannot be split into per-gesture SEGMENTS: a boundary between a `key-down` and
+   * its `key-up` changes the semantics of the run. Before this action the whole recording
+   * therefore carried a single trailing capture, and a 14-gesture demonstration froze a
+   * baseline of one frame that guarded none of them. An interleaved capture puts a frame at
+   * each gesture's own settle point with the held keys untouched.
+   *
+   * `id` becomes a PNG filename and a baseline key, so it is path-validated exactly like a
+   * segment capture's id. `settleMs` is the same settle: a wall-clock hold before the
+   * screenshot, or (under `--aligned`) the frame count the bridge advances inside its pinned
+   * tick loop. It is scaled by `--speed` alongside the segment captures.
+   *
+   * NEW VOCABULARY: a trace recorded before this action existed carries none, so it parses,
+   * replays, and grades exactly as it did.
+   */
+  | { do: "capture"; id: string; settleMs?: number };
 
 /** A gate a segment must reach before it is considered complete. */
 export type Anchor =

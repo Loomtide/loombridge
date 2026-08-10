@@ -411,8 +411,27 @@ const MAX_WAIT_MS = 10_000;
  * grafting the human's pacing between them. Keyboard gameplay is continuous and
  * CONCURRENT (a key stays held across waits while another taps), so — unlike the
  * per-click transform — it can't be split into per-gesture segments; it's one
- * `recorded` segment carrying the whole timeline plus a final capture. A key still
- * held at stop is released with a trailing `key-up` so the trace stays balanced.
+ * `recorded` segment carrying the whole timeline. A key still held at stop is
+ * released with a trailing `key-up` so the trace stays balanced.
+ *
+ * PER-GESTURE CAPTURES WITHOUT PER-GESTURE SEGMENTS. Each pointer gesture is followed by
+ * an INTERLEAVED `{ do: "capture" }` action (`step-1`, `step-2`, …) sitting at that
+ * gesture's own point in the timeline, plus the trailing `final` capture of the end state.
+ * That is the whole reason the capture action exists: a segment boundary between a
+ * `key-down` and its `key-up` would change the run's semantics, while a capture inside the
+ * timeline leaves every held key exactly where the human left it. Before this, a 14-gesture
+ * keyboard recording froze a baseline of ONE frame, so the pixel ratchet guarded nothing
+ * about the gestures that produced it.
+ *
+ * THE SETTLE IS THE HUMAN'S OWN DWELL, AND IT IS SPENT ONCE. The settle is the gap to the
+ * NEXT observed event (capped by {@link MAX_SETTLE_MS}) and is then DEDUCTED from the `wait`
+ * that gap would otherwise have become. So the timeline's total length, and with it every
+ * key-hold duration, is exactly what was recorded. This is why the merged path does NOT
+ * apply the pointer path's {@link MIN_SETTLE_MS} floor per gesture: on the pointer path each
+ * gesture is its own segment with no key held across it, so a floor only slows replay down,
+ * whereas here a floor would hold a key down LONGER than the human did and change what the
+ * game actually simulated. The only floored settle is the one after the last event, where
+ * there is no following gap to spend and nothing left to distort.
  */
 export function observedEdgesToTrace(
   clicks: ObservedClick[],
@@ -443,12 +462,21 @@ export function observedEdgesToTrace(
   // wait, and any trailing gap after the last real action is discarded.
   let pendingMs = 0;
   let prevTMs = events[0].tMs;
+  // Milliseconds of the upcoming gap ALREADY SPENT by a capture settle that was just
+  // emitted. Deducted from the next `wait` so the human's dwell is honored exactly once
+  // and the timeline (every key-hold duration with it) keeps its recorded length. The cap
+  // is applied to the gap FIRST and the debt taken off after, so a capped 10s gap that
+  // spent 3s settling waits 7s: 10s total, not 13s.
+  let settleDebtMs = 0;
   const flushWait = (): void => {
-    const gap = Math.min(pendingMs, MAX_WAIT_MS);
+    const gap = Math.max(0, Math.min(pendingMs, MAX_WAIT_MS) - settleDebtMs);
     if (gap > 0) actions.push({ do: "wait", durationMs: gap });
     pendingMs = 0;
+    settleDebtMs = 0;
   };
-  for (const ev of events) {
+  let gestureCount = 0;
+  for (let i = 0; i < events.length; i++) {
+    const ev = events[i];
     pendingMs += Math.max(0, ev.tMs - prevTMs);
     prevTMs = ev.tMs;
 
@@ -486,6 +514,21 @@ export function observedEdgesToTrace(
       if (gate) actions.push(gate);
       actions.push({ do: "tap", locator });
     }
+    // The gesture's own frame, at the gesture's own point in the timeline. The id matches
+    // the pointer path's (`step-N`, numbered by gesture) so it is stable across
+    // re-recordings of the same flow and reads the same in both kinds of report.
+    gestureCount += 1;
+    // The human's dwell on the resulting screen: the gap to the NEXT observed event,
+    // capped. With no next event the observation simply ended, so there is no dwell to
+    // read and no following gap to distort — that one settles for MIN_SETTLE_MS, the same
+    // discipline the trailing `final` capture uses.
+    const nextTMs = i + 1 < events.length ? events[i + 1].tMs : undefined;
+    const settleMs =
+      nextTMs === undefined ? MIN_SETTLE_MS : Math.min(Math.max(0, nextTMs - ev.tMs), MAX_SETTLE_MS);
+    actions.push({ do: "capture", id: `step-${gestureCount}`, settleMs });
+    // Spend the dwell ONCE: the settle we just emitted comes out of the gap that would
+    // otherwise become the next `wait`.
+    settleDebtMs = settleMs;
   }
   // Release any key still held at stop, so replay can't strand it (teardown's
   // end_session is a backstop, but a balanced trace is honest on its own).

@@ -210,6 +210,28 @@ function parseSegment(value: unknown, path: string): Segment {
     }
   }
 
+  // CAPTURE IDS MUST BE UNIQUE ONCE A SEGMENT INTERLEAVES THEM. Every capture id becomes
+  // `<id>.png` in the run's capture directory AND a key in the approved baseline manifest, so
+  // two captures sharing an id in one segment means the second frame overwrites the first and
+  // one approved baseline silently grades two different moments.
+  //
+  // Scoped to segments that actually carry a `capture` ACTION, deliberately. That is the new
+  // vocabulary this collision became reachable through; a trace recorded before this existed
+  // has whatever shape it has, and a parser that started refusing it would break the
+  // back-compat promise for a hazard those traces cannot express.
+  const captureActions = actions.filter((a): a is Extract<Action, { do: "capture" }> => a.do === "capture");
+  if (captureActions.length > 0) {
+    const seen = new Set<string>();
+    for (const captureId of [...captureActions.map((a) => a.id), ...(captures ?? []).map((c) => c.id)]) {
+      if (seen.has(captureId)) {
+        throw new TraceParseError(
+          `${path}: duplicate capture id ${JSON.stringify(captureId)} — a capture id is a PNG name and a baseline key`,
+        );
+      }
+      seen.add(captureId);
+    }
+  }
+
   return { id, actions, anchors, captures, ...(scene !== undefined ? { scene } : {}) };
 }
 
@@ -260,9 +282,19 @@ function parseAction(value: unknown, path: string): Action {
         ...parseCondition(obj, path),
         timeoutMs: optionalNumber(obj.timeoutMs, `${path}.timeoutMs`),
       };
+    case "capture":
+      // An interleaved capture. `requireId` (not requireString): the id becomes a PNG
+      // filename and a baseline key, so it takes the SAME path-segment validation a
+      // segment-level capture id takes — a hand-authored trace must not be able to write a
+      // frame outside its capture directory through the action list.
+      return {
+        do: "capture",
+        id: requireId(obj.id, `${path}.id`),
+        settleMs: optionalNumber(obj.settleMs, `${path}.settleMs`),
+      };
     default:
       throw new TraceParseError(
-        `${path}.do must be one of tap | world-tap | key-tap | key-hold | key-down | key-up | wait | drag | wait-for-visible | wait-for-condition (got ${JSON.stringify(
+        `${path}.do must be one of tap | world-tap | key-tap | key-hold | key-down | key-up | wait | drag | wait-for-visible | wait-for-condition | capture (got ${JSON.stringify(
           obj.do,
         )})`,
       );

@@ -322,7 +322,11 @@ export function traceDemonstration(trace: {
   for (const segment of trace.segments) {
     captures += segment.captures?.length ?? 0;
     for (const action of segment.actions) {
-      if (action.do === "tap" || action.do === "drag" || action.do === "world-tap") gestures += 1;
+      // An INTERLEAVED capture is a frame the replay will take, exactly like a trailing one.
+      // Counting it here is what makes the under-capture warning silence itself once the
+      // merged keyboard transform starts emitting one per gesture.
+      if (action.do === "capture") captures += 1;
+      else if (action.do === "tap" || action.do === "drag" || action.do === "world-tap") gestures += 1;
       else if (
         action.do === "key-down" ||
         action.do === "key-up" ||
@@ -769,21 +773,36 @@ function sleep(ms: number): Promise<void> {
 /**
  * Scale a trace's capture settles for a paced replay: each recorded human inter-action
  * gap divides by `speed`, floored at {@link MIN_SCALED_SETTLE_MS} so the game still
- * renders a stable frame before capture. Pure; exported for unit tests. Actions and
- * wait-for-visible timeouts are NOT scaled: readiness gates are about the game, not the
- * human's pacing.
+ * renders a stable frame before capture. Pure; exported for unit tests. Non-capture
+ * actions and wait-for-visible timeouts are NOT scaled: readiness gates are about the
+ * game, not the human's pacing.
+ *
+ * BOTH PLACES A SETTLE CAN LIVE are scaled, and they have to be: a settle is a settle
+ * whether it sits on a segment's trailing `captures` or on an INTERLEAVED `{ do: "capture" }`
+ * action in the middle of a merged keyboard timeline. Scaling only the first would leave a
+ * `--speed 4` run holding every interleaved settle at its recorded length while the report
+ * stamped `replaySpeed: 4`, and a baseline approved from it would claim a pacing the frames
+ * were never taken at.
  */
-export function scaleTraceSettles<T extends { segments: { captures?: { settleMs?: number }[] }[] }>(
-  trace: T,
-  speed: number,
-): T {
+export function scaleTraceSettles<
+  T extends {
+    segments: {
+      actions?: { do: string; settleMs?: number }[];
+      captures?: { settleMs?: number }[];
+    }[];
+  },
+>(trace: T, speed: number): T {
   if (speed <= 1) return trace;
-  for (const segment of trace.segments) {
-    for (const capture of segment.captures ?? []) {
-      if (typeof capture.settleMs === "number") {
-        capture.settleMs = Math.max(MIN_SCALED_SETTLE_MS, capture.settleMs / speed);
-      }
+  const scale = (holder: { settleMs?: number }): void => {
+    if (typeof holder.settleMs === "number") {
+      holder.settleMs = Math.max(MIN_SCALED_SETTLE_MS, holder.settleMs / speed);
     }
+  };
+  for (const segment of trace.segments) {
+    for (const action of segment.actions ?? []) {
+      if (action.do === "capture") scale(action);
+    }
+    for (const capture of segment.captures ?? []) scale(capture);
   }
   return trace;
 }
