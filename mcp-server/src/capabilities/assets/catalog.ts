@@ -12,6 +12,18 @@ import type {
   AssetTrustTier,
 } from "./types.js";
 
+/**
+ * The free, human-browsable asset store, used ONLY as the fallback provenance link on a compact
+ * record that names no `provider.url` / `source.url` of its own.
+ *
+ * This is a BROWSE link, not an endpoint: nothing fetches it, and it is not where the catalog
+ * layer looks for data. The catalog endpoint stays configuration (`--catalog-api` / `--catalog` /
+ * `LOOMBRIDGE_ASSET_CATALOG_URL`), and with none of those set the catalog layer refuses by name
+ * rather than reaching for a default. Keep those two roles separate: making this a fetch target
+ * would re-introduce exactly the baked-in deployment the boundary guards exist to prevent.
+ */
+export const ASSET_STORE_URL = "https://assetstore.loomtide.ai/";
+
 export interface AssetCatalogValidationIssue {
   code:
     | "MISSING_FIELD"
@@ -144,10 +156,11 @@ function normalizeProvider(input: UnknownRecord): AssetCatalogRecord["provider"]
   return {
     name: stringValue(provider.name) ?? providerId ?? "",
     // A BROWSE link recording where a compact record came from, and required non-empty by
-    // `validateCatalogRecord`. It is deliberately a deep `/tree/main/catalog/` path, and the
-    // endpoint guard allowlists only that exact prefix: a repo-root GitHub prefix used to be
-    // allowlisted, which permitted the exact private-mirror DEFAULT the guard exists to prevent.
-    url: stringValue(provider.url) ?? (providerId ? `https://github.com/Loomtide/LoomtideAssetRegistry/tree/main/catalog/providers/${providerId}.json` : ""),
+    // `validateCatalogRecord`. It is the human web store's ROOT, never a deep path: the store
+    // serves 200 at `/` and 404 on every `/providers/<id>` shape, so a deep link would be a
+    // dead provenance URL. This used to default to a GitHub mirror that is not public, which
+    // pointed every open-build consumer at a repo they cannot read.
+    url: stringValue(provider.url) ?? (providerId ? ASSET_STORE_URL : ""),
     type: stringValue(provider.type) as AssetCatalogRecord["provider"]["type"],
     acquisitionLane: stringValue(provider.acquisitionLane) as AssetAcquisitionLane | undefined,
     termsNotes: stringValue(provider.termsNotes),
@@ -159,12 +172,12 @@ function normalizeSource(input: UnknownRecord): AssetCatalogRecord["source"] {
   const sourceId = stringValue(input.sourceId);
   const review = isObject(input.review) ? input.review : {};
   const verifiedAt = stringValue(review.verifiedAt) ?? "";
-  const origin = sourceId ? `Loomtide/LoomtideAssetRegistry:${sourceId}` : "";
+  const origin = sourceId ? `loomtide-asset-store:${sourceId}` : "";
   const fixture = firstString(input.localPath, input.githubRawUrl, input.relativePath, input.id) ?? "";
   return {
     title: stringValue(source.title) ?? titleFromInput(input) ?? "",
     // As in `normalizeProvider`: a browse link, never an endpoint.
-    url: stringValue(source.url) ?? (sourceId ? `https://github.com/Loomtide/LoomtideAssetRegistry/tree/main/catalog/sources/${sourceId}.json` : ""),
+    url: stringValue(source.url) ?? (sourceId ? ASSET_STORE_URL : ""),
     downloadPage: stringValue(source.downloadPage),
     author: stringValue(source.author) ?? stringValue(input.providerId) ?? "",
     verified: typeof source.verified === "boolean" ? source.verified : stringValue(review.status) === "verified" ? true : undefined,

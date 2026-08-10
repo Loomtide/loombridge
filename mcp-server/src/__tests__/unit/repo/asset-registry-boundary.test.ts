@@ -1133,12 +1133,14 @@ const URL_RE = /https?:\/\/[^\s"'`)\\<>]+/g;
  * they are schema `$id`s, a licence URL, doc pointers, and the report renderer's font hosts.
  *
  * `https://github.com/Loomtide/` used to be here as a WHOLE-ORG prefix, which permitted the exact
- * default this guard exists to prevent: the historical bad default WAS a private GitHub mirror
- * (`Loomtide/LoomtideAssetRegistry`), and a live fallback of that shape passed both halves of the
- * guard. The two GitHub entries are now deep, specific paths: the public repo's docs tree, and the
- * `/tree/main/catalog/` BROWSE path a compact catalog record cites as provenance (a GitHub HTML
- * page, not a fetchable catalog). The load-bearing half of this property is behavioural and lives
- * at the bottom of this file: the real resolver must refuse with nothing configured.
+ * default this guard exists to prevent: the historical bad default WAS a GitHub mirror repo that
+ * is not public, and a live fallback of that shape passed both halves of the guard. NO GitHub
+ * mirror prefix is allowlisted any more, so any such URL is now a finding by construction.
+ *
+ * The provenance BROWSE link a compact catalog record falls back to is the human asset store's
+ * ROOT (`ASSET_STORE_URL` in `capabilities/assets/catalog.ts`): an HTML page a person opens, never
+ * a fetchable catalog. The load-bearing half of this property is behavioural and lives at the
+ * bottom of this file: the real resolver must refuse with nothing configured.
  */
 const ALLOWED_URL_PREFIXES = [
   "http://json-schema.org/",
@@ -1146,10 +1148,16 @@ const ALLOWED_URL_PREFIXES = [
   "https://loombridge.dev/schemas/",
   "https://creativecommons.org/",
   "https://github.com/Loomtide/loombridge/blob/",
-  "https://github.com/Loomtide/LoomtideAssetRegistry/tree/main/catalog/",
   "https://fonts.googleapis.com",
   "https://fonts.gstatic.com",
 ];
+/**
+ * Allowed WHOLE, not as a prefix. The asset store's root is a browse link; every path UNDER it is
+ * an API shape (`/v1/assets/search`), so admitting it as a prefix would allowlist the very thing
+ * this guard exists to refuse: a baked-in catalog endpoint. Exact match keeps the browse link and
+ * refuses the endpoint. The LITMUS below plants a deep store path and requires it to be reported.
+ */
+const ALLOWED_EXACT_URLS = new Set(["https://assetstore.loomtide.ai/"]);
 /**
  * Deployment hostnames, refused even if some future edit allowlists one. Endpoints are
  * CONFIGURATION, named by env var or flag; baking one in couples the OSS product to one
@@ -1168,7 +1176,10 @@ export function hardcodedEndpointFindings(srcRoot: string, readFile: ReadFile = 
       const url = m[0];
       if (DEPLOYMENT_HOST_RE.test(url)) {
         findings.push(`${rel}: deployment host ${url}`);
-      } else if (!ALLOWED_URL_PREFIXES.some((prefix) => url.startsWith(prefix))) {
+      } else if (
+        !ALLOWED_EXACT_URLS.has(url) &&
+        !ALLOWED_URL_PREFIXES.some((prefix) => url.startsWith(prefix))
+      ) {
         findings.push(`${rel}: unallowlisted URL ${url}`);
       }
     }
@@ -1192,8 +1203,12 @@ test("asset boundary LITMUS: a hardcoded endpoint is reported", () => {
     "deployment default": `const D = "https://${["asset-api", "example", "up", "railway", "app"].join(".")}/v1/assets";`,
     "serverless deployment": `const D = "https://${["catalog", "example", "a", "run", "app"].join(".")}/v1";`,
     "unallowlisted host": `const D = "https://catalog.example.com/v1/assets";`,
-    "private GitHub mirror": `const D = "https://github.com/Loomtide/LoomtideAssetRegistry/raw/main/catalog";`,
+    "non-public GitHub mirror": `const D = "https://github.com/example-org/private-asset-mirror/raw/main/catalog";`,
     "brand catalog host": `const D = "https://${["catalog", "loomtide", "ai"].join(".")}/v1/catalog/public/x";`,
+    // The asset store ROOT is allowlisted as a browse link. A PATH under it is an endpoint, and
+    // must still be reported: this is what makes `ALLOWED_EXACT_URLS` non-vacuous, and it is the
+    // cheapest way to turn a browse link back into a baked-in deployment.
+    "deep path under the asset store": `const D = "https://${["assetstore", "loomtide", "ai"].join(".")}/v1/assets/search";`,
   };
   for (const [shape, source] of Object.entries(shapes)) {
     const findings = hardcodedEndpointFindings(SRC, (p) => (p === planted ? source : readFromDisk(p)));

@@ -130,11 +130,18 @@ function hostIsPrivate(value: string): boolean {
 }
 
 /**
- * A path/url that LOOKS like a private mirror reference even if it parses as a url —
- * e.g. an http(s) url whose path embeds the private registry repo.
+ * A path/url that LOOKS like a private mirror reference even if it parses as a url, e.g. an
+ * http(s) url on a PUBLIC host whose path embeds the non-public registry repo.
+ *
+ * Matches the repo slug alone, deliberately, and not `<org>/<repo>`. The previous pattern was
+ * `Loombridge/LoomtideAssetRegistry`, and the owning org is `Loomtide`: the org segment was
+ * misspelled, so this branch could never fire on the path it exists to catch. It looked green
+ * only because every case the tests exercised was on `raw.githubusercontent.com`, which
+ * `hostIsPrivate` rejects first. Matching the slug alone fixes the typo and stops the check
+ * depending on which org happens to own the mirror.
  */
 function looksLikePrivateMirrorPath(value: string): boolean {
-  return /Loombridge\/LoomtideAssetRegistry/i.test(value);
+  return /LoomtideAssetRegistry/i.test(value);
 }
 
 function publicFileUrl(file: AssetFile): string | undefined {

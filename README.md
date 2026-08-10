@@ -1,6 +1,6 @@
 # Loombridge
 
-### Agent layer to build and verify games in Unity. It supports recording the game play once and replaying deterministicaly so you can automate regressions. You can also snapshot game feel and verify the drift in tuniung via replay. It generates reports of viauls and feel issues. ###
+### Agent layer to build and verify games in Unity. It supports recording the gameplay once and replaying it deterministically so you can automate regressions. You can also snapshot game feel and verify tuning drift via replay. It generates reports of visual and feel issues. ###
 
 
 [![CI](https://github.com/Loomtide/loombridge/actions/workflows/ci.yml/badge.svg)](https://github.com/Loomtide/loombridge/actions/workflows/ci.yml)
