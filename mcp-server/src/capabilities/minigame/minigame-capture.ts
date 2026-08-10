@@ -772,7 +772,7 @@ export async function runCapture(argv: string[], root: string = process.cwd()): 
   } catch (error) {
     console.error(
       `[loombridge minigame] capture: could not load trace '${traceId}' under ${rel(root, parsed.traceRoot)}: ${message(error)} ` +
-        "(record one first with `loombridge trace record --observe`).",
+        "(record one first with `loombridge trace record`).",
     );
     return 2;
   }

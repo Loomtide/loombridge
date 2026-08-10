@@ -13,10 +13,13 @@ import {
   parseStateSignal,
   readEnter,
   replayExitCode,
+  resolveAutoStateSignal,
   run,
+  traceIdFromScenePath,
 } from "../../../../capabilities/replay/trace.js";
 import { loadTraceBaselineManifest } from "../../../../capabilities/replay/trace-baseline-manifest.js";
 import { flatReplayLayout, standardReplayLayout } from "../../../../domain/state.js";
+import type { ReplayLiveClient } from "../../../../capabilities/replay/run-live.js";
 import type { ReplayRunArtifact } from "../../../../capabilities/replay/types.js";
 
 test("parseStateSignal: <path>:<Component>:<property> → meta shape", () => {
@@ -186,10 +189,6 @@ test("trace replay-all: a bad trace does NOT abort the fleet — the roll-up is 
 
 // `record` arg validation — these reject before any connect/bridge call.
 
-test("trace record: without --observe → usage error (exit 2)", async () => {
-  assert.equal(await run(["record", "--id", "x", "--scene", "Assets/S.unity"]), 2);
-});
-
 test("trace record: a malformed --scene (non-asset path) → usage error (exit 2)", async () => {
   // `--scene` is now OPTIONAL (omitted ⇒ the recorder resolves the active scene), but a GIVEN value must
   // be a real Assets/**.unity path — a bare name / traversal is still a usage error before any connect.
@@ -211,6 +210,338 @@ test("trace record: readEnter refuses a non-TTY stdin (would hang holding Play M
   // point at --duration rather than wait forever for an Enter that can't come.
   assert.equal(process.stdin.isTTY, undefined);
   await assert.rejects(() => readEnter("prompt"), /not a TTY.*--duration/s);
+});
+
+// ─────────────── `trace record` ergonomics: no required flags, derived id, auto signal ───────────────
+//
+// These drive the WHOLE verb (argv → runRecord → the real observeRecordLive/recordObservedTrace
+// → the real id derivation and trace write) against a scripted bridge injected through the
+// existing `clientFactory` door. No Unity editor is involved, and nothing here re-implements
+// the behaviour it is checking: every assertion reads a file the production code wrote or a
+// bridge param the production code sent.
+
+interface RecordedCall {
+  command: string;
+  params: Record<string, unknown>;
+}
+
+/** The one gesture the observer "saw", so the transform has something real to build from. */
+const ONE_CLICK = [{ tMs: 0, locator: { path: "/HUD/Start" }, button: 0, kind: "ui" }];
+
+/**
+ * A scripted bridge that answers a whole observe-recording: active-scene resolution, the
+ * reset cycle (defaulted), observe_start/observe_stop, teardown. Returns the `clientFactory`
+ * the trace verb already accepts, plus the call log.
+ */
+function recordBridge(
+  over: Record<string, (params: Record<string, unknown>) => { data?: unknown; error?: string }> = {},
+): { factory: () => ReplayLiveClient; calls: RecordedCall[] } {
+  const calls: RecordedCall[] = [];
+  const handlers = {
+    "scene.get_active": () => ({
+      data: { scene_name: "KidsChef", scene_path: "Assets/Scenes/KidsChef.unity", is_saved: true },
+    }),
+    "input.observe_stop": () => ({ data: { clicks: ONE_CLICK, observed: true } }),
+    ...over,
+  } as Record<string, (params: Record<string, unknown>) => { data?: unknown; error?: string }>;
+  const send = async (command: string, params: Record<string, unknown>) => {
+    calls.push({ command, params });
+    const result = (handlers[command] ?? (() => ({ data: {} })))(params);
+    if (result.error !== undefined) {
+      return {
+        id: "t",
+        timestamp: 0,
+        status: "error" as const,
+        data: null,
+        error: { code: "X", message: result.error },
+      };
+    }
+    return { id: "t", timestamp: 0, status: "success" as const, data: result.data ?? {} };
+  };
+  const factory = (): ReplayLiveClient => ({
+    isConnected: true,
+    waitForReconnect: async () => true,
+    connect: async () => ({}),
+    send,
+    disconnect: async () => {},
+  });
+  return { factory, calls };
+}
+
+/** Run the verb with stderr captured (the derived-id notices are printed there). */
+async function capturedRun(
+  argv: string[],
+  opts: Parameters<typeof run>[1],
+): Promise<{ exit: number; err: string }> {
+  const original = console.error;
+  let err = "";
+  console.error = (...parts: unknown[]) => {
+    err += `${parts.map(String).join(" ")}\n`;
+  };
+  try {
+    const exit = await run(argv, opts);
+    return { exit, err };
+  } finally {
+    console.error = original;
+  }
+}
+
+async function recordRoot(): Promise<string> {
+  return await fs.mkdtemp(path.join(os.tmpdir(), "trace-record-"));
+}
+
+function tracesDir(root: string): string {
+  return standardReplayLayout(root).replayTraces;
+}
+
+test("trace record: BARE `trace record` records; neither --observe nor --id is required", async () => {
+  // LITMUS: restore the `if (!observe) { … return usageError }` refusal in parseArgs (or the
+  // `sub !== "record"` exemption on the --id requirement) and this exits 2 with no trace on
+  // disk. Verified by doing exactly that against this test: it failed on `exit 2`, then passed
+  // once the refusals were removed again.
+  const root = await recordRoot();
+  try {
+    const { factory } = recordBridge();
+    const { exit, err } = await capturedRun(
+      ["record", "--root", root, "--duration", "0.01"],
+      { clientFactory: factory },
+    );
+    assert.equal(exit, 0, err);
+    const written = JSON.parse(
+      await fs.readFile(path.join(tracesDir(root), "kids-chef.trace.json"), "utf8"),
+    ) as { id: string; start: { scene: string } };
+    assert.equal(written.id, "kids-chef", "the id is derived from the RESOLVED scene");
+    assert.equal(written.start.scene, "Assets/Scenes/KidsChef.unity");
+    assert.match(err, /no --id given, recording as "kids-chef"/);
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test("trace record: --observe is still accepted and changes nothing (byte-identical trace)", async () => {
+  const bare = await recordRoot();
+  const legacy = await recordRoot();
+  try {
+    const withoutFlag = await capturedRun(["record", "--root", bare, "--duration", "0.01"], {
+      clientFactory: recordBridge().factory,
+    });
+    const withFlag = await capturedRun(
+      ["record", "--observe", "--root", legacy, "--duration", "0.01"],
+      { clientFactory: recordBridge().factory },
+    );
+    assert.equal(withoutFlag.exit, 0, withoutFlag.err);
+    assert.equal(withFlag.exit, 0, withFlag.err);
+    assert.equal(
+      await fs.readFile(path.join(tracesDir(legacy), "kids-chef.trace.json"), "utf8"),
+      await fs.readFile(path.join(tracesDir(bare), "kids-chef.trace.json"), "utf8"),
+      "the legacy flag selects nothing, so it must produce the same trace",
+    );
+  } finally {
+    await fs.rm(bare, { recursive: true, force: true });
+    await fs.rm(legacy, { recursive: true, force: true });
+  }
+});
+
+test("traceIdFromScenePath: basename without .unity, kebab-cased; unusable names refuse (null)", () => {
+  // LITMUS: drop the refusal (`return id;`) and both this and the CLI-level refusal test below
+  // fail: the derivation hands back an empty id and the recording would write ".trace.json".
+  // Verified by doing exactly that.
+  //
+  // A SECOND LITMUS covers the CamelCase rule: delete either boundary replace and a row here
+  // fails. Dropping `([a-z0-9])([A-Z])` gives "kidschef"; dropping `([A-Z]+)([A-Z][a-z])`
+  // gives "hudtest". Verified by doing exactly that, one at a time.
+
+  // A CamelCase hump is a word boundary: Unity scene names are conventionally PascalCase, and
+  // this id becomes a filename, a baseline directory and a fleet row.
+  assert.equal(traceIdFromScenePath("Assets/Scenes/KidsChef.unity"), "kids-chef");
+  assert.equal(traceIdFromScenePath("Assets/Scenes/CountTheFruits.unity"), "count-the-fruits");
+  assert.equal(traceIdFromScenePath("Assets/Scenes/Level2Boss.unity"), "level2-boss");
+  // An acronym run stays one word until a real word starts (never h-u-d-test, never hudtest).
+  assert.equal(traceIdFromScenePath("Assets/Scenes/HUDTest.unity"), "hud-test");
+  assert.equal(traceIdFromScenePath("Assets/Scenes/TestHUD.unity"), "test-hud");
+  assert.equal(traceIdFromScenePath("Assets/Scenes/MyHUD2Test.unity"), "my-hud2-test");
+  // Stated separators still split, and an already-kebab name survives byte for byte (no
+  // doubled hyphens, no leading/trailing hyphen).
+  assert.equal(traceIdFromScenePath("Assets/Scenes/Count The Fruits.unity"), "count-the-fruits");
+  assert.equal(traceIdFromScenePath("Assets/Scenes/Count_The_Fruits.unity"), "count-the-fruits");
+  assert.equal(traceIdFromScenePath("Assets/Scenes/count-the-fruits.unity"), "count-the-fruits");
+  assert.equal(traceIdFromScenePath("Assets/Scenes/Kids-Chef.unity"), "kids-chef");
+  assert.equal(traceIdFromScenePath("Assets/Levels/Level 01.unity"), "level-01");
+  // A digit run inside one word is NOT a boundary (only lower-or-digit → UPPER is).
+  assert.equal(traceIdFromScenePath("Assets/Scenes/Scene01.unity"), "scene01");
+  // Nothing usable survives ⇒ null, so the caller asks for an explicit --id rather than
+  // inventing a generic name nobody chose.
+  assert.equal(traceIdFromScenePath("Assets/Scenes/___.unity"), null);
+  assert.equal(traceIdFromScenePath("Assets/Scenes/シーン.unity"), null);
+});
+
+test("trace record: a scene whose name yields no safe id REFUSES and names --id (no generic fallback)", async () => {
+  const root = await recordRoot();
+  try {
+    const { factory } = recordBridge({
+      "scene.get_active": () => ({
+        data: { scene_name: "___", scene_path: "Assets/Scenes/___.unity", is_saved: true },
+      }),
+    });
+    const { exit, err } = await capturedRun(["record", "--root", root, "--duration", "0.01"], {
+      clientFactory: factory,
+    });
+    assert.notEqual(exit, 0);
+    assert.match(err, /cannot derive a trace id.*Pass --id <name>/s);
+    assert.deepEqual(
+      await fs.readdir(tracesDir(root)).catch(() => []),
+      [],
+      "a refused derivation writes no trace at all",
+    );
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test("trace record: a DERIVED id never overwrites; it lands at <id>-2 and the original is untouched", async () => {
+  // LITMUS: delete the suffixing loop in `deriveRecordId` (return `base` straight) and this
+  // fails on the byte comparison: the pre-existing trace comes back rewritten. Verified by
+  // doing exactly that: the run overwrote kids-chef.trace.json and the assertion caught it.
+  const root = await recordRoot();
+  try {
+    await fs.mkdir(tracesDir(root), { recursive: true });
+    const original = path.join(tracesDir(root), "kids-chef.trace.json");
+    const originalBytes = '{"this":"is someone else\'s recording"}\n';
+    await fs.writeFile(original, originalBytes, "utf8");
+
+    const { exit, err } = await capturedRun(["record", "--root", root, "--duration", "0.01"], {
+      clientFactory: recordBridge().factory,
+    });
+    assert.equal(exit, 0, err);
+
+    assert.equal(
+      await fs.readFile(original, "utf8"),
+      originalBytes,
+      "the existing trace must be byte-identical afterwards",
+    );
+    const second = JSON.parse(
+      await fs.readFile(path.join(tracesDir(root), "kids-chef-2.trace.json"), "utf8"),
+    ) as { id: string };
+    assert.equal(second.id, "kids-chef-2", "the trace's own id matches the file it landed in");
+    assert.match(err, /recording as "kids-chef-2"/);
+    assert.match(err, /re-record it with: --id kids-chef\b/, "it says how to re-record the original");
+
+    // And a THIRD recording keeps counting rather than stopping at -2.
+    const third = await capturedRun(["record", "--root", root, "--duration", "0.01"], {
+      clientFactory: recordBridge().factory,
+    });
+    assert.equal(third.exit, 0, third.err);
+    assert.ok(
+      await fs.stat(path.join(tracesDir(root), "kids-chef-3.trace.json")).then(() => true),
+      "the suffix keeps climbing",
+    );
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test("trace record: an EXPLICIT --id still overwrites (unchanged) and is never suffixed", async () => {
+  const root = await recordRoot();
+  try {
+    await fs.mkdir(tracesDir(root), { recursive: true });
+    const target = path.join(tracesDir(root), "happy-path.trace.json");
+    await fs.writeFile(target, '{"stale":true}\n', "utf8");
+
+    const { exit, err } = await capturedRun(
+      ["record", "--id", "happy-path", "--root", root, "--duration", "0.01"],
+      { clientFactory: recordBridge().factory },
+    );
+    assert.equal(exit, 0, err);
+    const written = JSON.parse(await fs.readFile(target, "utf8")) as { id: string };
+    assert.equal(written.id, "happy-path", "the named trace was re-recorded in place");
+    assert.deepEqual(
+      (await fs.readdir(tracesDir(root))).sort(),
+      ["happy-path.trace.json"],
+      "an explicit id never grows a -2 sibling",
+    );
+    assert.doesNotMatch(err, /no --id given/, "the derivation path is inert when --id was typed");
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+// --- auto state-signal precedence (the pure table, then the same table through the CLI) ---
+
+test("resolveAutoStateSignal: the four rows of the precedence table", () => {
+  // LITMUS: make the default win over a declaration (`if (flag !== undefined) return flag;
+  // return true;`) and row 2 fails. Verified by doing exactly that.
+  assert.equal(resolveAutoStateSignal(undefined, false), true, "neither typed ⇒ ON (the new default)");
+  assert.equal(resolveAutoStateSignal(undefined, true), false, "--state-signal alone ⇒ the declaration wins");
+  assert.equal(resolveAutoStateSignal(true, true), true, "--auto-state-signal still beats --state-signal");
+  assert.equal(resolveAutoStateSignal(true, false), true, "--auto-state-signal alone ⇒ ON");
+  assert.equal(resolveAutoStateSignal(false, false), false, "--no-auto-state-signal ⇒ OFF");
+  assert.equal(resolveAutoStateSignal(false, true), false, "--no-auto-state-signal ⇒ OFF even with a declaration");
+});
+
+/**
+ * Drive a real recording and report what `input.observe_start` was actually asked for. This
+ * is the wiring half of the table: the resolver above could be perfect and still not reach
+ * the bridge.
+ */
+async function observeStartParams(extraArgs: string[]): Promise<Record<string, unknown>> {
+  const root = await recordRoot();
+  try {
+    const { factory, calls } = recordBridge();
+    const { exit, err } = await capturedRun(
+      ["record", "--root", root, "--duration", "0.01", ...extraArgs],
+      { clientFactory: factory },
+    );
+    assert.equal(exit, 0, err);
+    const start = calls.find((c) => c.command === "input.observe_start");
+    assert.ok(start, "the recording never started observing");
+    return start.params;
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+}
+
+test("trace record precedence (wired): nothing typed ⇒ auto-detection ON", async () => {
+  const params = await observeStartParams([]);
+  assert.equal(params.autoDetectStateSignal, true);
+});
+
+test("trace record precedence (wired): --state-signal alone ⇒ the declared signal wins, auto OFF", async () => {
+  // LITMUS: default the flag to `true` instead of `!hasDeclaredStateSignal` and this fails:
+  // the declared signal disappears from observe_start and autoDetectStateSignal shows up.
+  const params = await observeStartParams(["--state-signal", "/Canvas/GM:ChefGameManager:phase"]);
+  assert.equal("autoDetectStateSignal" in params, false, "a default must never beat a declaration");
+  assert.deepEqual(params.stateSignal, {
+    path: "/Canvas/GM",
+    component: "ChefGameManager",
+    property: "phase",
+  });
+});
+
+test("trace record precedence (wired): --auto-state-signal wins even alongside --state-signal", async () => {
+  const params = await observeStartParams([
+    "--auto-state-signal",
+    "--state-signal",
+    "/Canvas/GM:ChefGameManager:phase",
+  ]);
+  assert.equal(params.autoDetectStateSignal, true, "the documented precedence is preserved");
+  assert.equal("stateSignal" in params, false, "the two modes stay exclusive");
+});
+
+test("trace record precedence (wired): --no-auto-state-signal forces auto OFF", async () => {
+  const bare = await observeStartParams(["--no-auto-state-signal"]);
+  assert.deepEqual(bare, {}, "the explicit opt out leaves observe_start with no signal at all");
+
+  const declared = await observeStartParams([
+    "--no-auto-state-signal",
+    "--state-signal",
+    "/Canvas/GM:ChefGameManager:phase",
+  ]);
+  assert.equal("autoDetectStateSignal" in declared, false);
+  assert.deepEqual(declared.stateSignal, {
+    path: "/Canvas/GM",
+    component: "ChefGameManager",
+    property: "phase",
+  });
 });
 
 test("discoverTraces: only *.trace.json with safe ids, sorted; missing dir → []", async () => {

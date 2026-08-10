@@ -75,7 +75,7 @@ function printUsage(): void {
       "               Modes (see `verify --help`): --snapshot grades feel drift against the",
       "               approved snapshot; --minigame grades a screen-contract capture pack",
       "               (exit 0/1/2); --profile is DIAGNOSTIC feel grading, never gating.",
-      "  trace      Record once, replay deterministically: `trace record --observe` captures",
+      "  trace      Record once, replay deterministically: `trace record` captures",
       "               a human demonstration; `trace replay --id <id>` re-drives it against",
       "               the editor and pixel-diffs frames vs the approved baseline.",
       "  feel       Tuning snapshot: `feel snapshot <capture|approve|status>` freezes the game's",

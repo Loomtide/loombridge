@@ -32,7 +32,7 @@ loombridge verify --root . --only screens # ONE section (CI granularity); never 
   baseline** (a contract graded against captures of itself is not a human anchor: run
   `loombridge minigame baseline approve`), a baseline approved for a *different* project: each
   is a visible row that cannot contribute a pass.
-- **No assets at all** prints the on-ramp (`trace record --observe` → `trace replay` →
+- **No assets at all** prints the on-ramp (`trace record` → `trace replay` →
   `trace approve`, then `verify --live`) and exits `2`. Recording is a **human** step: the play
   session *is* the approval moment. Do not claim it as an agent action.
 - **Pixel drift can be TOLERATED, only by a human, only up to 2%.** A game that animates
@@ -441,7 +441,7 @@ loombridge minigame check --scene Assets/Scenes/MyGame.unity --id my-game
 - `minigame scan --scene <Assets/...unity>` proposes a DRAFT contract from the scene's visible controls /
   text / backgrounds. It is a proposal the developer reviews — derived data feeds the contract, never the
   verdict.
-- A demonstration (`loombridge trace record --observe`) establishes the flow / state ordering.
+- A demonstration (`loombridge trace record`) establishes the flow / state ordering.
 - `minigame sync --scene <…>` re-scans on later scene changes and proposes structural migrations; it is
   dry-run by default and writes only with `--apply` (and `--add`/`--remove`). It refuses a removal that would
   empty a state's bindings.

@@ -286,7 +286,7 @@
       "type": "object",
       "additionalProperties": false,
       "required": ["locator", "property"],
-      "description": "OPTIONAL declared game state-signal that `minigame next` threads into the printed `trace record --observe` command (--state-signal <path>:<Component>:<property>) so a multi-screen/gesture game can phase-align each gesture on the game's phase. `locator` is a BARE hierarchy path: NO scene prefix and NO ':' (the CLI parses --state-signal on ':').",
+      "description": "OPTIONAL declared game state-signal that `minigame next` threads into the printed `trace record` command (--state-signal <path>:<Component>:<property>) so a multi-screen/gesture game can phase-align each gesture on the game's phase. `locator` is a BARE hierarchy path: NO scene prefix and NO ':' (the CLI parses --state-signal on ':').",
       "properties": {
         "locator": {
           "type": "string",

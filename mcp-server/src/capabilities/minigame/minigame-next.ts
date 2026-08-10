@@ -96,12 +96,14 @@ function commandsFor(f: WorkspaceFacts): Record<Exclude<NextStepAt, "done">, str
   // is bare (no scene prefix / no `:`, enforced by the validator); an absent component → `path::property`.
   // With NO declared signal, fall back to live per-scene auto-detection: the scan only sees the
   // scanned scene, so a hub-to-game recording would otherwise carry no phase gates and capture
-  // races activation animations ("visible" is not "consumable").
+  // races activation animations ("visible" is not "consumable"). The flag now RESTATES the
+  // CLI default rather than switching anything on, and is kept so the printed command still
+  // says out loud which gating the workspace expects.
   const stateSignalFlag = f.stateSignal
     ? ` --state-signal ${f.stateSignal.locator}:${f.stateSignal.component ?? ""}:${f.stateSignal.property}`
     : " --auto-state-signal";
   return {
-    record: `loombridge trace record --observe --flat --id ${traceId} --scene ${f.scene} --root ${ws}${stateSignalFlag}`,
+    record: `loombridge trace record --flat --id ${traceId} --scene ${f.scene} --root ${ws}${stateSignalFlag}`,
     capture: `loombridge minigame capture --contract ${contract} --trace-root ${ws} --captures ${captures}`,
     finalize: `loombridge minigame finalize --contract ${contract} --captures ${captures} --trace-root ${ws}${backgroundFlag}`,
     fix: `loombridge minigame capture --contract ${contract} --trace-root ${ws} --captures ${captures}`,

@@ -1265,7 +1265,7 @@ function printUsage(): void {
       "",
       "  --contract <path>   The draft .minigame.json from `minigame setup` (required).",
       "  --captures <dir>    The capture pack (<state>.ui-rects.json per screen; required).",
-      "  --trace-root <dir>  Replay root from `trace record --observe` (optional hint).",
+      "  --trace-root <dir>  Replay root from `trace record` (optional hint).",
       "  --output <path>     Write here instead of in place.",
       "  --outcome-gated <a,b>  Mark state(s) whose outcome a READ-ONLY verifier can't drive",
       "                      (a win/reward gated by correct answers on a re-randomizing game).",
