@@ -308,11 +308,11 @@ test("trace record: BARE `trace record` records; neither --observe nor --id is r
     );
     assert.equal(exit, 0, err);
     const written = JSON.parse(
-      await fs.readFile(path.join(tracesDir(root), "kidschef.trace.json"), "utf8"),
+      await fs.readFile(path.join(tracesDir(root), "kids-chef.trace.json"), "utf8"),
     ) as { id: string; start: { scene: string } };
-    assert.equal(written.id, "kidschef", "the id is derived from the RESOLVED scene");
+    assert.equal(written.id, "kids-chef", "the id is derived from the RESOLVED scene");
     assert.equal(written.start.scene, "Assets/Scenes/KidsChef.unity");
-    assert.match(err, /no --id given, recording as "kidschef"/);
+    assert.match(err, /no --id given, recording as "kids-chef"/);
   } finally {
     await fs.rm(root, { recursive: true, force: true });
   }
@@ -332,8 +332,8 @@ test("trace record: --observe is still accepted and changes nothing (byte-identi
     assert.equal(withoutFlag.exit, 0, withoutFlag.err);
     assert.equal(withFlag.exit, 0, withFlag.err);
     assert.equal(
-      await fs.readFile(path.join(tracesDir(legacy), "kidschef.trace.json"), "utf8"),
-      await fs.readFile(path.join(tracesDir(bare), "kidschef.trace.json"), "utf8"),
+      await fs.readFile(path.join(tracesDir(legacy), "kids-chef.trace.json"), "utf8"),
+      await fs.readFile(path.join(tracesDir(bare), "kids-chef.trace.json"), "utf8"),
       "the legacy flag selects nothing, so it must produce the same trace",
     );
   } finally {
@@ -346,11 +346,29 @@ test("traceIdFromScenePath: basename without .unity, kebab-cased; unusable names
   // LITMUS: drop the refusal (`return id;`) and both this and the CLI-level refusal test below
   // fail: the derivation hands back an empty id and the recording would write ".trace.json".
   // Verified by doing exactly that.
-  assert.equal(traceIdFromScenePath("Assets/Scenes/KidsChef.unity"), "kidschef");
+  //
+  // A SECOND LITMUS covers the CamelCase rule: delete either boundary replace and a row here
+  // fails. Dropping `([a-z0-9])([A-Z])` gives "kidschef"; dropping `([A-Z]+)([A-Z][a-z])`
+  // gives "hudtest". Verified by doing exactly that, one at a time.
+
+  // A CamelCase hump is a word boundary: Unity scene names are conventionally PascalCase, and
+  // this id becomes a filename, a baseline directory and a fleet row.
+  assert.equal(traceIdFromScenePath("Assets/Scenes/KidsChef.unity"), "kids-chef");
+  assert.equal(traceIdFromScenePath("Assets/Scenes/CountTheFruits.unity"), "count-the-fruits");
+  assert.equal(traceIdFromScenePath("Assets/Scenes/Level2Boss.unity"), "level2-boss");
+  // An acronym run stays one word until a real word starts (never h-u-d-test, never hudtest).
+  assert.equal(traceIdFromScenePath("Assets/Scenes/HUDTest.unity"), "hud-test");
+  assert.equal(traceIdFromScenePath("Assets/Scenes/TestHUD.unity"), "test-hud");
+  assert.equal(traceIdFromScenePath("Assets/Scenes/MyHUD2Test.unity"), "my-hud2-test");
+  // Stated separators still split, and an already-kebab name survives byte for byte (no
+  // doubled hyphens, no leading/trailing hyphen).
   assert.equal(traceIdFromScenePath("Assets/Scenes/Count The Fruits.unity"), "count-the-fruits");
   assert.equal(traceIdFromScenePath("Assets/Scenes/Count_The_Fruits.unity"), "count-the-fruits");
   assert.equal(traceIdFromScenePath("Assets/Scenes/count-the-fruits.unity"), "count-the-fruits");
+  assert.equal(traceIdFromScenePath("Assets/Scenes/Kids-Chef.unity"), "kids-chef");
   assert.equal(traceIdFromScenePath("Assets/Levels/Level 01.unity"), "level-01");
+  // A digit run inside one word is NOT a boundary (only lower-or-digit → UPPER is).
+  assert.equal(traceIdFromScenePath("Assets/Scenes/Scene01.unity"), "scene01");
   // Nothing usable survives ⇒ null, so the caller asks for an explicit --id rather than
   // inventing a generic name nobody chose.
   assert.equal(traceIdFromScenePath("Assets/Scenes/___.unity"), null);
@@ -383,11 +401,11 @@ test("trace record: a scene whose name yields no safe id REFUSES and names --id 
 test("trace record: a DERIVED id never overwrites; it lands at <id>-2 and the original is untouched", async () => {
   // LITMUS: delete the suffixing loop in `deriveRecordId` (return `base` straight) and this
   // fails on the byte comparison: the pre-existing trace comes back rewritten. Verified by
-  // doing exactly that: the run overwrote kidschef.trace.json and the assertion caught it.
+  // doing exactly that: the run overwrote kids-chef.trace.json and the assertion caught it.
   const root = await recordRoot();
   try {
     await fs.mkdir(tracesDir(root), { recursive: true });
-    const original = path.join(tracesDir(root), "kidschef.trace.json");
+    const original = path.join(tracesDir(root), "kids-chef.trace.json");
     const originalBytes = '{"this":"is someone else\'s recording"}\n';
     await fs.writeFile(original, originalBytes, "utf8");
 
@@ -402,11 +420,11 @@ test("trace record: a DERIVED id never overwrites; it lands at <id>-2 and the or
       "the existing trace must be byte-identical afterwards",
     );
     const second = JSON.parse(
-      await fs.readFile(path.join(tracesDir(root), "kidschef-2.trace.json"), "utf8"),
+      await fs.readFile(path.join(tracesDir(root), "kids-chef-2.trace.json"), "utf8"),
     ) as { id: string };
-    assert.equal(second.id, "kidschef-2", "the trace's own id matches the file it landed in");
-    assert.match(err, /recording as "kidschef-2"/);
-    assert.match(err, /re-record it with: --id kidschef\b/, "it says how to re-record the original");
+    assert.equal(second.id, "kids-chef-2", "the trace's own id matches the file it landed in");
+    assert.match(err, /recording as "kids-chef-2"/);
+    assert.match(err, /re-record it with: --id kids-chef\b/, "it says how to re-record the original");
 
     // And a THIRD recording keeps counting rather than stopping at -2.
     const third = await capturedRun(["record", "--root", root, "--duration", "0.01"], {
@@ -414,7 +432,7 @@ test("trace record: a DERIVED id never overwrites; it lands at <id>-2 and the or
     });
     assert.equal(third.exit, 0, third.err);
     assert.ok(
-      await fs.stat(path.join(tracesDir(root), "kidschef-3.trace.json")).then(() => true),
+      await fs.stat(path.join(tracesDir(root), "kids-chef-3.trace.json")).then(() => true),
       "the suffix keeps climbing",
     );
   } finally {

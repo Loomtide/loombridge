@@ -215,11 +215,23 @@ export function resolveAutoStateSignal(
 }
 
 /**
- * Derive a trace id from a scene path: basename without `.unity`, lower-cased, with every
- * run of non-alphanumerics turned into a single `-` (`Assets/Scenes/KidsChef.unity` →
- * `kidschef`, `Assets/Scenes/Count The Fruits.unity` → `count-the-fruits`). Word boundaries
- * are the ones the scene NAME states (spaces, underscores, punctuation); a CamelCase hump is
- * not treated as one, so `KidsChef` stays `kidschef` rather than becoming `kids-chef`.
+ * Derive a trace id from a scene path: basename without `.unity`, kebab-cased.
+ * `Assets/Scenes/KidsChef.unity` → `kids-chef`, `Assets/Scenes/CountTheFruits.unity` →
+ * `count-the-fruits`, `Assets/Scenes/HUDTest.unity` → `hud-test`.
+ *
+ * A CamelCase hump IS a word boundary, because Unity scene names are conventionally
+ * PascalCase and this id is not internal: it becomes the trace filename, the baseline
+ * directory name and a row in the fleet roll-up. Splitting only on stated separators would
+ * mint `countthefruits` and `kidsadventure` there. The goal is the id a developer would have
+ * typed by hand, which is the whole reason for deriving instead of asking.
+ *
+ * Two boundary patterns, in this order, then the separator pass:
+ *   1. lower-or-digit followed by upper (`KidsChef` → `Kids Chef`, `Level2Boss` → `Level2 Boss`)
+ *   2. an ACRONYM RUN followed by a capitalised word (`HUDTest` → `HUD Test`). Without this,
+ *      pattern 1 alone leaves `HUDTest` intact and the result is `hudtest`; splitting every
+ *      capital instead would give `h-u-d-test`. An acronym is one word until a real word starts.
+ * Everything then lower-cases, runs of non-alphanumerics collapse to a single `-`, and leading
+ * or trailing `-` is trimmed, so an already-kebab name survives byte for byte.
  *
  * Returns null when nothing usable survives (e.g. a scene named entirely in non-ASCII), so
  * the caller can REFUSE and ask for an explicit `--id`. There is deliberately no generic
@@ -231,6 +243,8 @@ export function resolveAutoStateSignal(
 export function traceIdFromScenePath(scenePath: string): string | null {
   const base = path.basename(scenePath).replace(/\.unity$/i, "");
   const id = base
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/([A-Z]+)([A-Z][a-z])/g, "$1 $2")
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
@@ -2549,9 +2563,9 @@ function printUsage(): void {
       "              (or the editor's CURRENT scene), observe your clicks/drags until you",
       "              press Enter (or --duration <sec>), and write",
       "              .loombridge/replays/traces/<id>.trace.json. Takes no required flags:",
-      "              bare `trace record` records the current scene under an id derived from",
-      "              its name (Assets/Scenes/KidsChef.unity → kidschef), and a DERIVED id",
-      "              never overwrites: an existing kidschef becomes kidschef-2, printed.",
+      "              bare `trace record` records the current scene under an id kebab-cased",
+      "              from its name (Assets/Scenes/KidsChef.unity → kids-chef), and a DERIVED",
+      "              id never overwrites: an existing kids-chef becomes kids-chef-2, printed.",
       "  replay      Drive .loombridge/replays/traces/<id>.trace.json against the running",
       "              editor and write .loombridge/replays/reports/<id>.report.{json,html},",
       "              diffing each capture against its approved baseline. --speed <1..8>",
