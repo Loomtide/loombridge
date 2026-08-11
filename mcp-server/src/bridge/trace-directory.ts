@@ -1,5 +1,6 @@
 import os from "node:os";
 import path from "node:path";
+import { LOOMBRIDGE_DIRNAME } from "../shared/loombridge-dirname.js";
 import type { McpStartupProjectBinding } from "./startup-binding.js";
 
 /** Explicit override, for harnesses and for users who want traces somewhere specific. */
@@ -32,7 +33,11 @@ export function resolveTraceDirectory(
     return override.trim();
   }
   if (binding.kind === "strict" || binding.kind === "cwd") {
-    return path.join(binding.target, ".loombridge", "replays", "traces");
+    // The dirname comes from the ONE constant. The `replays/traces` tail is spelled here
+    // rather than taken from `loombridgePaths().replayTraces` because `bridge/` may not
+    // import `domain/` (layering.test.ts). `__tests__/unit/repo/write-paths.test.ts` calls
+    // THIS function and classifies what it returns, so the tail cannot drift unwatched.
+    return path.join(binding.target, LOOMBRIDGE_DIRNAME, "replays", "traces");
   }
   return path.join(os.tmpdir(), "loombridge", "traces");
 }

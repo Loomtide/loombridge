@@ -201,8 +201,14 @@ export function absentAssetFamilies(
  * where `discoverVerificationAssets` looks, and the two lookups below are its only
  * definition: `discoverFeelSnapshotAsset` and `discoverScreenContractAsset` are the only
  * two that take a `workspace` argument.
+ *
+ * EXPORTED so `__tests__/unit/repo/write-paths.test.ts` can assert the carve-out is closed
+ * and shrinking: every kind in here is an anchor that lives outside the project and therefore
+ * cannot be committed, which is the defect ArtifactStorage S2/S3 exists to close. S3 empties
+ * this set; until then the guard pins its exact membership so a THIRD kind cannot join
+ * quietly.
  */
-const WORKSPACE_SCOPED_KINDS: ReadonlySet<DiscoveredAssetKind> = new Set<DiscoveredAssetKind>([
+export const WORKSPACE_SCOPED_KINDS: ReadonlySet<DiscoveredAssetKind> = new Set<DiscoveredAssetKind>([
   "feel-snapshot",
   "screen-contract",
 ]);

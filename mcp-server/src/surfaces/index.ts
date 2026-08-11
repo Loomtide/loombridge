@@ -79,6 +79,7 @@ import { InputSessionKeepalive } from "../bridge/input-keepalive.js";
 import { resolveBuildStamp } from "../shared/build-stamp.js";
 import { resolveTraceDirectory } from "../bridge/trace-directory.js";
 import { validateOpArguments } from "../shared/arg-validation.js";
+import { loombridgePaths } from "../domain/state.js";
 
 // ─────────────────────────────────────────────
 // Response Formatting (exported for testing)
@@ -645,7 +646,7 @@ export function resolveSafeScreenshotOutputPath(
   // The `.loombridge` and `captures` roots already admit every legitimate relative
   // path, and `..` escapes are correctly rejected by the path.relative check.
   const allowedRoots = [
-    path.resolve(resolvedCwd, ".loombridge"),
+    loombridgePaths(resolvedCwd).dir,
     path.resolve(resolvedCwd, "captures"),
     path.join(os.homedir(), "loombridge-runs"),
     path.resolve("/tmp"),

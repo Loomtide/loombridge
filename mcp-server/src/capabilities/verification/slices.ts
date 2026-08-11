@@ -819,6 +819,20 @@ export function getSliceVerifyDir(paths: LoombridgePaths, sliceId: string): stri
   return path.join(paths.verifyInputs, assertSafeSliceId(sliceId));
 }
 
+/**
+ * `.loombridge/reports/slices/<sliceId>/signoff<ext>` — the human sign-off artifact
+ * `plan --signoff` durably copies next to the slice's verdict.
+ *
+ * A slot rather than a literal join at the writer (`plan.ts` used to spell the whole
+ * `.loombridge/reports/slices/…` path itself), so the destination is derived from
+ * `paths.reports` and walked by `__tests__/unit/repo/write-paths.test.ts` like every other
+ * per-slice path here. `ext` is validated by the caller and passed through verbatim; the
+ * slice id goes through the same single-segment guard as the verdict path.
+ */
+export function getSliceSignoffPath(paths: LoombridgePaths, sliceId: string, ext: string): string {
+  return path.join(paths.reports, "slices", assertSafeSliceId(sliceId), `signoff${ext}`);
+}
+
 /** `.loombridge-fixtures/<sliceId>/` — the per-slice resumable checkpoint dir. */
 export function getSliceFixtureDir(paths: LoombridgePaths, sliceId: string): string {
   return path.join(paths.root, ".loombridge-fixtures", assertSafeSliceId(sliceId));

@@ -8,6 +8,7 @@ import {
   createUnityClientForCli,
   type UnityRoutingMetadata,
 } from "../../bridge/unity-client-resolver.js";
+import { loombridgePaths } from "../../domain/state.js";
 import { runFeelCaptureContract } from "./run.js";
 import type {
   FeelCaptureContract,
@@ -362,7 +363,7 @@ export async function runFeelCaptureLive(args: FeelCaptureLiveArgs): Promise<Fee
       (command, params, timeoutMs) => send(client, command, params, timeoutMs),
       {
         sourceRoot: args.sourceRoot,
-        traceRoot: path.join(args.root ?? path.dirname(args.contractPath), ".loombridge", "replays", "traces"),
+        traceRoot: loombridgePaths(args.root ?? path.dirname(args.contractPath)).replayTraces,
         replayCaptureDir: args.artifactsDir ? path.join(args.artifactsDir, "replay") : undefined,
         warn: (message) => warnings.push(message),
       },
