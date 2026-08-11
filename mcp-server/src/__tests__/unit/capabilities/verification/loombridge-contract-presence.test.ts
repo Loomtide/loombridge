@@ -105,7 +105,7 @@ async function scaffoldApprovedRoadmap(root: string): Promise<void> {
   await runPlan({ root, genre: "platformer-2d", engine: "unity", force: false, allowMissingDesignTarget: true });
   const image = path.join(root, "src-hero.png");
   await fs.writeFile(image, "hero", "utf-8");
-  await setDesignTarget({ root, imagePath: image, mode: "generated", approve: true });
+  await setDesignTarget({ root, imagePath: image, mode: "generated", kind: "rendered-unity-frame", approve: true });
   await writeApprovedAssetManifestForDesign(root);
   await runPlan({ root, genre: "platformer-2d", engine: "unity", force: false });
 }

@@ -89,6 +89,17 @@ Whichever backend runs, keep API keys in the environment. Never in chat, commits
 
 ## Stage 3: the fork that matters
 
+**Neither path needs Unity at plan time.** `plan`'s readiness gate checks only that the target is
+approved and still matches its freeze; it never reads the kind. So an approved
+`composition-reference` clears `plan` and `build`, and only `doneness` refuses one. You are not
+being asked to render anything in Unity before planning.
+
+**`rendered-unity-frame` is a misleading name, so read it as FINAL.** It describes what the artifact
+IS, the frame fidelity gets graded against, not where it came from. A flat 2D game's final mock is a
+`rendered-unity-frame` with no Unity involved anywhere. The question the `--kind` refusal is really
+asking is *"is this the final look, or a guide on the way to it?"*, which is a question about the
+game, not about which tool drew the image.
+
 ### 3a. Flat 2D game
 
 The generated mock IS the frozen hero shot. One stage, and `rendered-unity-frame` is correct:

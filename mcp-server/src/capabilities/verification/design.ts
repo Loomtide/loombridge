@@ -66,6 +66,17 @@ export type DesignTargetMode = "provided" | "generated" | "reference-game";
  * The 3D flow: (1) set/approve a `composition-reference`, (2) assemble the 3D
  * scene, (3) capture a real Unity frame, (4) `set --kind rendered-unity-frame
  * --approve` that frame, (5) only THEN does strict hero-shot fidelity run.
+ *
+ * NAME CAVEAT, and it misleads real users: `rendered-unity-frame` describes what the
+ * artifact IS (the final frame fidelity is graded against), NOT where it came from. A flat
+ * 2D game's final mock is a `rendered-unity-frame` with no Unity involved at all, and
+ * NEITHER kind requires an editor at plan time. `plan`'s readiness gate is
+ * `exitCodeForDesignReadiness`, which checks `approved && frozenMatches` and never reads
+ * `kind`, so an approved `composition-reference` clears `plan` and `build`; only `doneness`
+ * refuses one. Say so wherever this choice is put to a user: the refusal in
+ * `setDesignTarget` and the `--kind` help both spell it out, because the name alone reads
+ * as "you must render in Unity first" and sends people looking for an editor they do not
+ * need yet.
  */
 export type DesignTargetKind = "composition-reference" | "rendered-unity-frame";
 
@@ -231,6 +242,8 @@ export interface SetDesignTargetArgs {
    * Artifact kind (the 3D split). Defaults to `rendered-unity-frame` (final).
    * Pass `composition-reference` to approve a style/composition guide that
    * unlocks scene assembly but can never certify final hero-shot fidelity.
+   *
+   * REQUIRED when `mode` is `generated`: see the refusal in `setDesignTarget`.
    */
   kind?: DesignTargetKind;
   referenceGame?: string;
@@ -243,6 +256,43 @@ export interface SetDesignTargetArgs {
 export async function setDesignTarget(args: SetDesignTargetArgs): Promise<DesignTargetMeta> {
   if (args.mode === "reference-game" && !args.referenceGame) {
     throw new Error("--reference-game <name> is required when --mode reference-game.");
+  }
+  // REFUSE-ON-ABSENT, scoped to the one path where the default is dangerous.
+  //
+  // `kind` is absent-defaults-to-`rendered-unity-frame`, which is correct and documented
+  // compatibility for every OTHER path: a `provided` file is a deliberate human choice of
+  // artifact. On the GENERATED path the artifact was produced by a model moments earlier, and
+  // `target set --image hero.png --mode generated --approve` then silently freezes a flat mock
+  // as the thing `doneness` grades 3D fidelity against (no materials, real proportions, lighting
+  // or silhouettes). Nothing refused it, because an absent kind is legitimate for a flat 2D game.
+  //
+  // Deriving the answer is not available: NOTHING in this repo knows whether a project is 2D or
+  // 3D. No genre-contract field declares it, this module never consults the genre, and the
+  // genre-core LITMUS forbids core from matching registered genre id literals, so a `3d-` prefix
+  // heuristic is both off-limits and wrong for contract genres. So the operator states it. That is
+  // a question they can always answer and the tool never can.
+  //
+  // This lives in `setDesignTarget` rather than in argv parsing on purpose: argv is only today's
+  // single caller, and a refusal that a future caller (or an MCP op) routes around is not a
+  // refusal. See Docs/Design/HeroShotAuthoring.md §2.
+  if (args.mode === "generated" && !args.kind) {
+    throw new Error(
+      "--kind is required when --mode generated.\n" +
+        "\n" +
+        "The choice is about YOUR GAME, not about which tool drew the image:\n" +
+        "\n" +
+        "  flat 2D game   --kind rendered-unity-frame\n" +
+        "                 The mock IS the final hero shot. NO Unity render is needed now:\n" +
+        "                 the name means FINAL FRAME, not 'made in Unity'.\n" +
+        "\n" +
+        "  3D game        --kind composition-reference\n" +
+        "                 A style guide that unlocks scene assembly only. You build the\n" +
+        "                 scene, capture a real Unity frame, then re-set it as\n" +
+        "                 rendered-unity-frame. Nothing is needed from Unity yet.\n" +
+        "\n" +
+        "Omitting --kind would silently pick rendered-unity-frame and freeze a flat mock as the\n" +
+        "artifact `doneness` grades 3D hero-shot fidelity against.",
+    );
   }
   const paths = loombridgePaths(args.root);
   const dp = designPaths(paths);
@@ -316,14 +366,15 @@ function printUsage(): void {
       "",
       "  status   [--root <dir>] [--require-approved]",
       "  set      --image <path> [--html <path>] [--mode provided|generated|reference-game]",
-      "           [--kind composition-reference|rendered-unity-frame]",
+      "           [--kind composition-reference|rendered-unity-frame]  (REQUIRED with --mode generated)",
       "           [--reference-game <name>] [--note <text>] [--approve] [--root <dir>]",
       "  approve  [--note <text>] [--root <dir>]",
       "",
-      "Kinds (the 3D design-target split):",
-      "  rendered-unity-frame  (default) the FROZEN hero shot — a real rendered frame",
-      "                        (Unity capture, or a final 2D mock). Eligible for strict",
-      "                        hero-shot fidelity + `doneness`.",
+      "Kinds (what the artifact IS, not which tool produced it):",
+      "  rendered-unity-frame  (default) the FROZEN hero shot: the final frame `doneness`",
+      "                        grades fidelity against. A real Unity capture for a 3D game,",
+      "                        OR a final 2D mock for a flat 2D game, which needs no Unity at",
+      "                        all. The name means FINAL, not 'made in Unity'.",
       "  composition-reference a style/composition guide approved ONLY to unlock 3D scene",
       "                        assembly. NEVER certifies `doneness` / final fidelity.",
       "                        3D flow: approve a composition-reference → assemble the",

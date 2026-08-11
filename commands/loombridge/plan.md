@@ -137,7 +137,11 @@ so the two agents cannot drift.
      annotate the criteria the contract's own `fidelityCriteria` list (parallax and platform tiers
      are platformer callouts, not universal ones). Screenshot it to a PNG, then:
      ```bash
-     loombridge target set --image hero-shot.png --html hero-shot.html --mode generated
+     # --kind is REQUIRED with --mode generated. For a flat 2D game the mock IS the frozen
+     # hero shot; for a 3D build it is a composition-reference that only unlocks scene
+     # assembly, and you come back and freeze a real Unity frame (see `hero-shot-authoring`).
+     loombridge target set --image hero-shot.png --html hero-shot.html --mode generated \
+       --kind rendered-unity-frame
      ```
      Keep it to assets that actually exist (no concept art) so the build can match it.
    - **Reference game:** name a game (e.g. Celeste), research its visual + feel conventions,

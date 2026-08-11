@@ -514,7 +514,7 @@ test("runPlan — the `unknown` placeholder genre from `design set` is NOT prese
     const img = path.join(root, "hero.png");
     await fs.writeFile(img, "hero", "utf-8");
     // `design set` BEFORE any `plan` bootstraps STATE with the placeholder genre "unknown".
-    await setDesignTarget({ root, imagePath: img, mode: "generated", approve: true });
+    await setDesignTarget({ root, imagePath: img, mode: "generated", kind: "rendered-unity-frame", approve: true });
     assert.equal((await readState(paths))?.genre, "unknown", "precondition: design-set bootstraps the `unknown` placeholder genre");
 
     // A bare re-plan must resolve to the registry DEFAULT — the unregistered placeholder must NOT stick.
