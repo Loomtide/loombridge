@@ -193,10 +193,10 @@ $REPO_ROOT/scripts/prepare-project-assets.sh \\
   --name=switchyard
 \`\`\`
 
-Then read \`.loombridge/handoff/switchyard-asset-prepare-report.json\`. Import each accepted sprite using
+Then read \`.loombridge/run/handoff/switchyard-asset-prepare-report.json\`. Import each accepted sprite using
 its \`import.toolArguments.source_path\` and \`import.toolArguments.path\`; copy/import accepted WAV
 assets to their reported Unity paths and wire them to gameplay. Preserve
-\`.loombridge/handoff/switchyard-asset-attribution.md\` in the final handoff.
+\`.loombridge/run/handoff/switchyard-asset-attribution.md\` in the final handoff.
 
 Do not ship procedural placeholders when the report contains accepted \`placeholder:false\` candidates
 for the same primitive.

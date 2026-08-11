@@ -433,8 +433,8 @@ test("reportWasWritten: only a report THIS run produced may be stamped (M5)", as
 
 test("reportPathFor: an ESCAPING relative path is stored absolute, never as `../..`", () => {
   const root = path.resolve("/proj/game");
-  assert.equal(reportPathFor(root, path.join(root, ".loombridge", "reports", "x.json")),
-    path.join(".loombridge", "reports", "x.json"));
+  assert.equal(reportPathFor(root, path.join(root, ".loombridge", "run", "reports", "x.json")),
+    path.join(".loombridge", "run", "reports", "x.json"));
 
   // The workspace assets live OUTSIDE the project by design. A `../../..` string means
   // nothing without knowing the cwd it will be resolved against, so it is stored absolute.

@@ -128,7 +128,7 @@ $ loombridge doneness
 [loombridge doneness] NOT done:
   - phase is `planned`, not `verified-green`
   - no `currentBuild` in STATE — no build is in flight (run `loombridge build` first)
-  - no verdict at .loombridge/reports/build-verdict.json
+  - no verdict at .loombridge/run/reports/build-verdict.json
 ; exit 1
 ```
 

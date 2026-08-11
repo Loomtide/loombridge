@@ -127,7 +127,7 @@ function pngWithBlackPixels(blackPixels: number): Buffer {
 }
 
 async function writeTrace(root: string, id: string): Promise<void> {
-  const traces = path.join(root, ".loombridge", "replays", "traces");
+  const traces = path.join(root, ".loombridge", "anchors", "traces");
   await fs.mkdir(traces, { recursive: true });
   await fs.writeFile(
     path.join(traces, `${id}.trace.json`),

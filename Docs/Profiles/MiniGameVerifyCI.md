@@ -129,7 +129,7 @@ loombridge verify --strict \
   runs the offline ones, and writes one roll-up. Add `--only screens` to narrow it. A scoped run is reported
   as `partial` and is never a certificate, which is the honest label for a subset.
 - **`--strict`** is recommended in CI: it treats soft warnings as hard failures (all-green to ship).
-- It is **read-only** with respect to your game. It writes only under `.loombridge/reports/`.
+- It is **read-only** with respect to your game. It writes only under `.loombridge/run/reports/`.
 - When project-local anchors land ([`Docs/Design/ArtifactStorage.md`](../Design/ArtifactStorage.md), stage S2)
   the `cp -R` and the `--workspace` flag are the single edit: delete both.
 
@@ -140,14 +140,14 @@ loombridge verify --strict \
 ## 5. Upload the report artifacts
 
 Always upload (even on failure) so reviewers can open the report. The unified door writes into
-`.loombridge/reports/` under the project root:
+`.loombridge/run/reports/` under the project root:
 
 - **`verify.json`**: the run roll-up, every section, its status, and whether it was anchored.
 - **`verify-screens.json`** / **`.html`** / **`.md`**: the screens section in full, every check with exact
   numbers, the one-screen human report with inline thumbnails, and the same summary as text for a PR comment.
 - **`verify-scoped.json`**: written instead of `verify.json` when you pass `--only`.
 
-Uploading the whole `.loombridge/reports/` directory (with `if: always()`) is simplest; see the
+Uploading the whole `.loombridge/run/reports/` directory (with `if: always()`) is simplest; see the
 `actions/upload-artifact` step in the example workflow.
 
 ## 6. Exit codes in CI language

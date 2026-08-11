@@ -34,7 +34,7 @@ export interface SliceProof {
   runId?: string;
   /** ISO timestamp when the slice build was minted. */
   startedAt?: string;
-  /** Per-slice verdict path: .loombridge/reports/slices/<sliceId>.verdict.json. */
+  /** Per-slice verdict path: .loombridge/run/reports/slices/<sliceId>.verdict.json. */
   verdictPath?: string;
   /** Paths under .loombridge/verify/<sliceId>/ that MUST exist to certify. */
   captureManifest?: string[];
@@ -44,7 +44,7 @@ export interface SliceProof {
   approvedAt?: string | null;
   /** Optional human/operator approval note recorded at the approval seam. */
   approvalNote?: string;
-  /** Durable root-relative sign-off artifact copied under .loombridge/reports/slices/<id>/. */
+  /** Durable root-relative sign-off artifact copied under .loombridge/anchors/signoffs/<id>/. */
   signoffArtifact?: string;
   /** sha256 of the durable sign-off artifact bytes. */
   signoffSha256?: string;
@@ -819,12 +819,12 @@ export function assertSafeSliceId(sliceId: string): string {
   return sliceId;
 }
 
-/** `.loombridge/reports/slices/<sliceId>.verdict.json` — the per-slice verdict path (S2a). */
+/** `.loombridge/run/reports/slices/<sliceId>.verdict.json` — the per-slice verdict path (S2a). */
 export function getSliceVerdictPath(paths: LoombridgePaths, sliceId: string): string {
   return path.join(paths.reports, "slices", `${assertSafeSliceId(sliceId)}.verdict.json`);
 }
 
-/** `.loombridge/reports/slices/<sliceId>.diagnostic.json` — non-binding re-verify output. */
+/** `.loombridge/run/reports/slices/<sliceId>.diagnostic.json` — non-binding re-verify output. */
 export function getSliceDiagnosticPath(paths: LoombridgePaths, sliceId: string): string {
   return path.join(paths.reports, "slices", `${assertSafeSliceId(sliceId)}.diagnostic.json`);
 }
@@ -835,17 +835,25 @@ export function getSliceVerifyDir(paths: LoombridgePaths, sliceId: string): stri
 }
 
 /**
- * `.loombridge/reports/slices/<sliceId>/signoff<ext>` — the human sign-off artifact
- * `plan --signoff` durably copies next to the slice's verdict.
+ * `.loombridge/anchors/signoffs/<sliceId>/signoff<ext>` — the human sign-off artifact
+ * `plan --go --signoff` durably copies, and that `SLICES.json` cites as the evidence a
+ * slice is `approved`.
+ *
+ * AN ANCHOR, NOT A REPORT (ArtifactStorage S2 M4). It used to sit under
+ * `reports/slices/<id>/`, and the S2 split files `reports/` under `run/`: that would have
+ * made a human's approval artifact machine-local, ignored, and deletable by
+ * `git clean -fdx` while `SLICES.json` went on claiming the slice was approved. The rule
+ * this restores is the one the whole RFC turns on: an approval whose evidence never
+ * leaves one machine is not an approval.
  *
  * A slot rather than a literal join at the writer (`plan.ts` used to spell the whole
- * `.loombridge/reports/slices/…` path itself), so the destination is derived from
- * `paths.reports` and walked by `__tests__/unit/repo/write-paths.test.ts` like every other
- * per-slice path here. `ext` is validated by the caller and passed through verbatim; the
- * slice id goes through the same single-segment guard as the verdict path.
+ * `.loombridge/run/reports/slices/…` path itself), so the destination is derived from
+ * `paths.signoffs` and walked by `__tests__/unit/repo/write-paths.test.ts` like every
+ * other per-slice path here. `ext` is validated by the caller and passed through
+ * verbatim; the slice id goes through the same single-segment guard as the verdict path.
  */
 export function getSliceSignoffPath(paths: LoombridgePaths, sliceId: string, ext: string): string {
-  return path.join(paths.reports, "slices", assertSafeSliceId(sliceId), `signoff${ext}`);
+  return path.join(paths.signoffs, assertSafeSliceId(sliceId), `signoff${ext}`);
 }
 
 /** `.loombridge-fixtures/<sliceId>/` — the per-slice resumable checkpoint dir. */

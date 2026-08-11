@@ -44,7 +44,7 @@ function approveSlice(plan: SlicePlan, id: string): void {
   slice.proof = {
     runId: `run-${id}-old`,
     startedAt: "2026-01-01T00:00:00.000Z",
-    verdictPath: `.loombridge/reports/slices/${id}.verdict.json`,
+    verdictPath: `.loombridge/run/reports/slices/${id}.verdict.json`,
     captureManifest: [],
     checkpointId: id,
     approvedAt: "2026-01-01T00:00:01.000Z",
@@ -280,7 +280,7 @@ test("build auto-detects SLICES.json and mints proof for nextUnblockedSlice", as
   assert.ok(slice.proof.runId.startsWith("run-framing-"));
   assert.equal(slice.proof?.checkpointId, null);
   assert.equal(slice.proof?.approvedAt, null);
-  assert.equal(slice.proof?.verdictPath, path.join(".loombridge", "reports", "slices", "framing.verdict.json"));
+  assert.equal(slice.proof?.verdictPath, path.join(".loombridge", "run", "reports", "slices", "framing.verdict.json"));
   assert.deepEqual(slice.proof?.captureManifest, expectedManifest);
   assert.equal(after.slices.find((s) => s.id === "ground-tiling")!.state, "pending");
   assert.equal(after.slices.find((s) => s.id === "parallax")!.state, "pending");
@@ -301,7 +301,7 @@ test("build slice mode exits non-zero when no slice is currently buildable", asy
   first.proof = {
     runId: "run-framing-ready",
     startedAt: "2026-01-01T00:00:00.000Z",
-    verdictPath: ".loombridge/reports/slices/framing.verdict.json",
+    verdictPath: ".loombridge/run/reports/slices/framing.verdict.json",
     captureManifest: [],
     checkpointId: "framing",
     approvedAt: null,
@@ -341,7 +341,7 @@ test("rebuilding an upstream slice invalidates approved transitive dependents", 
   framing.proof = {
     runId: "run-framing-old",
     startedAt: "2026-01-01T00:00:00.000Z",
-    verdictPath: ".loombridge/reports/slices/framing.verdict.json",
+    verdictPath: ".loombridge/run/reports/slices/framing.verdict.json",
     captureManifest: [],
     checkpointId: "framing",
     approvedAt: null,

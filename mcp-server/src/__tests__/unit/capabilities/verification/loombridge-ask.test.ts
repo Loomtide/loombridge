@@ -98,7 +98,7 @@ test("ask why approval explains approval without exposing --go", async () => {
       proof: {
         runId: "run-framing-test",
         startedAt: "2026-01-01T00:00:00.000Z",
-        verdictPath: ".loombridge/reports/slices/framing.verdict.json",
+        verdictPath: ".loombridge/run/reports/slices/framing.verdict.json",
         captureManifest: [],
         checkpointId: "framing",
       },

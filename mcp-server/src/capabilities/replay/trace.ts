@@ -5,9 +5,9 @@
  *   loombridge trace report --id <id> [--root <dir>]
  *   loombridge trace tolerance --id <id> --set <fraction>
  *
- * `replay` reads `.loombridge/replays/traces/<id>.trace.json`, drives it against the
- * running editor, and writes `.loombridge/replays/reports/<id>.report.{json,html}`
- * plus the captured PNGs under `.loombridge/replays/reports/<id>/actual/`.
+ * `replay` reads `.loombridge/anchors/traces/<id>.trace.json`, drives it against the
+ * running editor, and writes `.loombridge/run/replays/reports/<id>.report.{json,html}`
+ * plus the captured PNGs under `.loombridge/run/replays/reports/<id>/actual/`.
  * `report` re-renders the self-contained HTML from an existing report JSON.
  *
  * The verb is the `.loombridge/` integration layer over the replay engine; all
@@ -89,6 +89,7 @@ import {
   standardReplayLayout,
   type ReplayLayout,
 } from "../../domain/state.js";
+import { legacyLayoutRefusal, scanLegacyLayout } from "../migrate/legacy-layout.js";
 import { unityConnectionHint, unityConnectionLostHint } from "../../shared/cli-ui.js";
 import { printNextStep } from "../minigame/minigame-next.js";
 import { readPng } from "../verification/analyze-frames.js";
@@ -103,12 +104,12 @@ interface TraceArgs {
    */
   id: string;
   root: string;
-  /** Override the trace input path (default `.loombridge/replays/traces/<id>.trace.json`). */
+  /** Override the trace input path (default `.loombridge/anchors/traces/<id>.trace.json`). */
   tracePath?: string;
   /**
    * Use the FLAT workspace layout — replay artifacts directly under `--root`
    * (`<root>/traces|reports|baseline`), no nested `.loombridge/`. Default false
-   * (standard `<root>/.loombridge/replays/`). The mini-game workspace passes this.
+   * (standard `<root>/.loombridge/run/replays/`). The mini-game workspace passes this.
    */
   flat: boolean;
   /** Emit the HTML report (default true). */
@@ -411,6 +412,22 @@ export async function run(args: string[], opts: TraceRunOpts = {}): Promise<numb
     printUsage();
     return parsed.usageError ? 2 : 0;
   }
+  // THE PRE-S2 LAYOUT REFUSAL. Every subcommand here reads or writes the demonstration
+  // and baseline slots, and after S2 those are `.loombridge/anchors/`. A project that has
+  // not migrated therefore looks EMPTY to this verb: `replay` says there is nothing to
+  // replay, `approve` has no report to promote, and `record --id <same id>` would write a
+  // second demonstration beside an approved baseline it cannot see. Refusing is the only
+  // answer that does not risk the irreplaceable artifact.
+  //
+  // `--flat` is exempt: it is the mini-game workspace layout, which never had a
+  // `.loombridge/run/replays/` and is not what this migration moves.
+  if (!parsed.flat) {
+    const refusal = legacyLayoutRefusal(await scanLegacyLayout(parsed.root), "[loombridge trace]");
+    if (refusal.length > 0) {
+      for (const line of refusal) console.error(line);
+      return 2;
+    }
+  }
   try {
     if (parsed.sub === "replay") return await runReplay(parsed, opts);
     if (parsed.sub === "replay-all") return await runReplayAll(parsed);
@@ -629,7 +646,7 @@ async function fileExists(target: string): Promise<boolean> {
  * Record a human demonstration into a replayable trace. Resets to a clean
  * Play-Mode start at `--scene` (or the editor's current scene), observes the human's
  * clicks/drags until they signal done (press Enter, or `--duration <sec>`), captures any
- * `--outcomes`, and writes `.loombridge/replays/traces/<id>.trace.json` (green by
+ * `--outcomes`, and writes `.loombridge/anchors/traces/<id>.trace.json` (green by
  * construction). With no `--id`, the id is derived from the recorded scene.
  */
 async function runRecord(args: TraceArgs, opts: TraceRunOpts = {}): Promise<number> {
@@ -1051,7 +1068,7 @@ async function removeStaleHtmlReport(paths: ReplayLayout, id: string): Promise<u
   return undefined;
 }
 
-/** Replay every trace under `.loombridge/replays/traces/` and write a roll-up report. */
+/** Replay every trace under `.loombridge/anchors/traces/` and write a roll-up report. */
 async function runReplayAll(args: TraceArgs): Promise<number> {
   const paths = layoutFor(args);
   if (args.id) {
@@ -2498,7 +2515,7 @@ function isUnderDir(child: string, parent: string): boolean {
  * True if `child` resolves under a real replay-artifact dir — the captured reports
  * (`replayReports`) or approved baselines (`replayBaselines`). This is the confinement
  * for copy/inline of report-referenced PNGs: it is tight in BOTH layouts (standard:
- * `.loombridge/replays/{reports,baselines}`; flat: `<ws>/{reports,baseline}`), so the
+ * `.loombridge/run/replays/{reports,baselines}`; flat: `<ws>/{reports,baseline}`), so the
  * flat layout's `replays === workspace` can't widen it to the whole workspace (a
  * hand-edited report.json can't reach the contract, captures, or raw/ as a source).
  */
@@ -2837,7 +2854,7 @@ function parseArgs(args: string[]): TraceArgs | { help: true; usageError?: boole
     return { help: true, usageError: true };
   }
   // `--id` becomes directory and file names (and the trace READ path) — never
-  // let it traverse outside `.loombridge/replays/`.
+  // let it traverse outside `.loombridge/run/replays/`.
   if (id !== undefined && !isSafePathSegment(id)) {
     console.error(
       `[loombridge trace] --id must not contain path separators or '..' (got "${id}").`,
@@ -3006,12 +3023,12 @@ function printUsage(): void {
       "  record      Record a human demonstration into a replayable trace: reset to --scene",
       "              (or the editor's CURRENT scene), observe your clicks/drags until you",
       "              press Enter (or --duration <sec>), and write",
-      "              .loombridge/replays/traces/<id>.trace.json. Takes no required flags:",
+      "              .loombridge/anchors/traces/<id>.trace.json. Takes no required flags:",
       "              bare `trace record` records the current scene under an id kebab-cased",
       "              from its name (Assets/Scenes/KidsChef.unity → kids-chef), and a DERIVED",
       "              id never overwrites: an existing kids-chef becomes kids-chef-2, printed.",
-      "  replay      Drive .loombridge/replays/traces/<id>.trace.json against the running",
-      "              editor and write .loombridge/replays/reports/<id>.report.{json,html},",
+      "  replay      Drive .loombridge/anchors/traces/<id>.trace.json against the running",
+      "              editor and write .loombridge/run/replays/reports/<id>.report.{json,html},",
       "              diffing each capture against its approved baseline. Takes no required",
       "              flags: bare `trace replay` replays the MOST RECENT trace (newest mtime,",
       "              ties broken by name), announced before it drives, so `trace record` then",
@@ -3020,10 +3037,10 @@ function printUsage(): void {
       "              divided, floored at 250ms); the pacing is stamped into the report and, at",
       "              approve, into the baseline, and a replay at a pacing other than the",
       "              baseline's REFUSES the pixel comparison (phase skew is not drift).",
-      "  replay-all  Replay EVERY trace under .loombridge/replays/traces/ and write a",
-      "              roll-up .loombridge/replays/fleet.report.{json,html}. Exit by worst tier.",
+      "  replay-all  Replay EVERY trace under .loombridge/anchors/traces/ and write a",
+      "              roll-up .loombridge/run/replays/fleet.report.{json,html}. Exit by worst tier.",
       "  approve     Promote the latest run's captures to the approved baseline",
-      "              (.loombridge/replays/baselines/<id>/). Never takes a tolerance, and",
+      "              (.loombridge/anchors/baselines/<id>/). Never takes a tolerance, and",
       "              refuses a run with an unreadable capture (a capture gap is not an anchor).",
       "              Takes no required flags: bare `trace approve` freezes the MOST RECENT",
       "              RUN, i.e. the newest <id>.report.json (ties broken by name), announced",

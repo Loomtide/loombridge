@@ -156,7 +156,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: loombridge-verify-reports
-          path: .loombridge/reports/
+          path: .loombridge/run/reports/
           if-no-files-found: warn
 
   # ===========================================================================
@@ -216,5 +216,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: loombridge-verify-reports-live
-          path: .loombridge/reports/
+          path: .loombridge/run/reports/
           if-no-files-found: warn

@@ -514,8 +514,8 @@ test("verify --minigame: full CLI path writes the default report and exits 1 on 
       root,
     ]);
     assert.equal(code, 1);
-    // Default report location under .loombridge/reports/.
-    const report = await readReport(path.join(root, ".loombridge", "reports", "minigame-verification.json"));
+    // Default report location under .loombridge/run/reports/.
+    const report = await readReport(path.join(root, ".loombridge", "run", "reports", "minigame-verification.json"));
     assert.equal(report.status, "fail");
   } finally {
     await fs.rm(root, { recursive: true, force: true });
@@ -541,7 +541,7 @@ test("verify --minigame: --output forwards through the real CLI to a custom repo
     const report = await readReport(custom);
     assert.equal(report.status, "fail");
     // The default location must NOT be written when --output is explicit.
-    await assert.rejects(fs.access(path.join(root, ".loombridge", "reports", "minigame-verification.json")));
+    await assert.rejects(fs.access(path.join(root, ".loombridge", "run", "reports", "minigame-verification.json")));
   } finally {
     await fs.rm(root, { recursive: true, force: true });
   }

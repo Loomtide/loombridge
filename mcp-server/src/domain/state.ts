@@ -111,11 +111,49 @@ export interface LoombridgeState {
   updatedAt: string;
 }
 
+/**
+ * THE TWO TIER ROOTS (ArtifactStorage S2).
+ *
+ * `anchors/` holds ground truth: what a human froze, and what a gate compares against.
+ * `run/` holds everything re-derivable from an anchor plus a run. The split is
+ * STRUCTURAL, not a list: `run/` carries its own `.gitignore`, so "if it is not under
+ * `run/`, it is meant to be committed" is a rule a human can hold and a clone inherits.
+ *
+ * Named constants rather than inline strings because the migration
+ * (`capabilities/migrate/migrate-layout.ts`) and the write-path guard both have to spell
+ * the same two words, and a second spelling of a tier root is the "declared path nothing
+ * walks" failure applied to the layout itself.
+ */
+export const ANCHORS_DIRNAME = "anchors";
+export const RUN_DIRNAME = "run";
+
+/**
+ * `.loombridge/run/.gitignore`, and why it is TWO lines rather than one.
+ *
+ * A bare `*` matches `.gitignore` itself, so the marker is never committed, never reaches
+ * a clone, and the structural guarantee silently does nothing: the directory is ignored
+ * only on the machine that happened to run a Loombridge verb. `!.gitignore` re-includes
+ * the marker so it travels with the repo and ignores `run/` from the moment a clone
+ * exists. Verified by `__tests__/unit/repo/write-paths.test.ts` against real `git
+ * check-ignore` behavior, not asserted from memory.
+ */
+export const RUN_GITIGNORE_BODY = "# Loombridge run tier: everything here is re-derivable.\n*\n!.gitignore\n";
+
 export interface LoombridgePaths {
   /** Project root — the directory that contains `.loombridge/`. */
   root: string;
   /** `.loombridge/` */
   dir: string;
+  /**
+   * `.loombridge/anchors/` — the COMMITTED ground-truth tier: recorded demonstrations,
+   * approved pixel baselines, and the human sign-off artifacts a slice approval cites.
+   */
+  anchors: string;
+  /**
+   * `.loombridge/run/` — the IGNORED re-derivable tier. Carries its own `.gitignore`
+   * ({@link RUN_GITIGNORE_BODY}) so the ignore rule travels to a clone.
+   */
+  run: string;
   /** `.loombridge/STATE.md` */
   state: string;
   /** `.loombridge/GAME_SPEC.md` */
@@ -142,7 +180,7 @@ export interface LoombridgePaths {
   adoption: string;
   /** `.loombridge/design/` — the Design Target Phase artifacts (plan §3c). */
   design: string;
-  /** `.loombridge/reports/` */
+  /** `.loombridge/run/reports/` */
   reports: string;
   /**
    * `.loombridge/tests/`: the stamped Unity test-results slot (`loombridge tests run`
@@ -150,7 +188,7 @@ export interface LoombridgePaths {
    */
   tests: string;
   /**
-   * `.loombridge/backups/` — where `loombridge update` copies the bridge install record
+   * `.loombridge/run/backups/` — where `loombridge update` copies the bridge install record
    * before mutating it, so a stray `.bak` never appears next to the record in
    * `ProjectSettings/` (and therefore in every consumer's `git status`).
    *
@@ -159,25 +197,101 @@ export interface LoombridgePaths {
    * `traces` slot survived here for as long as it did.
    */
   backups: string;
-  /** `.loombridge/replays/` — Replay Verification root (traces + reports + captures). */
+  /**
+   * `.loombridge/run/replays/` — the replay RUN root: the fleet roll-up
+   * (`fleet.report.{json,html}`) plus `reports/`.
+   *
+   * NO LONGER the confinement root for traces and baselines (ArtifactStorage S2): those
+   * are anchors and moved to `anchors/traces/` + `anchors/baselines/`. The `flat`
+   * workspace layout still puts all four under one directory, which is why
+   * `isReplayArtifact` confines against `replayReports` + `replayBaselines` and never
+   * against this field.
+   */
   replays: string;
-  /** `.loombridge/replays/traces/` — replay trace JSONs (`<id>.trace.json`). */
+  /** `.loombridge/anchors/traces/` — recorded demonstrations (`<id>.trace.json`). ANCHOR. */
   replayTraces: string;
-  /** `.loombridge/replays/reports/` — replay reports (`<id>.report.json`/`.html`) + per-id captures. */
+  /** `.loombridge/run/replays/reports/` — replay reports (`<id>.report.json`/`.html`) + per-id captures. */
   replayReports: string;
-  /** `.loombridge/replays/baselines/` — approved baseline PNGs per trace (`<id>/<captureId>.png`). */
+  /** `.loombridge/anchors/baselines/` — approved baseline PNGs per trace (`<id>/<captureId>.png`). ANCHOR. */
   replayBaselines: string;
-  /** `.loombridge/verify/` — captured op-output JSON the gates read. */
+  /**
+   * `.loombridge/anchors/signoffs/` — the durable human sign-off artifacts
+   * `plan --go --signoff` copies, and that `SLICES.json` cites as approval evidence.
+   *
+   * AN ANCHOR, NOT RUN OUTPUT (ArtifactStorage S2 M4). It used to live under
+   * `reports/slices/<id>/`, which the S2 split would have put under `run/`: a
+   * machine-local, `git clean -fdx`-deletable file that `SLICES.json` still names as the
+   * reason a slice is `approved`. An approval whose evidence is regenerable is not an
+   * approval, so this slot is committed like every other anchor.
+   */
+  signoffs: string;
+  /**
+   * `.loombridge/registry/` — imported asset packs (`<packId>.json`).
+   *
+   * DELIBERATELY NOT UNDER `run/` and DELIBERATELY NOT UNDER `anchors/`. These are
+   * project INPUTS: re-deriving one may need a hosted catalog a clone or a CI runner
+   * cannot reach, so ignoring them would break the clone-and-verify promise; but nobody
+   * APPROVES a pack, so filing them beside the recorded demonstrations would put an
+   * approval-shaped word on something no human ever froze. A committed, named top-level
+   * directory is what both facts add up to. A slot rather than a `path.join(paths.dir,
+   * "registry")` at the writer so the write-path guard walks it (W2) instead of W6
+   * catching it by luck.
+   */
+  registry: string;
+  /**
+   * `.loombridge/run/captures/` — the ad-hoc screenshot destination the op registry
+   * advertises. Regenerable by construction: it is whatever an agent pointed a screenshot at.
+   */
+  captures: string;
+  /** `.loombridge/run/art/` — geometry/art snapshot JSON written by the art ops. */
+  art: string;
+  /**
+   * `.loombridge/run/handoff/` — `scripts/prepare-project-assets.sh` writes its
+   * asset-prepare report and the attribution markdown here. Both are re-derived by
+   * re-running the script against the same profile + registry.
+   */
+  handoff: string;
+  /**
+   * `.loombridge/run/op-traces/` — the MCP server's own session trace JSONL + artifacts.
+   *
+   * A SEPARATE DIRECTORY FROM THE REPLAY ANCHORS ON PURPOSE (ArtifactStorage S2 M6). The
+   * server constructs its recorder at STARTUP, outside every CLI verb, and appends on the
+   * first op; no verb-level refusal can cover it. Sharing a directory with the recorded
+   * demonstrations is what made an op trace and a human demonstration indistinguishable by
+   * location.
+   */
+  opTraces: string;
+  /**
+   * `.loombridge/verify/` — captured op-output JSON the gates read.
+   *
+   * DOES NOT MOVE, for two independent reasons (ArtifactStorage S2). (a)
+   * `packages/com.loomtide.loombridge/Editor/Handlers/CaptureHandler.cs` hard-codes
+   * `Path.Combine(projectRoot, ".loombridge", "verify")` as its write allowlist and throws
+   * `INVALID_PARAMS` outside it, so moving this is a cross-language migration needing a
+   * bridge release AND a reinstall in every consumer project. (b) it is COMMITTED: the
+   * shipped template does not ignore it, which is what lets a clone re-grade an approved
+   * slice offline. Filing it under `run/` would structurally ignore it and break exactly
+   * the promise this RFC exists to deliver.
+   */
   verifyInputs: string;
-  /** `.loombridge/reports/build-verdict.json` */
+  /** `.loombridge/run/reports/build-verdict.json` */
   verdict: string;
 }
 
 export function loombridgePaths(root: string): LoombridgePaths {
   const dir = path.join(root, LOOMBRIDGE_DIRNAME);
+  const anchors = path.join(dir, ANCHORS_DIRNAME);
+  const run = path.join(dir, RUN_DIRNAME);
+  // TWO TREES ARE NAMED `reports` (ArtifactStorage S2 M7), and folding them into one
+  // would be a MERGE no rename can undo. `run/reports/` is the verification tier's
+  // (the build verdict, the unified report, `slices/`); `run/replays/reports/` is the
+  // replay tier's (`<id>.report.json`). They stay nested and distinct.
+  const replays = path.join(run, "replays");
   return {
     root,
     dir,
+    anchors,
+    run,
     state: path.join(dir, "STATE.md"),
     gameSpec: path.join(dir, "GAME_SPEC.md"),
     feelSpec: path.join(dir, "FEEL_SPEC.json"),
@@ -187,15 +301,21 @@ export function loombridgePaths(root: string): LoombridgePaths {
     genrePromotion: path.join(dir, "GENRE_PROMOTION.json"),
     adoption: path.join(dir, "ADOPTION.json"),
     design: path.join(dir, "design"),
-    reports: path.join(dir, "reports"),
+    registry: path.join(dir, "registry"),
+    reports: path.join(run, "reports"),
     tests: path.join(dir, TEST_RESULTS_DIRNAME),
-    backups: path.join(dir, "backups"),
-    replays: path.join(dir, "replays"),
-    replayTraces: path.join(dir, "replays", "traces"),
-    replayReports: path.join(dir, "replays", "reports"),
-    replayBaselines: path.join(dir, "replays", "baselines"),
+    backups: path.join(run, "backups"),
+    replays,
+    replayTraces: path.join(anchors, "traces"),
+    replayReports: path.join(replays, "reports"),
+    replayBaselines: path.join(anchors, "baselines"),
+    signoffs: path.join(anchors, "signoffs"),
+    captures: path.join(run, "captures"),
+    art: path.join(run, "art"),
+    handoff: path.join(run, "handoff"),
+    opTraces: path.join(run, "op-traces"),
     verifyInputs: path.join(dir, "verify"),
-    verdict: path.join(dir, "reports", "build-verdict.json"),
+    verdict: path.join(run, "reports", "build-verdict.json"),
   };
 }
 
@@ -206,7 +326,16 @@ export function loombridgePaths(root: string): LoombridgePaths {
  * WHERE replay artifacts live without inheriting the whole `.loombridge/` tree.
  */
 export interface ReplayLayout {
-  /** The directory every replay artifact lives under (confinement root). */
+  /**
+   * The replay RUN root: the fleet roll-up lives here, and per-run report paths are
+   * printed relative to it.
+   *
+   * NOT a confinement root. In the standard layout the traces and baselines are anchors
+   * and sit elsewhere entirely; in the flat workspace layout this IS the workspace, which
+   * is why `isReplayArtifact` confines against `replayReports` + `replayBaselines`
+   * instead. Reading this field as "everything replay writes lives under here" was true
+   * before ArtifactStorage S2 and is not true now.
+   */
   replays: string;
   /** Replay trace JSONs (`<id>.trace.json`). */
   replayTraces: string;
@@ -217,9 +346,11 @@ export interface ReplayLayout {
 }
 
 /**
- * Standard layout — replay artifacts under `<root>/.loombridge/replays/`. This is the
- * default for the generic `trace` verb run against a project root that owns a
- * `.loombridge/` state dir.
+ * Standard layout — SPLIT ACROSS THE TWO TIERS (ArtifactStorage S2). The recorded
+ * demonstration and its approved frames are anchors (`.loombridge/anchors/{traces,
+ * baselines}/`); the run output is not (`.loombridge/run/replays/`). This is the default
+ * for the generic `trace` verb run against a project root that owns a `.loombridge/`
+ * state dir.
  */
 export function standardReplayLayout(root: string): ReplayLayout {
   const p = loombridgePaths(root);
@@ -250,17 +381,37 @@ export function flatReplayLayout(workspace: string): ReplayLayout {
 /**
  * Create the `.loombridge/` directory tree. Idempotent.
  *
- * `paths.traces` (`.loombridge/traces/`) used to be scaffolded here. It was DEAD: this line
+ * A `paths.traces` slot (a top-level `traces` directory) used to be scaffolded here, and
+ * the path is deliberately no longer spelled: after ArtifactStorage S2 the demonstrations
+ * live at `paths.replayTraces`, and naming a second top-level slot in this paragraph would
+ * read as a live one. It was DEAD: this line
  * was its only reference in non-test source, nothing ever wrote a file into it, and every
- * replay trace goes to `paths.replayTraces` (`.loombridge/replays/traces/`). A directory
- * declared in the layout and created on every `plan`, that no writer and no reader walks, is
- * this repo's signature failure shape sitting inside the layout itself. Both the slot and
- * this entry are gone; `__tests__/unit/repo/write-paths.test.ts` is what stops the next one.
+ * replay trace goes to `paths.replayTraces`. A directory declared in the layout and created
+ * on every `plan`, that no writer and no reader walks, is this repo's signature failure
+ * shape sitting inside the layout itself. Both the slot and this entry are gone;
+ * `__tests__/unit/repo/write-paths.test.ts` is what stops the next one.
  */
 export async function ensureScaffold(paths: LoombridgePaths): Promise<void> {
   for (const d of [paths.dir, paths.design, paths.reports, paths.verifyInputs]) {
     await fs.mkdir(d, { recursive: true });
   }
+  await ensureRunGitignore(paths);
+}
+
+/**
+ * Write `.loombridge/run/.gitignore` if it is not already there.
+ *
+ * Called from EVERY entry point that creates the run tier, not only from `plan`: the
+ * whole structural guarantee is that a directory holding regenerable output cannot exist
+ * without the marker that ignores it. An existing file is left alone (a team may have
+ * added rules of their own under it), which is also what makes this safe to call on every
+ * scaffold.
+ */
+export async function ensureRunGitignore(paths: LoombridgePaths): Promise<void> {
+  await fs.mkdir(paths.run, { recursive: true });
+  const marker = path.join(paths.run, ".gitignore");
+  if (await fileExists(marker)) return;
+  await fs.writeFile(marker, RUN_GITIGNORE_BODY, "utf-8");
 }
 
 export function nowIso(): string {

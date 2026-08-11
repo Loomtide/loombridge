@@ -205,12 +205,12 @@ function approvedPlan(): SlicePlan {
     slice.proof = {
       runId: `run-${slice.id}-1`,
       startedAt: "2026-01-01T00:00:00.000Z",
-      verdictPath: `.loombridge/reports/slices/${slice.id}.verdict.json`,
+      verdictPath: `.loombridge/run/reports/slices/${slice.id}.verdict.json`,
       captureManifest: [`${slice.id}/verify-manifest.json`],
       checkpointId: slice.id,
       approvedAt: "2026-01-02T00:00:00.000Z",
       approvalNote: "looked right",
-      signoffArtifact: `.loombridge/reports/slices/${slice.id}/signoff.png`,
+      signoffArtifact: `.loombridge/run/reports/slices/${slice.id}/signoff.png`,
       signoffSha256: "a".repeat(64),
     };
   }
@@ -375,7 +375,7 @@ test("assertValidSlicePlan — rejects unsafe signoffArtifact paths", () => {
   plan.slices[0]!.proof = {
     runId: "run-a",
     startedAt: "2026-05-31T00:00:00.000Z",
-    verdictPath: ".loombridge/reports/slices/a.verdict.json",
+    verdictPath: ".loombridge/run/reports/slices/a.verdict.json",
     captureManifest: ["a/verify-manifest.json"],
     checkpointId: "a",
     approvedAt: "2026-05-31T01:00:00.000Z",
@@ -607,7 +607,7 @@ test("assertValidSlicePlan — accepts a well-formed proof block", () => {
   p.slices[0]!.proof = {
     runId: "run-framing-x",
     startedAt: "2026-05-31T00:00:00.000Z",
-    verdictPath: ".loombridge/reports/slices/framing.verdict.json",
+    verdictPath: ".loombridge/run/reports/slices/framing.verdict.json",
     captureManifest: ["framing/verify-manifest.json"],
     checkpointId: "framing",
     approvedAt: null,

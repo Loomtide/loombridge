@@ -14,7 +14,7 @@ identical on Claude Code and Codex because it lives in the deterministic CLI, no
 `loombridge verify` with **no mode flags** answers the only question a user has: *does this
 build still do what a human approved?* It discovers the project's verification assets
 (acceptance contract, approved trace baselines, feel snapshot, screen contract), **prints the
-plan first**, then runs them into one report at `.loombridge/reports/verify.json` alongside
+plan first**, then runs them into one report at `.loombridge/run/reports/verify.json` alongside
 the per-asset reports.
 
 ```bash
@@ -127,7 +127,7 @@ loombridge verify --root . --only screens # ONE section (CI granularity); never 
 - **`--report <path>`** resolves relative to `--root`, must stay inside the project root, and
   is **refused** (exit `2`, nothing written, nothing run) when it escapes the root, would
   overwrite a project artifact, or targets any file that is not a previous unified report. The screens section writes to a verify-owned
-  `.loombridge/reports/verify-screens.json`, never the guided flow's workspace report.
+  `.loombridge/run/reports/verify-screens.json`, never the guided flow's workspace report.
 - **`--only <sections>`** runs a SUBSET: a comma-separated selection of
   `contract`, `flow`, `feel`, `screens`, `tests`. Read the four rules before using it in CI:
   - **A broken or unapproved asset still refuses, whatever you selected.** Only a *healthy*
@@ -135,7 +135,7 @@ loombridge verify --root . --only screens # ONE section (CI granularity); never 
   - **Deselected rows are listed and excluded from the verdict.** You scoped the run, so the
     rows you scoped out cost nothing, and they are printed, so nobody has to guess.
   - **A scoped run is never a `pass`.** Its status ceiling is `partial`, it writes
-    `.loombridge/reports/verify-scoped.json` (never the full `verify.json`), and
+    `.loombridge/run/reports/verify-scoped.json` (never the full `verify.json`), and
     `loombridge doneness` refuses to certify from it.
   - **Unknown or empty selections refuse (exit `2`) before anything is written**, and a
     selection matching no discovered asset is a nothing-checked run (exit `2`), named as such.
@@ -228,7 +228,7 @@ reads without re-running a multi-minute editor.
    ```
 
    This reads captured op-output from the named state subdir, writes
-   `.loombridge/reports/build-verdict.json` (with the build's `runId` + `producedAt`), updates
+   `.loombridge/run/reports/build-verdict.json` (with the build's `runId` + `producedAt`), updates
    `STATE.md`, and exits non-zero on a Tier-1 `fail` (or on `warn` under `--strict`).
 
    > **Known limitation (M2 follow-up).** Today `loombridge verify` grades a **single** state
@@ -266,7 +266,7 @@ reads without re-running a multi-minute editor.
    > *diagnostic* verdict is `approvable: false` however green it is, because it is not bound
    > to the slice's proof.
 
-2. **Report honestly from the verdict.** `cat .loombridge/reports/build-verdict.json`.
+2. **Report honestly from the verdict.** `cat .loombridge/run/reports/build-verdict.json`.
    - `status: "pass"` → green; state it plainly.
    - `status: "fail"` → enumerate `failures[]` (gate + expected vs actual). **Do NOT claim
      the build is done.** The next step is `loombridge build` after fixing the reported failures.

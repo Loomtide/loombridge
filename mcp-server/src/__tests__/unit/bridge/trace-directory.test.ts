@@ -4,9 +4,14 @@ import os from "node:os";
 import path from "node:path";
 import { resolveTraceDirectory, TRACE_DIR_ENV_VAR } from "../../../bridge/trace-directory.js";
 
-test("trace dir: a bound project writes under its .loombridge/replays/traces", () => {
+test("trace dir: a bound project writes op traces under its .loombridge/run/op-traces", () => {
+  // NOT `anchors/traces` (ArtifactStorage S2 M6). The MCP server builds this recorder at
+  // STARTUP, outside every CLI verb, and appends on the first op: sharing a directory with
+  // the recorded human demonstrations meant an agent session re-created that directory just
+  // by connecting, so no migration could ever read "the legacy directory exists" as a
+  // signal, and a machine-generated op log sat beside an irreplaceable demonstration.
   const project = "/Users/dev/Games/MyGame";
-  const expected = path.join(project, ".loombridge", "replays", "traces");
+  const expected = path.join(project, ".loombridge", "run", "op-traces");
 
   assert.equal(resolveTraceDirectory({ kind: "strict", target: project }, {}), expected);
   assert.equal(resolveTraceDirectory({ kind: "cwd", target: project }, {}), expected);
@@ -32,7 +37,7 @@ test("trace dir: the env override wins over a bound project", () => {
 
 test("trace dir: a blank or whitespace override is ignored, not honoured as ''", () => {
   const project = "/Users/dev/Games/MyGame";
-  const expected = path.join(project, ".loombridge", "replays", "traces");
+  const expected = path.join(project, ".loombridge", "run", "op-traces");
 
   for (const blank of ["", "   ", "\t"]) {
     assert.equal(

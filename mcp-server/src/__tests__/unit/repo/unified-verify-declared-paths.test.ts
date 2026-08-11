@@ -9,7 +9,7 @@
  * S1 adds three filenames with a writer and a reader on opposite sides:
  *   - `baseline-manifest.json` under a trace baseline dir (trace approve writes it,
  *     unified discovery reads it);
- *   - `verify.json` and `verify-screens.json` under `.loombridge/reports/`.
+ *   - `verify.json` and `verify-screens.json` under `.loombridge/run/reports/`.
  *
  * The rule these tests enforce is not "the string is correct". A test asserting a
  * literal would drift with the code it guards. It is that each name has exactly ONE
@@ -224,31 +224,31 @@ test("the test-results DIRECTORY has one declaration, and both layers resolve th
  * Each entry is (file, the constant-derived spelling it must contain).
  */
 const PROSE_SITES: [string, string][] = [
-  [path.join(PKG_ROOT, "src", "capabilities", "verification", "verify.ts"), `.loombridge/reports/${UNIFIED_VERIFY_REPORT}`],
-  [path.join(PKG_ROOT, "src", "surfaces", "cli.ts"), `.loombridge/reports/${UNIFIED_VERIFY_REPORT}`],
+  [path.join(PKG_ROOT, "src", "capabilities", "verification", "verify.ts"), `.loombridge/run/reports/${UNIFIED_VERIFY_REPORT}`],
+  [path.join(PKG_ROOT, "src", "surfaces", "cli.ts"), `.loombridge/run/reports/${UNIFIED_VERIFY_REPORT}`],
   // V6/S2c. The MCP TOOL DESCRIPTION is a prose site with a reader nothing else reaches: it is
   // the only place an AGENT is told where the roll-up lands, it ships in the served tool list
   // rather than in any document a human opens, and a rename of the constant would leave it
   // routing to a file nothing writes while every code-level check stayed green.
   [
     path.join(PKG_ROOT, "src", "surfaces", "loombridge-bridge-tools.ts"),
-    `.loombridge/reports/${UNIFIED_VERIFY_REPORT}`,
+    `.loombridge/run/reports/${UNIFIED_VERIFY_REPORT}`,
   ],
-  [path.join(REPO_ROOT, "commands", "loombridge", "verify.md"), `.loombridge/reports/${UNIFIED_VERIFY_REPORT}`],
-  [path.join(REPO_ROOT, "Docs", "Design", "UnifiedVerify.md"), `.loombridge/reports/${UNIFIED_VERIFY_REPORT}`],
+  [path.join(REPO_ROOT, "commands", "loombridge", "verify.md"), `.loombridge/run/reports/${UNIFIED_VERIFY_REPORT}`],
+  [path.join(REPO_ROOT, "Docs", "Design", "UnifiedVerify.md"), `.loombridge/run/reports/${UNIFIED_VERIFY_REPORT}`],
   // The verify-owned screens report is named in the two docs that describe the bare run.
-  [path.join(REPO_ROOT, "commands", "loombridge", "verify.md"), `.loombridge/reports/${UNIFIED_SCREENS_REPORT}`],
-  [path.join(REPO_ROOT, "Docs", "Design", "UnifiedVerify.md"), `.loombridge/reports/${UNIFIED_SCREENS_REPORT}`],
+  [path.join(REPO_ROOT, "commands", "loombridge", "verify.md"), `.loombridge/run/reports/${UNIFIED_SCREENS_REPORT}`],
+  [path.join(REPO_ROOT, "Docs", "Design", "UnifiedVerify.md"), `.loombridge/run/reports/${UNIFIED_SCREENS_REPORT}`],
   // S2a/F1. The SCOPED report is where a `--only` run lands, and the three documents below
   // are where an operator learns that (the help text they run, the command prose an agent
   // opens, the RFC a human reads). A rename that moved the constant alone would leave all
   // three routing to a file nothing writes, which is this repo's oldest failure shape.
   [
     path.join(PKG_ROOT, "src", "capabilities", "verification", "verify.ts"),
-    `.loombridge/reports/${UNIFIED_SCOPED_REPORT}`,
+    `.loombridge/run/reports/${UNIFIED_SCOPED_REPORT}`,
   ],
-  [path.join(REPO_ROOT, "commands", "loombridge", "verify.md"), `.loombridge/reports/${UNIFIED_SCOPED_REPORT}`],
-  [path.join(REPO_ROOT, "Docs", "Design", "UnifiedVerify.md"), `.loombridge/reports/${UNIFIED_SCOPED_REPORT}`],
+  [path.join(REPO_ROOT, "commands", "loombridge", "verify.md"), `.loombridge/run/reports/${UNIFIED_SCOPED_REPORT}`],
+  [path.join(REPO_ROOT, "Docs", "Design", "UnifiedVerify.md"), `.loombridge/run/reports/${UNIFIED_SCOPED_REPORT}`],
   // G11. The test-results trio is the newest declared path, and the prose that ROUTES an
   // agent to it is the half a constant rename cannot reach. `verify.md` is what an agent
   // opens to learn the gate exists; the CLI help and the RFC are where a human looks.
@@ -345,7 +345,7 @@ test("the user-facing prose names the report paths with the CONSTANT-derived spe
 test("LITMUS: the prose walk really fires when a site stops naming the path", () => {
   // Feed the same predicate a renamed constant. If the sites still 'contain' it, the walk
   // above is decorative.
-  const renamed = `.loombridge/reports/${UNIFIED_VERIFY_REPORT.replace(".json", "-renamed.json")}`;
+  const renamed = `.loombridge/run/reports/${UNIFIED_VERIFY_REPORT.replace(".json", "-renamed.json")}`;
   const stillFound = PROSE_SITES.filter(([file]) => readFileSync(file, "utf-8").includes(renamed));
   assert.deepEqual(stillFound, [], "a renamed path must not be found in any prose site");
 });

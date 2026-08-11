@@ -347,7 +347,7 @@ test("live feel capture preserves measurements and artifacts when disconnect cle
 
 test("live feel capture runs trace-replay contracts through the replay driver", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "loombridge-feel-live-trace-"));
-  const traceDir = path.join(root, ".loombridge", "replays", "traces");
+  const traceDir = path.join(root, ".loombridge", "anchors", "traces");
   await fs.mkdir(traceDir, { recursive: true });
   await fs.writeFile(
     path.join(traceDir, "start-game.json"),

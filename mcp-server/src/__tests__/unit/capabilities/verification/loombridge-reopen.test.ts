@@ -61,7 +61,7 @@ async function tiderunnerShapedPlan(): Promise<SlicePlan> {
     slice.proof = {
       runId: `run-${slice.id}-1`,
       startedAt: "2026-07-30T00:00:00.000Z",
-      verdictPath: `.loombridge/reports/slices/${slice.id}.verdict.json`,
+      verdictPath: `.loombridge/run/reports/slices/${slice.id}.verdict.json`,
       captureManifest: [`${slice.id}/console.json`],
       checkpointId: slice.id,
       approvedAt: "2026-07-30T01:00:00.000Z",

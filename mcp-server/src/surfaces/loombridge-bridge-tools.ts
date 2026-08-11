@@ -10,7 +10,7 @@
  *
  *  - `loombridge_status` (read-only) — reports whether an acceptance contract
  *    exists for a project root and, if not, instructs running `loombridge plan`.
- *    It can NEVER mistake a hand-created `.loombridge/captures/` for a pass.
+ *    It can NEVER mistake a hand-created `.loombridge/run/captures/` for a pass.
  *  - `loombridge_project_init` (safe scaffold) — idempotently creates the
  *    `.loombridge/` directory tree. It does NOT author a contract or fabricate any
  *    verified state (that is `loombridge plan`'s job); it only gives the project a
@@ -253,10 +253,10 @@ export const LOOMBRIDGE_VERIFY_TOOL = {
     "Run BEFORE claiming a build is done, or to self-check a game: the DETERMINISTIC unified verify door, the same " +
     "one `loombridge verify` runs. It DISCOVERS this project's verification assets (acceptance contract, approved " +
     "trace baselines, feel snapshot, screen contract, stamped Unity EditMode results), prints the plan, and grades " +
-    "the OFFLINE ones into `.loombridge/reports/verify.json`. It never launches an editor, so live-only assets are " +
+    "the OFFLINE ones into `.loombridge/run/reports/verify.json`. It never launches an editor, so live-only assets are " +
     "listed as `needs --live` rows and are NEVER folded into a pass (run `loombridge verify --live` yourself for " +
     "those). A project with NO assets REFUSES and points at `loombridge plan` (a hand-created " +
-    "`.loombridge/captures/` is NOT a verification); a broken or unapproved anchor refuses in its own harness tier, " +
+    "`.loombridge/run/captures/` is NOT a verification); a broken or unapproved anchor refuses in its own harness tier, " +
     "never as a fake pass. A green here is NOT `done`: `status` is `partial` whenever coverage was incomplete or a " +
     "section compared nothing a human froze (see `unanchoredSections`), and only `loombridge doneness` certifies. " +
     "Returns the exit code, the VERBATIM output, the unified status/tier, and the report file paths (not the blobs).",
@@ -309,7 +309,7 @@ export const LOOMBRIDGE_MOBILE_AUDIT_TOOL = {
       root: {
         type: "string",
         description:
-          "Project root that owns `.loombridge/` (the report is written under `.loombridge/reports/`). Default: the MCP server working directory.",
+          "Project root that owns `.loombridge/` (the report is written under `.loombridge/run/reports/`). Default: the MCP server working directory.",
       },
       project: {
         type: "string",
@@ -723,7 +723,7 @@ export interface LoombridgeMobileAuditToolPayload {
 /**
  * Translate an `editor.audit_mobile_assets` payload into the advisory report
  * (the SAME builder `loombridge mobile-audit` uses), write it under
- * `.loombridge/reports/`, and return a summary + top offenders + the path. The full
+ * `.loombridge/run/reports/`, and return a summary + top offenders + the path. The full
  * report is NEVER returned inline (output-size discipline). Refuses (`ok:false`)
  * when the bridge returned something that is not a stamped audit payload.
  */

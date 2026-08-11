@@ -899,7 +899,7 @@ test("--live: the feel section carries the engine's own tier, pass and integrity
  *
  *   ✖ --live: the flow summary NAMES the HTML page, in `trace replay`'s own spelling
  *     AssertionError [ERR_ASSERTION]: The input did not match the regular expression
- *     /flow: html   → \.loombridge\/replays\/reports\/b-drifted\.report\.html/. Input:
+ *     /flow: html   → \.loombridge\/run\/replays\/reports\/b-drifted\.report\.html/. Input:
  *
  *     '[loombridge verify] discovered 4 asset(s)...
  *
@@ -938,21 +938,21 @@ test("--live: the flow summary NAMES the HTML page, in `trace replay`'s own spel
     // `trace replay` prints `html   → <rel>`; the two doors read identically on purpose.
     assert.match(
       out,
-      /flow: html {3}→ \.loombridge\/replays\/reports\/b-drifted\.report\.html/,
+      /flow: html {3}→ \.loombridge\/run\/replays\/reports\/b-drifted\.report\.html/,
       "verify must name the page beside the JSON it already names",
     );
     // …and the machine-readable half, so a consumer of verify.json has it too.
     const report = await readUnified(root);
     assert.equal(
       report.sections.flow?.htmlPath,
-      path.join(".loombridge", "replays", "reports", "b-drifted.report.html"),
+      path.join(".loombridge", "run", "replays", "reports", "b-drifted.report.html"),
       "the section's page is the WORST asset's, chosen by the same rule as its reportPath",
     );
     assert.deepEqual(
       report.sections.flow?.assets?.map((a) => a.htmlPath),
       [
-        path.join(".loombridge", "replays", "reports", "a-clean.report.html"),
-        path.join(".loombridge", "replays", "reports", "b-drifted.report.html"),
+        path.join(".loombridge", "run", "replays", "reports", "a-clean.report.html"),
+        path.join(".loombridge", "run", "replays", "reports", "b-drifted.report.html"),
       ],
       "every executed trace records its own page, not just the one the summary links",
     );
@@ -1773,7 +1773,7 @@ test("F1: --report cannot point a scoped run at the full report, nor a full run 
       runVerifyCli([
         "--root", root, "--workspace", workspace,
         "--only", "contract",
-        "--report", `.loombridge/reports/${UNIFIED_VERIFY_REPORT}`,
+        "--report", `.loombridge/run/reports/${UNIFIED_VERIFY_REPORT}`,
       ]),
     );
     assert.equal(scopedAtFull.result, 2);
@@ -1782,7 +1782,7 @@ test("F1: --report cannot point a scoped run at the full report, nor a full run 
     const fullAtScoped = await captured(() =>
       runVerifyCli([
         "--root", root, "--workspace", workspace,
-        "--report", `.loombridge/reports/${UNIFIED_SCOPED_REPORT}`,
+        "--report", `.loombridge/run/reports/${UNIFIED_SCOPED_REPORT}`,
       ]),
     );
     assert.equal(fullAtScoped.result, 2);

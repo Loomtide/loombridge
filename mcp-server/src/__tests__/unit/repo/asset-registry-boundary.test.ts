@@ -842,6 +842,12 @@ const ALLOWED_NETWORK_SITES = new Map<string, string>([
   ["capabilities/minigame/minigame-run.ts: import node:child_process", "re-invokes this CLI locally"],
   ["capabilities/minigame/minigame-scene-entry.ts: import node:child_process", "re-invokes this CLI locally"],
   ["capabilities/feel/runtime-guard.ts: import node:child_process", "runs local git"],
+  [
+    "capabilities/migrate/migrate-layout.ts: import node:child_process",
+    "runs local git: `rev-parse --is-inside-work-tree` (the preflight that refuses to release " +
+      "the anchors into an untracked directory) and `add` (staging the moved anchors). Both are " +
+      "fixed argv arrays with no user-supplied subcommand, and neither reaches a remote.",
+  ],
 ]);
 
 /**

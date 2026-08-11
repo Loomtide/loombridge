@@ -306,7 +306,7 @@ export interface PlanArgs {
   go?: boolean;
   /** Optional approval note recorded when `plan --go` approves verified slices. */
   note?: string;
-  /** Optional operator sign-off image/frame copied into .loombridge/reports/slices/<id>/. */
+  /** Optional operator sign-off image/frame copied into .loombridge/anchors/signoffs/<id>/. */
   signoffPath?: string;
   /** Record the developer's explicit asset-source strategy in ASSET_MANIFEST.json. */
   assetMode?: AssetManifestMode;
@@ -1353,7 +1353,7 @@ function printUsage(): void {
       "  --note <text>   Optional operator note recorded when `--go` approves a slice",
       "  --signoff <path>",
       "                  Optional operator sign-off frame copied into",
-      "                  .loombridge/reports/slices/<id>/ and hashed at approval",
+      "                  .loombridge/anchors/signoffs/<id>/ and hashed at approval",
       "  --allow-missing-design-target",
       "                  Escape hatch: complete plan without an approved Design Target.",
       "                  (Default: gate is ON — plan exits non-zero until a hero shot is",

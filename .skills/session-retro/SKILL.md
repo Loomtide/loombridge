@@ -85,7 +85,7 @@ the only lever it could see (the raw bridge). This is not a footnote; it is the 
   `.loombridge/` was created by the tool or hand-rolled) vs **BYPASSED** (which verbs/gates never ran that
   the build's own plan implied should have).
 - Watch for **false-green / verification theatre**: the build hand-creating `.loombridge/`-shaped evidence
-  (screenshots into `.loombridge/captures/`, "contract pass" graded against a prose checklist) with no
+  (screenshots into `.loombridge/run/captures/`, "contract pass" graded against a prose checklist) with no
   contract, no gate, nothing routed to the supervisor. A more `.loombridge`-aware agent produces a MORE
   convincing fake green — flag it as High.
 - Output a short table: `Surface | Used? | Evidence | If bypassed, why (missing front door / undiscoverable / not applicable)`.

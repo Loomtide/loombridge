@@ -139,11 +139,11 @@ This approves the composition ONLY to unlock scene assembly. It can never certif
 re-set as the real kind:
 
 ```
-unity_editor_screenshot { view: "game", outputPath: ".loombridge/captures/hero.png" }
+unity_editor_screenshot { view: "game", outputPath: ".loombridge/run/captures/hero.png" }
 ```
 
 ```bash
-loombridge target set --image .loombridge/captures/hero.png \
+loombridge target set --image .loombridge/run/captures/hero.png \
   --mode provided --kind rendered-unity-frame --approve
 ```
 

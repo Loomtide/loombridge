@@ -205,13 +205,13 @@ S1 shipped as described, plus four things this RFC did not originally specify:
   with a good trace baseline should still get that trace checked. The engine path and the MCP
   tool keep the fatal tier.
 
-- **The unified report is written to `.loombridge/reports/verify.json`** alongside the
+- **The unified report is written to `.loombridge/run/reports/verify.json`** alongside the
   per-asset reports, and the screens section writes a verify-owned
-  `.loombridge/reports/verify-screens.json` rather than the guided flow's workspace report.
+  `.loombridge/run/reports/verify-screens.json` rather than the guided flow's workspace report.
   `--report <path>` overrides the first, resolved relative to `--root`, and is REFUSED when it
   would overwrite a project artifact or any file that is not a previous unified report.
 - **`doneness` consumes the report** (the seam S1 originally left reserved). When
-  `.loombridge/reports/verify.json` is present and its `exit` is non-zero, `doneness` adds a
+  `.loombridge/run/reports/verify.json` is present and its `exit` is non-zero, `doneness` adds a
   refusal on both its paths (whole-game and slice roll-up); an absent report changes nothing,
   and a malformed one refuses rather than being skipped. It is a REFUSE-ONLY input: a green
   report never adds certification, so it is not a laundering path.
@@ -262,7 +262,7 @@ would this let a run CLAIM that it did not measure?
   tampered feel snapshot stop counting, which is the precise opposite of what this product
   sells.
 - **A scoped run's status ceiling is `partial`, and it never writes the full report.** It
-  writes `.loombridge/reports/verify-scoped.json`; `verify.json` keeps meaning "the last time
+  writes `.loombridge/run/reports/verify-scoped.json`; `verify.json` keeps meaning "the last time
   this project answered the whole question". `--report` pointing one at the other's path is
   refused in both directions, because both files carry `kind: "unified-verify"` and would
   otherwise pass the previous-report allowance.
@@ -359,7 +359,7 @@ note, so no guard enforces it.
   wave.
 - **The slot is COMMITTED.** The stamped run lives at `.loombridge/tests/test-results.xml`,
   `.loombridge/tests/test-results-manifest.json`, and `.loombridge/tests/test-run.log`, and
-  unlike `.loombridge/reports/` it is meant to be checked in: the stamped pair is evidence a
+  unlike `.loombridge/run/reports/` it is meant to be checked in: the stamped pair is evidence a
   reviewer can read without re-running an editor. The project template's `.gitignore` is
   guarded against ignoring it.
 - **What the binding proves, exactly.** The provenance of THESE BYTES: produced by this tool,
@@ -683,7 +683,7 @@ be silent about what it did not.
 1. Discovery manifest: derive purely from existing files (workspace layout is already the
    truth) or add an explicit `VERIFY.json` index? Leaning derive-from-files: one less thing
    to drift, and the layout is already guarded by tests.
-2. Where does the unified report live: `.loombridge/reports/verify.json` alongside the
+2. Where does the unified report live: `.loombridge/run/reports/verify.json` alongside the
    per-asset reports, or replacing them? Leaning alongside (per-asset reports are consumed by
    existing tooling).
 3. **RESOLVED (S1): `--live` opt-in.** Bare `verify` runs the offline assets and lists the

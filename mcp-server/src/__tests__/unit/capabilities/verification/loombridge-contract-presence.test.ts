@@ -112,7 +112,7 @@ async function scaffoldApprovedRoadmap(root: string): Promise<void> {
 
 /** Hand-create a `.loombridge/captures/` dir with a file but NO contract — RCL-P04. */
 async function fakeCaptures(root: string): Promise<void> {
-  const dir = path.join(root, ".loombridge", "captures");
+  const dir = path.join(root, ".loombridge", "run", "captures");
   await fs.mkdir(dir, { recursive: true });
   await fs.writeFile(path.join(dir, "frame-0.json"), "{}\n", "utf-8");
 }
@@ -147,7 +147,7 @@ test("inspectContractPresence flags captures-without-contract", async () => {
     const presence = await inspectContractPresence(loombridgePaths(root));
     assert.equal(presence.loombridgeDirExists, true);
     assert.equal(presence.contractExists, false);
-    assert.deepEqual(presence.capturePresentDirs, ["captures"]);
+    assert.deepEqual(presence.capturePresentDirs, ["run/captures"]);
     assert.equal(presence.capturesWithoutContract, true);
   } finally {
     await fs.rm(root, { recursive: true, force: true });
@@ -155,7 +155,7 @@ test("inspectContractPresence flags captures-without-contract", async () => {
 });
 
 test("noContractRefusal names plan + the captures-are-not-a-verification trap", () => {
-  const msg = noContractRefusal("/p/.loombridge/ACCEPTANCE.json", ["captures"]);
+  const msg = noContractRefusal("/p/.loombridge/ACCEPTANCE.json", ["run/captures"]);
   assert.match(msg, /No acceptance contract found at \/p\/\.loombridge\/ACCEPTANCE\.json/);
   assert.match(msg, /loombridge plan/);
   assert.match(msg, /NOT a verification/);
@@ -211,7 +211,7 @@ test("status model reports captures-without-contract honestly", async () => {
     assert.equal(model.hasRoadmap, false);
     assert.equal(model.contractExists, false);
     assert.equal(model.capturesWithoutContract, true);
-    assert.deepEqual(model.capturePresentDirs, ["captures"]);
+    assert.deepEqual(model.capturePresentDirs, ["run/captures"]);
     assert.ok(
       model.warnings.some((w) => /NO acceptance contract/.test(w) && /NOT a verification/.test(w)),
       model.warnings.join("\n"),
@@ -367,7 +367,7 @@ test("loombridge_status verifiedGreen is TRUE for a real runId-bound fresh-green
       engine: "unity",
       phase: "verified-green",
       currentBuild: { runId, startedAt, captureManifest: [] },
-      lastVerdict: { status: "pass", at: producedAt, verdictPath: ".loombridge/reports/build-verdict.json" },
+      lastVerdict: { status: "pass", at: producedAt, verdictPath: ".loombridge/run/reports/build-verdict.json" },
       updatedAt: producedAt,
     });
     await fs.mkdir(paths.reports, { recursive: true });
@@ -394,7 +394,7 @@ test("loombridge_status verifiedGreen is FALSE for a forged STATE.phase + empty 
       genre: "platformer-2d",
       engine: "unity",
       phase: "verified-green",
-      lastVerdict: { status: "pass", at: "2026-05-28T01:00:00.000Z", verdictPath: ".loombridge/reports/build-verdict.json" },
+      lastVerdict: { status: "pass", at: "2026-05-28T01:00:00.000Z", verdictPath: ".loombridge/run/reports/build-verdict.json" },
       updatedAt: "2026-05-28T01:00:00.000Z",
     });
 
@@ -798,7 +798,7 @@ test("buildAndWriteMobileAuditReport returns a summary + top offenders + path, a
     assert.ok(!("findings" in (p as unknown as Record<string, unknown>)), "the full findings array must not be inline");
     assert.ok(!Object.values(p).some((v) => typeof v === "string" && v.includes("# Mobile Optimization Audit")), "no raw markdown blob inline");
 
-    // The report file is written under .loombridge/reports/ and is byte-identical to the CLI builder.
+    // The report file is written under .loombridge/run/reports/ and is byte-identical to the CLI builder.
     const jsonPath = path.join(root, p.reportPath);
     const written = await fs.readFile(jsonPath, "utf8");
     assert.equal(written, stableStringify(buildMobileAuditReport(audit, DEFAULT_THRESHOLDS)));
