@@ -102,39 +102,52 @@ mechanism by which a well-written, installed, delivered skill stayed invisible.
 
 ## The change
 
-**Stop asserting absence. Report the inventory and let the agent match.**
+**Stop asserting absence. Print nothing in its place.**
 
-`renderSliceSkill` currently maps `undefined` to that sentence. Instead, when a slice carries no
-binding, print what the project actually has:
+`renderSliceSkill` maps an absent binding to that false sentence. When the project HAS skills, it
+now renders exactly:
 
 ```
-skill: no pinned skill for this slice. Installed skills you can match against:
-       generated-3d-art-integration, sfx-integration-pack, ui-polish-pack, ...
-       (or build with the generic `unity_*` MCP ops)
+skill: none pinned for this slice
 ```
 
-The CLI's job here is **inventory, not judgment**: read what is installed, print it, stop. It does
-not rank, score, or select. That keeps the deterministic layer making only claims it can support,
-and it hands the actual matching to the component that is genuinely good at it, since both Claude
-and Codex select skills from `description` front matter natively and those descriptions are already
-written as trigger conditions.
+No list, no count, no instruction to choose. That is the whole change.
 
-A pinned `skill` still wins when a pack sets one. This only changes the absent case.
+### Why not print the inventory (the first draft of this RFC, corrected on review)
+
+The first cut proposed listing the installed skills so the agent could match against them. Built,
+it rendered a 330-character line naming all 13, and the objection on review was the right one:
+**nobody should be choosing skills from a menu, and framing it as a choice defeats the point.**
+
+Routing is **already automatic**. Claude and Codex both surface the skills in `.claude/skills/` and
+`.codex/skills/` together with their `description` front matter, and those descriptions are written
+as trigger conditions precisely so the agent matches without being handed anything. Observed
+directly: a skill created mid-session appeared in the authoring agent's own available-skills list,
+with its description, with no inventory passed to it.
+
+So an inventory line is redundant with what the agent already has, and actively harmful in framing:
+it converts an automatic match into a chore. The defect was never "the agent lacks a list". It was
+that the CLI **asserted nothing existed**, which suppresses the matching that would otherwise
+happen. Deleting the false claim is the entire fix.
+
+The disk read survives, but only to answer *does this project have skills at all*, which is what
+decides between the two wordings. `renderSliceSkill` reads `installed.length` and never the names,
+with a comment saying not to "improve" it by enumerating them.
 
 ### Why not a text matcher over slice id / title / feelIntent
 
-Slice ids are more discriminating than gates (`hud` in all five packs, `feedback` / `impact-feedback`,
-`parallax`, `arena`). But they are free strings authored per pack, not a controlled vocabulary, so a
-matcher over them is a heuristic pretending to be a rule, and it duplicates work the agent's own
-selector does better with more context. Printing the inventory gets the same routing benefit with
-none of the false precision.
+Slice ids are more discriminating than gates (`hud` in all five packs, `feedback` /
+`impact-feedback`, `parallax`, `arena`). But they are free strings authored per pack, not a
+controlled vocabulary, so a matcher over them is a heuristic pretending to be a rule, and it
+duplicates work the agent's own selector does better with far more context.
 
 ## Invariants
 
 - **The CLI never claims a skill is absent when it is installed.** That false claim is the whole
   defect; it must become unrepresentable.
-- **The CLI does not rank or select skills.** Inventory only. Ranking is judgment, and judgment
-  does not belong in the deterministic layer.
+- **The CLI does not rank, select, or ENUMERATE skills.** It reports only whether the project has
+  any, because that is all that decides the wording. Ranking is judgment; listing is a menu; the
+  agent's own skill system already does the matching.
 - **Routing is advisory and never reaches a verdict.** Nothing here may influence `verify`,
   `doneness`, or any gate. A skill declaration must never become a lever on green.
 - **An explicit pack binding still wins.** This changes only the unbound case.
@@ -152,22 +165,26 @@ none of the false precision.
 
 ## Open questions
 
-1. **Where does the inventory come from: the shipped `agent-surface/` payload, or the project's
-   `.claude/skills/`?** Leaning the PROJECT, because that is the set the agent can actually open,
-   and a user may have removed one. The payload is what the CLI could offer, not what the project
-   has, and the difference is exactly the lie this RFC exists to stop telling.
-2. **Does the inventory belong in `ask` and `status` too?** Both render slice detail through the
-   same helper. Leaning yes for consistency, but `plan`/`build` is where the decision is made.
-3. **Does listing 13 names every slice become noise?** Possibly. A cap with a pointer at the skills
-   directory may read better than a full list. Worth deciding on real output rather than in advance.
+1. ~~Where does the inventory come from?~~ **ANSWERED: the project's `.claude/skills/`**, unioned
+   with `.codex/skills/`, because that is the set the agent can actually open. The bundled
+   `agent-surface/` payload is what the CLI *could* offer, and reading it would reproduce the same
+   class of lie in the opposite direction.
+2. ~~Does the inventory belong in `ask` and `status` too?~~ **ANSWERED: yes**, all three render
+   through the same helper and now agree.
+3. ~~Does listing 13 names become noise?~~ **DISSOLVED.** Nothing is listed. See "Why not print the
+   inventory": the question only existed because the first draft printed a menu.
+4. **Should `build` print the skill line at all?** It currently does not; only `plan` and `ask` do.
+   If the build decision is really made at `build`, that is a gap, but it is a separate change from
+   removing a false claim.
 
 ## LITMUS obligations
 
-- A slice with no binding, in a project WITH skills installed, must print the installed names and
-  must NOT print "none ships". A test asserting the old sentence is gone.
+- A slice with no binding, in a project WITH skills installed, must NOT print "none ships", and
+  must NOT enumerate the skills either. Both directions asserted: the false sentence is gone, and
+  no installed name appears in the output.
 - A slice with no binding, in a project WITHOUT skills installed, still prints the generic-ops
   wording. The degrade path is not a regression.
 - A slice WITH a binding prints exactly that binding, unchanged.
-- The inventory is read from disk, not hardcoded: planting a skill directory changes the output, and
-  removing one removes it from the list. A hardcoded list would pass every other test here.
+- The presence check is read from disk, not hardcoded: planting a skill directory and removing it
+  again must change what the reader returns. A hardcoded list would pass every other test here.
 - Nothing in `verify` or `doneness` output changes as a result of any skill being present or absent.

@@ -70,8 +70,23 @@ export interface SliceAcceptance {
  * The binding is optional by design: for most genres no shipped skill pack covers a given slice, and
  * naming one that does not exist is worse than naming none, because the agent goes looking for it.
  */
-export function renderSliceSkill(skill: string | undefined): string {
-  return skill ?? "(none ships for this slice — build with the generic `unity_*` MCP ops)";
+export function renderSliceSkill(skill: string | undefined, installed: readonly string[] = []): string {
+  if (skill) return skill;
+  // NEVER assert absence while the project holds skills. The old text said
+  // "(none ships for this slice ...)" unconditionally, and with 13 skills installed that was
+  // simply false: an agent told nothing exists does not go looking, which is how a delivered
+  // skill stayed invisible through a whole 3D build. See Docs/Design/SkillRouting.md.
+  //
+  // DELIBERATELY NOT A LIST. Only `installed.length` is read, never the names, because routing is
+  // ALREADY automatic: Claude and Codex both surface the skills in `.claude/skills/` /
+  // `.codex/skills/` with their descriptions, and those descriptions are written as trigger
+  // conditions precisely so the agent matches without being handed a menu. Printing the inventory
+  // here would be redundant with what the agent already has, and it would reframe an automatic
+  // match as a choice somebody has to make. The only thing this line has to do is stop suppressing
+  // the matching that would otherwise happen. Do not "improve" this by enumerating them.
+  if (installed.length > 0) return "none pinned for this slice";
+  // A project without `install-agent` genuinely has none, so the original wording is TRUE here.
+  return "(none ships for this slice — build with the generic `unity_*` MCP ops)";
 }
 
 /**
