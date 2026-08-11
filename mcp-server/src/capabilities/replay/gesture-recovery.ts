@@ -7,14 +7,27 @@
  * open-loop reproduction can under-deliver the travel the game's gesture detector needs, so the game
  * never advances and the run STALLS on that screen.
  *
- * The fix closes the loop on the game's OWN state signal. The recorder already gates each gesture with
- * a `wait-for-condition` (the phase enum reaching the next value). So instead of trusting a single
- * blind reproduction, we drive the gate and — if it doesn't pass — RE-DRIVE the preceding continuous
- * gesture with ESCALATING travel until the phase advances or a bounded budget is spent. This is
- * self-correcting for ANY gesture-driven game on ANY aspect, independent of the open-loop fidelity.
+ * The fix closes the loop on the game's OWN observable progress. The recorder emits two kinds of wait
+ * after a gesture, and BOTH of them fail for the same reason when the scrub under-delivered: the
+ * `wait-for-condition` phase gate (the phase enum never reaches its next value) and the
+ * `wait-for-visible` wait on the next screen's element (the panel the phase change would have
+ * activated stays inactive). So instead of trusting a single blind reproduction, we drive the wait
+ * and — if it doesn't pass — RE-DRIVE the preceding continuous gesture with ESCALATING travel until
+ * the wait clears or a bounded budget is spent. This is self-correcting for ANY gesture-driven game
+ * on ANY aspect, independent of the open-loop fidelity.
+ *
+ * WHY THE VISIBILITY WAIT COUNTS TOO (the real failure that motivated it). The observer emits
+ * `wait-for-visible` BEFORE the gate it precedes, so a recorded stir → `wait-for-visible
+ * /Canvas/CookPanel/Ingredient_spray` → `wait-for-condition phase == "Cooking"` died on the
+ * VISIBILITY wait, one action before the recovery-armed gate ever ran. Recovering only the gate left
+ * the machinery built for exactly this case unreachable on every trace the recorder produces.
+ * Reordering what the recorder emits would not fix an already-recorded trace, and could not be done
+ * safely anyway: `runtime.wait_for_condition` evaluates its locator up front and throws
+ * `LOCATOR_UNRESOLVED` rather than polling, so a gate hoisted ahead of the visibility wait would fail
+ * fast on every cross-scene recording (the next scene's state manager does not exist yet).
  *
  * It is a strict superset of the old behavior: with no continuous gesture to retry (a tap-advance
- * game, or a gate that isn't preceded by a scrub), it is exactly one dispatch. A gate that genuinely
+ * game, or a wait that isn't preceded by a scrub), it is exactly one dispatch. A wait that genuinely
  * can't be satisfied still fails after the budget — honest, never a fabricated pass.
  */
 
@@ -23,6 +36,21 @@ import type { DispatchResult, ReplayDriver } from "./driver.js";
 
 /** A continuous scrub gesture whose EFFECT is travel-accumulation (a stir/scrub), re-drivable with more travel. */
 export type ContinuousGesture = Extract<Action, { do: "drag" }> & { travelPx: number };
+
+/**
+ * A WAIT whose failure is evidence the game did not ADVANCE, and which a preceding continuous
+ * gesture could therefore still unstick: the phase gate, and the visibility wait on the element the
+ * phase change reveals. Both are emitted by the recorder around a gesture, in that order (visibility
+ * first), which is why recovery has to cover both — see the module header.
+ *
+ * A `wait` (a bare duration) is NOT here: it always "passes", so there is nothing to recover.
+ */
+export type RecoverableWait = Extract<Action, { do: "wait-for-condition" } | { do: "wait-for-visible" }>;
+
+/** True for the waits {@link dispatchWaitWithGestureRecovery} can recover. */
+export function isRecoverableWait(action: Action): action is RecoverableWait {
+  return action.do === "wait-for-condition" || action.do === "wait-for-visible";
+}
 
 /** True for a drag carrying a positive `travelPx` — the only gestures worth re-driving (a position
  *  drop or a plain A→B drag has no travel to escalate, so re-driving it changes nothing). */
@@ -66,7 +94,7 @@ export interface GestureRecoveryOptions {
    * Beyond the cap the gate is left to fail honestly → an honest can't-verify on that aspect.
    */
   maxTravelMultiple?: number;
-  /** Per-retry gate re-check timeout (ms). Kept short so a stuck run doesn't wait the full gate
+  /** Per-retry wait re-check timeout (ms). Kept short so a stuck run doesn't wait the full wait
    *  timeout on every attempt — the first dispatch already gave the game its full settle budget. */
   recheckTimeoutMs?: number;
   /** Optional progress callback (attempt index, escalated travelPx) for logging/tests. */
@@ -76,19 +104,36 @@ export interface GestureRecoveryOptions {
 const DEFAULTS = { maxAttempts: 4, travelEscalation: 1.5, maxTravelMultiple: 2.5, recheckTimeoutMs: 1500 };
 
 /**
- * Dispatch a `wait-for-condition` phase gate with adaptive gesture recovery. Returns the final gate
- * result. If the gate fails AND `lastGesture` is a continuous gesture, re-drive that gesture with
- * escalating travel and re-check, up to the budget. Pure orchestration over the injected `driver` —
+ * Build the RE-CHECK dispatch for a wait: the same wait on the short recheck timeout.
+ *
+ * A `wait-for-visible` also sheds its `minDelayMs`, the human's PACING floor. That floor was already
+ * paid on the first dispatch — which then burned its whole timeout failing, plus a gesture re-drive —
+ * so re-paying it on every attempt only makes a stuck run slower. It cannot make a re-check pass that
+ * would otherwise fail: it only ever ADDS time AFTER the element is already visible.
+ */
+function recheckOf(waitAction: RecoverableWait, timeoutMs: number): RecoverableWait {
+  if (waitAction.do === "wait-for-visible") {
+    const { minDelayMs: _pacingFloor, ...rest } = waitAction;
+    return { ...rest, timeoutMs };
+  }
+  return { ...waitAction, timeoutMs };
+}
+
+/**
+ * Dispatch a recoverable WAIT (a `wait-for-condition` phase gate, or the `wait-for-visible` the
+ * recorder emits just before it) with adaptive gesture recovery. Returns the final wait result. If
+ * the wait fails AND `lastGesture` is a continuous gesture, re-drive that gesture with escalating
+ * travel and re-check, up to the budget. Pure orchestration over the injected `driver` —
  * unit-testable with a fake driver.
  */
-export async function dispatchConditionWithGestureRecovery(
+export async function dispatchWaitWithGestureRecovery(
   driver: Pick<ReplayDriver, "dispatch">,
-  conditionAction: Extract<Action, { do: "wait-for-condition" }>,
+  waitAction: RecoverableWait,
   lastGesture: Action | undefined | null,
   options: GestureRecoveryOptions = {},
 ): Promise<DispatchResult> {
-  const first = await driver.dispatch(conditionAction);
-  // Exempt a BLOCKED gate (a missing capability / harness fault, not a stall) — re-driving a gesture
+  const first = await driver.dispatch(waitAction);
+  // Exempt a BLOCKED wait (a missing capability / harness fault, not a stall) — re-driving a gesture
   // can't fix it, and recovery must never turn a harness gap into a swallowed result. And only a
   // continuous gesture is re-drivable.
   if (first.ok || first.blocked || !isContinuousGesture(lastGesture)) return first;
@@ -103,12 +148,12 @@ export async function dispatchConditionWithGestureRecovery(
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     travelPx = Math.min(travelPx * escalation, maxTravel); // bounded — never brute-force past the cap
     options.onRetry?.(attempt, travelPx);
-    // Re-drive the SAME gesture with more scrub. Its precondition still holds (the gate it advances
+    // Re-drive the SAME gesture with more scrub. Its precondition still holds (the wait it advances
     // toward hasn't passed, so the game is still in the gesture's phase). A drag dispatch that reports
-    // not-actuated is NOT fatal here — we always re-check the gate, since the scrub may still have
+    // not-actuated is NOT fatal here — we always re-check the wait, since the scrub may still have
     // nudged the game's accumulator even if no discrete handler "fired".
     await driver.dispatch({ ...lastGesture, travelPx });
-    last = await driver.dispatch({ ...conditionAction, timeoutMs: recheckTimeoutMs });
+    last = await driver.dispatch(recheckOf(waitAction, recheckTimeoutMs));
     if (last.ok) return last;
     if (travelPx >= maxTravel) break; // hit the travel cap — a further attempt adds no scrub; fail honestly
   }

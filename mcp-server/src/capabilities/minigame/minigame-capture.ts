@@ -57,7 +57,13 @@ import {
 } from "./minigame-capture-plan.js";
 import { reorderStatesByTrace } from "./minigame-role-discover.js";
 import { isDraftContract } from "./minigame-draft.js";
-import { dispatchConditionWithGestureRecovery, isContinuousGesture, preservesPendingGesture } from "../replay/gesture-recovery.js";
+import {
+  dispatchWaitWithGestureRecovery,
+  isContinuousGesture,
+  isRecoverableWait,
+  preservesPendingGesture,
+  type RecoverableWait,
+} from "../replay/gesture-recovery.js";
 import { changedObjectIds } from "./input-response.js";
 import { captureBackgroundData } from "./minigame-background.js";
 import { discoverBackgroundCandidates } from "./minigame-background-discover.js";
@@ -486,19 +492,21 @@ export async function driveDeviceOnce(
     if (stimulus && i === stimulus.stimulusIndex) {
       acc.respBefore = (await driver.dumpScreenRects()) as RawScreenRects;
     }
-    // A phase gate (`wait-for-condition`) is driven with adaptive gesture recovery: if it fails, the
-    // preceding continuous gesture (a stir/scrub) is re-driven with escalating travel until the game's
-    // phase signal advances or a bounded budget is spent. This is what keeps a gesture-driven game from
-    // stalling on an extreme aspect where the open-loop scrub under-delivers (the android-tall stir).
-    const res =
-      action.do === "wait-for-condition"
-        ? await dispatchConditionWithGestureRecovery(driver, action, lastGesture, {
-            onRetry: (attempt, travelPx) =>
-              console.error(
-                `[loombridge minigame] capture: phase gate '${action.expected}' not met on ${device.id} — re-driving the gesture (attempt ${attempt}, travel ${Math.round(travelPx)}px).`,
-              ),
-          })
-        : await driver.dispatch(action);
+    // A WAIT that can only be cleared by the game advancing — the `wait-for-condition` phase gate AND
+    // the `wait-for-visible` the recorder emits just before it — is driven with adaptive gesture
+    // recovery: if it fails, the preceding continuous gesture (a stir/scrub) is re-driven with
+    // escalating travel until the wait clears or a bounded budget is spent. This is what keeps a
+    // gesture-driven game from stalling on an extreme aspect where the open-loop scrub under-delivers
+    // (the android-tall stir). The visibility wait is included because the recorder emits it FIRST,
+    // so it is where an under-reproduced stir actually kills the drive.
+    const res = isRecoverableWait(action)
+      ? await dispatchWaitWithGestureRecovery(driver, action, lastGesture, {
+          onRetry: (attempt, travelPx) =>
+            console.error(
+              `[loombridge minigame] capture: ${describeRecoverableWait(action)} not met on ${device.id} — re-driving the gesture (attempt ${attempt}, travel ${Math.round(travelPx)}px).`,
+            ),
+        })
+      : await driver.dispatch(action);
     // Track the re-drivable gesture with an ADJACENCY guard: a continuous gesture arms it; a discrete
     // input (tap/key/position-drag) between it and a gate CLEARS it (that input advances the gate, not
     // the earlier scrub) so a tap-advanced gate can't falsely recover a stale gesture; only the waits
@@ -1046,4 +1054,11 @@ function message(error: unknown): string {
 
 function describeReachedCondition(cond: MinigameReachedCondition): string {
   return `${cond.locator}.${cond.property_path} ${cond.operator} ${JSON.stringify(cond.expected)}`;
+}
+
+/** Name the wait a gesture re-drive is trying to clear, for the retry notice. */
+function describeRecoverableWait(action: RecoverableWait): string {
+  return action.do === "wait-for-condition"
+    ? `phase gate '${String(action.expected)}'`
+    : `visibility gate '${action.locator.path}'`;
 }
