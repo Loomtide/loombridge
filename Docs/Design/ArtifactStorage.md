@@ -1,6 +1,7 @@
 # RFC: Artifact storage (where Loombridge writes, and what a team commits)
 
-**Status:** **S1 + S2 SHIPPED**; S3/S4 proposed. **Date:** 2026-08-04, S2 landed 2026-08-11.
+**Status:** **S1 + S2 SHIPPED**; S3/S4 proposed. **Date:** 2026-08-04, S2 landed 2026-08-11,
+S2's migration machinery deleted 2026-08-12 ("Why S2 shipped no migration").
 Inherits from [Positioning.md](Positioning.md) and is a peer of
 [UnifiedVerify.md](UnifiedVerify.md): the front door cannot be a team gate until the anchors
 it reads can leave one machine.
@@ -23,9 +24,9 @@ Three mechanisms produce it, each verified in code:
    both the approved pixel baselines AND `traces/`, the recorded human demonstration. A trace is
    the single artifact in the system that CANNOT be regenerated without a human replaying the
    game, and the shipped default threw it away. **CLOSED by S2**: both are anchors under
-   `.loombridge/anchors/`, the ignore rule covers only `run/`, and `loombridge migrate-layout`
-   moves an existing project across (and `git add`s the destination, because `git clean -fd`
-   skips ignored files and the old rule was accidentally protecting them).
+   `.loombridge/anchors/`, and the ignore rule covers only `run/`. S2 originally shipped a
+   `loombridge migrate-layout` verb to carry an existing project across; it was deleted the day
+   after it landed, for the reasons under "Why S2 shipped no migration" below.
 3. **The home anchors were not portable even if copied.** The feel snapshot and the screen
    layout baseline carried an ABSOLUTE-path `projectRoot` stamp compared with `!==`, so a
    teammate whose checkout sat at a different path read `broken`, tier 2. **CLOSED by S1**
@@ -144,7 +145,7 @@ do and expensive to discover.
    hosted catalog a clone or a CI runner cannot reach, so ignoring them breaks the clone
    promise. But nobody APPROVES a pack, and `anchors/` means "a human froze this as the thing
    gates compare against". Filing an input there would dilute the word and would put
-   something un-approved into the set the migration and the tombstone treat as ground truth.
+   something un-approved into the set every gate treats as ground truth.
 
 5. **The human sign-off artifact moved to `anchors/signoffs/`.** `plan --go --signoff` wrote
    it under `paths.reports`, and the S2 split files `reports/` under `run/`: it would have
@@ -156,71 +157,83 @@ do and expensive to discover.
 
 6. **The MCP op traces moved to `run/op-traces/`, away from the demonstrations.** The server
    builds its recorder at startup, outside every CLI verb, and used to append into
-   `replays/traces/`. That had two costs: an agent session re-created the directory purely by
-   connecting, so "the legacy directory exists" could never be a safe migration signal; and a
-   machine-generated op log was indistinguishable by location from an irreplaceable human
-   demonstration. The migration refusal predicate is therefore **"a `*.trace.json` or a
-   stamped baseline manifest exists at a legacy path, and is not a tombstone"**, never "the
-   legacy directory exists".
+   `replays/traces/`, where a machine-generated op log was indistinguishable BY LOCATION from
+   an irreplaceable human demonstration. That is the whole reason for the move, and it stands
+   on its own. (It also killed a second problem, now moot: an agent session re-created the
+   directory purely by connecting, so "the directory exists" could never have been a safe
+   signal for the deleted migration to key off.)
 
 **Top-level `captures/` is no longer an allowlisted screenshot root.** It predated
 `.loombridge/`, sat outside the state dir, and belonged to neither tier, so no rule said
 whether a team should commit it. The advertised destination is `.loombridge/run/captures/`.
 
-## The migration, and the tombstone
+## Why S2 shipped no migration
 
-`loombridge migrate-layout` performs the move. It is not a `mv`, and the reasons are all the
-same reason: it touches the one artifact in the system a human cannot regenerate.
+S2 landed with a `loombridge migrate-layout` verb, a pre-S2-layout refusal in `verify` and in
+the `trace` verbs, a tombstone writer, and the path-remapping table that fed all three. **All
+of it was deleted the day after it merged.** This section is why, so the decision is not
+re-litigated by whoever next moves a directory.
 
-- **Copy → verify every byte at the destination → release the source.** There is no
-  `fs.rename` anywhere in it, which makes a cross-device move (`EXDEV`) an ordinary case
-  instead of a fallback branch that only ever runs on someone else's machine. Verification
-  is sha256 per file: a size or count comparison would pass on a truncated copy.
-- **A demonstration and its approved baseline move as ONE unit.** A half-migrated pair reads
-  as "recorded, not approved", and that row's printed next action is `trace approve`, which
-  would freeze NEW frames over the ones a human already approved. The same case now prints
-  "your approved baseline is at the OLD path; run `migrate-layout`" instead.
-- **The disk is the truth; the journal is a hint.** Interrupted between destination-verify
-  and source-release, both copies exist. A second run re-derives every decision from what is
-  actually there, so the survivor is neither re-migrated nor mistaken for finished work.
-- **A lock file with a stale rule**, staleness decided by age AND process liveness, so a
-  Ctrl-C does not cost an operator a fifteen-minute wait.
-- **It refuses to run outside a git work tree** (unless `--no-git`), and `git add`s the
-  destination itself. `git clean -fd` SKIPS ignored files, so the anchors under the old,
-  ignored `replays/` were accidentally protected by the very rule this RFC removes; moving
-  them somewhere untracked and un-ignored is strictly less protection. Measured on a
-  template-derived project: `git clean -fd` deleted the migrated anchors with no git object
-  behind them.
-- **It re-stamps the four recorded paths that are not sha-bound**, and re-derives the
-  sign-off sha from the relocated bytes. "No re-stamping needed" is true only of the pixel
-  baseline, whose binding is a hash over bytes. The four are `SliceProof.verdictPath` (which
-  three readers PREFER over the derived path), `SliceProof.signoffArtifact` +
-  `signoffSha256`, the verdict evidence ledger's `inputsDir`, and `STATE.md`'s
-  `lastVerdict.verdictPath`.
+**Nobody can be in the state it detected.** Three facts, each checkable:
 
-### The tombstone, and why it is the highest-priority part
+- The repo has been public since 2026-07-21 with **0 stars**.
+- npm carries `@loomtide/loombridge` at **0.0.1**, a placeholder. The version in use is 0.2.0,
+  which has never been published.
+- A survey of every consumer project on the author's machine found exactly ONE that ever had
+  anchors, and it had already been migrated by hand. Every other project has zero traces and
+  zero baselines.
 
-**An OLDER CLI against a MIGRATED project must not tell a human to re-record.** Reproduced:
-`discoverTraces` returns `[]` for a directory that is not there, so an old binary sees not a
-`broken` anchor but NO anchor, prints the on-ramp, and says *"the cheapest universal anchor
-is a recorded demonstration, so ask your human to play the game once: 1. loombridge trace
-record"*. An old CLI is not hypothetical: a pinned CI runner, a second machine, and a frozen
-installed runtime all keep running whatever they were installed with.
+So **no published version has ever shipped the pre-S2 layout**. The refusal could never fire,
+the tombstone could never be read, and the verb could never be run for its stated purpose. What
+shipping it actually bought was three costs and no benefit: dead code, a permanent maintenance
+obligation for an unreachable state, and a top-level CLI verb that the first real user would
+read as something they were supposed to understand.
 
-So the migration leaves each legacy anchor path OCCUPIED: a stub trace (so the id is still
-discovered and the row still exists) and a PNG-less baseline manifest carrying the REAL
-`traceSha256` of the migrated demonstration (so `verifyTraceBaseline` fails, `notRunClass`
-becomes `broken`, and the tier is 2). The manifest's one declared-and-absent frame has a
-SENTENCE for its `captureId`, because a manifest's failure text is the only channel a binary
-that has never heard of this change will print.
+The engineering was not wrong for the problem it was posed. The problem was not real.
 
-This is proved by running the REAL discovery classifier over the LEGACY directories, which is
-exactly what an old binary does, rather than by a test asserting its own model of one. The
-counterfactual runs in the same test: with the legacy paths merely emptied, the same code
-path reports zero rows.
+### The forward rule
 
-A new CLI reads the same files as the migration MARKER, which is what keeps the refusal from
-becoming a permanent exit-2 loop.
+> **A breaking layout change made BEFORE the first public release gets a plain move and a
+> release note. It never gets a migration.**
+
+Migration engineering begins at the first public release, because that is the first moment a
+version exists that somebody else could be pinned to. Until then the honest instrument is a
+release note: "0.x moved `<here>` to `<there>`; move it yourself, or delete it and re-approve."
+
+This is not a licence to move anchors casually. The reason S2's migration was written so
+carefully still holds in full: a recorded demonstration is the one artifact in the system a
+human cannot regenerate. What changed is who has one. When somebody does, the answer is a
+migration, and the notes below are what it should be built from.
+
+### What the deleted migration knew, kept for whoever writes the next one
+
+Recorded because these were expensive to work out, not because any of it is live code:
+
+- **Copy → verify every byte at the destination → release the source**, never `fs.rename`, so a
+  cross-device move (`EXDEV`) is an ordinary case rather than a fallback branch that only runs on
+  someone else's machine. Verify with sha256 per file: a size or count comparison passes on a
+  truncated copy.
+- **A demonstration and its approved baseline must move as ONE unit.** A half-moved pair reads as
+  "recorded, not approved", and that row's printed next action is `trace approve`, which would
+  freeze NEW frames over the ones a human already approved.
+- **The disk is the truth; a journal is a hint.** Interrupted between destination-verify and
+  source-release, both copies exist, and a second run must re-derive every decision from what is
+  actually there.
+- **`git clean -fd` SKIPS ignored files.** The anchors under the old, ignored `replays/` were
+  accidentally protected by the very rule this RFC removes, so moving them somewhere untracked
+  and un-ignored is strictly LESS protection. Measured on a template-derived project: `git clean
+  -fd` deleted relocated anchors that had no git object behind them. Any future move must `git
+  add` its destination.
+- **Four recorded paths are not sha-bound and need re-stamping** when they move:
+  `SliceProof.verdictPath` (which three readers PREFER over the derived path),
+  `SliceProof.signoffArtifact` + `signoffSha256`, the verdict evidence ledger's `inputsDir`, and
+  `STATE.md`'s `lastVerdict.verdictPath`. "No re-stamping needed" is true only of the pixel
+  baseline, whose binding is a hash over bytes.
+- **An older CLI pointed at a moved project reports NO anchor, not a broken one**, because
+  `discoverTraces` returns `[]` for a directory that is not there. It then prints the on-ramp,
+  whose first instruction is to record a new demonstration over the one that still exists. That
+  is why the deleted design left tombstones at the old paths. It is also a live defect in its own
+  right, independent of any migration: see "Open findings" below.
 
 ### Why the split falls where it does
 
@@ -253,10 +266,13 @@ machine the moment they are committed, so the ordering is a constraint, not a pr
    identity that is not a real `host/path` never matches portably: the `basename:` fallback, a
    `../template.git` relative remote, and an `insteadOf` shorthand are all coincidences two
    unrelated repos share.
-2. **Ship a migration.** `loombridge migrate-workspace` relocates an existing
-   `~/.loombridge/projects/<id>/` into the project, sorts each artifact into `anchors/` or
-   `run/`, and RE-STAMPS the bindings. Without this step the move silently invalidates anchors
-   that are already in use, including the two validated live on consumer projects in July 2026.
+2. **Move the home workspace into the project, and RE-STAMP the bindings.** A plain move, done
+   once by hand per project, plus a release note. **Not** a `migrate-workspace` verb, and not
+   any other shipped migration: the forward rule above applies to S3 exactly as it applied to
+   S2, and the same three facts (public repo, no users, npm placeholder) hold. Re-stamping is
+   still required, because the move silently invalidates anchors that are already in use,
+   including the two validated live on consumer projects in July 2026. The difference is that
+   re-stamping two anchors on one machine is a note in the release, not a verb in the CLI.
 3. **Only then flip the default**, and invert the refusals below.
 
 ### The refusals being inverted
@@ -307,13 +323,41 @@ reports "no assets found" rather than "your anchors are on another machine".
   plan row, naming the absolute path the anchor was approved at, because two checkouts of one
   repo still share a home workspace until S2 lands.
 - **S2** SHIPPED. The `anchors/` + `run/` layout, the single ignore rule, the write-path guard
-  with its LITMUS, the template `.gitignore` rewrite (including `.loombridge-fixtures/`, and
-  top-level `captures/`, which is no longer an allowlisted screenshot root at all), and
-  `loombridge migrate-layout` with its tombstone. See "Decisions taken during S2" for the six
-  places the shipped layout differs from the draft above, and why.
-- **S3** `migrate-workspace`, and the default flip with the five refusals inverted.
+  with its LITMUS, and the template `.gitignore` rewrite (including `.loombridge-fixtures/`, and
+  top-level `captures/`, which is no longer an allowlisted screenshot root at all). It also
+  shipped `loombridge migrate-layout` and its tombstone, both **deleted the following day**: see
+  "Why S2 shipped no migration". See "Decisions taken during S2" for the six places the shipped
+  layout differs from the draft above, and why.
+- **S3** The home-workspace move (a PLAIN MOVE plus a release note, never a `migrate-workspace`
+  verb), and the default flip with the five refusals inverted.
 - **S4** Docs: the contradictions listed below, plus a "what to commit" section that a new team
   reads once.
+
+## Open findings
+
+### ABSENT and BROKEN are the same row, and a user can reach it with `mv`
+
+**OPEN. Not fixed by anything in this RFC, and deliberately not fixed alongside the migration
+deletion.**
+
+`discoverTraces` returns `[]` for a directory that is not there. So when a trace family's
+directory is missing, `verify` reports the family as ABSENT and prints the on-ramp, whose first
+instruction is *"the cheapest universal anchor is a recorded demonstration, so ask your human to
+play the game once: 1. `loombridge trace record`"*. **It cannot distinguish "this project never
+had a demonstration" from "this project had one and it is gone."**
+
+This is the defect that motivated S2's tombstone, and it is the reason that machinery looked
+justified. It is worth restating that the tombstone was a workaround for a *symptom on someone
+else's binary*: the underlying hole is in the CURRENT discovery path and it survives the deletion
+untouched. Any user can hit it without a migration ever existing, by moving, renaming, or
+deleting their own `anchors/traces/` directory, or by checking out a branch where it does not
+exist. The consequence is the worst one available: the printed next action is to re-record, and a
+recorded demonstration is the one artifact in the system a human cannot regenerate.
+
+A fix has to make "I have no record of an anchor here" and "I have a record of an anchor here and
+it is missing" two different rows with two different printed actions, which means discovery needs
+a source of expectation independent of the directory listing (`SLICES.json`, a committed anchor
+inventory, or `STATE.md`). That is a design question of its own and it belongs in its own change.
 
 ## Bugs found while writing this, fileable independently
 
@@ -351,9 +395,10 @@ reports "no assets found" rather than "your anchors are on another machine".
    **DECIDED: inside**, on the strength of the write-path guard plus the run tier's own
    `.gitignore`, which makes the ignore rule travel to a clone rather than depending on the
    project's top-level file being right.
-3. ~~**Should `migrate-workspace` be automatic on first run?**~~ **DECIDED for S2: explicit.**
-   `migrate-layout` is a named top-level verb an operator asks for, never something another verb
-   does on the way past; `verify` and `trace` REFUSE with the one-line command instead. Silent
-   relocation of approved anchors is exactly the class of magic this repo avoids, and here the
-   thing being relocated cannot be regenerated. The same answer is expected to hold for S3's
-   `migrate-workspace`.
+3. ~~**Should `migrate-workspace` be automatic on first run?**~~ **MOOT: there is no migration
+   to schedule.** S2 answered "explicit, a named top-level verb", shipped it, and then deleted
+   it a day later along with the refusals that pointed at it ("Why S2 shipped no migration").
+   S3 does not get one either. If a migration is ever warranted (after the first public
+   release), the "explicit, never on the way past" answer is still the right one: silent
+   relocation of approved anchors is exactly the class of magic this repo avoids, and the thing
+   being relocated cannot be regenerated.

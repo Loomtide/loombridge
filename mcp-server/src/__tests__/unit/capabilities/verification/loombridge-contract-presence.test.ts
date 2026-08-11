@@ -1,7 +1,7 @@
 /**
  * Refuse-on-missing-contract + bridge-surfaced discovery (dogfood core-hardening
  * Epic 0; RCL-P04 / RCL-P01). The gate verbs must REFUSE when there is no
- * acceptance contract — a hand-created `.loombridge/captures/` is not a
+ * acceptance contract — a hand-created `.loombridge/run/captures/` is not a
  * verification — and the core must be discoverable from the bridge.
  */
 
@@ -110,7 +110,7 @@ async function scaffoldApprovedRoadmap(root: string): Promise<void> {
   await runPlan({ root, genre: "platformer-2d", engine: "unity", force: false });
 }
 
-/** Hand-create a `.loombridge/captures/` dir with a file but NO contract — RCL-P04. */
+/** Hand-create a `.loombridge/run/captures/` dir with a file but NO contract — RCL-P04. */
 async function fakeCaptures(root: string): Promise<void> {
   const dir = path.join(root, ".loombridge", "run", "captures");
   await fs.mkdir(dir, { recursive: true });

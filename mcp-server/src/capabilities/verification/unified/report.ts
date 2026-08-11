@@ -376,15 +376,8 @@ export function worstExitTier(codes: readonly number[]): number {
   return worst;
 }
 
-/**
- * Map a not-run reason to the tier it contributes (A6).
- *
- * EXPORTED for the migration tombstone's proof (`migrate-layout.test.ts`). That test's whole
- * claim is that an OLD CLI pointed at a MIGRATED project tiers the trace row at 2 rather
- * than reporting no anchor at all, and a test that re-implemented this two-line mapping
- * would be checking its own arithmetic instead of the rule the product ships.
- */
-export function notRunTier(why: NotRunReason): number {
+/** Map a not-run reason to the tier it contributes (A6). */
+function notRunTier(why: NotRunReason): number {
   // A deliberate `--live` omission is the ONLY non-execution an operator chose; every
   // other one is an anchor the run could not measure, which is the harness tier.
   return why === "live-only-skipped" ? 0 : 2;

@@ -89,7 +89,6 @@ import {
   standardReplayLayout,
   type ReplayLayout,
 } from "../../domain/state.js";
-import { legacyLayoutRefusal, scanLegacyLayout } from "../migrate/legacy-layout.js";
 import { unityConnectionHint, unityConnectionLostHint } from "../../shared/cli-ui.js";
 import { printNextStep } from "../minigame/minigame-next.js";
 import { readPng } from "../verification/analyze-frames.js";
@@ -411,22 +410,6 @@ export async function run(args: string[], opts: TraceRunOpts = {}): Promise<numb
   if ("help" in parsed) {
     printUsage();
     return parsed.usageError ? 2 : 0;
-  }
-  // THE PRE-S2 LAYOUT REFUSAL. Every subcommand here reads or writes the demonstration
-  // and baseline slots, and after S2 those are `.loombridge/anchors/`. A project that has
-  // not migrated therefore looks EMPTY to this verb: `replay` says there is nothing to
-  // replay, `approve` has no report to promote, and `record --id <same id>` would write a
-  // second demonstration beside an approved baseline it cannot see. Refusing is the only
-  // answer that does not risk the irreplaceable artifact.
-  //
-  // `--flat` is exempt: it is the mini-game workspace layout, which never had a
-  // `.loombridge/run/replays/` and is not what this migration moves.
-  if (!parsed.flat) {
-    const refusal = legacyLayoutRefusal(await scanLegacyLayout(parsed.root), "[loombridge trace]");
-    if (refusal.length > 0) {
-      for (const line of refusal) console.error(line);
-      return 2;
-    }
   }
   try {
     if (parsed.sub === "replay") return await runReplay(parsed, opts);
