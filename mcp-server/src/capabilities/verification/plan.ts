@@ -43,6 +43,7 @@ import { isSliceDone } from "./doneness.js";
 import {
   assertValidSlicePlan,
   awaitingApprovalSlices,
+  getSliceSignoffPath,
   instantiateSlicePlan,
   nextUnblockedSlice,
   planDispatchMode,
@@ -449,7 +450,7 @@ async function copySignoffArtifact(args: {
   const ext = /^[.][A-Za-z0-9]{1,12}$/.test(path.extname(args.signoffPath))
     ? path.extname(args.signoffPath)
     : ".bin";
-  const dest = path.join(args.root, ".loombridge", "reports", "slices", args.sliceId, `signoff${ext}`);
+  const dest = getSliceSignoffPath(loombridgePaths(args.root), args.sliceId, ext);
   await fs.mkdir(path.dirname(dest), { recursive: true });
   await fs.writeFile(dest, bytes);
   const durableBytes = await fs.readFile(dest);

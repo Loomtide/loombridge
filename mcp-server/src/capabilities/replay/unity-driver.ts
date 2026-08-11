@@ -48,6 +48,7 @@ import type {
   ResetSpec,
 } from "./types.js";
 import type { MinigameReachedCondition } from "../minigame/profiles/types.js";
+import { LOOMBRIDGE_DIRNAME } from "../../domain/state.js";
 
 export type BridgeSend = (
   command: string,
@@ -90,8 +91,19 @@ export interface UnityDriverOptions {
   alignedCaptureFps?: number;
 }
 
+/**
+ * The cwd-relative capture directory a driver falls back to when no `captureDir` is given.
+ *
+ * POSIX separators on purpose: this string is sent to the bridge as a server-relative
+ * `outputPath` and joined with `/` at the call site, so `path.join` (which would emit `\`
+ * on Windows) must not be used. The dirname comes from the ONE constant; the
+ * `replays/actual` tail is not a `LoombridgePaths` slot, so
+ * `__tests__/unit/repo/write-paths.test.ts` pins THIS export and classifies it.
+ */
+export const UNITY_DRIVER_DEFAULT_CAPTURE_DIR = `${LOOMBRIDGE_DIRNAME}/replays/actual`;
+
 const DEFAULTS = {
-  captureDir: ".loombridge/replays/actual",
+  captureDir: UNITY_DRIVER_DEFAULT_CAPTURE_DIR,
   defaultAnchorTimeoutMs: 5000,
   pollIntervalMs: 150,
   playSettleTimeoutMs: 30000,

@@ -58,6 +58,21 @@ export function normalizeWorkspaceId(raw: string): string {
 }
 
 /**
+ * The ROOT-LEVEL directory under the user's home: `~/.loombridge/`.
+ *
+ * DELIBERATELY a second constant, not a re-use of `LOOMBRIDGE_DIRNAME` (the project-local
+ * state dir). The two share a value today because they share a brand, not because they are
+ * the same thing: one is a per-project contract directory inside a game repo, the other is
+ * machine-global (the frozen CLI runtime, the cross-project workspaces). Renaming the
+ * project directory must not silently relocate a user's installed runtime, so a single
+ * constant serving both would be a coupling nobody asked for.
+ *
+ * Two callers: `workspacesRoot()` below, and `capabilities/setup/cli-install-method.ts`
+ * (which classifies a CLI running out of `~/.loombridge/runtime`).
+ */
+export const LOOMBRIDGE_HOME_DIRNAME = ".loombridge";
+
+/**
  * The DECLARED root every workspace lives under: `~/.loombridge/projects`.
  *
  * Exported (A5) because more than one caller needs the DIRECTORY rather than one
@@ -67,7 +82,7 @@ export function normalizeWorkspaceId(raw: string): string {
  * function and the scan reads the same one.
  */
 export function workspacesRoot(): string {
-  return path.resolve(os.homedir(), ".loombridge", "projects");
+  return path.resolve(os.homedir(), LOOMBRIDGE_HOME_DIRNAME, "projects");
 }
 
 /** The default workspace path for an id: `~/.loombridge/projects/<id>`. */

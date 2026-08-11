@@ -184,7 +184,7 @@ Report the paths to:
 - `.loombridge/STATE.md`
 - `.loombridge/reports/build-verdict.json`
 - `.loombridge/verify/`
-- `.loombridge/traces/`
+- `.loombridge/replays/traces/`
 
 Keep the final answer honest: this wrapper is successful only if the real plan/build/verify
 pipeline produced the proof artifacts. It must never claim demo success from command prose

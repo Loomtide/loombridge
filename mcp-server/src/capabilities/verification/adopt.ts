@@ -304,7 +304,7 @@ export async function runAdopt(args: AdoptArgs): Promise<number> {
       "Build, then `loombridge verify`, then `loombridge doneness` — these still refuse until verified-green.",
     ],
   };
-  const reportPath = path.join(paths.dir, "ADOPTION.json");
+  const reportPath = paths.adoption;
   await fs.writeFile(reportPath, `${JSON.stringify(report, null, 2)}\n`, "utf-8");
 
   // 5. STATE.md — `planned` ONLY. No currentBuild, no verdict: doneness/verify
