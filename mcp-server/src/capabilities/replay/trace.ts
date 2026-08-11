@@ -265,6 +265,9 @@ export function traceIdFromScenePath(scenePath: string): string | null {
  * - `droppedUnfocused`: the Game view did not have input focus, so the EDITOR swallowed the
  *   tap and the game never received it. Recording it would mint a phantom step that replay
  *   (clean reset + focus-independent virtual input) cannot reproduce.
+ * - `droppedOsModifier`: a Cmd/Meta/Win key edge — window-manager input (focusing the Game view,
+ *   alt-tabbing), not gameplay. Replaying it would inject a HELD Cmd into the game. Ctrl, Alt and
+ *   Shift are never dropped: real games bind them.
  *
  * A zero count prints nothing. A bridge older than the focus backstop reports no
  * `droppedUnfocused` at all, which reads as 0, so its output is unchanged. Pure;
@@ -273,6 +276,7 @@ export function traceIdFromScenePath(scenePath: string): string | null {
 export function observeDropNotices(counts: {
   droppedNoTarget: number;
   droppedUnfocused?: number;
+  droppedOsModifier?: number;
 }): string[] {
   const lines: string[] = [];
   if (counts.droppedNoTarget > 0) {
@@ -284,6 +288,12 @@ export function observeDropNotices(counts: {
   if (unfocused > 0) {
     lines.push(
       `[loombridge trace] ignored ${unfocused} tap(s) while the Game view was unfocused (the game never received them).`,
+    );
+  }
+  const osModifier = counts.droppedOsModifier ?? 0;
+  if (osModifier > 0) {
+    lines.push(
+      `[loombridge trace] ignored ${osModifier} Cmd/Win key edge(s) — OS window-manager input (focusing the Game view), not gameplay. Ctrl/Alt/Shift are always kept.`,
     );
   }
   return lines;
@@ -662,7 +672,7 @@ async function runRecord(args: TraceArgs, opts: TraceRunOpts = {}): Promise<numb
   console.error(
     `[loombridge trace] recording ${args.id ? `"${args.id}"` : "(id derived from the recorded scene)"}: connecting to Unity, then resetting ${args.scene ?? "the current scene"} to a clean Play-Mode start…`,
   );
-  const { trace, droppedNoTarget, droppedUnfocused } = await observeRecordLive(meta, {
+  const { trace, droppedNoTarget, droppedUnfocused, droppedOsModifier } = await observeRecordLive(meta, {
     waitForStop,
     outcomes,
     projectPathCanonical: resolveCliProjectPin({ root: args.root }),
@@ -686,9 +696,10 @@ async function runRecord(args: TraceArgs, opts: TraceRunOpts = {}): Promise<numb
   // recording. See `traceDemonstration`.
   const shape = traceDemonstration(trace);
   const outcomeCount = trace.assertions?.length ?? 0;
-  // Honest, not silent: gestures the observer saw but did not record (inert target, or a
-  // tap the editor swallowed while the Game view was unfocused) are reported, not a mystery.
-  for (const notice of observeDropNotices({ droppedNoTarget, droppedUnfocused })) {
+  // Honest, not silent: input the observer saw but did not record (inert target, a tap the editor
+  // swallowed while the Game view was unfocused, or a Cmd/Win press that was window-manager input)
+  // is reported, not a mystery.
+  for (const notice of observeDropNotices({ droppedNoTarget, droppedUnfocused, droppedOsModifier })) {
     console.error(notice);
   }
   // Loud, before the success line: a trace that captures fewer frames than the human

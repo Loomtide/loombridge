@@ -196,6 +196,55 @@ export function extractKeyEdges(data: unknown): ObservedKeyEdge[] {
 }
 
 /**
+ * The OS WINDOW-MANAGER modifier family: Command/Meta on macOS, the Windows key elsewhere, both
+ * sides, under every alias `KeyCode.ToString()` can print. `LeftMeta`, `LeftCommand` and `LeftApple`
+ * are the same enum value, and which name .NET prints for a shared value is not something the
+ * recorder should have to predict, so all of them are listed. Compared case-insensitively.
+ *
+ * These keys are NOT gameplay input. A human presses Cmd (or Win) to bring the Game view into
+ * focus, to alt-tab, or to grab a screenshot — and one real recording carried `key-down LeftMeta`
+ * x3, `key-down LeftWindows`, then the matching ups, purely from focusing the editor. Replaying
+ * that injects a HELD Cmd into the game.
+ *
+ * Ctrl, Alt and Shift are deliberately NOT here: real games bind them (sprint, crouch, modifiers on
+ * a build menu), so dropping them would silently delete gameplay.
+ */
+const OS_MODIFIER_KEYS = new Set([
+  "leftmeta",
+  "rightmeta",
+  "leftcommand",
+  "rightcommand",
+  "leftapple",
+  "rightapple",
+  "leftwindows",
+  "rightwindows",
+]);
+
+/** True for a key in the OS window-manager modifier family (see {@link OS_MODIFIER_KEYS}). */
+export function isOsModifierKey(key: string): boolean {
+  return OS_MODIFIER_KEYS.has(key.trim().toLowerCase());
+}
+
+/**
+ * Split observed key edges into the ones worth replaying and a count of the OS-modifier edges
+ * dropped. Pure; the caller reports the count (a dropped input the human performed must never be
+ * silent).
+ *
+ * THIS MUST RUN BEFORE THE TRANSFORM IS CHOSEN. The presence of ANY key edge is what routes a
+ * recording onto the merged keyboard timeline (`observedEdgesToTrace`) instead of the per-gesture
+ * pointer transform (`observedClicksToTrace`). A pointer-only demonstration polluted by one Cmd
+ * press would otherwise lose its per-gesture segments and per-gesture captures over an input the
+ * game never saw. `observeLive.stop()` applies it, which is upstream of that branch in
+ * `recordObservedTrace`.
+ */
+export function dropOsModifierKeyEdges(
+  edges: ObservedKeyEdge[],
+): { edges: ObservedKeyEdge[]; dropped: number } {
+  const kept = edges.filter((edge) => !isOsModifierKey(edge.key));
+  return { edges: kept, dropped: edges.length - kept.length };
+}
+
+/**
  * A state-signal binding: the component/property whose value names the game's current phase
  * (an enum like `Mix`/`Pour`). Used to build a `wait-for-condition` gate so replay waits for the
  * game to reach the same consumable phase the human's gesture occurred at.
