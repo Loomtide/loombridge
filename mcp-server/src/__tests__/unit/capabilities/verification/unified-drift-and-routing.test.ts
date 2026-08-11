@@ -144,6 +144,7 @@ function reportWith(sections: UnifiedVerifyReport["sections"]): UnifiedVerifyRep
     live: true,
     plan: [],
     notRun: [],
+    absentFamilies: [],
     only: null,
     deselected: [],
     sections,

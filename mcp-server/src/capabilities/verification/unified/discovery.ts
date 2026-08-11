@@ -68,8 +68,8 @@ import {
 import { projectBindingMatches, type ProjectBinding } from "../../../shared/repo-identity.js";
 
 /**
- * The CLOSED inventory (RFC "The model: verification assets"). Order is the plan's
- * print order, cheapest and most universal first.
+ * The CLOSED inventory (RFC "The model: verification assets"), and the ONE place a kind
+ * is declared. Order is the plan's print order, cheapest and most universal first.
  *
  * - `contract`        the acceptance contract + design target (Tier-1 gate suite).
  * - `trace`           a recorded demonstration + its approved pixel baseline.
@@ -81,17 +81,131 @@ import { projectBindingMatches, type ProjectBinding } from "../../../shared/repo
  * - `slice-plan`      the approved slice roadmap (`SLICES.json`) and the per-slice
  *                     verdicts + evidence dirs it points at, rolled up OFFLINE (E5/L109).
  *                     APPENDED LAST for the same reason `test-results` was.
+ *
+ * EACH ENTRY CARRIES ITS OWN PROSE (`covers`, `nextAction`), because the ABSENCE report
+ * (`absentAssetFamilies`) has to name every kind this project has no asset of, and a
+ * second hand-maintained list of kinds somewhere in the reporting code is exactly the
+ * drift this repo keeps paying for: the seventh kind gets added here, the reporting list
+ * does not, and the gap it leaves is invisible precisely where the whole point was to make
+ * gaps visible. Deriving both the closed inventory and its prose from ONE array means a
+ * new kind cannot be silently omitted from either.
  */
-export const ASSET_KINDS = [
-  "contract",
-  "trace",
-  "feel-snapshot",
-  "screen-contract",
-  "test-results",
-  "slice-plan",
+export const ASSET_KIND_CATALOG = [
+  {
+    kind: "contract",
+    covers: "the acceptance contract's Tier-1 gates over captured evidence in .loombridge/verify/",
+    nextAction: "loombridge plan (scaffolds ACCEPTANCE.json)",
+  },
+  {
+    kind: "trace",
+    covers: "a recorded demonstration re-driven and compared pixel-for-pixel to its approved frames",
+    nextAction: "loombridge trace record --id <name>, then `trace replay`, then `trace approve`",
+  },
+  {
+    kind: "feel-snapshot",
+    covers: "frozen kinematics (jump height, run speed, gravity) re-measured against the live game",
+    nextAction: "loombridge feel snapshot capture, then `loombridge feel snapshot approve`",
+  },
+  {
+    kind: "screen-contract",
+    covers:
+      "declared screens and their layout: safe area, tap-target size, required objects in frame, text clipping",
+    nextAction: "loombridge minigame init --id <kebab>, then `capture`, then `minigame baseline approve`",
+  },
+  {
+    kind: "test-results",
+    covers: "a stamped Unity EditMode test run, graded offline from the stored results",
+    nextAction: "loombridge tests run",
+  },
+  {
+    kind: "slice-plan",
+    covers: "the approved slice roadmap, rolled up from each slice's own verdict and evidence",
+    nextAction: "loombridge plan --genre <pack> (a genre pack authors SLICES.json)",
+  },
 ] as const;
 
+/**
+ * The closed kind list, DERIVED from the catalog rather than spelled a second time. Every
+ * existing consumer (the plan sort, the `--only` mapping, the tests that pin the append
+ * order) keeps reading this name.
+ */
+export const ASSET_KINDS = ASSET_KIND_CATALOG.map((entry) => entry.kind);
+
 export type DiscoveredAssetKind = (typeof ASSET_KINDS)[number];
+
+/** One catalog entry, as the absence report reads it. */
+export interface AssetKindEntry {
+  readonly kind: DiscoveredAssetKind;
+  readonly covers: string;
+  readonly nextAction: string;
+}
+
+/**
+ * A check family this project has NO asset of, so nothing in it ran (R-gap).
+ *
+ * INFORMATIONAL ONLY, and deliberately a separate type from {@link DiscoveredAsset} and
+ * from `UnifiedNotRun`: those two carry tiers into the outcome rule, and an absent family
+ * carries none. Nothing here may ever reach `resolveUnifiedOutcome`. The reason is the
+ * moat rather than tidiness: naming a gap is not covering it, and a shape that could be
+ * mistaken for a graded row is one refactor away from letting "we listed what we skipped"
+ * read as "we checked it".
+ */
+export interface AbsentAssetFamily {
+  kind: DiscoveredAssetKind;
+  /** What a check of this family would have established. */
+  covers: string;
+  /** The command that creates one. */
+  nextAction: string;
+  /**
+   * WHERE discovery looked, when that is not the project root. The workspace assets live
+   * at `~/.loombridge/projects/<id>/`, and the id is derived from the project's FOLDER
+   * NAME, so "there is no screen contract" and "there is no screen contract UNDER THE ID
+   * THIS FOLDER NAME DERIVES" are different sentences. Naming the directory is what lets
+   * a reader see which one they are being told (see the routing note below, which names
+   * the other id when one exists).
+   */
+  searchedIn?: string;
+}
+
+/**
+ * Every known check family this project has no asset of, in catalog order.
+ *
+ * The catalog is a PARAMETER with a production default so a test can hand in a
+ * seventh kind and prove this function reports whatever the source of truth holds,
+ * rather than a list copied into this file.
+ */
+export function absentAssetFamilies(
+  assets: readonly { kind: DiscoveredAssetKind }[],
+  opts: { workspace?: string } = {},
+  catalog: readonly AssetKindEntry[] = ASSET_KIND_CATALOG,
+): AbsentAssetFamily[] {
+  const present = new Set(assets.map((a) => a.kind));
+  const absent: AbsentAssetFamily[] = [];
+  for (const entry of catalog) {
+    if (present.has(entry.kind)) continue;
+    absent.push({
+      kind: entry.kind,
+      covers: entry.covers,
+      nextAction: entry.nextAction,
+      ...(opts.workspace !== undefined && WORKSPACE_SCOPED_KINDS.has(entry.kind)
+        ? { searchedIn: opts.workspace }
+        : {}),
+    });
+  }
+  return absent;
+}
+
+/**
+ * The kinds that live OUTSIDE the project, in the workspace whose id is derived from the
+ * folder name. Spelled here rather than as a catalog field because it is a fact about
+ * where `discoverVerificationAssets` looks, and the two lookups below are its only
+ * definition: `discoverFeelSnapshotAsset` and `discoverScreenContractAsset` are the only
+ * two that take a `workspace` argument.
+ */
+const WORKSPACE_SCOPED_KINDS: ReadonlySet<DiscoveredAssetKind> = new Set<DiscoveredAssetKind>([
+  "feel-snapshot",
+  "screen-contract",
+]);
 
 /**
  * How (and whether) an asset can be checked:
@@ -162,6 +276,11 @@ export interface DiscoveredAsset {
 
 export interface DiscoveryResult {
   assets: DiscoveredAsset[];
+  /**
+   * Every known check family with ZERO assets here, so the plan can say what it could
+   * not check and why. Informational: it never becomes a row, a section, or a tier.
+   */
+  absent: AbsentAssetFamily[];
   /** Plan-level notes that belong to no single asset (e.g. an underivable workspace). */
   notes: string[];
 }
@@ -259,7 +378,11 @@ export async function discoverVerificationAssets(opts: DiscoveryOpts): Promise<D
   assets.sort(
     (a, b) => ASSET_KINDS.indexOf(a.kind) - ASSET_KINDS.indexOf(b.kind) || a.id.localeCompare(b.id),
   );
-  return { assets, notes };
+  // THE ABSENCE REPORT, computed here rather than at the call site: this function is the
+  // one thing that knows both what was found and WHERE it looked. A project with only a
+  // trace used to say nothing at all about the five families it never checked, so a reader
+  // could not tell "those passed" from "those do not exist here".
+  return { assets, absent: absentAssetFamilies(assets, { workspace }), notes };
 }
 
 // ── contract ─────────────────────────────────────────────────────────────────

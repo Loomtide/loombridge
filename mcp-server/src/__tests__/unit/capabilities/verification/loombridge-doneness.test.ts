@@ -1289,6 +1289,7 @@ async function writeUnifiedReport(root: string, over: Partial<UnifiedVerifyRepor
         why: "non-anchor",
       },
     ],
+    absentFamilies: [],
     // S2a/F12: both fields are required on the shipped type, so the fixture states them.
     only: null,
     deselected: [],

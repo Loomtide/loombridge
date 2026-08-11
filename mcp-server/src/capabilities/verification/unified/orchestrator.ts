@@ -70,7 +70,11 @@ import {
   verifyTestResults,
 } from "../../tests/test-results-manifest.js";
 import { gradedGates } from "../run-gates.js";
-import { discoverVerificationAssets, type DiscoveredAsset } from "./discovery.js";
+import {
+  discoverVerificationAssets,
+  type AbsentAssetFamily,
+  type DiscoveredAsset,
+} from "./discovery.js";
 import {
   SCOPED_SUMMARY,
   SECTION_FOR_KIND,
@@ -300,7 +304,7 @@ export async function runUnifiedVerify(opts: UnifiedVerifyOpts): Promise<number>
   const workspaceId = opts.workspaceId ?? sanitizeWorkspaceId(path.basename(root));
   const workspace = opts.workspace ?? (workspaceId ? projectWorkspace(workspaceId) : undefined);
 
-  const { assets, notes } = await discoverVerificationAssets({
+  const { assets, absent, notes } = await discoverVerificationAssets({
     root,
     workspaceId: opts.workspaceId,
     workspace,
@@ -308,7 +312,7 @@ export async function runUnifiedVerify(opts: UnifiedVerifyOpts): Promise<number>
 
   // THE PLAN, before any write. `discoverVerificationAssets` only reads, so at this
   // point the project on disk is byte-identical to what the operator started with.
-  for (const line of planLines(root, assets, notes, opts.live, only)) console.error(line);
+  for (const line of planLines(root, assets, notes, opts.live, only, absent)) console.error(line);
 
   if (assets.length === 0) {
     // The on-ramp. Nothing is written, not even `.loombridge/`: a fresh project that
@@ -399,6 +403,10 @@ export async function runUnifiedVerify(opts: UnifiedVerifyOpts): Promise<number>
     live: opts.live,
     plan: assets,
     notRun,
+    // Straight from discovery, unfiltered by the selection: a family with no asset is
+    // absent whatever `--only` asked for, and re-deriving it here from a second list of
+    // kinds is the drift the catalog exists to prevent.
+    absentFamilies: absent,
     only,
     deselected,
     sections,
@@ -949,13 +957,23 @@ async function feelSection(
 
 // ── output ───────────────────────────────────────────────────────────────────
 
-/** The plan: one line per discovered asset, printed before anything runs. */
+/**
+ * The plan: one line per discovered asset, then one line per check family this project has
+ * NO asset of, printed before anything runs.
+ *
+ * The second half is not decoration. Observed live: a project with a single trace produced
+ * a verdict covering exactly that trace, and the operator could not tell whether the screen
+ * checks (safe area, tap targets, required objects) had passed, did not exist, or had
+ * silently not run. Every family the door knows about is now named either as a row above or
+ * as a gap below, so those three readings can never again print identically.
+ */
 export function planLines(
   root: string,
   assets: readonly DiscoveredAsset[],
   notes: readonly string[],
   live: boolean,
   only: readonly UnifiedSectionName[] | null = null,
+  absent: readonly AbsentAssetFamily[] = [],
 ): string[] {
   const scope = only ? `; scoped to --only ${only.join(",")}` : "";
   const lines = [
@@ -971,6 +989,17 @@ export function planLines(
     if (terms) lines.push(`${TAG}     anchor terms: ${terms}`);
   }
   if (assets.length === 0) lines.push(`${TAG}   (no verification assets)`);
+  // ONE LINE PER ABSENT FAMILY, in the same voice as the rows above: what it would have
+  // established, and the command that creates one. `searchedIn` is printed when the family
+  // lives outside the project, because "no screen contract" and "no screen contract under
+  // the id this folder name derives" are different answers.
+  for (const family of absent) {
+    const where = family.searchedIn ? `, searched ${family.searchedIn}` : "";
+    lines.push(
+      `${TAG}   ${family.kind}: NO ASSET, nothing in this family was checked${where} ` +
+        `(would cover ${family.covers}); create one: ${family.nextAction}`,
+    );
+  }
   for (const note of notes) lines.push(`${TAG}   note: ${note}`);
   return lines;
 }
@@ -1112,6 +1141,19 @@ export function summaryLines(report: UnifiedVerifyReport, live: boolean): string
     lines.push(
       `${TAG} NOT MEASURED (never folded into pass): ` +
         report.notRun.map((n) => `${n.kind} '${n.id}' (${n.reason})`).join("; "),
+    );
+  }
+  if (report.absentFamilies.length > 0) {
+    // THE COVERAGE GAP, on every run, green or red. A verdict that grades one trace and
+    // says nothing else reads as a verdict about the game; this line says which families
+    // it is silent about. It is INFORMATIONAL: no status word, no tier, no exit code is
+    // derived from it anywhere, and the wording is careful not to imply otherwise, because
+    // enumerating a gap is the opposite of covering it. The per-family next action is one
+    // scroll up, in the plan, rather than repeated here.
+    lines.push(
+      `${TAG} NOT CHECKED (no asset of this kind exists here, so this verdict says nothing ` +
+        `about them; see the plan above to create one): ` +
+        report.absentFamilies.map((f) => f.kind).join(", "),
     );
   }
   if (report.only) {

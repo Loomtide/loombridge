@@ -25,6 +25,14 @@ loombridge verify --root . --only screens # ONE section (CI granularity); never 
 
 - **The plan prints before anything is written.** One row per asset: what it is, when and by
   what its anchor was approved, and whether it will run. Read it before trusting the exit code.
+- **A check family with NO asset is named too, every run.** One line per absent family: what it
+  would have covered and the command that creates one, plus the workspace directory that was
+  searched for the two families that live outside the project (feel snapshot, screen contract).
+  The summary repeats the names in one `NOT CHECKED` line and the report carries them as
+  `absentFamilies`. This is why a project with only a trace no longer reads as if the
+  safe-area / tap-target / required-object checks passed: they live in the screen-contract
+  family, and their absence is now stated rather than implied. It is **informational only** and
+  changes no status, tier, or exit code: naming a gap is the opposite of covering it.
 - **Offline by default.** Trace replay and feel-snapshot capture need a running editor, so
   they are listed as `not run: needs --live` and are **never folded into a pass**.
 - **A row that cannot execute is named, never skipped.** An unapproved trace, an unstamped

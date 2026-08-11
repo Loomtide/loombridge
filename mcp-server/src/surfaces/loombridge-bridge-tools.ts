@@ -513,6 +513,16 @@ export interface LoombridgeVerifyToolPayload {
    * "scoping is not reported here". `null` when this run wrote no report.
    */
   deselected: Array<{ kind: string; id: string; section: string }> | null;
+  /**
+   * Check families this project has NO asset of, so nothing in them was graded. `null` when
+   * this run wrote no report.
+   *
+   * The counterpart to `notRun`: that field answers "which discovered anchor went
+   * unmeasured", this one answers "which family was never here at all". Without it a
+   * payload covering one trace is indistinguishable, to its reader, from a payload covering
+   * everything the product can check. INFORMATIONAL: it feeds no status, tier, or exit.
+   */
+  absentFamilies: Array<{ kind: string; nextAction: string }> | null;
   /** The unified report path relative to `root` (written even when the run refused, unless nothing ran at all). */
   reportPath: string;
 }
@@ -586,6 +596,7 @@ export async function runLoombridgeVerifyTool(root: string): Promise<LoombridgeV
     unanchoredSections: unified?.unanchoredSections ?? null,
     notRun: unified?.notRun ?? null,
     deselected: unified?.deselected ?? null,
+    absentFamilies: unified?.absentFamilies ?? null,
     reportPath: path.relative(root, reportPath),
   };
 }
@@ -597,6 +608,7 @@ async function readUnifiedReport(reportPath: string): Promise<{
   unanchoredSections: string[];
   notRun: Array<{ kind: string; id: string; why: string; reason: string }>;
   deselected: Array<{ kind: string; id: string; section: string }>;
+  absentFamilies: Array<{ kind: string; nextAction: string }>;
   sections?: { contract?: { reportSha256?: unknown } };
 } | null> {
   try {
@@ -620,6 +632,14 @@ async function readUnifiedReport(reportPath: string): Promise<{
         kind: String(r.kind ?? ""),
         id: String(r.id ?? ""),
         section: String(r.section ?? ""),
+      })),
+      // Trimmed to what an agent acts on: WHICH family is missing and the command that
+      // creates one. An older report with no `absentFamilies` key reads as an empty list,
+      // which is the honest fallback: that run never computed the gaps, and inventing them
+      // here from a second list of kinds is the drift the catalog exists to prevent.
+      absentFamilies: rows(raw.absentFamilies).map((r) => ({
+        kind: String(r.kind ?? ""),
+        nextAction: String(r.nextAction ?? ""),
       })),
       sections: (raw.sections ?? undefined) as { contract?: { reportSha256?: unknown } } | undefined,
     };
