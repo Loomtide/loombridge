@@ -14,7 +14,12 @@
  */
 
 import type { DispatchResult, ReplayDriver } from "./driver.js";
-import { dispatchConditionWithGestureRecovery, isContinuousGesture, preservesPendingGesture } from "./gesture-recovery.js";
+import {
+  dispatchWaitWithGestureRecovery,
+  isContinuousGesture,
+  isRecoverableWait,
+  preservesPendingGesture,
+} from "./gesture-recovery.js";
 import type {
   Action,
   Anchor,
@@ -120,14 +125,16 @@ async function runReplay(
         });
         result = { ok: true };
       } else {
-        // A phase gate (`wait-for-condition`) is driven with adaptive gesture recovery: if it fails, the
-        // preceding continuous gesture (a stir/scrub) is re-driven with escalating travel until the
-        // game's phase signal advances or a bounded budget is spent — so an under-reproduced gesture on
-        // an extreme aspect self-corrects instead of stalling the run.
-        result =
-          action.do === "wait-for-condition"
-            ? await dispatchConditionWithGestureRecovery(driver, action, lastGesture)
-            : await driver.dispatch(action);
+        // A WAIT that can only be cleared by the game advancing — the `wait-for-condition` phase gate
+        // AND the `wait-for-visible` the recorder emits just before it — is driven with adaptive
+        // gesture recovery: if it fails, the preceding continuous gesture (a stir/scrub) is re-driven
+        // with escalating travel until the wait clears or a bounded budget is spent, so an
+        // under-reproduced gesture self-corrects instead of stalling the run. Covering the visibility
+        // wait is what makes this reachable at all on a recorder-produced trace: the recorder emits it
+        // FIRST, so it, not the gate, is where an under-reproduced stir kills the run.
+        result = isRecoverableWait(action)
+          ? await dispatchWaitWithGestureRecovery(driver, action, lastGesture)
+          : await driver.dispatch(action);
       }
       // Adjacency guard: arm on a continuous gesture; CLEAR on any discrete input between it and a gate
       // (incl. across a segment boundary) so a gate advanced by a tap can't recover a stale, far-earlier

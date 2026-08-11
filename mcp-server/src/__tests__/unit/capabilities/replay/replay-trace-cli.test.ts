@@ -67,6 +67,17 @@ test("observeDropNotices: both counts print both lines; zero counts print nothin
   assert.deepEqual(observeDropNotices({ droppedNoTarget: 0 }), []);
 });
 
+test("observeDropNotices: dropped Cmd/Win key edges are REPORTED (a dropped human input is never silent)", () => {
+  const lines = observeDropNotices({ droppedNoTarget: 0, droppedOsModifier: 5 });
+  assert.deepEqual(lines, [
+    "[loombridge trace] ignored 5 Cmd/Win key edge(s) — OS window-manager input (focusing the Game view), " +
+      "not gameplay. Ctrl/Alt/Shift are always kept.",
+  ]);
+  // Zero, or absent (nothing was dropped), prints nothing.
+  assert.deepEqual(observeDropNotices({ droppedNoTarget: 0, droppedOsModifier: 0 }), []);
+  assert.deepEqual(observeDropNotices({ droppedNoTarget: 0 }), []);
+});
+
 test("trace record: a malformed --state-signal (no colons) is a usage error (exit 2)", async () => {
   assert.equal(
     await run(["record", "--observe", "--id", "x", "--scene", "S", "--state-signal", "phase"]),

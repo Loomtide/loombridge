@@ -9,6 +9,7 @@
  */
 
 import {
+  dropOsModifierKeyEdges,
   extractClicks,
   extractKeyEdges,
   type ObservedClick,
@@ -31,6 +32,13 @@ export interface StopResult {
    * field (an older editor simply reports nothing here).
    */
   droppedUnfocused: number;
+  /**
+   * Key edges dropped for being OS WINDOW-MANAGER modifiers (Cmd/Meta/Win, either side): the human
+   * pressed them to focus the Game view or alt-tab, not to play. Dropped here, upstream of the
+   * transform choice, so a pointer demonstration polluted by a Cmd press still takes the pointer
+   * path. Reported, never silent. See `dropOsModifierKeyEdges`.
+   */
+  droppedOsModifier: number;
 }
 
 export interface ObserveSession {
@@ -140,11 +148,15 @@ export async function observeLive(
       // `droppedUnfocused` field at all, which reads as 0 (nothing dropped for focus).
       const droppedUnfocused = (response.data as { droppedUnfocused?: unknown } | undefined)
         ?.droppedUnfocused;
+      // OS modifier edges are stripped HERE, at the session boundary, because the transform choice
+      // downstream keys off whether ANY key edge survived. See `dropOsModifierKeyEdges`.
+      const keys = dropOsModifierKeyEdges(extractKeyEdges(response.data));
       return {
         clicks: extractClicks(response.data),
-        keyEdges: extractKeyEdges(response.data),
+        keyEdges: keys.edges,
         droppedNoTarget: typeof droppedNoTarget === "number" ? droppedNoTarget : 0,
         droppedUnfocused: typeof droppedUnfocused === "number" ? droppedUnfocused : 0,
+        droppedOsModifier: keys.dropped,
       };
     },
   };

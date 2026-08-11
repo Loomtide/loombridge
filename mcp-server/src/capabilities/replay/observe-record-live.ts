@@ -56,6 +56,11 @@ export interface ObserveRecordResult {
    * 0 from a bridge that predates the field.
    */
   droppedUnfocused: number;
+  /**
+   * Key edges dropped for being OS window-manager modifiers (Cmd/Meta/Win): window-manager input,
+   * not gameplay (logged, never silent).
+   */
+  droppedOsModifier: number;
 }
 
 /**
@@ -165,7 +170,12 @@ export async function recordObservedTrace(
   // Phase 2 / D1-B: auto-detect each scene's signal live (per-scene gates without a declared signal).
   const session = await observeLive(send, startSignal, meta.autoDetectStateSignal === true); // input.observe_start
   await options.waitForStop(); // the human plays, then signals done
-  const { clicks, keyEdges, droppedNoTarget, droppedUnfocused } = await session.stop(); // observe_stop (refuses observed:false)
+  // `keyEdges` here has ALREADY had the OS window-manager modifiers (Cmd/Meta/Win) stripped, by
+  // `observeLive.stop()`. That ordering is load-bearing: the transform choice below keys off
+  // whether any key edge survived, so a pointer demonstration polluted by a Cmd press must reach
+  // it with an EMPTY edge list and take the pointer path.
+  const { clicks, keyEdges, droppedNoTarget, droppedUnfocused, droppedOsModifier } =
+    await session.stop(); // observe_stop (refuses observed:false)
   // Outcomes are read while Play Mode is STILL live — captureOutcomes must run
   // before endLiveSession stops Play (runtime values are gone after the reload).
   const outcomes = await captureOutcomes(send, options.outcomes ?? []);
@@ -175,7 +185,7 @@ export async function recordObservedTrace(
     keyEdges.length > 0
       ? observedEdgesToTrace(clicks, keyEdges, meta, outcomes)
       : observedClicksToTrace(clicks, meta, outcomes);
-  return { trace, droppedNoTarget, droppedUnfocused };
+  return { trace, droppedNoTarget, droppedUnfocused, droppedOsModifier };
 }
 
 /** Connect, record a human demonstration, and return the trace (caller persists it). */

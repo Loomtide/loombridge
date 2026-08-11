@@ -167,6 +167,112 @@ test("recordObservedTrace: a session with key edges → the timed-edge transform
   ]);
 });
 
+// --- OS window-manager modifier keys (Cmd / Meta / Win) -------------------------------------
+//
+// A real recording of a pointer-only cooking mini-game carried `key-down LeftMeta` x3,
+// `key-down LeftWindows`, then the matching ups, at actions 52 to 58: the human pressed Cmd to
+// bring the Game view into focus. Replaying those injects a HELD Cmd into the game, and — worse —
+// their mere PRESENCE routed a pure pointer demonstration onto the merged keyboard timeline,
+// costing it its per-gesture segments and per-gesture captures.
+//
+// LITMUS (observed, not asserted). Delete the `dropOsModifierKeyEdges(...)` call in
+// `observe-live.ts` (`keyEdges: extractKeyEdges(response.data)`) and re-run this file. Both tests
+// below fail on the REAL record path:
+//
+//   ✖ recordObservedTrace: a pointer demonstration polluted by a Cmd press takes the POINTER path
+//     AssertionError [ERR_ASSERTION]: a Cmd press must not route a pointer demo onto the keyboard
+//     timeline
+//     'input-system' !== 'ui-events'
+//   ✖ recordObservedTrace: Cmd/Meta/Win edges are dropped and COUNTED; Ctrl/Alt/Shift are kept
+//     AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+//     + actual - expected
+//       [
+//     +   'LeftMeta',
+//     +   'LeftCommand',
+//     +   'LeftApple',
+//     +   'leftwindows',
+//         'LeftControl',
+//         'LeftAlt',
+//         'LeftShift',
+//     +   'RightMeta',
+//     +   'RightCommand',
+//     +   'RightApple',
+//     +   'RightWindows'
+//       ]
+//
+//   ℹ pass 16 / ℹ fail 2
+
+/** observe_stop returning clicks + raw key edges (observed:true). */
+const stopWithKeys = (clicks: unknown[], keyEdges: unknown[]): Handler => () => ({
+  data: { clicks, keyEdges, observed: true },
+});
+
+test("recordObservedTrace: a pointer demonstration polluted by a Cmd press takes the POINTER path", async () => {
+  const clicks = [
+    { tMs: 0, locator: { path: "/HUD/Start" }, button: 0, kind: "ui" },
+    { tMs: 900, locator: { path: "/HUD/Next" }, button: 0, kind: "ui" },
+  ];
+  const { send } = fakeBridge({
+    "input.observe_stop": stopWithKeys(clicks, [
+      { key: "LeftMeta", edge: "down", tMs: 400 },
+      { key: "LeftWindows", edge: "down", tMs: 402 },
+      { key: "LeftMeta", edge: "up", tMs: 700 },
+      { key: "LeftWindows", edge: "up", tMs: 701 },
+    ]),
+  });
+  const { trace, droppedOsModifier } = await recordObservedTrace(send, meta, { waitForStop: async () => {} });
+
+  // The pointer path: `ui-events`, one SEGMENT per gesture, each with its own capture.
+  assert.equal(
+    trace.input.backend,
+    "ui-events",
+    "a Cmd press must not route a pointer demo onto the keyboard timeline",
+  );
+  assert.deepEqual(trace.segments.map((s) => s.id), ["step-1", "step-2"]);
+  assert.deepEqual(
+    trace.segments.map((s) => (s.captures ?? []).map((c) => c.id)),
+    [["step-1"], ["step-2"]],
+    "per-gesture captures, which the merged keyboard timeline would not have produced here",
+  );
+  // No key action survived anywhere in the trace.
+  const keyActions = trace.segments.flatMap((s) => s.actions.filter((a) => a.do.startsWith("key-")));
+  assert.deepEqual(keyActions, []);
+  assert.equal(droppedOsModifier, 4, "the dropped edges are counted for the CLI notice");
+  assert.doesNotThrow(() => parseTrace(trace as unknown));
+});
+
+test("recordObservedTrace: Cmd/Meta/Win edges are dropped and COUNTED; Ctrl/Alt/Shift are kept", async () => {
+  // Every alias `KeyCode.ToString()` can print for the shared Meta/Command/Apple enum values, both
+  // sides — and the three modifiers real games bind, which must survive untouched.
+  const { send } = fakeBridge({
+    "input.observe_stop": stopWithKeys(
+      [],
+      [
+        { key: "LeftMeta", edge: "down", tMs: 0 },
+        { key: "LeftCommand", edge: "down", tMs: 1 },
+        { key: "LeftApple", edge: "down", tMs: 2 },
+        { key: "leftwindows", edge: "down", tMs: 3 }, // case-insensitive
+        { key: "LeftControl", edge: "down", tMs: 4 },
+        { key: "LeftAlt", edge: "down", tMs: 5 },
+        { key: "LeftShift", edge: "down", tMs: 6 },
+        { key: "RightMeta", edge: "down", tMs: 7 },
+        { key: "RightCommand", edge: "down", tMs: 8 },
+        { key: "RightApple", edge: "down", tMs: 9 },
+        { key: "RightWindows", edge: "down", tMs: 10 },
+      ],
+    ),
+  });
+  const { trace, droppedOsModifier } = await recordObservedTrace(send, meta, { waitForStop: async () => {} });
+
+  // Only the three game-bindable modifiers reach the trace (each with its balanced trailing up).
+  const pressed = trace.segments[0].actions.filter((a) => a.do === "key-down").map((a) => (a as { key: string }).key);
+  assert.deepEqual(pressed, ["LeftControl", "LeftAlt", "LeftShift"]);
+  assert.equal(droppedOsModifier, 8);
+  // With real key edges surviving, this one DOES belong on the merged keyboard timeline.
+  assert.equal(trace.input.backend, "input-system");
+  assert.doesNotThrow(() => parseTrace(trace as unknown));
+});
+
 test("recordObservedTrace: waitForStop is awaited BEFORE observe_stop", async () => {
   const order: string[] = [];
   const { send } = fakeBridge({
