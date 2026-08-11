@@ -4,6 +4,7 @@ import { designStatus } from "./design.js";
 import { loombridgePaths, readState } from "../../domain/state.js";
 import { readSlicePlan, renderSliceSkill } from "./slices.js";
 import { computeStatusModel, developerNextAction, type LoombridgeStatusModel } from "./status-model.js";
+import { readInstalledSkills } from "../setup/installed-skills.js";
 
 export interface AskArgs {
   root: string;
@@ -47,11 +48,11 @@ function currentSliceSummary(model: LoombridgeStatusModel): string {
   return `${s.id} (${s.state}) — ${s.title}.`;
 }
 
-function currentSliceDetails(model: LoombridgeStatusModel): string {
+function currentSliceDetails(model: LoombridgeStatusModel, installed: readonly string[]): string {
   if (!model.currentSlice) return currentSliceSummary(model);
   const s = model.currentSlice;
   const deps = s.dependsOn.length ? s.dependsOn.join(", ") : "none";
-  return `${s.id} (${s.state}) — ${s.title}. Skill: ${renderSliceSkill(s.skill)}. Gates: ${s.acceptance.gates.join(", ")}. Dependencies: ${deps}.`;
+  return `${s.id} (${s.state}) — ${s.title}. Skill: ${renderSliceSkill(s.skill, installed)}. Gates: ${s.acceptance.gates.join(", ")}. Dependencies: ${deps}.`;
 }
 
 function nextLine(model: LoombridgeStatusModel): string {
@@ -73,7 +74,12 @@ function warningSummary(model: LoombridgeStatusModel): string | null {
   return `${warnings.length} warning${warnings.length === 1 ? "" : "s"} need attention. Ask "warnings" for details.`;
 }
 
-export function answerAsk(model: LoombridgeStatusModel, question?: string): string {
+/** `installed` is the project's skill inventory; answerAsk stays pure and never reads disk. */
+export function answerAsk(
+  model: LoombridgeStatusModel,
+  question?: string,
+  installed: readonly string[] = [],
+): string {
   const q = (question ?? "").toLowerCase();
   const lines: string[] = [];
 
@@ -131,7 +137,7 @@ export function answerAsk(model: LoombridgeStatusModel, question?: string): stri
   }
 
   if (wantsSlice) {
-    lines.push(`Current slice: ${currentSliceDetails(model)}`);
+    lines.push(`Current slice: ${currentSliceDetails(model, installed)}`);
     lines.push(nextLine(model));
     return lines.join("\n");
   }
@@ -152,7 +158,7 @@ export async function runAsk(args: AskArgs): Promise<number> {
       designStatus(paths),
     ]);
     const model = await computeStatusModel({ paths, state, plan, design });
-    console.log(answerAsk(model, args.question));
+    console.log(answerAsk(model, args.question, readInstalledSkills(args.root)));
     return 0;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
