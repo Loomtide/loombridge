@@ -25,12 +25,26 @@ import process from "node:process";
 
 /**
  * Consumer-facing skills only. Dev-time workflows (new-unity-test-project, session-retro,
- * genre-pack-authoring, generated-3d-art-integration, and the perf/sfx/ui authoring packs)
- * are intentionally excluded from the surface a partner project receives.
+ * generated-3d-art-integration, and the perf/sfx/ui authoring packs) are intentionally
+ * excluded from the surface a partner project receives.
+ *
+ * MEMBERSHIP IS NOT TASTE: it is load-bearing. A shipped command that names a skill absent
+ * from this list sends the agent looking for guidance the project never received, at the
+ * moment it is about to act. `slice-skill-bindings.test.ts` walks BOTH directions this list
+ * is referenced from (genre slice templates, and the shipped command prose) and fails on a
+ * name that resolves to nothing. Add the skill here, or do not name it in a shipped command.
  */
 export const CONSUMER_SKILLS = [
   "asset-layer",
   "game-polish-2d",
+  // `plan` BLOCKS on an approved hero shot for every project, 2D or 3D, and its step 3 routes
+  // here for the mode choice and the `--kind` fork. Excluding it left the shipped plan.md
+  // naming a runbook consumers never received.
+  "hero-shot-authoring",
+  // Authoring a genre contract became a first-class CONSUMER flow when genre genericity
+  // shipped (`loombridge genre init` is a consumer verb, and plan.md step 2 routes here for
+  // an unfamiliar genre). The dev-time exclusion above predates that.
+  "genre-pack-authoring",
   "parallax-2d",
   "platformer-level-design",
   "unity-2d-game",
