@@ -183,15 +183,25 @@ reports "no assets found" rather than "your anchors are on another machine".
 
 ## Bugs found while writing this, fileable independently
 
-- **`LOOMBRIDGE_WORKSPACE` is documented but read by nothing.**
-  `Docs/Profiles/MiniGameVerifyCI.md:86` shows `WORKSPACE="${LOOMBRIDGE_WORKSPACE:-...}"`. No
-  source file reads that variable. A reader sets it and nothing happens.
-- **The shipped CI example is a self-graded green.**
-  `Docs/Profiles/examples/minigame-verify.github-actions.yml:22` points at in-project contract
-  and capture paths that no code writes, and uses the legacy
-  `verify --minigame --contract --captures` mode, which does NOT enforce the approved-baseline
-  rule the unified door enforces. It grades a document against captures of that same document.
-  It is also accidental proof that repo-local anchors work: the recipe just skips the anchor.
+- ~~**`LOOMBRIDGE_WORKSPACE` is documented but read by nothing.**~~ **FIXED.** The variable was
+  removed from `MiniGameVerifyCI.md` rather than implemented: `--workspace <dir>` is the real
+  knob, it is the same flag every workspace-aware verb takes, and the unified router already
+  reads it. A second spelling of one setting earns nothing. The page now states outright that
+  no such variable exists, so a reader who saw the old revision is not left guessing.
+- ~~**The shipped CI example is a self-graded green.**~~ **FIXED.** Confirmed from the source
+  before fixing: on identical inputs (a contract with no `baseline.ref` plus the capture pack it
+  was finalized from) the legacy alias printed `38 pass · 0 fail` and exited `0`, where the
+  unified door exited `2` with *"a contract graded against captures of itself is not a human
+  anchor"*. The example now uses the bare door with `--workspace`, splits into an honest headless
+  job and a Unity-runner job, and the fictional `.loombridge/minigame/{contracts,captures}/`
+  paths are gone. A guard walks it:
+  `mcp-server/src/__tests__/unit/repo/profile-examples.test.ts` derives the verbs from the
+  `cli.ts` dispatch, each verb's flags from its module, and decides "is this the anchored door?"
+  by calling the real `classifyOrchestratorArgs` router.
+  - **Still true, and still what S2 is for:** the anchor bundle has to be committed in-repo and
+    copied OUT to `$RUNNER_TEMP` for the run, because `verify` refuses a `--workspace` inside the
+    project. The example is structured so S2 collapses that to a single deletion (the `cp -R`
+    step and the `--workspace` flag).
 - **`ARCHITECTURE.md` layout drift:** it names `replays/baseline/` (code writes `baselines/`),
   cites `src/capabilities/state.ts` (the file is `src/domain/state.ts`), and lists
   `minigame-verification.json` under `.loombridge/reports/` (the unified door writes
