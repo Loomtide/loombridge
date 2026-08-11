@@ -629,6 +629,37 @@ deliberately removes only that one.
   settings that let an unfocused tap land at all). A blocked segment also captures nothing:
   its state was never reached, so its screen is not the evidence its capture id names.
 
+### Absent-family delivery notes (the coverage wave)
+
+Shipped against a live confusion. A human ran `verify --live` on a real project, got a verdict
+covering exactly one asset (a replay trace), and asked why the safe-area checks they used to
+see were missing. Verify was right: those checks belong to the screen-contract family, that
+project has no screen contract, so none of them ran. But the output never said so, and
+"those passed", "those do not exist here" and "those silently did not run" printed
+identically. A door whose whole claim is that a verdict states what it established cannot
+be silent about what it did not.
+
+- **Every known family is named, every run, by default.** One line per family with no asset:
+  what it would have covered, and the command that creates one. No flag: an opt-in coverage
+  report is a coverage report nobody reads at the moment they are being misled.
+- **DERIVED, NEVER HAND-LISTED.** `ASSET_KIND_CATALOG` is now the single declaration of a
+  kind, carrying its prose, and `ASSET_KINDS` is derived from it. A second list of kinds
+  inside the reporting code is exactly the drift that would leave a seventh kind absent from
+  the report about absences, which is the failure mode this repo keeps paying for.
+- **INFORMATIONAL, and structurally so.** `absentFamilies` is a distinct type from both
+  `DiscoveredAsset` and `UnifiedNotRun` (the two that carry tiers), it is not an input to
+  `resolveUnifiedOutcome`, and no status word or exit code is derived from it. Naming a gap
+  is the opposite of covering it, and the zero-asset refusal (`nothing-checked`, exit 2,
+  no report written) is untouched. A test re-derives the recorded outcome from executed +
+  notRun alone, so folding gaps into the calculus in either direction fails.
+- **The workspace-scoped families name the DIRECTORY they were searched in.** The workspace
+  id is derived from the project's folder name, so "no screen contract" and "no screen
+  contract under the id this folder name derives" are different sentences. This is the cheap
+  half of the keying problem; the A5 routing note remains the half that names the other id
+  when some workspace on the machine stamps this root.
+- **The same gaps ride in `verify.json` and the `loombridge_verify` MCP payload**, so a CI
+  consumer and an agent see what the human saw rather than having to regex stderr.
+
 ## Out of scope
 
 - Aligning the windows OUTSIDE the settle (action dispatch round trips, anchor polling), the

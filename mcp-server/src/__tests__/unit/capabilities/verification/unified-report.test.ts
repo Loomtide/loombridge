@@ -460,6 +460,7 @@ test("the report path helpers are the ONLY spelling of the three declared filena
       live: false,
       plan: [],
       notRun: [],
+      absentFamilies: [],
       // S2a/F12: `only` and `deselected` are REQUIRED on the type, so a full run has to say
       // out loud that it was not scoped rather than leaving the field off.
       only: null,

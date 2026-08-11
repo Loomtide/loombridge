@@ -18,7 +18,12 @@ import fs from "node:fs/promises";
 import path from "node:path";
 
 import type { DriftFacts } from "../../replay/visual-diff.js";
-import type { DiscoveredAsset, DiscoveredAssetKind, NotRunClass } from "./discovery.js";
+import type {
+  AbsentAssetFamily,
+  DiscoveredAsset,
+  DiscoveredAssetKind,
+  NotRunClass,
+} from "./discovery.js";
 
 /**
  * The unified report filename under `.loombridge/reports/`. ONE constant; see A8.
@@ -319,6 +324,17 @@ export interface UnifiedVerifyReport {
   plan: DiscoveredAsset[];
   /** Discovered assets that did not execute, and why. Never folded into pass. */
   notRun: UnifiedNotRun[];
+  /**
+   * Every known check family this project has NO asset of, so a CI consumer sees the same
+   * gaps stdout printed. A `verify.json` that lists only what exists cannot answer "were
+   * the screen checks green, or absent?", which is the question a human actually hit.
+   *
+   * INFORMATIONAL, and never part of the calculus: `resolveUnifiedOutcome` does not take
+   * this array, so no entry here can change `status` or `exit` in either direction. It is
+   * a statement of what was NOT established, and the absence of an asset is neither a pass
+   * (nothing was measured) nor a failure (a project is allowed to have no screens).
+   */
+  absentFamilies: AbsentAssetFamily[];
   /**
    * S2a/F12: the `--only` scoping of THIS run, or `null` for a full run. REQUIRED rather
    * than optional-when-absent, so a reader (and `doneness`) never has to treat a missing

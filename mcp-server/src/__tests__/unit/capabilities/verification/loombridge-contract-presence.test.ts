@@ -21,6 +21,7 @@ import { runPlan } from "../../../../capabilities/verification/plan.js";
 import { computeStatusModel, renderDetailedStatus } from "../../../../capabilities/verification/status-model.js";
 import { designStatus, setDesignTarget } from "../../../../capabilities/verification/design.js";
 import { fileExists, loombridgePaths, readState, writeState } from "../../../../domain/state.js";
+import { projectWorkspace, sanitizeWorkspaceId } from "../../../../domain/workspace-paths.js";
 import { readSlicePlan } from "../../../../capabilities/verification/slices.js";
 import {
   buildLoombridgeStatusPayload,
@@ -504,8 +505,22 @@ test("runLoombridgeVerifyTool surfaces the CLI output byte-for-byte (no summariz
     await fakeCaptures(rootB);
     const direct = await captureVerb(() => runVerifyCli(["--root", rootA]));
     const wrapped = await runLoombridgeVerifyTool(rootB);
-    // Normalize the only difference (the temp root path) so we compare the message text.
-    const norm = (l: string) => l.replace(rootA, "ROOT").replace(rootB, "ROOT");
+    // Normalize the differences that are PATHS rather than message text: the temp root, and
+    // the WORKSPACE derived from it. The absent-family lines name the workspace directory
+    // they searched, and that directory's name is the root's basename put through
+    // `sanitizeWorkspaceId`, so it is derived with the same two functions the door uses
+    // rather than assembled by hand here.
+    const workspaceOf = (root: string): string => {
+      const id = sanitizeWorkspaceId(path.basename(root));
+      assert.ok(id, `a temp root must derive a workspace id: ${root}`);
+      return projectWorkspace(id);
+    };
+    const norm = (l: string) =>
+      l
+        .replaceAll(workspaceOf(rootA), "WORKSPACE")
+        .replaceAll(workspaceOf(rootB), "WORKSPACE")
+        .replace(rootA, "ROOT")
+        .replace(rootB, "ROOT");
     assert.deepEqual(wrapped.output.map(norm), direct.lines.map(norm), "wrapper must surface the CLI lines verbatim");
     assert.equal(wrapped.exitCode, direct.code);
   } finally {
@@ -563,6 +578,7 @@ async function plantStaleGreenReport(root: string): Promise<string> {
     live: false,
     plan: [],
     notRun: [],
+    absentFamilies: [],
     only: null,
     deselected: [],
     sections: { contract: { status: "pass", exit: 0, anchored: true } },
