@@ -22,7 +22,7 @@ import {
   type ObserveTraceMeta,
   type OutcomeSpec,
 } from "./observe.js";
-import { captureOutcomes, observeLive } from "./observe-live.js";
+import { captureOutcomes, observeLive, type ObserveNotice } from "./observe-live.js";
 import { resilientSend, type ReconnectableClient } from "./resilient-send.js";
 import { endLiveSession, type LiveSessionClient } from "./session.js";
 import type { ReplayTrace } from "./types.js";
@@ -104,6 +104,12 @@ export interface ObserveRecordOptions {
    * heartbeat — so with two editors open the verb can drive the wrong project.
    */
   projectPathCanonical?: string;
+  /**
+   * Where to print the recorder's human-facing lines ("click the Unity window", "recording").
+   * Injected rather than hardcoded to console so the CLI owns its prefix and a test can assert
+   * the ORDER of what the human was told. Omitted ⇒ silent (the pre-existing behaviour).
+   */
+  onNotice?: ObserveNotice;
 }
 
 /**
@@ -118,6 +124,7 @@ export async function recordObservedTrace(
     waitForStop: () => Promise<void>;
     outcomes?: OutcomeSpec[];
     resolveId?: ResolveTraceId;
+    onNotice?: ObserveNotice;
   },
 ): Promise<ObserveRecordResult> {
   const driver = new UnityDriver(send);
@@ -168,7 +175,15 @@ export async function recordObservedTrace(
         }
       : undefined;
   // Phase 2 / D1-B: auto-detect each scene's signal live (per-scene gates without a declared signal).
-  const session = await observeLive(send, startSignal, meta.autoDetectStateSignal === true); // input.observe_start
+  // The ORDER here is load-bearing for the human: observeLive announces "click the Unity window"
+  // and does not return until the bridge has actually begun recording (or warned that it could
+  // not), so `waitForStop` (which prints "press Enter to stop") can never be reached first.
+  const session = await observeLive(
+    send,
+    startSignal,
+    meta.autoDetectStateSignal === true,
+    options.onNotice,
+  ); // input.observe_start
   await options.waitForStop(); // the human plays, then signals done
   // `keyEdges` here has ALREADY had the OS window-manager modifiers (Cmd/Meta/Win) stripped, by
   // `observeLive.stop()`. That ordering is load-bearing: the transform choice below keys off
@@ -207,6 +222,7 @@ export async function observeRecordLive(
       waitForStop: options.waitForStop,
       outcomes: options.outcomes,
       resolveId: options.resolveId,
+      onNotice: options.onNotice,
     });
   } finally {
     await endLiveSession(send, client);

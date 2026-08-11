@@ -658,8 +658,12 @@ async function runRecord(args: TraceArgs, opts: TraceRunOpts = {}): Promise<numb
         await sleep(args.durationSec! * 1000);
       }
     : () =>
+        // "then press Enter" only, because by the time this prints the recorder has already told
+        // the human to click Unity and confirmed that recording actually started (see the
+        // onNotice wiring below). Telling them to switch to Unity here as well would repeat an
+        // instruction they have already acted on to get this far.
         readEnter(
-          "[loombridge trace] ▶ Switch to Unity, play your flow, then press Enter here to stop… ",
+          "[loombridge trace] ▶ Play your flow in Unity, then press Enter here to stop… ",
         );
   // Race the stop signal against Ctrl-C so a cancel still runs cleanup (the
   // `finally` in observeRecordLive stops Play and returns the editor to edit mode)
@@ -676,6 +680,9 @@ async function runRecord(args: TraceArgs, opts: TraceRunOpts = {}): Promise<numb
     waitForStop,
     outcomes,
     projectPathCanonical: resolveCliProjectPin({ root: args.root }),
+    // The recorder's own human-facing lines ("click the Unity window now", then whether
+    // recording really started), prefixed like every other line this verb prints.
+    onNotice: (message: string) => console.error(`[loombridge trace] ${message}`),
     // Passed ONLY when no --id was typed, so the explicit path provably never reaches the
     // derivation (and never gets collision-suffixed).
     ...(args.id ? {} : { resolveId: (scenePath: string) => deriveRecordId(paths, scenePath) }),

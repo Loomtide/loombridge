@@ -1205,11 +1205,32 @@ function buildOps(): OpDef[] {
       "Begin OBSERVING the developer's real left-clicks during manual Play (the observe-a-human-session " +
       "recorder). Unlike the input-driving ops, this does not inject input and needs no input session — it " +
       "reads legacy UnityEngine.Input + the uGUI EventSystem in the game's Update loop. Requires Play Mode. " +
-      "FOCUSES the Game view first, so the human's first taps reach the game instead of being swallowed by the " +
-      "editor; a gesture that still arrives while the Game view is unfocused is dropped and counted as " +
-      "`droppedUnfocused` rather than recorded as a step the game never processed. " +
+      "FOCUSES the Game view first, then WAITS (default 60s, editor-tick polled) until Unity is the ACTIVE OS " +
+      "APPLICATION before it starts recording: Game-view focus alone is true even while Unity sits behind the " +
+      "terminal the CLI was run from, and the human's application-activating click is swallowed by the editor, " +
+      "so recording before that mints a step the game never processed. On timeout it starts anyway with a loud " +
+      "warning rather than refusing. Returns { active, backend, applicationActive, activationWaitedMs, " +
+      "activationTimedOut }. A gesture that still arrives while Unity is inactive or the Game view is unfocused " +
+      "is dropped and counted as `droppedUnfocused` rather than recorded. " +
       "Pair with input.observe_stop to collect the recorded clicks (each resolved to a locator).",
-    inputSchema: { type: "object", properties: {} },
+    // Async in the bridge (InputHandler.IsAsync): it completes across editor ticks while it waits
+    // for the editor to become the active application.
+    isAsync: true,
+    // Must exceed the bridge's activation grace (InputHandler.DefaultActivationTimeoutMs = 60000),
+    // or the MCP side aborts the call while the bridge is still waiting for the human's click.
+    defaultTimeoutMs: 90000,
+    inputSchema: {
+      type: "object",
+      properties: {
+        activationTimeoutMs: {
+          type: "number",
+          description:
+            "How long to wait (ms) for Unity to become the active OS application before recording " +
+            "starts anyway with a warning. Default 60000. 0 waits not at all (an unattended caller " +
+            "that accepts every gesture being dropped while Unity is inactive).",
+        },
+      },
+    },
   });
 
   ops.push({

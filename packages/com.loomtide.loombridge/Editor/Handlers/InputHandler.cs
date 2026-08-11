@@ -27,9 +27,21 @@ namespace UnityBridge.Handlers
             _inputService = inputService ?? new InputService();
         }
 
+        /// <summary>
+        /// Default grace, in ms, for the human to make Unity the ACTIVE OS APPLICATION before
+        /// observation begins (see <see cref="HandleObserveStart"/>). Human-scale on purpose: the
+        /// developer has to leave the terminal, find the Unity window and click it. The CLI's wire
+        /// timeout for input.observe_start must exceed this, or the client gives up before the
+        /// bridge does; `observe-live.ts` carries the mirror constant and a test binds the two.
+        /// </summary>
+        public const long DefaultActivationTimeoutMs = 60000;
+
         public bool IsAsync(string opName)
         {
-            return false;
+            // observe_start is the ONE async input op: when Unity is not the active OS
+            // application it WAITS (on the editor tick, never blocking the main thread) for
+            // the human to click the Unity window before it starts recording.
+            return opName == "observe_start";
         }
 
         public JObject HandleOp(string opName, JObject parameters)
@@ -59,8 +71,6 @@ namespace UnityBridge.Handlers
                 case "click_ui":
                     EnsureInputCapabilityOrThrow(opName);
                     return _inputService.ClickUi(parameters);
-                case "observe_start":
-                    return HandleObserveStart(parameters);
                 case "observe_stop":
                     return HandleObserveStop();
                 case "pointer_tap":
@@ -76,8 +86,16 @@ namespace UnityBridge.Handlers
         public void HandleOpAsync(string opName, JObject parameters,
             Action<JObject> respond, Action<BridgeException> onError)
         {
-            onError(new BridgeException(ErrorCodes.NOT_FOUND,
-                $"Input op '{opName}' is not async."));
+            switch (opName)
+            {
+                case "observe_start":
+                    HandleObserveStart(parameters, respond, onError);
+                    break;
+                default:
+                    onError(new BridgeException(ErrorCodes.NOT_FOUND,
+                        $"Input op '{opName}' is not async."));
+                    break;
+            }
         }
 
         private JObject HandleGetCapabilities()
@@ -99,11 +117,15 @@ namespace UnityBridge.Handlers
         // synthetic-input backend's availability is irrelevant. Play Mode is the
         // only precondition.
 
-        private JObject HandleObserveStart(JObject parameters)
+        private void HandleObserveStart(JObject parameters,
+            Action<JObject> respond, Action<BridgeException> onError)
         {
             if (!Application.isPlaying)
-                throw new BridgeException(ErrorCodes.PLAY_MODE_REQUIRED,
-                    "input.observe_start requires Play Mode — enter play, then start observing.");
+            {
+                onError(new BridgeException(ErrorCodes.PLAY_MODE_REQUIRED,
+                    "input.observe_start requires Play Mode — enter play, then start observing."));
+                return;
+            }
 
             // Optional declared game state-signal to sample at each recorded gesture, so
             // replay can auto-gate the gesture on the signal (e.g. wait until
@@ -121,24 +143,160 @@ namespace UnityBridge.Handlers
             // recording gates each scene on its own phase manager). Takes precedence over a declared signal.
             bool autoDetect = parameters?["autoDetectStateSignal"]?.Value<bool>() ?? false;
 
+            long activationTimeoutMs;
+            try
+            {
+                activationTimeoutMs = parameters?.Value<long?>("activationTimeoutMs")
+                    ?? DefaultActivationTimeoutMs;
+            }
+            catch (Exception)
+            {
+                onError(new BridgeException(ErrorCodes.INVALID_PARAMS,
+                    "input.observe_start 'activationTimeoutMs' must be a non-negative integer (ms)."));
+                return;
+            }
+            if (activationTimeoutMs < 0)
+            {
+                onError(new BridgeException(ErrorCodes.INVALID_PARAMS,
+                    "input.observe_start 'activationTimeoutMs' must be a non-negative integer (ms)."));
+                return;
+            }
+
             // FOCUS THE GAME VIEW BEFORE OBSERVING. Without focus the editor swallows the
             // human's first taps while this observer still attributes them (its raycast
             // resolves a target), so the trace records steps the game never processed and
             // replay diverges on the very first segment. Main thread, inside the handler,
             // before any gesture can arrive.
-            bool gameViewFocused = GameViewFocus.EnsureGameViewFocused();
-            if (gameViewFocused)
+            FocusGameViewForObservation();
+
+            // ...BUT Game-view focus is only half the precondition, and the half that used to be
+            // missing is the expensive one. Unity-internal window focus is true whenever the Game
+            // view is Unity's frontmost window, EVEN WHILE UNITY SITS BEHIND THE TERMINAL the human
+            // just ran `loombridge trace record` from. The application-activating click is swallowed
+            // by the editor (the game never processes it) yet the observer's raycast still resolves
+            // a target, so that click was recorded as a real gesture: an observed trace held the
+            // same tap twice and replay died on the second, whose target the first had navigated
+            // away from. So do not begin observing until Unity is genuinely the OS-active app.
+            if (GameViewFocus.IsApplicationActive())
+            {
+                BeginObserving(signalPath, signalComponent, signalProperty, autoDetect);
+                respond(BuildObserveStartResult(0L, false));
+                return;
+            }
+
+            if (activationTimeoutMs == 0)
+            {
+                // Explicit opt out (activationTimeoutMs: 0): do not wait at all. Loud, because
+                // every gesture arriving while Unity is inactive is DROPPED, not recorded.
+                Debug.LogWarning(
+                    "[Loombridge] observe_start: Unity is NOT the active application and activationTimeoutMs is 0, "
+                    + "so recording starts immediately. Gestures that arrive while Unity is inactive are DROPPED "
+                    + "(reported as droppedUnfocused), never recorded. Click the Unity window to make them count.");
+                BeginObserving(signalPath, signalComponent, signalProperty, autoDetect);
+                respond(BuildObserveStartResult(0L, false));
+                return;
+            }
+
+            Debug.Log(
+                $"[Loombridge] observe_start: waiting up to {activationTimeoutMs}ms for Unity to become the ACTIVE "
+                + "application. CLICK THE UNITY WINDOW NOW to begin recording; until then the editor swallows your "
+                + "taps and the recorder must not attribute them to the game.");
+
+            // The wait runs on EditorApplication.update via WaitEngine, NOT as a spin inside this
+            // handler: op handlers run on the main thread, so a blocking wait would freeze the very
+            // editor whose activation we are waiting for (and stop the player loop the observer
+            // rides on). WaitEngine already owns the tick-polled, timeout-bounded wait used by
+            // editor.wait_for, so this reuses it rather than adding a second tick hook.
+            WaitEngine.WaitFor(
+                new JObject { ["timeoutMs"] = activationTimeoutMs },
+                () =>
+                {
+                    // Play Mode can end while we wait (the human hits stop, or a domain reload
+                    // takes it out). Beginning an observer then would record nothing and surface
+                    // at stop as observed:false; fail honestly here instead. A BridgeException
+                    // from the predicate ends the wait through the error path.
+                    if (!Application.isPlaying)
+                        throw new BridgeException(ErrorCodes.PLAY_MODE_REQUIRED,
+                            "input.observe_start: Play Mode ended while waiting for Unity to become the "
+                            + "active application; nothing was recorded.");
+                    return GameViewFocus.IsApplicationActive();
+                },
+                null,
+                () => $"Unity did not become the active application within {activationTimeoutMs}ms.",
+                result =>
+                {
+                    long waitedMs = result?.Value<long?>("waited_ms") ?? 0L;
+                    // The activating click may have landed on a different Unity window (Scene view,
+                    // Console), so re-assert Game-view focus before the first gesture can arrive.
+                    FocusGameViewForObservation();
+                    Debug.Log(
+                        $"[Loombridge] observe_start: Unity is active after {waitedMs}ms: recording started. "
+                        + "Play your flow now.");
+                    BeginObserving(signalPath, signalComponent, signalProperty, autoDetect);
+                    respond(BuildObserveStartResult(waitedMs, false));
+                },
+                error =>
+                {
+                    // PROCEED ON TIMEOUT, LOUDLY, rather than refuse. A human who genuinely cannot
+                    // activate the window (remote session, window manager quirk) still deserves the
+                    // option to record, and proceeding is not a false green: the per-press-edge
+                    // probe below is the same hardened predicate, so any gesture that arrives while
+                    // Unity is inactive is DROPPED and counted in droppedUnfocused rather than
+                    // recorded. Only a TIMEOUT is converted; any other failure is still an error.
+                    if (error == null || error.Code != ErrorCodes.TIMEOUT)
+                    {
+                        onError(error ?? new BridgeException(ErrorCodes.TIMEOUT,
+                            "input.observe_start activation wait failed."));
+                        return;
+                    }
+
+                    Debug.LogWarning(
+                        $"[Loombridge] observe_start: Unity did NOT become the active application within "
+                        + $"{activationTimeoutMs}ms, so it is RECORDING ANYWAY. Every gesture that arrives while Unity is "
+                        + "inactive is DROPPED (reported as droppedUnfocused), never recorded, so this recording may "
+                        + "capture nothing at all. Click the Unity window, then play.");
+                    FocusGameViewForObservation();
+                    BeginObserving(signalPath, signalComponent, signalProperty, autoDetect);
+                    respond(BuildObserveStartResult(activationTimeoutMs, true));
+                });
+        }
+
+        /// <summary>Focus the Game view for observation and say so, exactly as before the wait existed.</summary>
+        private static void FocusGameViewForObservation()
+        {
+            if (GameViewFocus.EnsureGameViewFocused())
                 Debug.Log("[Loombridge] observe_start: focused the Game view so the first taps reach the game.");
             else
                 Debug.LogWarning(
                     "[Loombridge] observe_start: could not focus the Game view; early taps may be swallowed by the editor "
                     + "and will be DROPPED (reported as droppedUnfocused), never recorded.");
+        }
 
+        private static void BeginObserving(string signalPath, string signalComponent,
+            string signalProperty, bool autoDetect)
+        {
             // Install the focus probe the runtime observer consults at each press edge (it cannot
             // reference UnityEditor itself). Set BEFORE Begin so the very first gesture is gated.
-            InputObserverBridge.SetGameViewFocusProbe(GameViewFocus.IsGameViewFocused);
+            // IsGameViewInputFocused, not IsGameViewFocused: the probe answers "would this click
+            // have reached the game", which needs Unity to be OS-active as well, so focus lost
+            // MID-recording drops the gestures the editor swallows instead of recording gameplay
+            // the game never saw.
+            InputObserverBridge.SetGameViewFocusProbe(() => GameViewFocus.IsGameViewInputFocused());
             InputObserverBridge.Begin(signalPath, signalComponent, signalProperty, autoDetect);
-            return new JObject { ["active"] = true, ["backend"] = "InputObserver" };
+        }
+
+        private static JObject BuildObserveStartResult(long activationWaitedMs, bool activationTimedOut)
+        {
+            return new JObject
+            {
+                ["active"] = true,
+                ["backend"] = "InputObserver",
+                // The REAL fact at the moment recording began, so the CLI can tell the human that a
+                // recording started against an inactive editor will drop everything they do.
+                ["applicationActive"] = GameViewFocus.IsApplicationActive(),
+                ["activationWaitedMs"] = activationWaitedMs,
+                ["activationTimedOut"] = activationTimedOut
+            };
         }
 
         /// <summary>
