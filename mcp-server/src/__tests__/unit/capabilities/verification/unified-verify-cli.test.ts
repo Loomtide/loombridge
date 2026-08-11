@@ -34,7 +34,10 @@ import {
   type UnifiedVerifyReport,
 } from "../../../../capabilities/verification/unified/report.js";
 import { run as runTrace } from "../../../../capabilities/replay/trace.js";
-import { DEFAULT_DRIFT_FRACTION } from "../../../../capabilities/replay/visual-diff.js";
+import {
+  DEFAULT_DRIFT_FRACTION,
+  type MaskSuggestion,
+} from "../../../../capabilities/replay/visual-diff.js";
 import { run as runMinigame } from "../../../../capabilities/minigame/minigame.js";
 import { resolveCliProjectPin } from "../../../../capabilities/setup/cli-project-pin.js";
 import { createDraftAssetManifest, type AssetManifest } from "../../../../capabilities/assets/asset-manifest.js";
@@ -177,10 +180,11 @@ async function plantApprovedTrace(root: string, id: string): Promise<void> {
  * suggestion", which is a skip wearing a default, and the whole point of A3 is that the
  * section reports drift from typed facts instead of inferring it from a tier.
  */
-function cleanFlow(status = "pass"): {
+function cleanFlow(status = "pass", htmlPath = DOUBLE_HTML_PATH): {
   status: string;
   exitTier: number;
   suggestTolerance: boolean;
+  htmlPath: string;
   driftCaptures: number;
   maxDiffFraction: number;
   toleranceUsed: number;
@@ -189,20 +193,36 @@ function cleanFlow(status = "pass"): {
     status,
     exitTier: 0,
     suggestTolerance: false,
+    htmlPath,
     driftCaptures: 0,
     maxDiffFraction: 0,
     toleranceUsed: DEFAULT_DRIFT_FRACTION,
   };
 }
 
+/**
+ * The page the real engine renders on EVERY replay it performs, absolute as the seam hands
+ * it over. Required on the seam (never defaulted away) because the summary's job is to name
+ * it: a double that could omit it would let the "verify names the HTML" guard pass over a
+ * seam that had stopped carrying one.
+ */
+const DOUBLE_HTML_PATH = path.join("/tmp", "unified-double", "x.report.html");
+
 /** A trace whose actuation passed and whose pixels moved: tier 1, suggestion allowed. */
 function driftedFlow(
-  overrides: { status?: string; driftCaptures?: number; maxDiffFraction?: number; toleranceUsed?: number } = {},
+  overrides: {
+    status?: string;
+    driftCaptures?: number;
+    maxDiffFraction?: number;
+    toleranceUsed?: number;
+    htmlPath?: string;
+  } = {},
 ): ReturnType<typeof cleanFlow> {
   return {
     status: overrides.status ?? "pass",
     exitTier: 1,
     suggestTolerance: true,
+    htmlPath: overrides.htmlPath ?? DOUBLE_HTML_PATH,
     driftCaptures: overrides.driftCaptures ?? 1,
     maxDiffFraction: overrides.maxDiffFraction ?? 0.013,
     toleranceUsed: overrides.toleranceUsed ?? DEFAULT_DRIFT_FRACTION,
@@ -866,6 +886,82 @@ test("--live: the feel section carries the engine's own tier, pass and integrity
   }
 });
 
+/*
+ * The other half of the stale-HTML fix (`report-html-freshness.test.ts` owns the artifact
+ * half). The engine now renders a page on every replay; this pins that `verify` SAYS SO,
+ * because the human who hit the bug was told only about the JSON, went looking for a page
+ * the tool never named, and the one on disk was a previous run's.
+ *
+ * Driven through `runUnifiedVerify` so the real `flowSection` -> section roll-up ->
+ * `summaryLines` chain executes. Only the engine is a double (it needs a live editor).
+ *
+ * LITMUS, run 2026-08-11. The `if (section.htmlPath)` push deleted from `summaryLines`:
+ *
+ *   ✖ --live: the flow summary NAMES the HTML page, in `trace replay`'s own spelling
+ *     AssertionError [ERR_ASSERTION]: The input did not match the regular expression
+ *     /flow: html   → \.loombridge\/replays\/reports\/b-drifted\.report\.html/. Input:
+ *
+ *     '[loombridge verify] discovered 4 asset(s)...
+ *
+ * Restored, it passes. Deleting the `htmlPath` pass-through in `flowSection` instead fails
+ * the same assertion, so neither end of the wiring is vacuous.
+ */
+test("--live: the flow summary NAMES the HTML page, in `trace replay`'s own spelling", async () => {
+  const root = await plannedProject("unified-cli-htmllink-", { graded: true });
+  const workspace = await tmpDir("unified-cli-ws-");
+  try {
+    await plantApprovedTrace(root, "a-clean");
+    await plantApprovedTrace(root, "b-drifted");
+    const layout = standardReplayLayout(root);
+    // The page the engine really renders for the DRIFTED trace, which is the one whose
+    // verdict the section reports: the link and the status word must come from one asset.
+    const driftedHtml = path.join(layout.replayReports, "b-drifted.report.html");
+
+    const { result, lines } = await captured(() =>
+      runUnifiedVerify({
+        root,
+        strict: false,
+        live: true,
+        workspace,
+        deps: {
+          async runFlowTrace(_layout, id) {
+            return id === "b-drifted"
+              ? driftedFlow({ status: "visual-drift", htmlPath: driftedHtml })
+              : cleanFlow("pass", path.join(layout.replayReports, "a-clean.report.html"));
+          },
+        },
+      }),
+    );
+    assert.equal(result, 1);
+
+    const out = lines.join("\n");
+    // `trace replay` prints `html   → <rel>`; the two doors read identically on purpose.
+    assert.match(
+      out,
+      /flow: html {3}→ \.loombridge\/replays\/reports\/b-drifted\.report\.html/,
+      "verify must name the page beside the JSON it already names",
+    );
+    // …and the machine-readable half, so a consumer of verify.json has it too.
+    const report = await readUnified(root);
+    assert.equal(
+      report.sections.flow?.htmlPath,
+      path.join(".loombridge", "replays", "reports", "b-drifted.report.html"),
+      "the section's page is the WORST asset's, chosen by the same rule as its reportPath",
+    );
+    assert.deepEqual(
+      report.sections.flow?.assets?.map((a) => a.htmlPath),
+      [
+        path.join(".loombridge", "replays", "reports", "a-clean.report.html"),
+        path.join(".loombridge", "replays", "reports", "b-drifted.report.html"),
+      ],
+      "every executed trace records its own page, not just the one the summary links",
+    );
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+    await fs.rm(workspace, { recursive: true, force: true });
+  }
+});
+
 test("--live: a trace at tier 1 (pixel DRIFT) is a game defect: the run exits 1, not 2", async () => {
   // FX8 + FX5 together. The worst-selection line has to pick the tier-1 outcome as the
   // section's, and a found defect must keep exit 1 even though a second anchor went
@@ -1024,6 +1120,75 @@ test("MX8: --live prints the MASK verdict too, in the trace verb's exact words",
   }
 });
 
+/*
+ * The verify door's half of the mask-surfacing fix (`replay-pixel-masks.test.ts` owns the
+ * trace door's, and derives these verdicts from real pixels; here they are handed to the
+ * seam, because the engine needs a live editor).
+ *
+ * The operator this was found on hit the drift through `verify --live`, so the ORDER has to
+ * hold here specifically: they read "re-approve the tolerance with …" first, and the reason
+ * no honest mask existed was below it.
+ *
+ * LITMUS, run 2026-08-11. The two blocks in `flowSection` swapped back so
+ * `driftSuggestionLines` prints first:
+ *
+ *   ✖ the mask verdict LEADS the tolerance advice at the verify door too
+ *     AssertionError [ERR_ASSERTION]: the mask verdict must lead: a tolerance is the
+ *     blunter instrument
+ *
+ * and with the whole `if (maskSuggestion)` block deleted instead:
+ *
+ *   ✖ the mask verdict LEADS the tolerance advice at the verify door too
+ *     AssertionError [ERR_ASSERTION]: The input did not match the regular expression
+ *     /flow: drift is diffuse; masks cannot cover it honestly/. Input:
+ *
+ *     '[loombridge verify] plan for /var/folders/.../unified-cli-maskorder-GqgiIK …
+ *
+ * Restored, it passes.
+ */
+test("the mask verdict LEADS the tolerance advice at the verify door too", async () => {
+  const root = await unityLikeProject("unified-cli-maskorder-");
+  const workspace = await tmpDir("unified-cli-ws-");
+  try {
+    await plantApprovedTrace(root, "happy-path-2");
+    const run = async (maskSuggestion: MaskSuggestion): Promise<string> => {
+      const { lines } = await captured(() =>
+        runUnifiedVerify({
+          root,
+          strict: false,
+          live: true,
+          workspace,
+          deps: {
+            async runFlowTrace() {
+              return { ...driftedFlow({ driftCaptures: 2 }), maskSuggestion };
+            },
+          },
+        }),
+      );
+      return lines.join("\n");
+    };
+
+    // The verdict the human's run actually reached, and never got to read.
+    const tooLoose = await run({ kind: "diffuse", refusal: { kind: "too-loose", tightness: 0.249 } });
+    assert.match(tooLoose, /flow: drift is diffuse; masks cannot cover it honestly/);
+    assert.match(tooLoose, /under the 60% tightness bar, so they are mostly unchanged frame/);
+    assert.doesNotMatch(tooLoose, /"?too-loose"?/, "the reason is explained, never echoed as a token");
+    assert.ok(
+      tooLoose.indexOf("masks cannot cover it honestly") < tooLoose.indexOf("re-approve the tolerance"),
+      `the mask verdict must lead: a tolerance is the blunter instrument\n${tooLoose}`,
+    );
+
+    // …and the circle: a comparison happened, so no second characterization run is asked for.
+    const moved = await run({ kind: "moved", previousCaptures: ["a"], currentCaptures: ["b"] });
+    assert.match(moved, /flow: the previous run WAS compared, and none of its drift recurs here/);
+    assert.doesNotMatch(moved, /re-run replay once more/);
+    assert.ok(moved.indexOf("previous run WAS compared") < moved.indexOf("re-approve the tolerance"), moved);
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+    await fs.rm(workspace, { recursive: true, force: true });
+  }
+});
+
 test("MX10: a GREEN trace graded with masks says so in the per-asset detail", async () => {
   // V4/M7. `demo=pass` is the string an agent quotes as proof, and a pass measured with 8%
   // of every frame blanked is a materially weaker claim than a pass. The drifted branch
@@ -1090,6 +1255,7 @@ test("--live: NO suggestion is printed when the trace is a harness fault, only w
               status: "pass",
               exitTier: 2,
               suggestTolerance: false,
+              htmlPath: DOUBLE_HTML_PATH,
               driftCaptures: 0,
               maxDiffFraction: 0,
               toleranceUsed: DEFAULT_DRIFT_FRACTION,

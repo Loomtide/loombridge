@@ -39,6 +39,35 @@ export interface ReportChrome {
   frameHeight?: number;
   /** The ONE combined consent sentence for this anchor's terms, when there is one. */
   anchorTerms?: string | null;
+  /**
+   * sha256 of the EXACT `<id>.report.json` bytes this page was rendered from.
+   *
+   * The HTML is the artifact a human actually opens, and it sits on disk next to a JSON
+   * verdict that a LATER run can rewrite. Two artifacts that can silently disagree is the
+   * failure this stamp exists to end: with it, "is this page the run whose verdict I was
+   * just shown?" is answerable by hashing the JSON beside it, instead of by trusting an
+   * mtime. Absent only for a caller that has no bytes to bind to (nothing in-tree).
+   */
+  sourceReportSha256?: string;
+}
+
+/** The `<meta>` name the source-report binding is published under. */
+export const SOURCE_REPORT_SHA_META = "loombridge-source-report-sha256";
+
+/** A sha we are willing to put in an HTML attribute: 64 lowercase hex, nothing else. */
+const SHA256_HEX = /^[0-9a-f]{64}$/;
+
+/**
+ * Read back the source-report binding {@link renderReplayReportHtml} stamped.
+ *
+ * The reader half of the stamp, kept here beside the writer so the two cannot drift
+ * apart. A caller holding the report JSON's bytes compares this against their sha256:
+ * equal means the page and the verdict describe the same run, different (or absent)
+ * means the page is stale and must not be read as this run's evidence.
+ */
+export function sourceReportSha256Of(html: string): string | undefined {
+  const match = new RegExp(`<meta name="${SOURCE_REPORT_SHA_META}" content="([0-9a-f]{64})"`).exec(html);
+  return match?.[1];
 }
 
 const STATUS_COLOR: Record<string, string> = {
@@ -131,11 +160,26 @@ export function renderReplayReportHtml(
     ? `<div class="terms">anchor terms: ${esc(chrome.anchorTerms)}</div>`
     : "";
 
+  // THE BINDING TO THE VERDICT THIS PAGE RENDERS (see `ReportChrome.sourceReportSha256`).
+  // Machine-readable in the head and legible in the header, because both readers exist: a
+  // guard hashing the JSON beside it, and a human who wants to know the page is not a
+  // leftover. An unparseable value is dropped rather than escaped into the attribute:
+  // `trace report` renders from an unvalidated on-disk JSON, so nothing shaped by that
+  // file may reach an attribute (the same trust boundary `statusClass` draws).
+  const sourceSha = chrome.sourceReportSha256 && SHA256_HEX.test(chrome.sourceReportSha256)
+    ? chrome.sourceReportSha256
+    : undefined;
+  const shaMeta = sourceSha ? `\n<meta name="${SOURCE_REPORT_SHA_META}" content="${sourceSha}" />` : "";
+  const shaLine = sourceSha
+    ? `<div class="meta">rendered from <code>${esc(artifact.traceId)}.report.json</code> ` +
+      `sha256 <code>${sourceSha}</code></div>`
+    : "";
+
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />${shaMeta}
 <title>Replay report: ${esc(artifact.traceId)}</title>
 <style>
   :root { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #1f2328; }
@@ -179,6 +223,7 @@ export function renderReplayReportHtml(
       artifact.visualDrift ? ` · <span class="vstatus vstatus-drift">visual drift</span>` : ""
     }
   </div>
+  ${shaLine}
   ${terms}
   ${divergence}
   ${section("Segments", `<table><thead><tr><th>segment</th><th>status</th><th>anchors reached</th><th>captures</th></tr></thead><tbody>${segmentsRows}</tbody></table>`)}

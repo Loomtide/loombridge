@@ -1006,9 +1006,49 @@ async function replayOneTrace(
   await applyVisualDiff(paths, id, artifact);
 
   const reportJson = path.join(paths.replayReports, `${id}.report.json`);
-  await fs.writeFile(reportJson, `${JSON.stringify(artifact, null, 2)}\n`, "utf-8");
-  const htmlPath = opts.html ? await writeHtmlReport(paths, id, artifact) : undefined;
+  const body = `${JSON.stringify(artifact, null, 2)}\n`;
+  await fs.writeFile(reportJson, body, "utf-8");
+  // THE PAIR ON DISK ALWAYS DESCRIBES ONE RUN, and the rule lives HERE, at the single
+  // place `<id>.report.json` is written, rather than in each caller.
+  //
+  // The defect this closes, observed on a real project: `verify --live` re-drove a trace,
+  // graded it red and rewrote the JSON, but rendered no HTML, so the `.report.html` beside
+  // it was still the GREEN page an earlier `trace replay` had left. Nothing on that page
+  // said it was stale, and it is the artifact a human actually opens: the reader sees green
+  // frames under a failing verdict and concludes the failure was spurious. A missing file
+  // is a dead end; a stale one is a wrong answer.
+  //
+  // So either this run RE-RENDERS the page (bound to the bytes just written), or the older
+  // page is REMOVED. There is no third branch in which a page from another run survives.
+  const htmlPath = opts.html
+    ? await writeHtmlReport(paths, id, artifact, sha256(body))
+    : await removeStaleHtmlReport(paths, id);
   return { artifact, reportJson, htmlPath };
+}
+
+/**
+ * Delete the previous run's `<id>.report.html`, and SAY SO.
+ *
+ * `--no-html` is a request to spend no time rendering, never a request to leave the last
+ * run's verdict standing next to this one's JSON. The line is printed here rather than by
+ * a caller so no future call site can drop it: a silent deletion would surprise a human who
+ * had that page open, and a silent SKIP would be the original bug wearing a flag.
+ *
+ * Returns `undefined` always (this path renders nothing); the removal is announced, not
+ * returned, because no caller has anything to point a reader at afterwards.
+ */
+async function removeStaleHtmlReport(paths: ReplayLayout, id: string): Promise<undefined> {
+  const htmlPath = path.join(paths.replayReports, `${id}.report.html`);
+  try {
+    await fs.rm(htmlPath, { force: false });
+  } catch {
+    return undefined; // Nothing there (the common case), or nothing we may remove.
+  }
+  console.error(
+    `[loombridge trace] removed the stale ${id}.report.html: it rendered the PREVIOUS run, and ` +
+      `--no-html means none was rendered for this one. Re-render with: loombridge trace report --id ${id}`,
+  );
+  return undefined;
 }
 
 /** Replay every trace under `.loombridge/replays/traces/` and write a roll-up report. */
@@ -1900,9 +1940,17 @@ async function pruneUndeclaredBaselines(dir: string, pngs: TraceBaselinePng[]): 
 
 /**
  * The programmatic seam unified `verify` drives a trace through: one replay, its
- * per-trace JSON report, and the tier that replay earns. No HTML (the unified
- * report links the JSON), no argv, no `TraceArgs` (the verb's argv shape stays
- * private so the orchestrator cannot grow a second, drifting CLI).
+ * per-trace JSON and HTML reports, and the tier that replay earns. No argv and no
+ * `TraceArgs` (the verb's argv shape stays private so the orchestrator cannot grow a
+ * second, drifting CLI).
+ *
+ * THIS PATH RENDERS THE HTML. It used to pass `html: false`, on the reasoning that "the
+ * unified report links the JSON": true, and beside the point: the two doors write into
+ * the SAME `reports/` directory, so a verify that rewrote only the JSON left whatever page
+ * an earlier `trace replay` had rendered sitting next to it, describing a different run.
+ * Observed on a real project: a red `verify --live` next to a green page from 4 minutes
+ * earlier. The JSON is what the roll-up binds; the HTML is what a human opens, and both
+ * have to be this run's.
  *
  * The unified flow always passes `strictVisual: true` (S1 amendment A5: pixel-drift
  * gating is the DEFAULT there: an approved pixel baseline that a human froze is an
@@ -1927,6 +1975,8 @@ export async function replayTraceForVerify(
 ): Promise<{
   artifact: ReplayRunArtifact;
   reportJson: string;
+  /** The page rendered for THIS run, so the unified summary can name it (never a stale one). */
+  htmlPath: string;
   exitTier: number;
   /** A3: the drift facts, so the unified section reports numbers instead of a bare tier. */
   drift: DriftFacts;
@@ -1936,18 +1986,28 @@ export async function replayTraceForVerify(
    */
   maskSuggestion?: MaskSuggestion;
 }> {
-  const { artifact, reportJson } = await replayOneTrace(layout, id, {
-    html: false,
+  const { artifact, reportJson, htmlPath } = await replayOneTrace(layout, id, {
+    html: true,
     projectPathCanonical: opts.projectPathCanonical,
     ...(opts.clientFactory ? { clientFactory: opts.clientFactory } : {}),
   });
   return {
     artifact,
     reportJson,
+    // `replayOneTrace` returns this whenever it was asked to render, and it was; the throw
+    // states the invariant rather than letting an `undefined` become a summary line that
+    // silently stops naming the page.
+    htmlPath: htmlPath ?? unreachableHtmlPath(id),
     exitTier: replayExitCode(artifact, opts.strictVisual),
     drift: driftFacts(artifact),
     ...(artifact.maskSuggestion ? { maskSuggestion: artifact.maskSuggestion } : {}),
   };
+}
+
+function unreachableHtmlPath(id: string): never {
+  throw new Error(
+    `[loombridge trace] internal: the verify replay of "${id}" rendered no HTML report despite asking for one.`,
+  );
 }
 
 /**
@@ -2326,7 +2386,10 @@ async function runReport(args: TraceArgs): Promise<number> {
     return 1;
   }
 
-  const htmlPath = await writeHtmlReport(paths, args.id, artifact);
+  // Bound to the bytes just READ, not to a re-serialization of the parsed object: this
+  // verb renders whatever is on disk, including a hand-edited file, and the stamp has to
+  // name those bytes so the page and the JSON beside it can be compared at all.
+  const htmlPath = await writeHtmlReport(paths, args.id, artifact, sha256(raw));
   console.error(`[loombridge trace] html → ${path.relative(args.root, htmlPath)}`);
   return 0;
 }
@@ -2345,11 +2408,20 @@ function isReplayRunArtifact(value: unknown): value is ReplayRunArtifact {
   );
 }
 
-/** Load the capture PNGs and render the self-contained HTML next to the JSON. */
+/**
+ * Load the capture PNGs and render the self-contained HTML next to the JSON.
+ *
+ * `sourceReportSha256` is the sha256 of the `<id>.report.json` BYTES this page renders,
+ * and it is a required argument on purpose: an optional one would default to "unbound",
+ * and a page that declines to name the verdict it came from is exactly the artifact a
+ * later run can silently outdate. Both call sites hold those bytes already (one just
+ * wrote them, the other just read them).
+ */
 async function writeHtmlReport(
   paths: ReplayLayout,
   id: string,
   artifact: ReplayRunArtifact,
+  sourceReportSha256: string,
 ): Promise<string> {
   // The masks the run graded with, so the report can DRAW them on the thumbnails: a
   // reader looking at two frames that "match" has no way to know a region was blanked
@@ -2376,6 +2448,7 @@ async function writeHtmlReport(
   await fs.writeFile(
     htmlPath,
     renderReplayReportHtml(artifact, captures, {
+      sourceReportSha256,
       ...(anchor?.frameWidth !== undefined ? { frameWidth: anchor.frameWidth } : {}),
       ...(anchor?.frameHeight !== undefined ? { frameHeight: anchor.frameHeight } : {}),
       anchorTerms: anchorTermsSentence(
@@ -2528,15 +2601,19 @@ export function printSummary(
     );
   }
   if (shouldSuggestTolerance(artifact)) {
-    for (const line of driftSuggestionLines({ ...facts, traceId: id })) {
-      console.error(`[loombridge trace] ${line}`);
-    }
-    // Masks for CONCENTRATED drift, tolerance for diffuse: both are printed when both
-    // could help (P4), and the mask branch is the one that can refuse outright.
+    // THE MASK VERDICT LEADS. Masks for CONCENTRATED drift, tolerance for diffuse: both are
+    // printed when both could help (P4), and the mask branch is the one that can refuse
+    // outright. It goes FIRST because it is the stronger signal: it either names the region
+    // and the command, or it says in so many words that no honest mask exists here, which
+    // is what decides whether a tolerance is the remaining option at all. Led by the
+    // tolerance line, an operator reads "widen it" and never gets to the reason.
     if (artifact.maskSuggestion) {
       for (const line of maskSuggestionLines(artifact.maskSuggestion, id)) {
         console.error(`[loombridge trace] ${line}`);
       }
+    }
+    for (const line of driftSuggestionLines({ ...facts, traceId: id })) {
+      console.error(`[loombridge trace] ${line}`);
     }
   }
   console.error(`[loombridge trace] report → ${path.relative(root, reportJson)}`);
@@ -2979,7 +3056,9 @@ function printUsage(): void {
       "                    trace's own id names the report.",
       "  --flat            Lay replay artifacts directly under --root (traces/, reports/,",
       "                    baseline/) with no nested .loombridge/ — the mini-game workspace layout.",
-      "  --no-html         Skip the HTML report.",
+      "  --no-html         Skip the HTML report. Any page from an earlier run is REMOVED",
+      "                    rather than left beside this run's verdict; `trace report --id`",
+      "                    renders one from the report on disk whenever you want it.",
       "  --strict-visual   Make a visual drift from baseline a failure.",
       "  --speed <n>       replay only: pacing multiplier, 1 to 8 (default: the baseline's",
       "                    stamped pacing, else 1).",
