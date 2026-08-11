@@ -26,7 +26,7 @@ async function fakeImage(dir: string): Promise<string> {
 
 async function scaffoldApprovedRoadmap(root: string): Promise<void> {
   await runPlan({ root, genre: "platformer-2d", engine: "unity", force: false, allowMissingDesignTarget: true });
-  await setDesignTarget({ root, imagePath: await fakeImage(root), mode: "generated", approve: true });
+  await setDesignTarget({ root, imagePath: await fakeImage(root), mode: "generated", kind: "rendered-unity-frame", approve: true });
   await writeApprovedAssetManifestForDesign(root);
   assert.equal(await runPlan({ root, genre: "platformer-2d", engine: "unity", force: false }), 0);
 }

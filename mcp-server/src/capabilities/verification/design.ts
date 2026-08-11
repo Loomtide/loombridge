@@ -231,6 +231,8 @@ export interface SetDesignTargetArgs {
    * Artifact kind (the 3D split). Defaults to `rendered-unity-frame` (final).
    * Pass `composition-reference` to approve a style/composition guide that
    * unlocks scene assembly but can never certify final hero-shot fidelity.
+   *
+   * REQUIRED when `mode` is `generated`: see the refusal in `setDesignTarget`.
    */
   kind?: DesignTargetKind;
   referenceGame?: string;
@@ -243,6 +245,33 @@ export interface SetDesignTargetArgs {
 export async function setDesignTarget(args: SetDesignTargetArgs): Promise<DesignTargetMeta> {
   if (args.mode === "reference-game" && !args.referenceGame) {
     throw new Error("--reference-game <name> is required when --mode reference-game.");
+  }
+  // REFUSE-ON-ABSENT, scoped to the one path where the default is dangerous.
+  //
+  // `kind` is absent-defaults-to-`rendered-unity-frame`, which is correct and documented
+  // compatibility for every OTHER path: a `provided` file is a deliberate human choice of
+  // artifact. On the GENERATED path the artifact was produced by a model moments earlier, and
+  // `target set --image hero.png --mode generated --approve` then silently freezes a flat mock
+  // as the thing `doneness` grades 3D fidelity against (no materials, real proportions, lighting
+  // or silhouettes). Nothing refused it, because an absent kind is legitimate for a flat 2D game.
+  //
+  // Deriving the answer is not available: NOTHING in this repo knows whether a project is 2D or
+  // 3D. No genre-contract field declares it, this module never consults the genre, and the
+  // genre-core LITMUS forbids core from matching registered genre id literals, so a `3d-` prefix
+  // heuristic is both off-limits and wrong for contract genres. So the operator states it. That is
+  // a question they can always answer and the tool never can.
+  //
+  // This lives in `setDesignTarget` rather than in argv parsing on purpose: argv is only today's
+  // single caller, and a refusal that a future caller (or an MCP op) routes around is not a
+  // refusal. See Docs/Design/HeroShotAuthoring.md §2.
+  if (args.mode === "generated" && !args.kind) {
+    throw new Error(
+      "--kind is required when --mode generated. A generated image is a `composition-reference` " +
+        "(a style/composition guide that unlocks 3D scene assembly and NEVER certifies doneness) " +
+        "unless it is the final frame of a flat 2D game, which is `rendered-unity-frame`. Choosing " +
+        "by omission would freeze a mock as the artifact doneness grades hero-shot fidelity " +
+        "against. Pass --kind composition-reference or --kind rendered-unity-frame.",
+    );
   }
   const paths = loombridgePaths(args.root);
   const dp = designPaths(paths);
@@ -316,7 +345,7 @@ function printUsage(): void {
       "",
       "  status   [--root <dir>] [--require-approved]",
       "  set      --image <path> [--html <path>] [--mode provided|generated|reference-game]",
-      "           [--kind composition-reference|rendered-unity-frame]",
+      "           [--kind composition-reference|rendered-unity-frame]  (REQUIRED with --mode generated)",
       "           [--reference-game <name>] [--note <text>] [--approve] [--root <dir>]",
       "  approve  [--note <text>] [--root <dir>]",
       "",

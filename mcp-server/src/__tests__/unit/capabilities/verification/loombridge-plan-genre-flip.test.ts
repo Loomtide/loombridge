@@ -78,7 +78,7 @@ async function plannedPlatformer(): Promise<string> {
   await markUnity(root);
   const img = path.join(root, "src-hero.png");
   await fs.writeFile(img, "hero-pixels-v1", "utf-8");
-  await setDesignTarget({ root, imagePath: img, mode: "generated", approve: true });
+  await setDesignTarget({ root, imagePath: img, mode: "generated", kind: "rendered-unity-frame", approve: true });
   await writeApprovedAssetManifestForDesign(root);
   await planWithLog({ root, genre: "platformer-2d", genreExplicit: true, engine: "unity", force: false });
   const plan = await readSlicePlan(loombridgePaths(root));

@@ -28,7 +28,7 @@ async function makeUnityProject(root: string): Promise<void> {
 async function approveDesignTarget(root: string): Promise<void> {
   const img = path.join(root, "src-hero.png");
   await fs.writeFile(img, "hero-pixels-v1", "utf-8");
-  await setDesignTarget({ root, imagePath: img, mode: "generated", approve: true });
+  await setDesignTarget({ root, imagePath: img, mode: "generated", kind: "rendered-unity-frame", approve: true });
   await writeApprovedAssetManifestForDesign(root);
 }
 

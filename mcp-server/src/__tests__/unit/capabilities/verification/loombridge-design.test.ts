@@ -57,7 +57,7 @@ test("set ingests a hero shot as draft; approve freezes + flips state", async ()
   const root = await tmpRoot();
   const img = await fakeImage(root);
 
-  const meta = await setDesignTarget({ root, imagePath: img, mode: "generated" });
+  const meta = await setDesignTarget({ root, imagePath: img, mode: "generated", kind: "rendered-unity-frame" });
   assert.equal(meta.status, "draft");
   assert.equal(meta.approvedAt, null);
 
@@ -82,7 +82,7 @@ test("set ingests a hero shot as draft; approve freezes + flips state", async ()
 test("frozen-integrity: editing the hero shot after approval is detected", async () => {
   const root = await tmpRoot();
   const img = await fakeImage(root);
-  await setDesignTarget({ root, imagePath: img, mode: "generated", approve: true });
+  await setDesignTarget({ root, imagePath: img, mode: "generated", kind: "rendered-unity-frame", approve: true });
 
   const paths = loombridgePaths(root);
   // Tamper with the frozen PNG after approval.
@@ -125,7 +125,7 @@ test("resolveDesignTargetKind defaults to rendered-unity-frame (final-by-default
 
 test("set defaults a target to rendered-unity-frame; designStatus reports the kind", async () => {
   const root = await tmpRoot();
-  const meta = await setDesignTarget({ root, imagePath: await fakeImage(root), mode: "generated", approve: true });
+  const meta = await setDesignTarget({ root, imagePath: await fakeImage(root), mode: "generated", kind: "rendered-unity-frame", approve: true });
   assert.equal(meta.kind, "rendered-unity-frame", "no --kind ⇒ final hero shot");
 
   const report = await designStatus(loombridgePaths(root));
@@ -219,7 +219,7 @@ test("plan hard-gates on Design Target by default (no flag needed)", async () =>
 
   // Establish + approve a target, then the default flow advances to the asset gate.
   const img = await fakeImage(root);
-  await setDesignTarget({ root, imagePath: img, mode: "generated", approve: true });
+  await setDesignTarget({ root, imagePath: img, mode: "generated", kind: "rendered-unity-frame", approve: true });
   const needsAssets = await runPlan({ root, genre: "platformer-2d", engine: "unity", force: false });
   assert.equal(needsAssets, 1, "plan now requires an approved Asset Manifest after Design Target approval");
 
@@ -234,7 +234,7 @@ test("plan hard-gates on Design Target by default (no flag needed)", async () =>
 test("plan refuses a tampered approved target by default (frozen = golden)", async () => {
   const root = await tmpRoot();
   const img = await fakeImage(root);
-  await setDesignTarget({ root, imagePath: img, mode: "generated", approve: true });
+  await setDesignTarget({ root, imagePath: img, mode: "generated", kind: "rendered-unity-frame", approve: true });
   await writeApprovedAssetManifestForDesign(root);
   const paths = loombridgePaths(root);
 
@@ -275,11 +275,87 @@ test("verify embeds the frozen Design Target reference in the verdict (advisory)
   assert.equal(verdict.designTarget.heroShot, null);
 
   // Approve a target -> the verdict references the frozen hero shot.
-  await setDesignTarget({ root, imagePath: await fakeImage(root), mode: "generated", approve: true });
+  await setDesignTarget({ root, imagePath: await fakeImage(root), mode: "generated", kind: "rendered-unity-frame", approve: true });
   await runVerify(verifyArgs);
   verdict = JSON.parse(await fs.readFile(paths.verdict, "utf-8"));
   assert.equal(verdict.designTarget.status, "approved");
   assert.equal(verdict.designTarget.frozenMatches, true);
   assert.match(verdict.designTarget.heroShot, /hero-shot\.png$/);
   assert.ok(verdict.designTarget.pngSha256, "verdict records the frozen hash");
+});
+
+// --- RFC HeroShotAuthoring §2: --kind is required on the GENERATED path -----------------------
+//
+// `kind` is absent-defaults-to-`rendered-unity-frame`. That is correct compatibility everywhere
+// except one path: a generated image approved by omission silently becomes the artifact
+// `doneness` grades 3D hero-shot fidelity against. These four bound the refusal from both
+// sides, so it cannot drift into "generated is second-class" or "the default is gone".
+
+test("REFUSES --mode generated with no --kind (the silent-mock trap)", async () => {
+  const root = await tmpRoot();
+  const img = await fakeImage(root);
+
+  await assert.rejects(
+    () => setDesignTarget({ root, imagePath: img, mode: "generated" }),
+    /--kind is required when --mode generated/,
+  );
+});
+
+test("the generated refusal NAMES both kinds, so the operator can act on it", async () => {
+  const root = await tmpRoot();
+  const img = await fakeImage(root);
+
+  await assert.rejects(
+    () => setDesignTarget({ root, imagePath: img, mode: "generated" }),
+    (error: Error) => {
+      assert.match(error.message, /composition-reference/);
+      assert.match(error.message, /rendered-unity-frame/);
+      return true;
+    },
+  );
+});
+
+test("the generated refusal fires BEFORE anything is written (no half-frozen target)", async () => {
+  const root = await tmpRoot();
+  const img = await fakeImage(root);
+
+  await assert.rejects(() => setDesignTarget({ root, imagePath: img, mode: "generated" }));
+
+  // A refusal that has already copied the hero shot leaves a target the next command can read,
+  // which would be a half-applied write masquerading as a clean refusal.
+  const dp = designPaths(loombridgePaths(root));
+  await assert.rejects(
+    () => fs.access(dp.heroPng),
+    "the refusal must not leave a frozen hero shot behind",
+  );
+});
+
+test("LITMUS: --mode generated with an EXPLICIT kind still succeeds (refusal is about ABSENCE)", async () => {
+  const root = await tmpRoot();
+  const img = await fakeImage(root);
+
+  const final = await setDesignTarget({
+    root, imagePath: img, mode: "generated", kind: "rendered-unity-frame",
+  });
+  assert.equal(final.kind, "rendered-unity-frame");
+
+  const guide = await setDesignTarget({
+    root, imagePath: img, mode: "generated", kind: "composition-reference",
+  });
+  assert.equal(guide.kind, "composition-reference");
+});
+
+test("LITMUS: the absent-kind DEFAULT survives off the generated path (compat is intact)", async () => {
+  const root = await tmpRoot();
+  const img = await fakeImage(root);
+
+  // `provided` is a deliberate human choice of artifact, so the documented default stands.
+  const provided = await setDesignTarget({ root, imagePath: img, mode: "provided" });
+  assert.equal(provided.kind, DEFAULT_DESIGN_TARGET_KIND);
+  assert.equal(provided.kind, "rendered-unity-frame");
+
+  const ref = await setDesignTarget({
+    root, imagePath: img, mode: "reference-game", referenceGame: "Celeste",
+  });
+  assert.equal(ref.kind, DEFAULT_DESIGN_TARGET_KIND);
 });
