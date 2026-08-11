@@ -24,29 +24,53 @@
 import process from "node:process";
 
 /**
- * Consumer-facing skills only. Dev-time workflows (new-unity-test-project, session-retro,
- * generated-3d-art-integration, and the perf/sfx/ui authoring packs) are intentionally
- * excluded from the surface a partner project receives.
+ * Skills a consumer project receives via `loombridge install-agent`.
+ *
+ * THE LINE IS "builds a GAME" vs "builds LOOMBRIDGE", not 2D vs 3D and not shipped-vs-draft.
+ * This list was curated when Loombridge was partner-facing, and it excluded the 3D-art, SFX,
+ * UI, mobile-perf and greed-loop packs as "dev-time workflows". They are not: every one of
+ * them is about building the USER's game, and their absence is why a real 3D build had to be
+ * driven by hand-prompting with no runbook in reach. Only two skills are genuinely dev-time
+ * and stay out: `new-unity-test-project` (clean-room testing of Loombridge itself) and
+ * `session-retro` (mining Loombridge's own dogfood transcripts).
  *
  * MEMBERSHIP IS NOT TASTE: it is load-bearing. A shipped command that names a skill absent
  * from this list sends the agent looking for guidance the project never received, at the
  * moment it is about to act. `slice-skill-bindings.test.ts` walks BOTH directions this list
  * is referenced from (genre slice templates, and the shipped command prose) and fails on a
  * name that resolves to nothing. Add the skill here, or do not name it in a shipped command.
+ *
+ * PROVENANCE TAGS SHIP AS-IS. Several of these carry `[VALIDATED: dogfood-ui #3 + internal
+ * art-workflow notes]` style citations, and a consumer cannot follow those sources. They stay
+ * because the tag's JOB is the confidence tier (validated vs candidate vs anecdote), which is
+ * exactly what a reader needs in order to weigh a rule; the citation is the evidence for that
+ * tier, not a link the reader is expected to open. `mobile-device-perf` says outright that it
+ * is a CANDIDATE validated by one run. Stripping the tags would leave the claims and remove
+ * the honesty about how well-founded they are.
  */
 export const CONSUMER_SKILLS = [
   "asset-layer",
   "game-polish-2d",
+  // Skinning a 3D blockout with generated art. The runbook for the image -> image-to-3D ->
+  // Unity path, including the provider gotchas that each cost a real session.
+  "generated-3d-art-integration",
+  // Authoring a genre contract became a first-class CONSUMER flow when genre genericity
+  // shipped (`loombridge genre init` is a consumer verb, and plan.md step 2 routes here for
+  // an unfamiliar genre).
+  "genre-pack-authoring",
+  // Tuning whether a risk/reward run is FUN, which is a property of the user's game.
+  "graybox-greed-loop-tuning-pack",
   // `plan` BLOCKS on an approved hero shot for every project, 2D or 3D, and its step 3 routes
   // here for the mode choice and the `--kind` fork. Excluding it left the shipped plan.md
   // naming a runbook consumers never received.
   "hero-shot-authoring",
-  // Authoring a genre contract became a first-class CONSUMER flow when genre genericity
-  // shipped (`loombridge genre init` is a consumer verb, and plan.md step 2 routes here for
-  // an unfamiliar genre). The dev-time exclusion above predates that.
-  "genre-pack-authoring",
+  // Hitting a frame-time target on the user's real devices.
+  "mobile-device-perf",
   "parallax-2d",
   "platformer-level-design",
+  // Sound and HUD for the user's game. Both are build-the-game concerns, not build-the-tool.
+  "sfx-integration-pack",
+  "ui-polish-pack",
   "unity-2d-game",
   "verify-2d-game",
 ];
