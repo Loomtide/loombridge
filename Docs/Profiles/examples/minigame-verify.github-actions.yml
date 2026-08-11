@@ -1,13 +1,42 @@
-# Example: run the Loombridge mini-game release check in GitHub Actions.
+# Example: run the Loombridge release check in GitHub Actions.
 #
 # This is a REFERENCE file (it lives under Docs/, not .github/workflows/, so it does
 # not run in the Loombridge repo). Copy it into YOUR game repo's .github/workflows/ and
 # adjust the marked spots. See Docs/Profiles/MiniGameVerifyCI.md for the full guide.
 #
-# What it does: install loombridge (no ~/.claude) -> print the build (stale-runtime
-# guard) -> produce/restore the capture pack -> verify --minigame --strict -> upload
-# the report -> a job summary that distinguishes exit 1 (fix the game) from exit 2
-# (fix the test setup).
+# WHAT THIS FILE IS HONEST ABOUT
+# ------------------------------
+# A release check is only worth running if it CANNOT pass by grading a document against
+# captures of that same document. `loombridge minigame finalize` derives a screen
+# contract's real locators and states FROM a capture pack, so "contract + captures" is one
+# artifact wearing two hats, and both halves are producible by the same agent in the same
+# session. The frozen third thing is the APPROVED LAYOUT BASELINE that a human created with
+# `loombridge minigame baseline approve`. The unified `verify` door refuses to run the
+# screens section without one, and refuses to exit 0 for a whole run in which nothing
+# human-approved was compared.
+#
+# So this workflow has two jobs, and they prove different things:
+#
+#   1. anchored-recheck   headless (ubuntu-latest), runs on every PR. Re-grades the
+#                         COMMITTED evidence against the COMMITTED human-approved anchors.
+#                         Catches contract edits, threshold edits, a deleted or foreign
+#                         anchor, and anchor rot. It does NOT re-capture the build in this
+#                         PR, so its green says nothing about how the current code renders.
+#
+#   2. live-release-check needs a Unity-equipped runner you supply. It drives the editor
+#                         through the bridge to capture THIS build, then grades those fresh
+#                         captures against the same approved anchors. This is the only job
+#                         whose green is a statement about the code in the PR.
+#
+# If you only wire job 1, say so in your release notes. Job 1 is a real anchored check and
+# a real refusal surface; it is not a substitute for job 2.
+#
+# WHAT NOT TO COPY FROM OLDER GUIDES
+# ----------------------------------
+# `loombridge verify --minigame --contract <c> --captures <p>` is a DEPRECATED ALIAS that
+# grades a contract against a capture pack with no anchor in the loop at all. On identical
+# inputs it exits 0 where the unified door exits 2 and prints "a contract graded against
+# captures of itself is not a human anchor". Do not use it in CI.
 
 name: minigame-verify
 
@@ -15,23 +44,41 @@ on:
   workflow_dispatch: {}
   pull_request:
     paths:
-      - "Assets/**"          # adjust to your game's source paths
-      - ".loombridge/minigame/**"
+      - "Assets/**" # adjust to your game's source paths
+      - "verification/screens/**" # the committed anchor bundle (see ANCHORS below)
 
 env:
-  # The mini-game contract + the per-state capture pack (see MiniGameVerifyCI.md §3).
-  CONTRACT: .loombridge/minigame/contracts/shape-match.minigame.json
-  CAPTURES: .loombridge/minigame/captures/shape-match
-  LOOMBRIDGE_REF: main        # PIN to a SHA/tag for reproducible runs
+  # THE COMMITTED ANCHOR BUNDLE, repo-relative. One directory holding the three things the
+  # screens section needs, laid out exactly as a Loombridge workspace:
+  #
+  #   verification/screens/<id>.minigame.json     the screen contract
+  #   verification/screens/captures/              the per-screen capture pack
+  #   verification/screens/baseline/              the approved layout baseline, including
+  #                                               baseline-manifest.json
+  #
+  # Produce it on a developer machine: run the mini-game flow (see MiniGameVerifyQuickstart),
+  # get a PASS, then `loombridge minigame baseline approve`. The default workspace is
+  # ~/.loombridge/projects/<id>/; copy that directory here and commit it, PNGs included.
+  #
+  # The baseline manifest is stamped with the project's git origin plus its path inside the
+  # repo, so a committed bundle grades correctly on any checkout at any absolute path. A
+  # bundle from a different repository is refused rather than silently accepted.
+  ANCHORS: verification/screens
+
+  # PIN to a SHA or tag for reproducible runs.
+  LOOMBRIDGE_REF: main
 
 jobs:
-  release-check:
-    runs-on: ubuntu-latest   # use a Unity-equipped/self-hosted runner if you LIVE-capture (§3)
+  # ===========================================================================
+  # JOB 1: headless, anchored, runs everywhere.
+  # ===========================================================================
+  anchored-recheck:
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout the game
         uses: actions/checkout@v4
 
-      # --- install loombridge (CLI only — no ~/.claude) ---
+      # --- install loombridge (CLI only, no ~/.claude) ---
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
@@ -53,48 +100,121 @@ jobs:
       - name: Print the loombridge build (stale-runtime guard)
         run: loombridge --version
 
-      # --- produce the capture pack (§3) ---
-      # OPTION A (shown): re-grade a capture pack committed to the repo.
-      # OPTION B: on a Unity-equipped runner, drive the build through the bridge here
-      #           to produce $CAPTURES live (the full release check). See the capture runbook.
-      - name: Capture pack present
+      # --- restore the committed anchor bundle to a workspace OUTSIDE the checkout ---
+      #
+      # `verify` refuses a --workspace inside the project, because a workspace inside the
+      # game repo would write verification artifacts into the game repo. So the bundle is
+      # committed in-repo and copied out to $RUNNER_TEMP for the run. Nothing is mutated
+      # in the checkout by this step.
+      #
+      # WHEN PROJECT-LOCAL ANCHORS LAND (Docs/Design/ArtifactStorage.md, stage S2) this
+      # step and the --workspace flag below are the single edit: delete both, and verify
+      # reads the bundle from the repo directly. Nothing else in this file changes.
+      - name: Restore the approved anchors
         run: |
-          if [ ! -d "$CAPTURES" ]; then
-            echo "::error::No capture pack at $CAPTURES — produce it first (see MiniGameVerifyCI.md §3)."
+          if [ ! -f "$ANCHORS/baseline/baseline-manifest.json" ]; then
+            echo "::error::No approved layout baseline at $ANCHORS/baseline/. A screen contract"
+            echo "::error::graded against captures of itself is not a human anchor. Run"
+            echo "::error::\`loombridge minigame baseline approve\` locally and commit the bundle."
             exit 1
           fi
+          cp -R "$ANCHORS" "$RUNNER_TEMP/loombridge-workspace"
 
       # --- the release check ---
-      - name: Verify mini-game (--strict)
+      #
+      # BARE `verify` is the front door. It discovers every verification asset this project
+      # has, prints the plan, runs the offline ones, and writes one roll-up. Add `--only
+      # screens` to narrow it; a scoped run is reported as `partial` and is never a
+      # certificate, which is the honest label for a subset.
+      - name: Verify against the approved anchors (--strict)
         id: verify
         run: |
           set +e
-          loombridge verify --minigame --contract "$CONTRACT" --captures "$CAPTURES" --strict \
-            --output "$RUNNER_TEMP/minigame-verification.json"
+          loombridge verify --strict \
+            --root "$GITHUB_WORKSPACE" \
+            --workspace "$RUNNER_TEMP/loombridge-workspace"
           CODE=$?
           set -e
           echo "exit_code=$CODE" >> "$GITHUB_OUTPUT"
           {
-            echo "## Mini-game release check"
+            echo "## Anchored re-check (committed evidence vs committed anchors)"
             case "$CODE" in
-              0) echo "✅ **READY** — all tested screens passed. Ship." ;;
-              1) echo "⛔ **NOT READY** — a game/asset defect or a baseline drift. Fix the game, or re-approve the baseline if the change was intended." ;;
-              2) echo "⚠️ **CAN'T VERIFY** — the build wasn't honestly tested (capture/test-setup gap). Fix the harness, **not** the game." ;;
+              0) echo "✅ **ANCHORED GREEN**. The committed evidence still matches what a human approved." ;;
+              1) echo "⛔ **NOT READY**. A game/asset defect or a baseline drift. Fix the game, or re-approve the baseline with \`loombridge minigame baseline approve\` if the change was intended." ;;
+              2) echo "⚠️ **CAN'T VERIFY**. A harness/capture gap, a broken asset, or nothing human-approved was compared. Fix the evidence, **not** the game." ;;
               *) echo "Unexpected exit code $CODE." ;;
             esac
             echo ""
-            echo "See the uploaded \`minigame-verification.html\` for the full report."
+            echo "This job re-grades COMMITTED captures. It does not re-capture this PR's build."
+            echo "See the uploaded report for the full breakdown."
           } >> "$GITHUB_STEP_SUMMARY"
           exit "$CODE"
 
-      # --- always upload the report (even on failure) ---
-      - name: Upload report
+      # --- always upload the reports (even on failure) ---
+      - name: Upload reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: minigame-verification
-          path: |
-            ${{ runner.temp }}/minigame-verification.html
-            ${{ runner.temp }}/minigame-verification.md
-            ${{ runner.temp }}/minigame-verification.json
+          name: loombridge-verify-reports
+          path: .loombridge/reports/
+          if-no-files-found: warn
+
+  # ===========================================================================
+  # JOB 2: the real release check. Needs a Unity-equipped runner.
+  # ===========================================================================
+  #
+  # Set the repository variable LOOMBRIDGE_UNITY_RUNNER to the label of a self-hosted
+  # runner that has the Unity editor, a license, and the Loombridge bridge installed in
+  # this project. Until you do, this job is skipped and its absence is visible in the
+  # checks list, which is the point: nobody should be able to mistake job 1 for this.
+  #
+  # The capture step is intentionally left as a marked TODO rather than guessed at. Driving
+  # the editor is project-specific (which scene, which recorded trace) and a plausible-looking
+  # command that does not match your project is worse than an obvious blank. Fill it from
+  # MiniGameVerifyQuickstart.md, then delete the `exit 1`.
+  live-release-check:
+    if: ${{ vars.LOOMBRIDGE_UNITY_RUNNER != '' }}
+    runs-on: ${{ vars.LOOMBRIDGE_UNITY_RUNNER }}
+    steps:
+      - name: Checkout the game
+        uses: actions/checkout@v4
+
+      - name: Print the loombridge build (stale-runtime guard)
+        run: loombridge --version
+
+      - name: Restore the approved anchors
+        run: |
+          cp -R "$ANCHORS" "$RUNNER_TEMP/loombridge-workspace"
+
+      - name: Capture THIS build through the bridge
+        run: |
+          echo "TODO: drive the editor and overwrite $RUNNER_TEMP/loombridge-workspace/captures"
+          echo "with captures of the build in this PR. See MiniGameVerifyQuickstart.md."
+          exit 1
+
+      - name: Verify the fresh captures against the approved anchors (--strict)
+        run: |
+          set +e
+          loombridge verify --strict \
+            --root "$GITHUB_WORKSPACE" \
+            --workspace "$RUNNER_TEMP/loombridge-workspace"
+          CODE=$?
+          set -e
+          {
+            echo "## Live release check (this build vs the approved anchors)"
+            case "$CODE" in
+              0) echo "✅ **READY**. This build still matches what a human approved. Ship." ;;
+              1) echo "⛔ **NOT READY**. A game/asset defect or a baseline drift in THIS build." ;;
+              2) echo "⚠️ **CAN'T VERIFY**. The build wasn't honestly tested. Fix the capture/harness, **not** the game." ;;
+              *) echo "Unexpected exit code $CODE." ;;
+            esac
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit "$CODE"
+
+      - name: Upload reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: loombridge-verify-reports-live
+          path: .loombridge/reports/
           if-no-files-found: warn
