@@ -12,18 +12,43 @@
  * change to ONE derivation plus a migration, observable by a test that already exists. PR-B
  * narrows the allowed prefixes below and this file fails until every destination follows.
  *
- * FOUR WALKS, none of which hand-lists what it checks:
- *   W1  the literal `.loombridge` has exactly TWO spellings in the whole source tree, and both
- *       are declarations: the project dirname, and the independent home-root dirname that is
- *       not a project path at all. That is what makes W2 exhaustive. With the PROJECT dirname
- *       spelled exactly once, every project-local destination has to flow through
- *       `loombridgePaths()` to exist, so walking that object walks all of them.
+ * WHAT THIS GUARD PROVES, AND WHAT IT DOES NOT.
+ *
+ * An earlier version of this header argued that because the project dirname is "spelled
+ * exactly once, every project-local destination has to flow through `loombridgePaths()` to
+ * exist, so walking that object walks all of them." THAT WAS FALSE, and believing it is
+ * exactly how a migration ships that relocates the derived slots and strands the rest.
+ * `filesHardCodingName` matches a whole quoted string EQUAL to the dirname, so it never saw
+ * `".loombridge/registry"`, `.loombridge/handoff`, `.loombridge/genre-contract.json`,
+ * `.loombridge/editor-allowlist.json`, `.loombridge/captures/`, `.loombridge/art/`, or the C#
+ * `Path.Combine(projectRoot, ".loombridge", "verify")` that gates every `capture.invoke_static`.
+ * All of those are real and shipped, and W1 to W4 were green over every one of them.
+ *
+ * SIX WALKS, none of which hand-lists what it checks. Each states its own narrow claim:
+ *   W1  the dirname ALONE (a whole quoted `.loombridge`) is spelled twice, and both are
+ *       declarations: the project dirname, and the independent home-root dirname that is not
+ *       a project path at all. This bounds where a RENAME of the directory has to happen. It
+ *       says NOTHING about what lives inside it: W5 is what covers that.
  *   W2  every field of `loombridgePaths()` is walked via `Object.entries`, so a field added
  *       tomorrow is classified automatically or the test fails.
  *   W3  the destinations that do NOT flow through `loombridgePaths()`, each resolved by
  *       calling the REAL function that produces it, classified or excepted with a reason.
  *   W4  the workspace carve-out (anchors that live outside the project) is closed at two
  *       members and shrinking.
+ *   W5  THE INVENTORY. Every first path segment under `.loombridge/` spelled anywhere in the
+ *       shipped TypeScript, the shell scripts, the Unity C# package, or the project template,
+ *       classified against a declared table. This is the walk that sees the destinations W1 to
+ *       W4 are structurally blind to, INCLUDING the non-TypeScript writers, and it is the list
+ *       an S2 migration has to relocate.
+ *   W6  THE COMPOSE-OFF-`dir` CENSUS. Every `.dir` read off a `LoombridgePaths` value outside
+ *       `domain/state.ts`, found through the TypeScript TYPE CHECKER, with the composed
+ *       destination resolved where the type system can resolve it and REFUSED where it cannot.
+ *
+ * `TOP_LEVEL_CHILDREN` IS NOT THE MIGRATION INVENTORY. It is the DERIVED subset: the direct
+ * children `loombridgePaths()` itself produces. The inventory is the four tables W5 reads
+ * together: `ALLOWED_SUBDIRS` + `TOP_LEVEL_CHILDREN` (derived), `UNDERIVED_CHILDREN` (real,
+ * shipped, not derived), and `DOCUMENTED_ONLY_CHILDREN` (named in shipped source, written by
+ * nothing today), plus `HOME_ROOT_CHILDREN`, which is the set that must NOT move.
  *
  * Every LITMUS below feeds a PLANTED input to the SAME exported predicate the real check
  * calls. An empty violation list is exactly what a defused predicate returns, so an empty
@@ -36,6 +61,7 @@ import { readFileSync, readdirSync, statSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import ts from "typescript";
 
 import { PKG_ROOT, REPO_ROOT } from "../../_support/paths.js";
 import { filesHardCodingName } from "./unified-verify-declared-paths.test.js";
@@ -107,17 +133,32 @@ const readCode = (p: string): string => stripCommentary(readFileSync(p, "utf-8")
  */
 const DIRNAME_DECLARING_MODULES = ["domain/workspace-paths.ts", "shared/loombridge-dirname.ts"];
 
-test("W1: the `.loombridge` literal has exactly two spellings, and both are declarations", () => {
+test("W1: the bare `.loombridge` dirname has exactly two spellings, and both are declarations", () => {
   assert.deepEqual(
     filesHardCodingName(LOOMBRIDGE_DIRNAME, ALL, readCode),
     DIRNAME_DECLARING_MODULES,
-    "every other module must compose from LOOMBRIDGE_DIRNAME / loombridgePaths(); a third spelling " +
-      "is a project-local destination W2 cannot see",
+    "every other module must compose the DIRNAME from LOOMBRIDGE_DIRNAME / loombridgePaths(); a " +
+      "third spelling is a rename this guard would not move",
   );
-  // The two constants are independent declarations that happen to agree today. If a future
-  // change makes them disagree this assertion is what tells the next reader that was on
-  // purpose, rather than leaving a silent divergence.
-  assert.equal(LOOMBRIDGE_DIRNAME, LOOMBRIDGE_HOME_DIRNAME);
+  // SCOPE, stated so it is not over-read: `filesHardCodingName` matches a whole quoted string
+  // EQUAL to the dirname. `".loombridge/registry"` is a different string and does not appear
+  // here. W5 is the walk that sees those, and it reads RAW text for exactly that reason.
+  assert.ok(
+    filesHardCodingName(LOOMBRIDGE_DIRNAME, [path.join(SRC, "__x__.ts")], () => `"${LOOMBRIDGE_DIRNAME}/registry"`)
+      .length === 0,
+    "if this ever starts matching a deeper path, W5's tables and W1's claim both have to be re-read",
+  );
+  // The two constants are two declarations of the same value, and this assertion is what
+  // KEEPS them equal: `assert.equal` fails on divergence, so they are documented as
+  // independent and tested as coupled on purpose. Splitting the value is a deliberate act
+  // that changes this line, not something a rename can do silently in one of them.
+  assert.equal(
+    LOOMBRIDGE_DIRNAME,
+    LOOMBRIDGE_HOME_DIRNAME,
+    "the project dirname and the home-root dirname share a value today; changing one alone must " +
+      "be a decision made HERE, because W5's project/home split is what keeps ~/.loombridge/runtime " +
+      "from being migrated as if it were project state",
+  );
 });
 
 test("W1 LITMUS: the real scan fires on a planted third spelling", () => {
@@ -243,9 +284,13 @@ export function unclassifiedDerivedDestinations(root: string, paths: LoombridgeP
 }
 
 /**
- * Every direct child of `.loombridge/` the layout declares. Pinned so a NEW top-level file or
- * directory has to come through this guard and justify itself, instead of appearing in a
- * consumer's repo root as a surprise.
+ * Every direct child of `.loombridge/` that `loombridgePaths()` DERIVES.
+ *
+ * NOT the migration inventory, and reading it as one is the mistake this guard was rebuilt to
+ * stop. `.loombridge/genre-contract.json` is a real direct child, written by `genre init` in a
+ * real consumer project today, and it is deliberately absent from this list because
+ * `loombridgePaths()` does not produce it. The complete direct-child set is W5's
+ * `PROJECT_CHILDREN`; this array is the derived subset of it.
  */
 const TOP_LEVEL_CHILDREN = [
   "ACCEPTANCE.json",
@@ -273,7 +318,11 @@ test("W2: every derived destination lands in a declared part of the layout", () 
   );
 });
 
-test("W2: the direct children of `.loombridge/` are exactly the pinned set", () => {
+test("W2: the DERIVED direct children of `.loombridge/` are exactly the pinned set", () => {
+  // Scoped in the title on purpose. The old title said "the direct children ... are exactly
+  // the pinned set", which was false and green: `genre-contract.json` and
+  // `editor-allowlist.json` are direct children this walk cannot reach, because the walk's
+  // input is `loombridgePaths()` and neither is a field on it. W5 asserts the full set.
   const children = new Set(
     derivedDestinations(PATHS)
       .filter(({ value }) => path.dirname(value) === PATHS.dir)
@@ -490,7 +539,15 @@ function nonDerivedDestinations(): WriteDestination[] {
     { label: "slices.getSliceVerifyDir", value: getSliceVerifyDir(PATHS, "slice-a") },
     { label: "slices.getSliceSignoffPath", value: getSliceSignoffPath(PATHS, "slice-a", ".png") },
     { label: "slices.getSliceFixtureDir", value: getSliceFixtureDir(PATHS, "slice-a") },
-    // The screenshot allowlist, probed by CALLING it: one entry per admitted root.
+    // The screenshot allowlist, probed by CALLING it: one entry per admitted ROOT.
+    //
+    // READ THE SCOPE. These entries are the allowlist's ROOTS, not its destinations.
+    // `<root>/.loombridge` classifies as `state-dir` trivially, and that says nothing about
+    // where a screenshot actually lands: the two paths the op registry advertises,
+    // `.loombridge/captures/start.png` and `.loombridge/art/gameplay-geometry.json`, both
+    // classify `null`, and neither is a `LoombridgePaths` field. W5 is what inventories them
+    // (`captures` and `art` are `UNDERIVED_CHILDREN` there). Do not read a green W3 as
+    // "screenshots land in a declared slot".
     ...admittedScreenshotRoots(SCREENSHOT_PROBE_SEGMENTS, ROOT).map((segment) => ({
       label: `screenshot-allowlist.${segment === LOOMBRIDGE_DIRNAME ? "state-dir" : segment}`,
       value: path.resolve(ROOT, segment),
@@ -624,6 +681,688 @@ test("W4 LITMUS: the predicate fires on a three-member set", () => {
   // Shrinking (what S3 does) is a failure HERE on purpose: the expectation moves with the
   // code, in the same commit, rather than the guard silently tolerating either state.
   assert.ok(workspaceCarveOutProblems(new Set(["feel-snapshot"])).length > 0);
+});
+
+/* ══════════════════════════════════════════════════════════════════════════ */
+/* W5. THE INVENTORY: EVERY `.loombridge/<segment>` SPELLED ANYWHERE          */
+/* ══════════════════════════════════════════════════════════════════════════ */
+
+/**
+ * W1 to W4 all start from TypeScript that imports `loombridgePaths()`. Everything else is
+ * invisible to them, and "everything else" is where this repo's most expensive failures live
+ * (CLAUDE.md, "the recurring blind spot: declared paths nothing walks"). Three of the
+ * destinations below are not TypeScript at all:
+ *
+ *   - `scripts/prepare-project-assets.sh` creates `.loombridge/handoff/` in a CONSUMER project.
+ *   - `Editor/Handlers/CaptureHandler.cs` hard-codes `Path.Combine(projectRoot, ".loombridge",
+ *     "verify")` as the C# write allowlist and THROWS `INVALID_PARAMS` outside it. Move
+ *     `verify/` in TypeScript alone and every `capture.invoke_static` starts refusing while
+ *     the whole Node suite stays green.
+ *   - `Editor/Core/EditorInvokeAllowlist.cs` reads `.loombridge/editor-allowlist.json` on
+ *     every invoke.
+ *
+ * So W5 scans TEXT, across file types, for the first path segment after the dirname, and
+ * requires each segment to be classified. It reads RAW bytes, NOT `readCode`: a segment named
+ * in a comment or in a `--help` string is still something an S2 move has to relocate or
+ * restate, and resting this walk on the comment stripper would inherit whatever that stripper
+ * gets wrong.
+ */
+interface PrefixHit {
+  /** Repo-relative file the spelling was found in. */
+  file: string;
+  /** The FIRST path segment after `.loombridge/`. */
+  segment: string;
+  /** `home` for `~/.loombridge/...` (machine-global), `project` for project-local state. */
+  scope: "home" | "project";
+}
+
+const SEGMENT_CHARS = "[A-Za-z0-9_.-]+";
+const DIRNAME_RE_SOURCE = LOOMBRIDGE_DIRNAME.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/**
+ * `com.loomtide.loombridge/Editor/...` ends in the dirname's characters but is the UPM package
+ * id, not the state dir. The lookbehind rejects it: a real path segment is never preceded by a
+ * word character.
+ */
+const PREFIX_RE = new RegExp(`(?<![A-Za-z0-9_-])${DIRNAME_RE_SOURCE}/(${SEGMENT_CHARS})`, "g");
+
+/**
+ * The SPLIT spelling: `Path.Combine(projectRoot, ".loombridge", "verify")` in C# and
+ * `path.join(root, ".loombridge", "x")` in TypeScript never produce the `/` a plain scan looks
+ * for. Normalising them into the joined form first is what stops the C# capture allowlist
+ * being invisible to a check whose whole purpose is to see it.
+ */
+const SPLIT_JOIN_RE = new RegExp(`["']${DIRNAME_RE_SOURCE}["']\\s*,\\s*["'](${SEGMENT_CHARS})["']`, "g");
+
+/**
+ * `~/.loombridge`, `$HOME/.loombridge`, `${HOME}/.loombridge`, `%USERPROFILE%\.loombridge`.
+ *
+ * The separator is part of the pattern, not part of the match: the scan's match starts at the
+ * dirname, so the text immediately before it ends with the `/` (or `\`) that follows the home
+ * marker. Dropping that from the regex classified `~/.loombridge/runtime` as PROJECT state,
+ * which is the exact confusion `LOOMBRIDGE_HOME_DIRNAME` exists to prevent.
+ */
+const HOME_PREFIX_RE = /(?:~|\$\{?HOME\}?|%USERPROFILE%)[/\\]$/;
+
+/** THE SCAN. `files` is a parameter so a LITMUS can feed it a planted file. */
+export function scanPrefixHits(files: readonly { file: string; text: string }[]): PrefixHit[] {
+  const hits: PrefixHit[] = [];
+  for (const { file, text } of files) {
+    const normalized = text.replace(SPLIT_JOIN_RE, `${LOOMBRIDGE_DIRNAME}/$1`);
+    for (const match of normalized.matchAll(PREFIX_RE)) {
+      // Trailing sentence punctuation is prose, not part of the name: `.loombridge/SLICES.json.`
+      // at the end of a sentence names `SLICES.json`.
+      const segment = match[1]!.replace(/[.-]+$/, "");
+      // `.loombridge/.` and `.loombridge/../x` are relative-path plumbing, not children.
+      if (segment === "" || segment === "." || segment === "..") continue;
+      const before = normalized.slice(Math.max(0, match.index - 12), match.index);
+      hits.push({ file, segment, scope: HOME_PREFIX_RE.test(before) ? "home" : "project" });
+    }
+  }
+  return hits;
+}
+
+/**
+ * THE MIGRATION INVENTORY, part 2: direct children of `.loombridge/` that are REAL and SHIPPED
+ * but are NOT produced by `loombridgePaths()`, so W2 is structurally blind to every one. Each
+ * entry names what writes or reads it, because that is what an S2 move has to go change.
+ */
+const UNDERIVED_CHILDREN: ReadonlyMap<string, string> = new Map([
+  [
+    "art",
+    "advertised by surfaces/op-registry.ts as the example output_path for the geometry snapshot " +
+      "op ('.loombridge/art/gameplay-geometry.json'); written through " +
+      "resolveSafeScreenshotOutputPath, which admits it only because it is under .loombridge/. " +
+      "No LoombridgePaths field, no template .gitignore rule.",
+  ],
+  [
+    "captures",
+    "advertised by surfaces/op-registry.ts as the example screenshot outputPath, scanned by " +
+      "domain/contract-presence.ts (CAPTURE_DIR_NAMES) as the hand-created false-green shape, " +
+      "and ignored by the shipped template .gitignore. Still not a LoombridgePaths field.",
+  ],
+  [
+    "editor-allowlist.json",
+    "packages/com.loomtide.loombridge/Editor/Core/EditorInvokeAllowlist.cs ConfigRelativePath, " +
+      "read FRESH on every editor.invoke. C#, so no TypeScript walk can see it: moving it " +
+      "without moving the C# constant refuses every allowlisted invoke.",
+  ],
+  [
+    "genre-contract.json",
+    "capabilities/genre/genre.ts runInit default out path (LOOMBRIDGE_DIRNAME + " +
+      "DEFAULT_CONTRACT_FILENAME). A real direct child in real consumer projects today, and the " +
+      "reason TOP_LEVEL_CHILDREN must not be read as the inventory.",
+  ],
+  [
+    "handoff",
+    "scripts/prepare-project-assets.sh creates <project>/.loombridge/handoff/ and writes the " +
+      "asset-prepare report + attribution into it; scripts/new-test-project.sh points the agent " +
+      "at those filenames in prose. Shell, so no TypeScript walk can see it.",
+  ],
+  [
+    "registry",
+    "capabilities/assets/assets.ts writeImportedRegistryPacks composes " +
+      "path.join(loombridgePaths(root).dir, 'registry') and writes <packId>.json there. Composed " +
+      "off .dir, so no .loombridge/registry literal appears in the writing expression; W6 is the " +
+      "walk that sees the composition itself.",
+  ],
+]);
+
+/**
+ * Named in shipped source but written by NOTHING today. Classified rather than dropped: a
+ * segment silently omitted from the tables is indistinguishable from one nobody noticed, and
+ * the point of the inventory is that every spelling has an owner and a decision.
+ */
+const DOCUMENTED_ONLY_CHILDREN: ReadonlyMap<string, string> = new Map([
+  [
+    "games",
+    "capabilities/minigame/profiles/profiles.ts names '.loombridge/games/<id>.json' as the S6b+ " +
+      "per-project contract slot. ASPIRATIONAL: nothing writes it. A migration owes it a decision " +
+      "(adopt the new layout or delete the note), not a relocation.",
+  ],
+  [
+    "traces",
+    "domain/state.ts records that paths.traces ('.loombridge/traces/') used to be scaffolded here " +
+      "and was DEAD. Kept as a note so the slot is not re-invented. Nothing writes it; a " +
+      "migration must not resurrect it.",
+  ],
+]);
+
+/**
+ * `~/.loombridge/<segment>`: the MACHINE-GLOBAL root. This set must NOT move when the project
+ * layout moves, which is the entire reason `LOOMBRIDGE_HOME_DIRNAME` is a separate constant
+ * (W1). Listing it explicitly is what stops a bulk relocation treating a user's installed
+ * runtime as project state.
+ */
+const HOME_ROOT_CHILDREN: ReadonlyMap<string, string> = new Map([
+  ["asset-layer", "scripts/loombridge-install-locally.sh freezes profiles + registry + fixtures here."],
+  [
+    "projects",
+    "domain/workspace-paths.ts workspacesRoot(): the cross-project verification workspaces " +
+      "(feel snapshots, mini-game contracts). ArtifactStorage S3 EMPTIES this, which is a " +
+      "different move from S2 and must not be folded into it.",
+  ],
+  ["runtime", "the frozen CLI runtime the `loombridge` bin execs. Renaming project state must never touch it."],
+]);
+
+/** Every project-local segment the layout declares today, derived + underived + documented. */
+const PROJECT_CHILDREN: ReadonlySet<string> = new Set([
+  ...ALLOWED_SUBDIRS.keys(),
+  ...TOP_LEVEL_CHILDREN,
+  ...UNDERIVED_CHILDREN.keys(),
+  ...DOCUMENTED_ONLY_CHILDREN.keys(),
+]);
+
+/**
+ * THE PREDICATE. One sentence per segment that no table declares. `projectChildren` and
+ * `homeChildren` are parameters so a LITMUS can run the REAL scan against the DERIVED-ONLY
+ * tables and prove what those tables miss.
+ */
+export function unclassifiedPrefixHits(
+  hits: readonly PrefixHit[],
+  projectChildren: ReadonlySet<string>,
+  homeChildren: ReadonlySet<string>,
+): string[] {
+  const problems = new Map<string, string>();
+  for (const hit of hits) {
+    const declared = hit.scope === "home" ? homeChildren : projectChildren;
+    if (declared.has(hit.segment)) continue;
+    const key = `${hit.scope} ${LOOMBRIDGE_DIRNAME}/${hit.segment}`;
+    if (!problems.has(key)) problems.set(key, `${key} (first spelled in ${hit.file})`);
+  }
+  return [...problems.values()].sort();
+}
+
+/**
+ * The trees W5 reads, and which files in each count.
+ *
+ * SCOPE, stated so the inventory is not over-claimed. `Docs/`, `commands/`, `.skills/`,
+ * `demos/` and `unity-dev-project/` are NOT scanned. Measured rather than assumed: scanning
+ * them today adds exactly two segments, `.loombridge/run/` and `.loombridge/minigame/`, and
+ * both come from `Docs/Design/ArtifactStorage.md`, where `run/` is the layout S2 PROPOSES and
+ * `minigame/` is labelled "fictional" in the sentence that uses it. Pinning a proposal as a
+ * today-fact would make the inventory lie in the other direction. Prose that names a path is
+ * still prose an S2 move has to restate, and this guard does not cover it.
+ */
+const SCANNED_TREES: readonly { root: string; include: (rel: string) => boolean }[] = [
+  // The shipped server source. Tests are excluded: a test that hard-codes a moved path FAILS
+  // when the layout moves, so the suite guards itself. Shipped source has no such feedback,
+  // which is precisely why it needs this walk.
+  { root: path.join(PKG_ROOT, "src"), include: (rel) => rel.endsWith(".ts") && !rel.split("/").includes("__tests__") },
+  { root: path.join(REPO_ROOT, "scripts"), include: () => true },
+  // C# only, and not the EditMode suite, for the same self-guarding reason as above.
+  { root: path.join(REPO_ROOT, "packages"), include: (rel) => rel.endsWith(".cs") && !rel.split("/").includes("Tests") },
+  { root: path.join(REPO_ROOT, "templates"), include: () => true },
+];
+
+function filesUnder(root: string, include: (rel: string) => boolean, base = root, acc: string[] = []): string[] {
+  for (const entry of readdirSync(root)) {
+    const abs = path.join(root, entry);
+    if (statSync(abs).isDirectory()) {
+      if (entry === "node_modules" || entry === ".git") continue;
+      filesUnder(abs, include, base, acc);
+    } else if (include(path.relative(base, abs).split(path.sep).join("/"))) {
+      acc.push(abs);
+    }
+  }
+  return acc;
+}
+
+/** Every scanned file, as `{ file, text }`, read raw. */
+function scannedFiles(): { file: string; text: string }[] {
+  return SCANNED_TREES.flatMap(({ root, include }) =>
+    filesUnder(root, include).map((abs) => ({
+      file: path.relative(REPO_ROOT, abs).split(path.sep).join("/"),
+      text: readFileSync(abs, "utf-8"),
+    })),
+  );
+}
+
+const PREFIX_HITS = scanPrefixHits(scannedFiles());
+
+test("W5: every `.loombridge/<segment>` spelled anywhere in the shipped tree is classified", () => {
+  assert.deepEqual(
+    unclassifiedPrefixHits(PREFIX_HITS, PROJECT_CHILDREN, new Set(HOME_ROOT_CHILDREN.keys())),
+    [],
+    "a path segment under .loombridge/ exists in the shipped tree that no table declares. Add it " +
+      "to ALLOWED_SUBDIRS/TOP_LEVEL_CHILDREN (derived), UNDERIVED_CHILDREN (real but not derived), " +
+      "DOCUMENTED_ONLY_CHILDREN (named, never written), or HOME_ROOT_CHILDREN (machine-global, does " +
+      "not move), and say what an S2 migration owes it",
+  );
+});
+
+test("W5: the inventory is exactly the declared tables, in both directions", () => {
+  // Both directions on purpose. A NEW segment fails the check above; a segment that no longer
+  // exists fails HERE, so a table cannot rot into a list of paths nobody writes any more. The
+  // observed side is derived from the scan, never re-typed.
+  const observed = { project: new Set<string>(), home: new Set<string>() };
+  for (const hit of PREFIX_HITS) observed[hit.scope].add(hit.segment);
+
+  assert.deepEqual([...observed.project].sort(), [...PROJECT_CHILDREN].sort());
+  assert.deepEqual([...observed.home].sort(), [...HOME_ROOT_CHILDREN.keys()].sort());
+
+  // NON-VACUITY: the scan must have read a real, multi-language corpus. A scan that opened
+  // nothing returns no hits and passes every emptiness assertion above it.
+  const languages = new Set(PREFIX_HITS.map((h) => path.extname(h.file) || path.basename(h.file)));
+  assert.ok(languages.has(".ts"), `no TypeScript hit; scanned extensions were ${JSON.stringify([...languages])}`);
+  assert.ok(languages.has(".cs"), `no C# hit; scanned extensions were ${JSON.stringify([...languages])}`);
+  assert.ok(languages.has(".sh"), `no shell hit; scanned extensions were ${JSON.stringify([...languages])}`);
+  assert.ok(
+    PREFIX_HITS.some((h) => h.file.startsWith("templates/")),
+    "no template hit; the shipped project skeleton was not scanned",
+  );
+});
+
+test("W5 LITMUS: against the DERIVED tables alone, the scan reports the eight it was blind to", () => {
+  // This is the finding, run as an assertion rather than written down as a claim. Feed the
+  // REAL scan the tables W1 to W4 rest on (`loombridgePaths()`'s own children and nothing
+  // else), and it names every destination those walks cannot see. Each of these is live in the
+  // shipped tree right now.
+  const derivedOnly = new Set([...ALLOWED_SUBDIRS.keys(), ...TOP_LEVEL_CHILDREN]);
+  assert.deepEqual(
+    unclassifiedPrefixHits(PREFIX_HITS, derivedOnly, new Set(HOME_ROOT_CHILDREN.keys())).map((p) => p.split(" (")[0]),
+    [
+      "project .loombridge/art",
+      "project .loombridge/captures",
+      "project .loombridge/editor-allowlist.json",
+      "project .loombridge/games",
+      "project .loombridge/genre-contract.json",
+      "project .loombridge/handoff",
+      "project .loombridge/registry",
+      "project .loombridge/traces",
+    ],
+    "the derived layout is NOT the inventory; if this list shrank, check whether the destination " +
+      "was really routed through loombridgePaths() or merely stopped being spelled",
+  );
+
+  // …and with NO home table the machine-global root is reported too, which is what proves
+  // HOME_ROOT_CHILDREN carries weight rather than being decoration.
+  assert.deepEqual(
+    unclassifiedPrefixHits(PREFIX_HITS, PROJECT_CHILDREN, new Set()).map((p) => p.split(" (")[0]),
+    ["home .loombridge/asset-layer", "home .loombridge/projects", "home .loombridge/runtime"],
+  );
+});
+
+test("W5 LITMUS: the scan fires on a planted destination, in each language it claims to read", () => {
+  // OBSERVED. Add to `capabilities/verification/capture.ts`, verbatim:
+  //
+  //   const dest = path.join(root, ".loombridge/orphaned-anchors", `${id}.json`);
+  //   await fs.mkdir(path.dirname(dest), { recursive: true });
+  //   await fs.writeFile(dest, "{}\n", "utf-8");
+  //
+  // rebuild, re-run, and the REAL check above fails, verbatim:
+  //
+  //   ✖ W5: every `.loombridge/<segment>` spelled anywhere in the shipped tree is classified
+  //     AssertionError [ERR_ASSERTION]: a path segment under .loombridge/ exists in the shipped tree that no table declares. Add it to ALLOWED_SUBDIRS/TOP_LEVEL_CHILDREN (derived), UNDERIVED_CHILDREN (real but not derived), DOCUMENTED_ONLY_CHILDREN (named, never written), or HOME_ROOT_CHILDREN (machine-global, does not move), and say what an S2 migration owes it
+  //     + actual - expected
+  //
+  //     + [
+  //     +   'project .loombridge/orphaned-anchors (first spelled in mcp-server/src/capabilities/verification/capture.ts)'
+  //     + ]
+  //     - []
+  //
+  // (`W5: the inventory is exactly the declared tables` and the derived-tables LITMUS fail
+  // alongside it, for the same reason: the observed set grew by one.)
+  //
+  // W1 TO W4 STAYED GREEN THROUGH THAT: 51 of 54 passed and the only three failures were
+  // W5's. That is the measurement behind this file's rewritten header. The same planted
+  // module on the previous revision of this guard passed every check it had.
+  //
+  // The planted strings are ASSEMBLED from the constant rather than written out, for the reason
+  // CLAUDE.md records: a bulk rewriter "tidied" the layering guard's literal specifier and
+  // silently defused it.
+  const D = LOOMBRIDGE_DIRNAME;
+  const planted = [
+    // TypeScript, joined spelling.
+    { file: "mcp-server/src/capabilities/x.ts", text: `const dest = path.join(root, "${D}/orphaned-anchors");` },
+    // C#, SPLIT spelling: the shape CaptureHandler.cs uses, which a plain `/` scan cannot see.
+    { file: "packages/x/Editor/X.cs", text: `var p = Path.Combine(projectRoot, "${D}", "orphaned-anchors");` },
+    // Shell, the shape prepare-project-assets.sh uses.
+    { file: "scripts/x.sh", text: `HANDOFF_DIR="$PROJECT/${D}/orphaned-anchors"` },
+    // Template config.
+    { file: "templates/create-loombridge-game/.gitignore", text: `${D}/orphaned-anchors/` },
+  ];
+  for (const file of planted) {
+    assert.deepEqual(
+      unclassifiedPrefixHits(scanPrefixHits([file]), PROJECT_CHILDREN, new Set(HOME_ROOT_CHILDREN.keys())),
+      [`project ${D}/orphaned-anchors (first spelled in ${file.file})`],
+      `the scan missed a planted destination in ${file.file}`,
+    );
+  }
+
+  // The home/project SPLIT has to be live too, or every machine-global path would be graded
+  // against the project tables (and would pass, since `runtime` is not a project child).
+  const home = scanPrefixHits([{ file: "scripts/x.sh", text: `cp -R "$X" ~/${D}/orphaned-anchors/` }]);
+  assert.deepEqual(home.map((h) => h.scope), ["home"]);
+  assert.deepEqual(
+    unclassifiedPrefixHits(home, PROJECT_CHILDREN, new Set(HOME_ROOT_CHILDREN.keys())),
+    [`home ${D}/orphaned-anchors (first spelled in scripts/x.sh)`],
+  );
+
+  // …and the UPM package id must NOT be read as a state-dir path, or the inventory would fill
+  // with `Editor`, `Runtime`, `Tests` and stop meaning anything.
+  assert.deepEqual(scanPrefixHits([{ file: "scripts/x.sh", text: "packages/com.loomtide.loombridge/Editor/x.cs" }]), []);
+});
+
+/* ══════════════════════════════════════════════════════════════════════════ */
+/* W6. THE COMPOSE-OFF-`dir` CENSUS                                           */
+/* ══════════════════════════════════════════════════════════════════════════ */
+
+/**
+ * W5 sees a destination only when its FIRST SEGMENT is spelled. `assets.ts` writes
+ * `.loombridge/registry/<packId>.json` through
+ * `path.join(loombridgePaths(root).dir, "registry")`, and the writing expression spells no
+ * `.loombridge/registry` literal at all: W5 catches `registry` today only because a nearby
+ * `console.error` happens to print the joined path. That is luck, not a guard. W6 is the check
+ * that does not depend on the luck.
+ *
+ * HOW RELIABLE IS THIS? Precisely, because a check that LOOKS like it covers composition and
+ * does not is worse than none:
+ *
+ *   RELIABLE: WHICH SITES EXIST. The receiver is identified by the TypeScript TYPE CHECKER,
+ *     not by a name pattern. `input.before.dir` in `capabilities/telemetry/report.ts` is a
+ *     different type and is correctly out of scope; a `LoombridgePaths` held in a variable
+ *     under any name is in scope. A `.dir` use added anywhere in non-test source fails the pin
+ *     below until someone classifies it.
+ *   RELIABLE: THE COMPOSED SEGMENT, WHEN THE TYPE SYSTEM KNOWS IT. A string literal
+ *     (`"registry"`) and an `as const` union (`CAPTURE_DIR_NAMES` yields `"verify" | "captures"`)
+ *     both resolve, and both exist today.
+ *   REFUSED, NEVER SKIPPED: a `path.join(dir, x)` whose `x` is not literal-typed is reported
+ *     as `composes:UNRESOLVABLE` and fails unless it is excepted with a stated reason. This is
+ *     the §"refuse when a bound field is absent" rule applied to a scan.
+ *   NOT COVERED, SAID PLAINLY: the value ESCAPING under an alias. `const d = paths.dir` followed
+ *     by `path.join(d, computeName())` in another function is classified `escapes` here and this
+ *     guard cannot follow it. Following an alias needs dataflow analysis, not a syntactic walk.
+ *     What W6 does instead is make every escape VISIBLE and require a reason for it, so the two
+ *     that exist are decisions rather than blind spots. If a third appears, the honest fix is to
+ *     route the destination back through a `LoombridgePaths` FIELD so W2 walks it, not to grow
+ *     this scan into a dataflow engine.
+ */
+interface DirUseSite {
+  /** `src/`-relative module. */
+  file: string;
+  /** `composes:<segments>` | `composes:UNRESOLVABLE` | `root-arg` | `escapes`. */
+  kind: string;
+  /** What the value is handed to, so a changed call site fails the pin. */
+  callee: string;
+  /** First path segments this site composes, empty for the non-composing kinds. */
+  segments: string[];
+}
+
+const TS_PROGRAM_OPTIONS: ts.CompilerOptions = (() => {
+  const configPath = path.join(PKG_ROOT, "tsconfig.json");
+  const raw = ts.readConfigFile(configPath, ts.sys.readFile);
+  const parsed = ts.parseJsonConfigFileContent(raw.config, ts.sys, PKG_ROOT);
+  return { ...parsed.options, noEmit: true, declaration: false, declarationMap: false, sourceMap: false };
+})();
+
+/**
+ * A program over the shipped source, optionally with ONE planted module. The planted file is
+ * served by a wrapping compiler host rather than written to disk, so the LITMUS cannot leave a
+ * stray file behind, and it sits at a real path inside `src/` so its relative import of
+ * `domain/state.js` resolves through the same module resolution the real code uses.
+ */
+function sourceProgram(planted?: { file: string; text: string }): ts.Program {
+  const roots = [...ALL, ...(planted ? [planted.file] : [])];
+  const host = ts.createCompilerHost(TS_PROGRAM_OPTIONS, true);
+  if (planted) {
+    // The originals are captured BEFORE the overrides are installed. Reading them off `host`
+    // inside the override is a self-call that recurses until the stack dies.
+    const baseFileExists = host.fileExists.bind(host);
+    const baseReadFile = host.readFile.bind(host);
+    const baseGetSourceFile = host.getSourceFile.bind(host);
+    const isPlanted = (f: string): boolean => path.resolve(f) === path.resolve(planted.file);
+    host.fileExists = (f) => isPlanted(f) || baseFileExists(f);
+    host.readFile = (f) => (isPlanted(f) ? planted.text : baseReadFile(f));
+    host.getSourceFile = (f, languageVersion, onError, shouldCreate) =>
+      isPlanted(f)
+        ? ts.createSourceFile(f, planted.text, languageVersion, true, ts.ScriptKind.TS)
+        : baseGetSourceFile(f, languageVersion, onError, shouldCreate);
+  }
+  return ts.createProgram(roots, TS_PROGRAM_OPTIONS, host);
+}
+
+/** Every string value a type can be, or `null` when the type system does not know. */
+function literalStrings(type: ts.Type): string[] | null {
+  const parts = type.isUnion() ? type.types : [type];
+  const values: string[] = [];
+  for (const part of parts) {
+    if (!part.isStringLiteral()) return null;
+    values.push(part.value);
+  }
+  return values.length > 0 ? values : null;
+}
+
+function calleeName(node: ts.Node): string {
+  if (ts.isCallExpression(node)) {
+    const target = node.expression;
+    if (ts.isPropertyAccessExpression(target)) return `${target.expression.getText()}.${target.name.text}`;
+    return target.getText();
+  }
+  return ts.SyntaxKind[node.kind]!;
+}
+
+/**
+ * THE CENSUS. Both the real check and its LITMUS call this. `program` is a parameter so the
+ * LITMUS can hand it a program carrying a planted module.
+ */
+export function collectDirUseSites(program: ts.Program, roots: readonly string[]): DirUseSite[] {
+  const checker = program.getTypeChecker();
+  const wanted = new Set(roots.map((f) => path.resolve(f)));
+  const sites: DirUseSite[] = [];
+
+  for (const sourceFile of program.getSourceFiles()) {
+    if (!wanted.has(path.resolve(sourceFile.fileName))) continue;
+    const rel = path.relative(SRC, sourceFile.fileName).split(path.sep).join("/");
+    // `domain/state.ts` is where `dir` is DECLARED; every other reader is what this walks.
+    if (rel === "domain/state.ts") continue;
+
+    const visit = (node: ts.Node): void => {
+      // A destructured `dir` leaves no property access to follow, so it is REFUSED rather than
+      // missed: there is no such binding today, and this is what keeps that true.
+      if (ts.isObjectBindingPattern(node)) {
+        const typeName = checker.typeToString(checker.getTypeAtLocation(node));
+        const bindsDir = node.elements.some((el) => (el.propertyName ?? el.name).getText() === "dir");
+        if (typeName.includes("LoombridgePaths") && bindsDir) {
+          sites.push({ file: rel, kind: "escapes", callee: "ObjectBindingPattern", segments: [] });
+        }
+      }
+
+      if (ts.isPropertyAccessExpression(node) && node.name.text === "dir") {
+        const receiver = checker.typeToString(checker.getTypeAtLocation(node.expression));
+        if (receiver.includes("LoombridgePaths")) {
+          const parent = node.parent;
+          let kind = "escapes";
+          let segments: string[] = [];
+          if (ts.isCallExpression(parent) && parent.arguments.some((a) => a === node)) {
+            const composer =
+              ts.isPropertyAccessExpression(parent.expression) &&
+              (parent.expression.name.text === "join" || parent.expression.name.text === "resolve");
+            const rest = parent.arguments.slice(parent.arguments.findIndex((a) => a === node) + 1);
+            if (!composer || rest.length === 0) {
+              kind = "root-arg";
+            } else {
+              const values = literalStrings(checker.getTypeAtLocation(rest[0]!));
+              if (values === null) kind = "composes:UNRESOLVABLE";
+              else {
+                segments = [...new Set(values.map((v) => v.split("/")[0]!))].sort();
+                kind = `composes:${segments.join(",")}`;
+              }
+            }
+          }
+          sites.push({ file: rel, kind, callee: calleeName(parent), segments });
+        }
+      }
+      ts.forEachChild(node, visit);
+    };
+    visit(sourceFile);
+  }
+  return sites;
+}
+
+/** Stable one-line form, pinned below. No line numbers: those churn on unrelated edits. */
+const formatDirUse = (s: DirUseSite): string => `${s.file} ${s.kind} via ${s.callee}`;
+
+/**
+ * Every `.dir` read outside `domain/state.ts`, pinned. A NEW site, a MOVED site, or a site
+ * whose call target changed all fail here and have to be classified by a human, which is the
+ * part of W6 that genuinely cannot drift.
+ */
+const EXPECTED_DIR_USES = [
+  "capabilities/assets/asset-manifest.ts root-arg via fs.mkdir",
+  "capabilities/assets/assets.ts composes:registry via path.join",
+  "capabilities/verification/slices.ts root-arg via fs.cp",
+  "capabilities/verification/slices.ts root-arg via fs.mkdir",
+  "domain/contract-presence.ts composes:captures,verify via path.join",
+  "domain/contract-presence.ts root-arg via fileExists",
+  "surfaces/index.ts escapes via ArrayLiteralExpression",
+];
+
+/** Sites whose destination this scan CANNOT resolve, each with the reason it is acceptable. */
+const DIR_USE_EXCEPTIONS: ReadonlyMap<string, string> = new Map([
+  [
+    "surfaces/index.ts escapes via ArrayLiteralExpression",
+    "resolveSafeScreenshotOutputPath's `allowedRoots`: the state dir is a CONTAINMENT root here, " +
+      "compared with path.relative, never composed into a destination. What lands under it is " +
+      "decided by the caller's requested path, so there is nothing for a static scan to resolve. " +
+      "The destinations that actually occur (.loombridge/captures/, .loombridge/art/) are " +
+      "inventoried by W5 as UNDERIVED_CHILDREN instead.",
+  ],
+]);
+
+const DIR_USES = collectDirUseSites(sourceProgram(), ALL);
+
+/** Sites that are neither resolvable nor excepted, plus exceptions that have gone stale. */
+export function unresolvedDirUses(
+  sites: readonly DirUseSite[],
+  exceptions: ReadonlyMap<string, string> = DIR_USE_EXCEPTIONS,
+): string[] {
+  const problems: string[] = [];
+  for (const site of sites) {
+    const key = formatDirUse(site);
+    const opaque = site.kind === "escapes" || site.kind === "composes:UNRESOLVABLE";
+    if (opaque && !exceptions.has(key)) {
+      problems.push(`${key}: the composed destination cannot be resolved statically and has no stated reason`);
+    }
+    if (!opaque && exceptions.has(key)) {
+      problems.push(`${key}: resolves fine now; its exception is stale, remove it`);
+    }
+  }
+  return problems.sort();
+}
+
+test("W6: every `.dir` read off a LoombridgePaths is the pinned, classified set", () => {
+  assert.deepEqual(
+    DIR_USES.map(formatDirUse).sort(),
+    EXPECTED_DIR_USES,
+    "a LoombridgePaths `.dir` site was added, moved, or re-pointed. Every one of these composes or " +
+      "consumes a project-local destination that no LoombridgePaths FIELD names, so it has to be " +
+      "read and classified rather than absorbed",
+  );
+
+  // NON-VACUITY: the checker must really have been consulted. `capabilities/telemetry/report.ts`
+  // reads `input.before.dir`, a `.dir` on a DIFFERENT type, and a name-based scan would list
+  // it. Its absence is what proves this walks types, not identifiers.
+  assert.equal(
+    DIR_USES.some((s) => s.file.startsWith("capabilities/telemetry/")),
+    false,
+    "a non-LoombridgePaths `.dir` leaked into the census; the receiver test is matching names, not types",
+  );
+});
+
+test("W6: every destination composed off `.dir` lands on a classified segment", () => {
+  // The segments come from the type checker, not from a literal in this file, so a writer that
+  // starts composing a new subdirectory fails here even though it spells no `.loombridge/...`
+  // path anywhere. That is the hole `assets.ts` sat in.
+  const composed = DIR_USES.flatMap((s) => s.segments.map((segment) => ({ file: s.file, segment, scope: "project" as const })));
+  assert.ok(composed.length > 0, "no composed segment was resolved at all; the resolver is not running");
+  assert.deepEqual(
+    unclassifiedPrefixHits(composed, PROJECT_CHILDREN, new Set(HOME_ROOT_CHILDREN.keys())),
+    [],
+    "a destination composed off .loombridge/ is not in the inventory",
+  );
+});
+
+test("W6: an unresolvable site is refused unless a reason is recorded", () => {
+  assert.deepEqual(unresolvedDirUses(DIR_USES), []);
+
+  // The exception's weight: with NO exceptions the predicate must report the allowlist root.
+  assert.deepEqual(unresolvedDirUses(DIR_USES, new Map()), [
+    "surfaces/index.ts escapes via ArrayLiteralExpression: the composed destination cannot be " +
+      "resolved statically and has no stated reason",
+  ]);
+
+  // …and a stale exception is reported, so the list cannot rot into blanket permission. The
+  // stale key is taken from a real RESOLVED site rather than re-typed, so this litmus cannot
+  // quietly stop testing anything when that site moves.
+  const resolved = DIR_USES.find((s) => !DIR_USE_EXCEPTIONS.has(formatDirUse(s)));
+  assert.ok(resolved, "no resolved site to stale-except; the census returned only opaque sites");
+  const stale = new Map([...DIR_USE_EXCEPTIONS, [formatDirUse(resolved), "no longer true"]]);
+  assert.ok(unresolvedDirUses(DIR_USES, stale).some((p) => p.includes("its exception is stale")));
+});
+
+test("W6 LITMUS: the census fires on a planted composition that spells no path literal", () => {
+  // OBSERVED. Change `writeImportedRegistryPacks` in `capabilities/assets/assets.ts` to compose
+  // `path.join(loombridgePaths(root).dir, "orphaned-anchors")`, rebuild, re-run, and the REAL
+  // checks above fail, verbatim:
+  //
+  //   ✖ W6: every `.dir` read off a LoombridgePaths is the pinned, classified set
+  //     AssertionError [ERR_ASSERTION]: a LoombridgePaths `.dir` site was added, moved, or re-pointed. Every one of these composes or consumes a project-local destination that no LoombridgePaths FIELD names, so it has to be read and classified rather than absorbed
+  //     + actual - expected
+  //
+  //       [
+  //         'capabilities/assets/asset-manifest.ts root-arg via fs.mkdir',
+  //     +   'capabilities/assets/assets.ts composes:orphaned-anchors via path.join',
+  //     -   'capabilities/assets/assets.ts composes:registry via path.join',
+  //         'capabilities/verification/slices.ts root-arg via fs.cp',
+  //         'capabilities/verification/slices.ts root-arg via fs.mkdir',
+  //         'domain/contract-presence.ts composes:captures,verify via path.join',
+  //         'domain/contract-presence.ts root-arg via fileExists',
+  //         'surfaces/index.ts escapes via ArrayLiteralExpression'
+  //
+  //   ✖ W6: every destination composed off `.dir` lands on a classified segment
+  //     AssertionError [ERR_ASSERTION]: a destination composed off .loombridge/ is not in the inventory
+  //     + actual - expected
+  //
+  //     + [
+  //     +   'project .loombridge/orphaned-anchors (first spelled in capabilities/assets/assets.ts)'
+  //     + ]
+  //     - []
+  //
+  // W5 STAYED GREEN THROUGH THAT, which is the argument for W6 existing at all. The only
+  // `.loombridge/registry` text in that module is a `console.error` progress line, and the
+  // break did not touch it: the inventory still read `registry`, still did not read
+  // `orphaned-anchors`, and the real write destination had moved. A check that finds a
+  // destination through a nearby log message is finding it by luck.
+  //
+  // The planted module is served in-memory by a wrapping compiler host, so nothing is written
+  // to the source tree. The segment is assembled from a variable rather than written inline for
+  // the reason CLAUDE.md records about defused self-tests.
+  const file = path.join(SRC, "capabilities", "verification", "__planted_dir_use__.ts");
+  const segment = ["orphaned", "anchors"].join("-");
+  const text = [
+    `import path from "node:path";`,
+    `import { loombridgePaths } from "../../domain/state.js";`,
+    `export function plantedWriter(root: string): string {`,
+    `  return path.join(loombridgePaths(root).dir, "${segment}", "x.json");`,
+    `}`,
+  ].join("\n");
+
+  const sites = collectDirUseSites(sourceProgram({ file, text }), [...ALL, file]);
+  const planted = sites.filter((s) => s.file === "capabilities/verification/__planted_dir_use__.ts");
+  assert.deepEqual(
+    planted.map(formatDirUse),
+    [`capabilities/verification/__planted_dir_use__.ts composes:${segment} via path.join`],
+    "the census missed a composition off .dir; without this, `registry` was only ever found by luck",
+  );
+  assert.deepEqual(
+    unclassifiedPrefixHits(
+      planted.flatMap((s) => s.segments.map((seg) => ({ file: s.file, segment: seg, scope: "project" as const }))),
+      PROJECT_CHILDREN,
+      new Set(HOME_ROOT_CHILDREN.keys()),
+    ),
+    [`project ${LOOMBRIDGE_DIRNAME}/${segment} (first spelled in capabilities/verification/__planted_dir_use__.ts)`],
+  );
 });
 
 /* ══════════════════════════════════════════════════════════════════════════ */
