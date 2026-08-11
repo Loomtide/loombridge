@@ -66,6 +66,17 @@ export type DesignTargetMode = "provided" | "generated" | "reference-game";
  * The 3D flow: (1) set/approve a `composition-reference`, (2) assemble the 3D
  * scene, (3) capture a real Unity frame, (4) `set --kind rendered-unity-frame
  * --approve` that frame, (5) only THEN does strict hero-shot fidelity run.
+ *
+ * NAME CAVEAT, and it misleads real users: `rendered-unity-frame` describes what the
+ * artifact IS (the final frame fidelity is graded against), NOT where it came from. A flat
+ * 2D game's final mock is a `rendered-unity-frame` with no Unity involved at all, and
+ * NEITHER kind requires an editor at plan time. `plan`'s readiness gate is
+ * `exitCodeForDesignReadiness`, which checks `approved && frozenMatches` and never reads
+ * `kind`, so an approved `composition-reference` clears `plan` and `build`; only `doneness`
+ * refuses one. Say so wherever this choice is put to a user: the refusal in
+ * `setDesignTarget` and the `--kind` help both spell it out, because the name alone reads
+ * as "you must render in Unity first" and sends people looking for an editor they do not
+ * need yet.
  */
 export type DesignTargetKind = "composition-reference" | "rendered-unity-frame";
 
@@ -266,11 +277,21 @@ export async function setDesignTarget(args: SetDesignTargetArgs): Promise<Design
   // refusal. See Docs/Design/HeroShotAuthoring.md §2.
   if (args.mode === "generated" && !args.kind) {
     throw new Error(
-      "--kind is required when --mode generated. A generated image is a `composition-reference` " +
-        "(a style/composition guide that unlocks 3D scene assembly and NEVER certifies doneness) " +
-        "unless it is the final frame of a flat 2D game, which is `rendered-unity-frame`. Choosing " +
-        "by omission would freeze a mock as the artifact doneness grades hero-shot fidelity " +
-        "against. Pass --kind composition-reference or --kind rendered-unity-frame.",
+      "--kind is required when --mode generated.\n" +
+        "\n" +
+        "The choice is about YOUR GAME, not about which tool drew the image:\n" +
+        "\n" +
+        "  flat 2D game   --kind rendered-unity-frame\n" +
+        "                 The mock IS the final hero shot. NO Unity render is needed now:\n" +
+        "                 the name means FINAL FRAME, not 'made in Unity'.\n" +
+        "\n" +
+        "  3D game        --kind composition-reference\n" +
+        "                 A style guide that unlocks scene assembly only. You build the\n" +
+        "                 scene, capture a real Unity frame, then re-set it as\n" +
+        "                 rendered-unity-frame. Nothing is needed from Unity yet.\n" +
+        "\n" +
+        "Omitting --kind would silently pick rendered-unity-frame and freeze a flat mock as the\n" +
+        "artifact `doneness` grades 3D hero-shot fidelity against.",
     );
   }
   const paths = loombridgePaths(args.root);
@@ -349,10 +370,11 @@ function printUsage(): void {
       "           [--reference-game <name>] [--note <text>] [--approve] [--root <dir>]",
       "  approve  [--note <text>] [--root <dir>]",
       "",
-      "Kinds (the 3D design-target split):",
-      "  rendered-unity-frame  (default) the FROZEN hero shot — a real rendered frame",
-      "                        (Unity capture, or a final 2D mock). Eligible for strict",
-      "                        hero-shot fidelity + `doneness`.",
+      "Kinds (what the artifact IS, not which tool produced it):",
+      "  rendered-unity-frame  (default) the FROZEN hero shot: the final frame `doneness`",
+      "                        grades fidelity against. A real Unity capture for a 3D game,",
+      "                        OR a final 2D mock for a flat 2D game, which needs no Unity at",
+      "                        all. The name means FINAL, not 'made in Unity'.",
       "  composition-reference a style/composition guide approved ONLY to unlock 3D scene",
       "                        assembly. NEVER certifies `doneness` / final fidelity.",
       "                        3D flow: approve a composition-reference → assemble the",
