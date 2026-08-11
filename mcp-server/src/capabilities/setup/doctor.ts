@@ -42,6 +42,7 @@ import {
   isLoombridgeAuthoredEntry,
 } from "./install-mcp.js";
 import { ROUTING_DOC_RELPATH, ROUTING_DOC_VERSION, parseRoutingDocVersion } from "./routing-doc.js";
+import { detectGenerationBackends, generationBackendsDoctorDetail } from "./generation-backends.js";
 
 type CheckStatus = "pass" | "warn" | "fail" | "info";
 
@@ -99,6 +100,19 @@ function checkLocalInstall(checks: DoctorCheck[]): { bundledVersion?: string; bu
     detail: `node ${process.versions.node}`,
     remediation: nodeMajor >= 18 ? undefined : "Install Node 18+ (Loombridge targets an active LTS).",
   });
+
+  // Which hero-shot generation backends this machine can OFFER. INFO on purpose: an optional
+  // accelerator being absent is a supported configuration, not a missing dependency, and
+  // `claude` is always available so the count is never zero. See generation-backends.ts.
+  const backends = safe(() => detectGenerationBackends()) ?? [];
+  if (backends.length > 0) {
+    checks.push({
+      id: "generation.backends",
+      label: "Hero-shot backends",
+      status: "info",
+      detail: generationBackendsDoctorDetail(backends),
+    });
+  }
 
   const located = safe(() => locateBridgeTarball());
   if (!located) {

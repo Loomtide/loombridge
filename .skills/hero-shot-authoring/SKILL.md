@@ -67,23 +67,36 @@ choice is a surprise in the worst possible place.
 **This agent.** Compose the frame directly (HTML/CSS at native scale, then screenshot it). Use the
 `frontend-design` skill for the composition work. This is the default and needs nothing installed.
 
-**codex.** Available only if the user has it:
+**codex.** Available only if the user has it. `loombridge doctor` reports this for you in its
+`Hero-shot backends` row, so prefer that over probing by hand:
 
 ```bash
-command -v codex && codex --version    # verified surface: codex-cli 0.145.0
+loombridge doctor | grep 'Hero-shot backends'
+# -> 2 of 2 hero-shot generation backend(s) available: claude, codex-cli 0.145.0
 ```
 
-`codex exec` runs Codex non-interactively and takes the prompt as an argument or on stdin.
-Attach reference images with `-i/--image <FILE>...`, and pick a model with `-m/--model <MODEL>`:
+**There is no imagegen flag.** You delegate: `codex exec` runs Codex non-interactively, and you ask
+it to draw the frame using **codex's own imagegen skill**. Loombridge configures none of that, so
+whether imagegen is available depends on the user's Codex setup, not on anything here. This is the
+path a real 3D game shipped with.
 
 ```bash
-codex exec -i reference.png "<hero shot prompt>"
+codex exec -C <project-dir> -s workspace-write \
+  "Use your imagegen skill to generate <description>. Write the PNG to hero-shot.png in the working root."
 ```
 
-> **UNVERIFIED:** the exact image-production recipe used on the maintainer's Ghost Relay build is
-> not yet recorded here. The CLI surface above is verified; how the image itself is produced and
-> written to disk is not. Confirm with the user before relying on a specific invocation, and update
-> this block with what actually ran. A plausible-looking wrong command is worse than this admission.
+Three things bite here, in the order they bite:
+
+- **codex cannot write by default.** `-s/--sandbox` takes `read-only`, `workspace-write` or
+  `danger-full-access`, and a read-only run produces no file no matter how well the prompt reads.
+  Pass `-s workspace-write` and set the working root with `-C/--cd` (or widen it with `--add-dir`).
+- **codex is a SEPARATE agent.** It cannot see this conversation, the genre contract, the asset
+  manifest, or the callouts you plan to annotate. Everything it needs goes in the prompt text.
+- **Verify the file before you freeze it.** `target set` copies and hashes whatever path you hand
+  it, so a run that quietly produced nothing becomes a confusing failure one step later. Check the
+  PNG exists and looks right, then set it.
+
+Attach reference images with `-i/--image <FILE>...` and pick a model with `-m/--model <MODEL>`.
 
 Whichever backend runs, keep API keys in the environment. Never in chat, commits, or reports.
 

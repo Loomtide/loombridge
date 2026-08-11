@@ -130,8 +130,13 @@ so the two agents cannot drift.
      ```bash
      loombridge target set --image <path.png> [--html <path.html>] --mode provided
      ```
-   - **Generate (default):** produce an **annotated hero shot** (Claude Design / frontend-design:
-     a single in-game frame at native scale, with callouts for the things THIS genre reads by).
+   - **Generate (default):** produce an **annotated hero shot** (a single in-game frame at native
+     scale, with callouts for the things THIS genre reads by). **Ask which backend the user
+     wants** rather than picking: `loombridge doctor` prints a `Hero-shot backends` row listing
+     what this machine can offer (this agent via `frontend-design`, plus `codex` when it is
+     installed). They produce visibly different art and this is the artifact the whole build is
+     graded against, so an unasked choice is a surprise in the worst possible place. If nothing
+     but this agent is available that is completely fine: it needs nothing installed.
      For a registered pack, build it from that genre's asset registry; for a **contract genre**
      there is no asset registry, so build it from the contract's `artDirection.assetRoles` and
      annotate the criteria the contract's own `fidelityCriteria` list (parallax and platform tiers

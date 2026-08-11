@@ -53,6 +53,7 @@ import {
   writeSlicePlan,
   type SlicePlan,
 } from "./slices.js";
+import { readInstalledSkills } from "../setup/installed-skills.js";
 import { computeStatusModel, renderPlanStatusEcho } from "./status-model.js";
 import { defaultGenreId, knownGenreIds, resolveGenrePack } from "../genre/genre-registry.js";
 import { promoteGenreContract, type GenrePromotionResult } from "../genre/genre-contract/promote.js";
@@ -1066,7 +1067,7 @@ export async function runPlan(args: PlanArgs): Promise<number> {
       console.error(
         `[loombridge plan] Plan next slice: ${next.id} — ${next.title}`,
       );
-      console.error(`[loombridge plan]   skill: ${renderSliceSkill(next.skill)}`);
+      console.error(`[loombridge plan]   skill: ${renderSliceSkill(next.skill, readInstalledSkills(args.root))}`);
       console.error(`[loombridge plan]   feel: ${next.feelIntent}`);
       console.error(`[loombridge plan]   gates: ${next.acceptance.gates.join(", ")}`);
       console.error(
@@ -1177,7 +1178,7 @@ export async function runPlan(args: PlanArgs): Promise<number> {
     }
     const next = nextUnblockedSlice(plan!)!;
     console.error(`[loombridge plan] Plan next slice: ${next.id} — ${next.title}`);
-    console.error(`[loombridge plan]   skill: ${renderSliceSkill(next.skill)}`);
+    console.error(`[loombridge plan]   skill: ${renderSliceSkill(next.skill, readInstalledSkills(args.root))}`);
     console.error(`[loombridge plan]   feel: ${next.feelIntent}`);
     console.error(`[loombridge plan]   gates: ${next.acceptance.gates.join(", ")}`);
     console.error(`[loombridge plan] next: review the slice above, then run \`loombridge build\` to build it.`);
