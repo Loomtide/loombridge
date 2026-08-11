@@ -9,7 +9,9 @@ import { deflateSync } from "node:zlib";
 import {
   applyVisualDiff,
   captureCoverageNotices,
+  discoverReports,
   discoverTraces,
+  mostRecentReportId,
   mostRecentTraceId,
   observeDropNotices,
   traceDemonstration,
@@ -576,8 +578,9 @@ async function writeTraceAged(root: string, id: string, minutesAgo: number): Pro
 }
 
 test("trace replay: bare, with several traces on disk, replays the NEWEST by mtime", async () => {
-  // LITMUS: flip the mtime comparison in `mostRecentTraceId` to `a.mtimeMs - b.mtimeMs`
-  // (the reversed sort) and this fails, observed verbatim:
+  // LITMUS: flip the mtime comparison in `mostRecentIdByMtime` (the sort `mostRecentTraceId`
+  // shares with the `approve` default) to `a.mtimeMs - b.mtimeMs` (the reversed sort) and
+  // this fails, observed verbatim:
   //   AssertionError [ERR_ASSERTION]: The input did not match the regular expression
   //   /no --id given, replaying the most recent trace "newest"/. Input:
   //   '[loombridge trace] no --id given, replaying the most recent trace "oldest".\n' +
@@ -617,8 +620,9 @@ test("trace replay: IDENTICAL mtimes tie-break by name, the same way on every ca
   // "replay, then read the report" unreproducible, so the tie-break is deterministic.
   //
   // LITMUS (two steps, because a stable sort hides a missing tie-break): drop the
-  // `|| (a.id < b.id ? …)` clause from `mostRecentTraceId` AND reverse `discoverTraces`'
-  // ordering (`.sort().reverse()`). This then fails, observed verbatim:
+  // `|| (a.id < b.id ? …)` clause from `mostRecentIdByMtime` (the sort `mostRecentTraceId`
+  // shares with the `approve` default) AND reverse `discoverTraces`' ordering
+  // (`.sort().reverse()`). This then fails, observed verbatim:
   //   AssertionError [ERR_ASSERTION]: tie-break winner on call 0
   //   'charlie' !== 'alpha'
   // Step two: restore the tie-break clause alone, LEAVING `discoverTraces` reversed, and
@@ -755,6 +759,265 @@ test("trace replay --trace: an explicit file wins over the most-recent search; t
     } finally {
       await fs.rm(outsideRoot, { recursive: true, force: true });
     }
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+// ─────────────── `trace approve` ergonomics: bare approve freezes the most recent RUN ───────────────
+//
+// The sibling of the `trace replay` block above, with ONE deliberate difference: `approve`
+// promotes the captures of a COMPLETED RUN, so it selects the most recent REPORT, never the
+// most recent trace. These drive the whole verb (argv → runApprove → the real id resolution →
+// the real promotion) and never touch the bridge at all: approve is a pure file operation.
+//
+// The observable is the BASELINE DIRECTORY production code wrote, named by the id the CLI
+// chose, so nothing here re-implements the selection it is checking.
+
+function baselinesDir(root: string): string {
+  return standardReplayLayout(root).replayBaselines;
+}
+
+/**
+ * Plant a COMPLETED RUN: `<id>.report.json` with `captures` promotable captures, the trace it
+ * binds to, and the report's mtime stamped `minutesAgo` minutes into the past.
+ */
+async function writeRunAged(
+  root: string,
+  id: string,
+  opts: { minutesAgo: number; captures?: number },
+): Promise<void> {
+  const actualDir = path.join(reportsDir(root), id, "actual");
+  await fs.mkdir(actualDir, { recursive: true });
+  const captures: Array<{ id: string; artifact: string }> = [];
+  for (let i = 0; i < (opts.captures ?? 1); i += 1) {
+    const artifact = path.join(actualDir, `cap${i}.png`);
+    await fs.writeFile(artifact, Buffer.from(`png-${id}-${i}`));
+    captures.push({ id: `cap${i}`, artifact });
+  }
+  await writeReport(root, id, captures);
+  await writeTrace(root, id);
+  const when = new Date(Date.now() - opts.minutesAgo * 60_000);
+  await fs.utimes(path.join(reportsDir(root), `${id}.report.json`), when, when);
+}
+
+test("trace approve: bare, with several runs on disk, freezes the NEWEST report by mtime", async () => {
+  // LITMUS: flip the mtime comparison in `mostRecentIdByMtime` to `a.mtimeMs - b.mtimeMs`
+  // (the reversed sort) and this fails, observed verbatim:
+  //   AssertionError [ERR_ASSERTION]: The input did not match the regular expression
+  //   /no --id given, approving the most recent run "newest"/. Input:
+  //   '[loombridge trace] no --id given, approving the most recent run "oldest".\n' +
+  //     '[loombridge trace]   that run holds 1 capture(s), and approving freezes them as the
+  //      approved baseline for "oldest".\n' + …
+  // Verified by doing exactly that, then restoring it and watching it pass.
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "approve-recent-"));
+  try {
+    await writeRunAged(root, "oldest", { minutesAgo: 30 });
+    await writeRunAged(root, "newest", { minutesAgo: 1 });
+    await writeRunAged(root, "middle", { minutesAgo: 10 });
+
+    const { exit, err } = await capturedRun(["approve", "--root", root], {});
+    assert.equal(exit, 0, err);
+    assert.match(err, /no --id given, approving the most recent run "newest"/);
+
+    // The baseline production code wrote is the observable: the loser runs were never frozen.
+    assert.deepEqual(
+      await fs.readFile(path.join(baselinesDir(root), "newest", "cap0.png")),
+      Buffer.from("png-newest-0"),
+    );
+    await assert.rejects(fs.access(path.join(baselinesDir(root), "oldest")));
+    await assert.rejects(fs.access(path.join(baselinesDir(root), "middle")));
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test("trace approve: the default selects the most recent REPORT, never the most recent TRACE", async () => {
+  // THE TEST THAT PROVES THE TWO VERBS DELIBERATELY DIFFER. `approve` promotes the captures
+  // of a run that HAPPENED, so a trace recorded after that run is not a candidate: it has no
+  // report, nothing was ever replayed from it, and there is nothing to promote. Reusing
+  // `replay`'s trace-based search would pick it and then fail with "no report at
+  // reports/recorded-later.report.json" for an id nobody typed.
+  //
+  // LITMUS: swap the search in `resolveApproveTargetId` to the trace-based one
+  // (`await mostRecentTraceId(paths.replayTraces)`) and this fails, observed verbatim:
+  //   AssertionError [ERR_ASSERTION]: [loombridge trace] no --id given, approving the most
+  //   recent run "recorded-later".
+  //   [loombridge trace] no report at .loombridge/replays/reports/recorded-later.report.json
+  //   — run 'trace replay --id recorded-later' first.
+  //
+  //   1 !== 0
+  // Verified by doing exactly that, then restoring it and watching it pass.
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "approve-vs-trace-"));
+  try {
+    // The run that should win: replayed a while ago, so its REPORT is the newest report…
+    await writeRunAged(root, "replayed", { minutesAgo: 10 });
+    // …while a trace recorded SINCE then is the newest TRACE on disk and has no report.
+    const laterTrace = await writeTrace(root, "recorded-later");
+    const now = new Date();
+    await fs.utimes(laterTrace, now, now);
+    // Belt and braces: the winner's own trace is older than the decoy's, so a trace-based
+    // pick cannot land on "replayed" by accident.
+    const older = new Date(Date.now() - 60 * 60_000);
+    await fs.utimes(path.join(tracesDir(root), "replayed.trace.json"), older, older);
+
+    const { exit, err } = await capturedRun(["approve", "--root", root], {});
+    assert.equal(exit, 0, err);
+    assert.match(err, /no --id given, approving the most recent run "replayed"/);
+    await fs.access(path.join(baselinesDir(root), "replayed", "cap0.png"));
+    await assert.rejects(
+      fs.access(path.join(baselinesDir(root), "recorded-later")),
+      "a trace that was never replayed must never be approved",
+    );
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test("trace approve: IDENTICAL mtimes tie-break by name, the same way on every call", async () => {
+  // Same correctness requirement as the replay default: a fresh clone or a copied workspace
+  // writes every file in one burst, so equal mtimes are the normal case, and a winner that
+  // varied between two runs of the same command would make an approval unreproducible.
+  //
+  // LITMUS (two steps, because a stable sort hides a missing tie-break): drop the
+  // `|| (a.id < b.id ? …)` clause from `mostRecentIdByMtime` AND reverse `discoverReports`'
+  // ordering (`.sort().reverse()`). This then fails, observed verbatim:
+  //   AssertionError [ERR_ASSERTION]: tie-break winner on call 0
+  //   'charlie' !== 'alpha'
+  // Step two: restore the tie-break clause alone, LEAVING `discoverReports` reversed, and
+  // this passes again. That second step is the real assertion: the winner must not depend on
+  // the discovery order. Verified by doing exactly that, then restoring both.
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "approve-tie-"));
+  try {
+    const same = new Date(Date.now() - 5 * 60_000);
+    for (const id of ["charlie", "alpha", "bravo"]) {
+      await writeRunAged(root, id, { minutesAgo: 5 });
+      await fs.utimes(path.join(reportsDir(root), `${id}.report.json`), same, same);
+    }
+    for (let call = 0; call < 5; call += 1) {
+      assert.equal(await mostRecentReportId(reportsDir(root)), "alpha", `tie-break winner on call ${call}`);
+    }
+
+    // …and the wired verb agrees with the function (no second, divergent selection path).
+    const { err } = await capturedRun(["approve", "--root", root], {});
+    assert.match(err, /no --id given, approving the most recent run "alpha"/);
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test("trace approve: bare with NO reports REFUSES (exit 2), names `trace replay`, freezes nothing", async () => {
+  // LITMUS: delete the `if (recent === null) { … return null; }` refusal from
+  // `resolveApproveTargetId` (`if (recent === null) return "";` instead) and this fails: the
+  // empty id falls through to the loader, which names a path nobody typed and exits in the
+  // game-defect tier. Observed verbatim:
+  //   AssertionError [ERR_ASSERTION]: missing reports dir: [loombridge trace] no report at
+  //   .loombridge/replays/reports/.report.json — run 'trace replay --id ' first.
+  //
+  //   1 !== 2
+  // Verified by doing exactly that, then restoring it and watching it pass.
+  const missing = await fs.mkdtemp(path.join(os.tmpdir(), "approve-none-"));
+  const empty = await fs.mkdtemp(path.join(os.tmpdir(), "approve-none-"));
+  try {
+    // (a) the reports directory does not exist at all, and (b) it exists and is empty:
+    // both are "nothing to approve", and both must refuse identically.
+    await fs.mkdir(reportsDir(empty), { recursive: true });
+    // A recorded-but-never-replayed trace is still nothing to approve: it is the decoy the
+    // trace-based search would have picked, and it must not rescue either case.
+    await writeTrace(empty, "recorded-only");
+
+    for (const [label, root] of [["missing reports dir", missing], ["empty reports dir", empty]] as const) {
+      const { exit, err } = await capturedRun(["approve", "--root", root], {});
+      assert.equal(exit, 2, `${label}: ${err}`);
+      assert.match(err, /there is nothing to approve/, label);
+      assert.match(err, /loombridge trace replay/, `${label}: the refusal names the replay verb`);
+      await assert.rejects(fs.access(baselinesDir(root)), `${label}: nothing was frozen`);
+    }
+  } finally {
+    await fs.rm(missing, { recursive: true, force: true });
+    await fs.rm(empty, { recursive: true, force: true });
+  }
+});
+
+test("trace approve --id: an explicit id is approved as-is and the most-recent search never runs", async () => {
+  // The whole default path must be INERT for existing callers, so the run asked for here is
+  // deliberately NOT the newest one on disk, and the consent line the default prints must
+  // not appear either.
+  //
+  // LITMUS: drop the `if (args.id) return args.id;` short-circuit from
+  // `resolveApproveTargetId` and this fails, observed verbatim:
+  //   AssertionError [ERR_ASSERTION]: nothing was defaulted
+  //   actual: '[loombridge trace] no --id given, approving the most recent run "newest".\n…'
+  //   expected: /no --id given/  operator: 'doesNotMatch'
+  // (the baseline also lands under "newest" rather than the "oldest" that was asked for).
+  // Verified by doing exactly that, then restoring it and watching it pass.
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "approve-explicit-"));
+  try {
+    await writeRunAged(root, "oldest", { minutesAgo: 30 });
+    await writeRunAged(root, "newest", { minutesAgo: 1 });
+
+    const { exit, err } = await capturedRun(["approve", "--id", "oldest", "--root", root], {});
+    assert.equal(exit, 0, err);
+    assert.doesNotMatch(err, /no --id given/, "nothing was defaulted");
+    assert.doesNotMatch(err, /that run holds/, "the explicit path prints what it always did");
+    await fs.access(path.join(baselinesDir(root), "oldest", "cap0.png"));
+    await assert.rejects(fs.access(path.join(baselinesDir(root), "newest")));
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test("trace approve: the consent line states the REAL number of captures being frozen", async () => {
+  // Naming the run is not enough at the consent moment for an anchor: "the most recent run"
+  // reads the same whether it freezes one frame or forty, so the size is printed too. The
+  // number is checked against the baselines production code actually wrote, so a hard-coded
+  // or off-by-one count cannot pass.
+  //
+  // LITMUS: hard-code the count (`const promotable = 1;`) in `runApprove` and this fails,
+  // observed verbatim:
+  //   AssertionError [ERR_ASSERTION]: The input did not match the regular expression
+  //   /that run holds 3 capture\(s\)/. Input: '[loombridge trace] no --id given, approving
+  //   the most recent run "three-frames".\n' +
+  //     '[loombridge trace]   that run holds 1 capture(s), and approving freezes them as the
+  //      approved baseline for "three-frames".\n' + …
+  // Verified by doing exactly that, then restoring it and watching it pass.
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "approve-count-"));
+  try {
+    await writeRunAged(root, "three-frames", { minutesAgo: 1, captures: 3 });
+
+    const { exit, err } = await capturedRun(["approve", "--root", root], {});
+    assert.equal(exit, 0, err);
+    assert.match(err, /that run holds 3 capture\(s\)/);
+    // The stated number is the number that was frozen, not a number about something else.
+    assert.deepEqual(
+      (await fs.readdir(path.join(baselinesDir(root), "three-frames"))).filter((f) => f.endsWith(".png")).sort(),
+      ["cap0.png", "cap1.png", "cap2.png"],
+    );
+    assert.match(err, /approved 3 baseline\(s\)/);
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test("discoverReports: only *.report.json with safe ids, sorted; missing dir → []", async () => {
+  // The suffix filter is what keeps the mini-game workspace's own `minigame-verification.json`
+  // (this directory is shared in the flat layout) out of the approve candidate list.
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "approve-disco-"));
+  try {
+    const dir = path.join(root, "reports");
+    await fs.mkdir(dir, { recursive: true });
+    for (const name of [
+      "b.report.json",
+      "a.report.json",
+      "minigame-verification.json",
+      "a.report.html",
+      ".report.json",
+      "..report.json",
+    ]) {
+      await fs.writeFile(path.join(dir, name), "{}");
+    }
+    assert.deepEqual(await discoverReports(dir), ["a", "b"]);
+    assert.deepEqual(await discoverReports(path.join(root, "missing")), []);
   } finally {
     await fs.rm(root, { recursive: true, force: true });
   }

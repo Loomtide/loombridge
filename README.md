@@ -110,7 +110,7 @@ loombridge plan --go                                  # human checkpoint: approv
 ```bash
 loombridge trace record --id happy-path               # you play; Loombridge watches
 loombridge trace replay                               # it replays your latest recording deterministically
-loombridge trace approve --id happy-path              # you approve the baseline once
+loombridge trace approve                              # you approve that run's baseline once
 loombridge verify                                     # from now on: one command, exit by worst tier
 ```
 
