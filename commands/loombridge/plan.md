@@ -120,7 +120,11 @@ so the two agents cannot drift.
    loombridge target status --root .
    ```
 
-   If it is not `approved`, pick an input path *with the user* (ask which they want):
+   If it is not `approved`, pick an input path *with the user* (ask which they want). The
+   **`hero-shot-authoring`** skill is the runbook for all four paths below: it covers choosing a
+   generation backend with the user (this agent, or `codex` when they have it), the 2D-versus-3D
+   fork, and capturing the real Unity frame. Read it before generating for a **3D** build, where
+   an absent `--kind` silently freezes a flat mock as the artifact `doneness` grades against.
 
    - **Provide:** the user points to a mock / screenshot / HTML. Save the image, then:
      ```bash
