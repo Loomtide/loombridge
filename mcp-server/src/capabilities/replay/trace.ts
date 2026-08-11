@@ -96,9 +96,10 @@ import { readPng } from "../verification/analyze-frames.js";
 interface TraceArgs {
   sub: "replay" | "report" | "approve" | "replay-all" | "record" | "tolerance" | "mask";
   /**
-   * Trace id. Empty when none was given, which only `record` and `replay` allow: `record`
-   * derives one from the recorded scene, `replay` falls back to the most recent trace
-   * (see {@link resolveReplayTargetId}). Every other subcommand still requires it.
+   * Trace id. Empty when none was given, which only `record`, `replay` and `approve` allow:
+   * `record` derives one from the recorded scene, `replay` falls back to the most recent
+   * trace (see {@link resolveReplayTargetId}), and `approve` to the most recent REPORT (see
+   * {@link resolveApproveTargetId}). Every other subcommand still requires it.
    */
   id: string;
   root: string;
@@ -456,14 +457,17 @@ async function runReplay(args: TraceArgs, opts: TraceRunOpts = {}): Promise<numb
  * when nobody named a trace. Returns null after printing the refusal when there is nothing
  * to pick.
  *
- * WHY `replay` DEFAULTS AND `approve` / `tolerance` / `mask` NEVER WILL. Those three are
- * ANCHOR operations: `approve` FREEZES a human-approved baseline, and `tolerance` / `mask`
- * WIDEN the gate on an existing one. An action that freezes or loosens an anchor has to NAME
- * the anchor it touches, because a wrong pick leaves a verdict standing that nobody consented
- * to and that no later output ever contradicts. `replay` is different in kind: it is
- * re-runnable, it produces a REPORT rather than an anchor, and a wrong pick costs exactly one
- * re-run with an explicit `--id`. Do NOT "simplify" this asymmetry away by extending the
- * default to the anchor verbs: it is the point, not an oversight.
+ * WHY `replay` AND `approve` DEFAULT AND `tolerance` / `mask` NEVER WILL. `tolerance` and
+ * `mask` WIDEN the gate on an existing anchor, which is the most dangerous class of change
+ * this tool makes: it leaves a verdict standing that nobody consented to and that no later
+ * output ever contradicts, so it should always name its target. `replay` and `approve` are
+ * different in kind. Both act on the run the operator just produced, both announce the pick
+ * out loud before doing anything, and both are re-runnable against an explicit `--id` if the
+ * pick was wrong. Do NOT "simplify" this asymmetry away by extending the default to the two
+ * widening verbs: it is the point, not an oversight.
+ *
+ * The two defaults select from DIFFERENT directories, deliberately: see
+ * {@link resolveApproveTargetId}.
  *
  * Precedence, and `--trace` comes FIRST for a reason: it names an exact file, which is the
  * strongest statement of intent available, so the most-recent search must not run at all.
@@ -512,6 +516,30 @@ async function resolveReplayTargetId(
  *
  * "Most recent" is the newest FILE MTIME among `<id>.trace.json`, because that is what
  * "the one I just recorded" means to the human typing this: `record` wrote it seconds ago.
+ * Ties break by NAME, and only ids `discoverTraces` accepts are candidates: see
+ * {@link mostRecentIdByMtime}, which both defaults share. Exported for unit tests.
+ */
+export async function mostRecentTraceId(dir: string): Promise<string | null> {
+  return await mostRecentIdByMtime(dir, await discoverTraces(dir), ".trace.json");
+}
+
+/**
+ * The most recently REPLAYED run under `dir`, or null when there is none: the `approve`
+ * half of the same idea, and the ONE place the two defaults differ (see
+ * {@link resolveApproveTargetId} for why it is reports rather than traces).
+ *
+ * Same recency rule and the same explicit name tie-break as {@link mostRecentTraceId},
+ * because they are the same rule: both call {@link mostRecentIdByMtime} rather than
+ * restating it, so "ties break by name" cannot come to mean two things in one file.
+ * Exported for unit tests.
+ */
+export async function mostRecentReportId(dir: string): Promise<string | null> {
+  return await mostRecentIdByMtime(dir, await discoverReports(dir), ".report.json");
+}
+
+/**
+ * The newest of `ids` by the mtime of `<dir>/<id><suffix>`, or null when none can be
+ * stat'ed. Shared by the `replay` and `approve` defaults.
  *
  * TIES BREAK BY NAME, and that is a correctness requirement rather than tidiness. A fresh
  * `git clone` (or a copied workspace) writes every file in one burst, so identical mtimes are
@@ -520,24 +548,27 @@ async function resolveReplayTargetId(
  * report" unreproducible for the operator AND for whoever reads the report afterwards. Name
  * order is stable, so the same directory always yields the same choice.
  *
- * Only ids `discoverTraces` accepts are candidates, so the winner is always a safe path
- * segment. Exported for unit tests.
+ * Only ids the caller's discovery accepted are candidates, and both discoveries filter on
+ * `isSafePathSegment`, so the winner is always a safe path segment.
  */
-export async function mostRecentTraceId(dir: string): Promise<string | null> {
-  const ids = await discoverTraces(dir);
+async function mostRecentIdByMtime(
+  dir: string,
+  ids: string[],
+  suffix: string,
+): Promise<string | null> {
   const stamped: { id: string; mtimeMs: number }[] = [];
   for (const id of ids) {
     try {
-      const stat = await fs.stat(path.join(dir, `${id}.trace.json`));
+      const stat = await fs.stat(path.join(dir, `${id}${suffix}`));
       stamped.push({ id, mtimeMs: stat.mtimeMs });
     } catch {
-      // Unreadable or gone between the listing and the stat: not a candidate. A trace
+      // Unreadable or gone between the listing and the stat: not a candidate. A file
       // whose mtime cannot be read has no claim to being the most recent one.
     }
   }
   if (stamped.length === 0) return null;
   // The name comparison is the EXPLICIT tie-break, not a side effect of the input order:
-  // relying on `discoverTraces` sorting plus a stable sort would make this correct by
+  // relying on the discovery's sorting plus a stable sort would make this correct by
   // coincidence, and one refactor of the discovery order away from being correct at all.
   stamped.sort((a, b) => b.mtimeMs - a.mtimeMs || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
   return stamped[0]!.id;
@@ -1051,6 +1082,30 @@ export async function discoverTraces(dir: string): Promise<string[]> {
 }
 
 /**
+ * Discover replayed-run ids from `<dir>/<id>.report.json` (safe ids only), the `approve`
+ * counterpart of {@link discoverTraces}.
+ *
+ * The suffix is the whole filter, and it is enough: `<id>.report.json` under the reports
+ * directory is written by exactly one thing, `replayOneTrace`. The fleet roll-up lives one
+ * level up (`<replays>/fleet.report.json`, never inside `reports/`), and the flat mini-game
+ * workspace shares this directory with `minigame-verification.json`, which the suffix
+ * excludes. Exported for tests.
+ */
+export async function discoverReports(dir: string): Promise<string[]> {
+  let entries: string[];
+  try {
+    entries = await fs.readdir(dir);
+  } catch {
+    return [];
+  }
+  return entries
+    .filter((f) => f.endsWith(".report.json"))
+    .map((f) => f.slice(0, -".report.json".length))
+    .filter((id) => isSafePathSegment(id))
+    .sort();
+}
+
+/**
  * Exit code for a replay run, in the product's three tiers: 0 pass, 1 game defect,
  * 2 harness fault / capture gap.
  *
@@ -1077,10 +1132,55 @@ export function replayExitCode(
   return 0;
 }
 
+/**
+ * Which RUN this `approve` freezes. An EXPLICIT `--id` is returned untouched, so every
+ * existing invocation walks the same path it always did; the search below is reached only
+ * when nobody named a run. Returns null after printing the refusal when there is nothing
+ * to pick.
+ *
+ * THE SEARCH IS OVER REPORTS, NOT TRACES, and that is the whole difference from
+ * {@link resolveReplayTargetId}. `approve` promotes the captures of a COMPLETED RUN, so the
+ * referent of "the one I mean" is "the thing I just replayed", and a report is the only
+ * evidence that a replay happened at all. Reusing the trace-based search would happily pick
+ * a trace that was recorded and never replayed, and then fail with "no report at
+ * reports/<id>.report.json" for an id nobody typed: a confusing answer to a question the
+ * operator never asked. Do NOT collapse the two searches into one.
+ */
+async function resolveApproveTargetId(
+  paths: ReplayLayout,
+  args: TraceArgs,
+): Promise<string | null> {
+  if (args.id) return args.id;
+
+  const recent = await mostRecentReportId(paths.replayReports);
+  if (recent === null) {
+    // REFUSE HERE, not in the loader. Falling through with an empty id would read
+    // `reports/.report.json` and report "no such file", which names a path nobody typed and
+    // says nothing about what to do next.
+    console.error(
+      `[loombridge trace] no --id given and no replay reports in ` +
+        `${path.relative(args.root, paths.replayReports)}/: there is nothing to approve.`,
+    );
+    console.error(
+      "[loombridge trace]   replay one first: `loombridge trace replay` (then bare `loombridge trace " +
+        "approve` freezes that run), or name a run with --id <id>.",
+    );
+    return null;
+  }
+  console.error(`[loombridge trace] no --id given, approving the most recent run "${recent}".`);
+  return recent;
+}
+
 /** Promote the latest run's captures to the approved baseline for this trace. */
 async function runApprove(args: TraceArgs): Promise<number> {
   const paths = layoutFor(args);
-  const reportJson = path.join(paths.replayReports, `${args.id}.report.json`);
+  const id = await resolveApproveTargetId(paths, args);
+  // Nothing to approve, and the refusal has already been printed. Exit 2, NOT 1: the tier
+  // is the one `--id <id> is required` used to exit with on this exact argv, and no anchor
+  // was touched, so the game-defect tier (1) would be a verdict about nothing. A report
+  // MISSING for an id the operator NAMED is a different fact and keeps its own tier below.
+  if (id === null) return 2;
+  const reportJson = path.join(paths.replayReports, `${id}.report.json`);
   const rel = path.relative(args.root, reportJson);
 
   let raw: string;
@@ -1088,7 +1188,7 @@ async function runApprove(args: TraceArgs): Promise<number> {
     raw = await fs.readFile(reportJson, "utf8");
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-      console.error(`[loombridge trace] no report at ${rel} — run 'trace replay --id ${args.id}' first.`);
+      console.error(`[loombridge trace] no report at ${rel} — run 'trace replay --id ${id}' first.`);
       return 1;
     }
     throw error;
@@ -1099,23 +1199,38 @@ async function runApprove(args: TraceArgs): Promise<number> {
     return 1;
   }
 
+  // WHAT IS ABOUT TO BE FROZEN, not just its name. This is the consent moment for an
+  // anchor, and a name alone does not tell the operator the SIZE of what they are freezing:
+  // "the most recent run" reads the same whether it holds one frame or forty. Printed only
+  // on the DEFAULTED path, because that is the path where the tool chose the target rather
+  // than the human; an explicit `--id` prints exactly what it always did.
+  if (!args.id) {
+    const promotable = parsed.segments
+      .flatMap((s) => s.captures)
+      .filter((c) => c.artifact !== undefined).length;
+    console.error(
+      `[loombridge trace]   that run holds ${promotable} capture(s), and approving freezes them as the ` +
+        `approved baseline for "${id}".`,
+    );
+  }
+
   // An approval is a PROVENANCE record, not just a file copy: it has to say which
   // demonstration these frames belong to. Read the trace bytes first and refuse
   // (harness tier) if they are gone: a baseline that cannot name its trace is not
   // an anchor, and unified `verify` would have to treat it as unstamped anyway.
-  const traceFile = path.join(paths.replayTraces, `${args.id}.trace.json`);
+  const traceFile = path.join(paths.replayTraces, `${id}.trace.json`);
   let traceSha256: string;
   try {
     traceSha256 = sha256(await fs.readFile(traceFile));
   } catch (error) {
     console.error(
-      `[loombridge trace] cannot approve "${args.id}": its trace is unreadable at ` +
+      `[loombridge trace] cannot approve "${id}": its trace is unreadable at ` +
         `${path.relative(args.root, traceFile)} (${message(error)}). An approved baseline must bind to the demonstration it froze.`,
     );
     return 2;
   }
 
-  const baselineDir = path.join(paths.replayBaselines, args.id);
+  const baselineDir = path.join(paths.replayBaselines, id);
 
   // The approved TOLERANCE survives a re-freeze (A1). Approve replaces frames, and the
   // tolerance is a separate human decision about this trace's animation, so silently
@@ -1152,11 +1267,11 @@ async function runApprove(args: TraceArgs): Promise<number> {
     .map((c) => c.id);
   if (unreadable.length > 0) {
     console.error(
-      `[loombridge trace] cannot approve "${args.id}": ${unreadable.length} capture(s) in the latest run ` +
+      `[loombridge trace] cannot approve "${id}": ${unreadable.length} capture(s) in the latest run ` +
         `could not be decoded (${unreadable.join(", ")}). A capture gap is a harness fault, never an anchor.`,
     );
     console.error(
-      `[loombridge trace]   re-run \`loombridge trace replay --id ${args.id}\`; if the APPROVED BASELINE is the ` +
+      `[loombridge trace]   re-run \`loombridge trace replay --id ${id}\`; if the APPROVED BASELINE is the ` +
         `unreadable half (the replay output names which), remove ${path.relative(args.root, baselineDir)} and approve again.`,
     );
     return 2;
@@ -1175,11 +1290,11 @@ async function runApprove(args: TraceArgs): Promise<number> {
   if (faultedCaptures.length > 0) {
     const named = faultedCaptures.map((c) => `${c.id} (${c.harnessFault})`).join("; ");
     console.error(
-      `[loombridge trace] cannot approve "${args.id}": the latest run carries a HARNESS FAULT, so its evidence ` +
+      `[loombridge trace] cannot approve "${id}": the latest run carries a HARNESS FAULT, so its evidence ` +
         `includes frames nothing could compare: ${named}. A run the harness could not complete is never an anchor.`,
     );
     console.error(
-      `[loombridge trace]   fix the harness condition and re-run \`loombridge trace replay --id ${args.id}\`. ` +
+      `[loombridge trace]   fix the harness condition and re-run \`loombridge trace replay --id ${id}\`. ` +
         "Approving here would freeze a partial run: the captures with no frame are pruned from the baseline, " +
         "so the trace would go permanently green over the very frames that failed.",
     );
@@ -1217,13 +1332,13 @@ async function runApprove(args: TraceArgs): Promise<number> {
       .map((c) => c.id);
     if (unevidenced.length > 0) {
       console.error(
-        `[loombridge trace] cannot approve "${args.id}": the report claims a capture-aligned clock ` +
+        `[loombridge trace] cannot approve "${id}": the report claims a capture-aligned clock ` +
           `(${parsed.alignedCaptureFps} fps) but ${unevidenced.length} capture(s) carry no frame evidence ` +
           `(${unevidenced.join(", ")}). The aligned stamp is the anchor's promise that these frames were ` +
           "taken inside the pinned tick loop; without the bridge's own frame count nothing binds it to a run.",
       );
       console.error(
-        `[loombridge trace]   re-run \`loombridge trace replay --id ${args.id} --aligned-fps ${parsed.alignedCaptureFps}\` ` +
+        `[loombridge trace]   re-run \`loombridge trace replay --id ${id} --aligned-fps ${parsed.alignedCaptureFps}\` ` +
           "against a bridge that reports framesElapsed, or approve a wall-clock run instead.",
       );
       return 2;
@@ -1243,7 +1358,7 @@ async function runApprove(args: TraceArgs): Promise<number> {
     const bad = refusal(value);
     if (bad !== null) {
       console.error(
-        `[loombridge trace] cannot approve "${args.id}": the report's ${field} is not a value an anchor can hold: ` +
+        `[loombridge trace] cannot approve "${id}": the report's ${field} is not a value an anchor can hold: ` +
           `${bad}. Approving it would mint a baseline the grade-time reader refuses on every later run.`,
       );
       return 2;
@@ -1267,8 +1382,8 @@ async function runApprove(args: TraceArgs): Promise<number> {
     const dims = await captureFrameDims(parsed, paths);
     if ("error" in dims) {
       console.error(
-        `[loombridge trace] cannot approve "${args.id}" while masks are stamped: ${dims.error}. ` +
-          `Clear them first (\`loombridge trace mask --id ${args.id} --clear\`) or fix the capture.`,
+        `[loombridge trace] cannot approve "${id}" while masks are stamped: ${dims.error}. ` +
+          `Clear them first (\`loombridge trace mask --id ${id} --clear\`) or fix the capture.`,
       );
       return 2;
     }
@@ -1289,9 +1404,9 @@ async function runApprove(args: TraceArgs): Promise<number> {
           ? `${carried.frameWidth}x${carried.frameHeight}`
           : "an unrecorded size";
       console.error(
-        `[loombridge trace] cannot approve "${args.id}": the game's resolution changed ` +
+        `[loombridge trace] cannot approve "${id}": the game's resolution changed ` +
           `(${stamped} to ${dims.width}x${dims.height}): masks were approved against the old frames; ` +
-          `re-stamp with \`loombridge trace mask --id ${args.id} --set ...\` against the new frames (or --clear).`,
+          `re-stamp with \`loombridge trace mask --id ${id} --set ...\` against the new frames (or --clear).`,
       );
       console.error(
         `[loombridge trace]   the ${carried.maskRects!.length} rect(s) would hide a different share of the new ` +
@@ -1348,7 +1463,7 @@ async function runApprove(args: TraceArgs): Promise<number> {
   const manifest: TraceBaselineManifest = {
     kind: "trace-baseline",
     schemaVersion: "1",
-    traceId: args.id,
+    traceId: id,
     traceSha256,
     approvedAt: new Date().toISOString(),
     sourceReportSha256: sha256(raw),
@@ -1409,7 +1524,7 @@ async function runApprove(args: TraceArgs): Promise<number> {
     const to = clockDisciplineText(manifest.alignedCaptureFps);
     console.error(
       `[loombridge trace] the anchor's capture clock changes: ${from} to ${to}. Every later replay of ` +
-        `"${args.id}" must run under ${to}; one under the old clock refuses the pixel comparison as a ` +
+        `"${id}" must run under ${to}; one under the old clock refuses the pixel comparison as a ` +
         "harness fault rather than grading two different animation phases against each other.",
     );
   }
@@ -2610,11 +2725,19 @@ function parseArgs(args: string[]): TraceArgs | { help: true; usageError?: boole
   }
 
   // `replay-all` runs every trace, `record` DERIVES one from the scene it ends up recording
-  // (see `traceIdFromScenePath`), and `replay` falls back to the most recent trace (see
-  // `resolveReplayTargetId`), so none of the three needs --id. The rest still require one,
-  // deliberately: `approve`, `tolerance` and `mask` all touch an ANCHOR, and an operation
-  // that freezes or widens an anchor must name the anchor it touches.
-  if (sub !== "replay-all" && sub !== "record" && sub !== "replay" && !id) {
+  // (see `traceIdFromScenePath`), `replay` falls back to the most recent trace (see
+  // `resolveReplayTargetId`) and `approve` to the most recent REPORT (see
+  // `resolveApproveTargetId`), so none of those four needs --id. The rest still require one,
+  // deliberately: `tolerance` and `mask` WIDEN the gate on an existing anchor, which is the
+  // most dangerous class of change this tool makes and the one that should always name its
+  // target. (`report` requires one because it re-renders exactly what it is pointed at.)
+  if (
+    sub !== "replay-all" &&
+    sub !== "record" &&
+    sub !== "replay" &&
+    sub !== "approve" &&
+    !id
+  ) {
     console.error("[loombridge trace] --id <id> is required.");
     return { help: true, usageError: true };
   }
@@ -2807,6 +2930,11 @@ function printUsage(): void {
       "  approve     Promote the latest run's captures to the approved baseline",
       "              (.loombridge/replays/baselines/<id>/). Never takes a tolerance, and",
       "              refuses a run with an unreadable capture (a capture gap is not an anchor).",
+      "              Takes no required flags: bare `trace approve` freezes the MOST RECENT",
+      "              RUN, i.e. the newest <id>.report.json (ties broken by name), announced",
+      "              with the number of captures it is about to freeze. It searches REPORTS,",
+      "              not traces: the referent is the run you just replayed, and a trace that",
+      "              was never replayed has nothing to promote.",
       "  tolerance   Stamp the human-approved pixel drift tolerance onto the EXISTING",
       "              approved baseline (--set <fraction>). Touches no frame and no sha: it",
       "              changes the terms of the comparison, not the thing being compared.",
@@ -2821,12 +2949,12 @@ function printUsage(): void {
       "",
       "Options:",
       "  --id <id>         Trace id. Required except for replay-all (runs every trace),",
-      "                    record (derives one from the recorded scene when omitted) and",
-      "                    replay (replays the most recent trace when omitted). A given --id",
-      "                    records over that trace; a DERIVED one never does. approve,",
-      "                    tolerance and mask ALWAYS require it: they freeze or widen an",
-      "                    anchor, and that must name the anchor it touches. replay defaults",
-      "                    because it is re-runnable and produces a report, not an anchor.",
+      "                    record (derives one from the recorded scene when omitted), replay",
+      "                    (replays the most recent trace when omitted) and approve (freezes",
+      "                    the most recent RUN when omitted). A given --id records over that",
+      "                    trace; a DERIVED one never does. tolerance and mask ALWAYS require",
+      "                    it: they WIDEN the gate on an existing anchor, which is the most",
+      "                    dangerous change here and the one that must name its target.",
       "  --root <dir>      Project root containing .loombridge/ (default: cwd).",
       "  --trace <path>    Override the trace input path (replay only). It names an exact",
       "                    file, so it wins over the most-recent search; with no --id the",
