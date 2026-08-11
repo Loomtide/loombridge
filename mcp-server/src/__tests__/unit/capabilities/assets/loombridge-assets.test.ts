@@ -36,7 +36,7 @@ async function fakeImage(dir: string): Promise<string> {
 
 async function draftManifest(root: string, mode: "registry" | "generated"): Promise<AssetManifest> {
   await runPlan({ root, genre: "platformer-2d", engine: "unity", force: false, allowMissingDesignTarget: true });
-  await setDesignTarget({ root, imagePath: await fakeImage(root), mode: "generated", approve: true });
+  await setDesignTarget({ root, imagePath: await fakeImage(root), mode: "generated", kind: "rendered-unity-frame", approve: true });
   assert.equal(await runPlan({ root, genre: "platformer-2d", engine: "unity", force: false, assetMode: mode }), 1);
   const manifest = await readAssetManifest(loombridgePaths(root));
   assert.ok(manifest);
@@ -46,7 +46,7 @@ async function draftManifest(root: string, mode: "registry" | "generated"): Prom
 
 async function draftManifest3dShooter(root: string): Promise<AssetManifest> {
   await runPlan({ root, genre: "3d-shooter", engine: "unity", force: false, allowMissingDesignTarget: true });
-  await setDesignTarget({ root, imagePath: await fakeImage(root), mode: "generated", approve: true });
+  await setDesignTarget({ root, imagePath: await fakeImage(root), mode: "generated", kind: "rendered-unity-frame", approve: true });
   assert.equal(await runPlan({ root, genre: "3d-shooter", engine: "unity", force: false, assetMode: "registry" }), 1);
   const manifest = await readAssetManifest(loombridgePaths(root));
   assert.ok(manifest);

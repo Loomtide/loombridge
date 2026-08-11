@@ -117,7 +117,7 @@ function planOf(slices: SliceEntry[], genre = "platformer-2d"): SlicePlan {
 async function approveFakeDesignTarget(root: string): Promise<string> {
   const image = path.join(root, "hero-shot-source.png");
   await fs.writeFile(image, "hero-pixels-v1", "utf-8");
-  const meta = await setDesignTarget({ root, imagePath: image, mode: "generated", approve: true });
+  const meta = await setDesignTarget({ root, imagePath: image, mode: "generated", kind: "rendered-unity-frame", approve: true });
   return meta.pngSha256;
 }
 

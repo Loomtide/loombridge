@@ -39,7 +39,7 @@ async function fakeImage(dir: string, bytes = "hero-pixels-v1"): Promise<string>
 /** Approve only the frozen Design Target; leaves ASSET_MANIFEST.json absent. */
 async function approveOnlyDesignTarget(root: string): Promise<void> {
   const img = await fakeImage(root);
-  await setDesignTarget({ root, imagePath: img, mode: "generated", approve: true });
+  await setDesignTarget({ root, imagePath: img, mode: "generated", kind: "rendered-unity-frame", approve: true });
 }
 
 function registrySelection(assetId: string): ManifestRegistrySelection {

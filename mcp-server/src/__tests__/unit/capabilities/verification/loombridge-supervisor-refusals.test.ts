@@ -46,7 +46,7 @@ async function plannedAndApproved(root: string): Promise<void> {
   await runPlan({ root, genre: "platformer-2d", engine: "unity", force: false, allowMissingDesignTarget: true });
   const img = path.join(root, "src-hero.png");
   await fs.writeFile(img, "hero-pixels-v1", "utf-8");
-  await setDesignTarget({ root, imagePath: img, mode: "generated", approve: true });
+  await setDesignTarget({ root, imagePath: img, mode: "generated", kind: "rendered-unity-frame", approve: true });
   await writeApprovedAssetManifestForDesign(root);
 }
 

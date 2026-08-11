@@ -32,7 +32,7 @@ async function fakeImage(dir: string): Promise<string> {
 
 async function scaffoldApprovedRoadmap(root: string): Promise<void> {
   await runPlan({ root, genre: "platformer-2d", engine: "unity", force: false, allowMissingDesignTarget: true });
-  await setDesignTarget({ root, imagePath: await fakeImage(root), mode: "generated", approve: true });
+  await setDesignTarget({ root, imagePath: await fakeImage(root), mode: "generated", kind: "rendered-unity-frame", approve: true });
   await writeApprovedAssetManifestForDesign(root);
   assert.equal(await runPlan({ root, genre: "platformer-2d", engine: "unity", force: false, go: true }), 0);
 }
@@ -225,7 +225,7 @@ test("build --allow-ungrounded-prototype tags ungrounded when ASSETS are unappro
   const root = await tmpRoot();
   // Design Target IS approved + frozen, but the Asset Manifest is left UNAPPROVED (no writeApprovedAssetManifestForDesign).
   await runPlan({ root, genre: "platformer-2d", engine: "unity", force: false, allowMissingDesignTarget: true });
-  await setDesignTarget({ root, imagePath: await fakeImage(root), mode: "generated", approve: true });
+  await setDesignTarget({ root, imagePath: await fakeImage(root), mode: "generated", kind: "rendered-unity-frame", approve: true });
 
   const code = await runBuild({ root, allowUngroundedPrototype: true });
   assert.equal(code, 0, "escaping the asset gate proceeds with --allow-ungrounded-prototype");
@@ -242,7 +242,7 @@ test("build --allow-ungrounded-prototype tags ungrounded when ASSETS are unappro
 test("build mints currentBuild + captureManifest from capturePack after approved target", async () => {
   const root = await tmpRoot();
   await runPlan({ root, genre: "platformer-2d", engine: "unity", force: false, allowMissingDesignTarget: true });
-  await setDesignTarget({ root, imagePath: await fakeImage(root), mode: "generated", approve: true });
+  await setDesignTarget({ root, imagePath: await fakeImage(root), mode: "generated", kind: "rendered-unity-frame", approve: true });
   await writeApprovedAssetManifestForDesign(root);
 
   const code = await runBuild({ root, intent: "add a coin pickup" });
@@ -367,7 +367,7 @@ test("rebuilding an upstream slice invalidates approved transitive dependents", 
 test("end-to-end: plan → build → verify → doneness lights up the §3a supervisor", async () => {
   const root = await tmpRoot();
   await runPlan({ root, genre: "platformer-2d", engine: "unity", force: false, allowMissingDesignTarget: true });
-  const design = await setDesignTarget({ root, imagePath: await fakeImage(root), mode: "generated", approve: true });
+  const design = await setDesignTarget({ root, imagePath: await fakeImage(root), mode: "generated", kind: "rendered-unity-frame", approve: true });
   await writeApprovedAssetManifestForDesign(root);
 
   // build mints currentBuild — no test simulation needed.
@@ -468,7 +468,7 @@ test("build SLICE-mode tags currentBuild ungrounded when escaping the unapproved
     await runPlan({ root, genre: "ignored-when-contract-present", genreContractPath, engine: "unity", force: false, allowMissingDesignTarget: true }),
     0,
   );
-  await setDesignTarget({ root, imagePath: await fakeImage(root), mode: "generated", approve: true });
+  await setDesignTarget({ root, imagePath: await fakeImage(root), mode: "generated", kind: "rendered-unity-frame", approve: true });
   const paths = loombridgePaths(root);
   assert.ok(await readSlicePlan(paths), "precondition: promotion wrote SLICES.json (slice-build path is taken)");
 
