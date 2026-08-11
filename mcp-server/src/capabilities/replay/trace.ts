@@ -1945,7 +1945,7 @@ async function pruneUndeclaredBaselines(dir: string, pngs: TraceBaselinePng[]): 
  * second, drifting CLI).
  *
  * THIS PATH RENDERS THE HTML. It used to pass `html: false`, on the reasoning that "the
- * unified report links the JSON" — true, and beside the point: the two doors write into
+ * unified report links the JSON": true, and beside the point: the two doors write into
  * the SAME `reports/` directory, so a verify that rewrote only the JSON left whatever page
  * an earlier `trace replay` had rendered sitting next to it, describing a different run.
  * Observed on a real project: a red `verify --live` next to a green page from 4 minutes
@@ -2601,15 +2601,19 @@ export function printSummary(
     );
   }
   if (shouldSuggestTolerance(artifact)) {
-    for (const line of driftSuggestionLines({ ...facts, traceId: id })) {
-      console.error(`[loombridge trace] ${line}`);
-    }
-    // Masks for CONCENTRATED drift, tolerance for diffuse: both are printed when both
-    // could help (P4), and the mask branch is the one that can refuse outright.
+    // THE MASK VERDICT LEADS. Masks for CONCENTRATED drift, tolerance for diffuse: both are
+    // printed when both could help (P4), and the mask branch is the one that can refuse
+    // outright. It goes FIRST because it is the stronger signal: it either names the region
+    // and the command, or it says in so many words that no honest mask exists here, which
+    // is what decides whether a tolerance is the remaining option at all. Led by the
+    // tolerance line, an operator reads "widen it" and never gets to the reason.
     if (artifact.maskSuggestion) {
       for (const line of maskSuggestionLines(artifact.maskSuggestion, id)) {
         console.error(`[loombridge trace] ${line}`);
       }
+    }
+    for (const line of driftSuggestionLines({ ...facts, traceId: id })) {
+      console.error(`[loombridge trace] ${line}`);
     }
   }
   console.error(`[loombridge trace] report → ${path.relative(root, reportJson)}`);
@@ -3052,7 +3056,9 @@ function printUsage(): void {
       "                    trace's own id names the report.",
       "  --flat            Lay replay artifacts directly under --root (traces/, reports/,",
       "                    baseline/) with no nested .loombridge/ — the mini-game workspace layout.",
-      "  --no-html         Skip the HTML report.",
+      "  --no-html         Skip the HTML report. Any page from an earlier run is REMOVED",
+      "                    rather than left beside this run's verdict; `trace report --id`",
+      "                    renders one from the report on disk whenever you want it.",
       "  --strict-visual   Make a visual drift from baseline a failure.",
       "  --speed <n>       replay only: pacing multiplier, 1 to 8 (default: the baseline's",
       "                    stamped pacing, else 1).",

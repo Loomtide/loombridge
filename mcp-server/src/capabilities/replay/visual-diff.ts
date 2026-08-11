@@ -990,6 +990,19 @@ export type MaskSuggestion =
        */
       exact: boolean;
     }
+  | {
+      /**
+       * A previous run's drift WAS compared, and none of it landed where this run's did.
+       * Distinct from `first-run`, which means there was nothing to compare at all: the
+       * two used to share a word, and so shared the "re-run once more to characterize"
+       * advice, which an operator can follow forever without the verdict ever changing.
+       */
+      kind: "moved";
+      /** The captures that drifted in the PREVIOUS run, sorted. */
+      previousCaptures: string[];
+      /** The captures that drifted in THIS run, sorted. */
+      currentCaptures: string[];
+    }
   | { kind: "diffuse"; refusal?: DriftClusterRefusal }
   | { kind: "suggest"; rects: MaskRect[]; captures: number; fraction: number };
 
@@ -1038,6 +1051,12 @@ export function deriveMaskSuggestion(
   const reproduced: string[] = [];
   let everyReproductionExact = true;
   const nondeterministic: CaptureDriftEvidence[] = [];
+  // A capture whose predecessor drifted but whose fingerprint could NOT be read. It makes
+  // the previous run unusable as a comparison, which is a different thing from a
+  // comparison that ran and found nothing in common, and only the latter may be reported
+  // as such. Without this, an unreadable (or hand-mangled) grid would be laundered into
+  // the confident claim "none of the previous run's drift recurs here".
+  let uncomparable = false;
   for (const capture of drifted) {
     const before = previousById.get(capture.captureId);
     if (!before?.drifted) continue;
@@ -1055,7 +1074,10 @@ export function deriveMaskSuggestion(
     // the capture falls through to `first-run`: ask for another run rather than name a rect.
     const beforeGrid = asDriftGrid(before.driftGrid);
     const nowGrid = asDriftGrid(capture.driftGrid);
-    if (beforeGrid === null || nowGrid === null) continue;
+    if (beforeGrid === null || nowGrid === null) {
+      uncomparable = true;
+      continue;
+    }
     if (driftGridSimilarity(beforeGrid, nowGrid) >= REPRODUCED_DRIFT_SIMILARITY) {
       reproduced.push(capture.captureId);
       everyReproductionExact = false;
@@ -1070,7 +1092,29 @@ export function deriveMaskSuggestion(
   if (reproduced.length > 0) {
     return { kind: "identical", captures: reproduced.sort(), exact: everyReproductionExact };
   }
-  if (nondeterministic.length === 0) return { kind: "first-run" };
+  if (nondeterministic.length === 0) {
+    // A COMPARISON HAPPENED AND SAID SOMETHING. `first-run` used to be the fallback for
+    // BOTH "there is no previous run" and "there is one, and none of its drift lines up
+    // with this run's", and the two are opposite facts wearing one word. The second
+    // printed "re-run replay once more to characterize the drift", which an operator on a
+    // real project followed, and followed again: drift that alternates between captures
+    // (or between regions) never lines up with the immediately preceding run, so the
+    // instruction repeats forever while the run it asks for has already happened twice.
+    // Observed: three consecutive runs, three identical "re-run once more" lines.
+    //
+    // The signal is the INPUT, not a guess: `previous` is this run's predecessor evidence
+    // as read off the report on disk, so "a prior run recorded drift" is a fact rather
+    // than an inference. Nothing about the refusal logic moves; only which of two facts
+    // gets reported. And the claim is only made when it can be MADE: a fingerprint this
+    // run could not read leaves the question open, which is still "run it again".
+    const priorDrifted = previous.filter((p) => p.drifted).map((p) => p.captureId).sort();
+    if (uncomparable || priorDrifted.length === 0) return { kind: "first-run" };
+    return {
+      kind: "moved",
+      previousCaptures: priorDrifted,
+      currentCaptures: drifted.map((c) => c.captureId).sort(),
+    };
+  }
   const unclustered = nondeterministic.find((c) => c.driftClusters === undefined);
   if (unclustered) {
     return {
@@ -1129,6 +1173,18 @@ export function formatMaskSetFlag(rect: MaskRect): string {
 export const DETERMINISTIC_DRIFT_WARNING =
   "that is a deterministic change, not ambient noise; investigate before masking.";
 
+/** At most this many capture ids are spelled out before the list is summarized. */
+const MAX_LISTED_CAPTURES = 4;
+
+/**
+ * A capture-id list a human can read. Real traces carry a dozen or more captures, and a
+ * refusal that unrolled every id would bury the sentence explaining it.
+ */
+function captureList(ids: readonly string[]): string {
+  if (ids.length <= MAX_LISTED_CAPTURES) return ids.join(", ");
+  return `${ids.slice(0, MAX_LISTED_CAPTURES).join(", ")} +${ids.length - MAX_LISTED_CAPTURES} more`;
+}
+
 /** The honest-refusal tail every "masks do not fit" sentence ends with. */
 const DIFFUSE_TAIL = "investigate it, or record the game-time alignment limit (see the RFC).";
 
@@ -1175,6 +1231,20 @@ export function maskSuggestionLines(suggestion: MaskSuggestion, traceId: string)
           ? `the drift is IDENTICAL across two runs: ${DETERMINISTIC_DRIFT_WARNING}`
           : `at least ${driftPercentText(REPRODUCED_DRIFT_SIMILARITY)}% of the drifted pixels reproduce across ` +
             `two runs: ${DETERMINISTIC_DRIFT_WARNING}`,
+      ];
+    case "moved":
+      return [
+        `the previous run WAS compared, and none of its drift recurs here: it drifted in ` +
+          `${captureList(suggestion.previousCaptures)}, this run drifted in ` +
+          `${captureList(suggestion.currentCaptures)}. Drift that lands somewhere new each run is not a ` +
+          "region, so there is nothing a mask could honestly cover.",
+        // NO PLACEHOLDER COMMAND HERE, and no pointer at a neighbouring line either.
+        // `driftSuggestionLines` prints the tolerance route with a real computed value
+        // under the same gate as this, and handing an operator a `--set <fraction>` to
+        // fill in themselves, right above the one already filled in, is how a command
+        // gets typed with the placeholder still in it.
+        "another replay is not the next step (this one already characterized it): the remaining choices " +
+          "are to investigate the nondeterminism, or to consent to a tolerance.",
       ];
     case "diffuse":
       return [diffuseLine(suggestion.refusal)];

@@ -34,7 +34,10 @@ import {
   type UnifiedVerifyReport,
 } from "../../../../capabilities/verification/unified/report.js";
 import { run as runTrace } from "../../../../capabilities/replay/trace.js";
-import { DEFAULT_DRIFT_FRACTION } from "../../../../capabilities/replay/visual-diff.js";
+import {
+  DEFAULT_DRIFT_FRACTION,
+  type MaskSuggestion,
+} from "../../../../capabilities/replay/visual-diff.js";
 import { run as runMinigame } from "../../../../capabilities/minigame/minigame.js";
 import { resolveCliProjectPin } from "../../../../capabilities/setup/cli-project-pin.js";
 import { createDraftAssetManifest, type AssetManifest } from "../../../../capabilities/assets/asset-manifest.js";
@@ -1111,6 +1114,75 @@ test("MX8: --live prints the MASK verdict too, in the trace verb's exact words",
       /flow: the drift is IDENTICAL across two runs: that is a deterministic change, not ambient noise; investigate before masking\./,
     );
     assert.doesNotMatch(refused.lines.join("\n"), /trace mask --id happy-path-2 --set/);
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+    await fs.rm(workspace, { recursive: true, force: true });
+  }
+});
+
+/*
+ * The verify door's half of the mask-surfacing fix (`replay-pixel-masks.test.ts` owns the
+ * trace door's, and derives these verdicts from real pixels; here they are handed to the
+ * seam, because the engine needs a live editor).
+ *
+ * The operator this was found on hit the drift through `verify --live`, so the ORDER has to
+ * hold here specifically: they read "re-approve the tolerance with …" first, and the reason
+ * no honest mask existed was below it.
+ *
+ * LITMUS, run 2026-08-11. The two blocks in `flowSection` swapped back so
+ * `driftSuggestionLines` prints first:
+ *
+ *   ✖ the mask verdict LEADS the tolerance advice at the verify door too
+ *     AssertionError [ERR_ASSERTION]: the mask verdict must lead: a tolerance is the
+ *     blunter instrument
+ *
+ * and with the whole `if (maskSuggestion)` block deleted instead:
+ *
+ *   ✖ the mask verdict LEADS the tolerance advice at the verify door too
+ *     AssertionError [ERR_ASSERTION]: The input did not match the regular expression
+ *     /flow: drift is diffuse; masks cannot cover it honestly/. Input:
+ *
+ *     '[loombridge verify] plan for /var/folders/.../unified-cli-maskorder-GqgiIK …
+ *
+ * Restored, it passes.
+ */
+test("the mask verdict LEADS the tolerance advice at the verify door too", async () => {
+  const root = await unityLikeProject("unified-cli-maskorder-");
+  const workspace = await tmpDir("unified-cli-ws-");
+  try {
+    await plantApprovedTrace(root, "happy-path-2");
+    const run = async (maskSuggestion: MaskSuggestion): Promise<string> => {
+      const { lines } = await captured(() =>
+        runUnifiedVerify({
+          root,
+          strict: false,
+          live: true,
+          workspace,
+          deps: {
+            async runFlowTrace() {
+              return { ...driftedFlow({ driftCaptures: 2 }), maskSuggestion };
+            },
+          },
+        }),
+      );
+      return lines.join("\n");
+    };
+
+    // The verdict the human's run actually reached, and never got to read.
+    const tooLoose = await run({ kind: "diffuse", refusal: { kind: "too-loose", tightness: 0.249 } });
+    assert.match(tooLoose, /flow: drift is diffuse; masks cannot cover it honestly/);
+    assert.match(tooLoose, /under the 60% tightness bar, so they are mostly unchanged frame/);
+    assert.doesNotMatch(tooLoose, /"?too-loose"?/, "the reason is explained, never echoed as a token");
+    assert.ok(
+      tooLoose.indexOf("masks cannot cover it honestly") < tooLoose.indexOf("re-approve the tolerance"),
+      `the mask verdict must lead: a tolerance is the blunter instrument\n${tooLoose}`,
+    );
+
+    // …and the circle: a comparison happened, so no second characterization run is asked for.
+    const moved = await run({ kind: "moved", previousCaptures: ["a"], currentCaptures: ["b"] });
+    assert.match(moved, /flow: the previous run WAS compared, and none of its drift recurs here/);
+    assert.doesNotMatch(moved, /re-run replay once more/);
+    assert.ok(moved.indexOf("previous run WAS compared") < moved.indexOf("re-approve the tolerance"), moved);
   } finally {
     await fs.rm(root, { recursive: true, force: true });
     await fs.rm(workspace, { recursive: true, force: true });

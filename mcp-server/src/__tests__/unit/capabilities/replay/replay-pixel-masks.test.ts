@@ -1091,6 +1091,11 @@ test("MX1: a previous report with NO fingerprint (or a mangled one) asks for ano
   // evidence is not evidence, so it lands on `first-run`, and every malformed shape lands
   // there too rather than being coerced into agreement OR into disagreement (the direction
   // that would MINT a suggestion).
+  //
+  // `first-run` here is load-bearing and is NOT the `moved` case: the predecessor drifted on
+  // this very capture, so "none of its drift recurs here" would be a claim about a
+  // comparison that could not be made. An unreadable fingerprint leaves the question open,
+  // and the open question is what "run it again" is for.
   const clusters = [{ x: 10, y: 10, w: 7, h: 7 }];
   const current = [
     { captureId: "cap", drifted: true, driftDiffSha: "b", driftGrid: gridOfRects(clusters), driftClusters: clusters },
@@ -1146,6 +1151,228 @@ test("TWO-RUN LITMUS: an IDENTICAL drift twice prints the regression warning, ne
       "the drift is IDENTICAL across two runs: that is a deterministic change, not ambient noise; " +
         "investigate before masking.",
     ]);
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+// ══════ THE MASK VERDICT REACHES THE HUMAN (the second artifact-honesty defect) ══════
+//
+// Same shape as the stale-HTML bug: a decision-relevant fact that exists in the artifacts
+// and never reaches the person deciding. Observed on a real project, in two ways.
+//
+// (1) THE CIRCLE. The human was told "re-run replay once more to characterize the drift
+// before masking", did exactly that, and was told it again. `first-run` was the fallback
+// for BOTH "no previous run" and "a previous run exists and none of its drift lines up
+// with this one's", so a drift that lands somewhere new each run repeats the instruction
+// forever while the run it asks for has already happened. Their words: "I ran both but
+// it's not clear what happened."
+//
+// (2) THE REFUSAL, BURIED. The run had reached a verdict (`diffuse` / `too-loose`: any
+// mask covering that drift would blank roughly four times more frame than actually
+// changed, so no honest mask exists) and the tolerance advice was printed ABOVE it, which
+// is the blunter instrument leading the stronger signal.
+//
+// Nothing about the refusal LOGIC changes here. The `too-loose` guard is anti-laundering
+// and works; these tests are about its conclusion being said out loud, in order.
+
+/** Grade twice, feeding run one's report forward exactly as a real replay would. */
+async function gradeTwice(
+  root: string,
+  captureIds: string[],
+  first: () => Promise<void>,
+  second: () => Promise<void>,
+): Promise<{ artifact: ReplayRunArtifact; out: string }> {
+  await first();
+  const one = await grade(root, "demo", captureIds);
+  await fs.writeFile(
+    path.join(standardReplayLayout(root).replayReports, "demo.report.json"),
+    `${JSON.stringify(one.artifact, null, 2)}\n`,
+  );
+  await second();
+  return grade(root, "demo", captureIds);
+}
+
+/**
+ * The real print site for the `trace` door. `printSummary` is what an operator reads, and
+ * driving it (rather than `maskSuggestionLines` alone) is the difference between pinning a
+ * sentence and pinning that the sentence is PRINTED.
+ */
+async function summaryOf(root: string, artifact: ReplayRunArtifact): Promise<string> {
+  const { out } = await captured(async () => {
+    printSummary(root, "demo", artifact, path.join(root, "r.json"), path.join(root, "r.html"), true);
+    return 0;
+  });
+  return out;
+}
+
+/*
+ * LITMUS, run 2026-08-11. The `moved` branch removed from `deriveMaskSuggestion` (i.e.
+ * `if (nondeterministic.length === 0) return { kind: "first-run" };`, as it shipped):
+ *
+ *   ✖ THE CIRCLE: a second run whose drift landed elsewhere is NOT told to re-run again
+ *     AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+ *     'first-run' !== 'moved'
+ *
+ * and, with the kind assertion removed so the print assertion is reached:
+ *
+ *   ✖ THE CIRCLE: a second run whose drift landed elsewhere is NOT told to re-run again
+ *     AssertionError [ERR_ASSERTION]: the operator has already done the characterization
+ *     run; asking again is the loop they were stuck in
+ *
+ * Restored, it passes.
+ */
+test("THE CIRCLE: a second run whose drift landed elsewhere is NOT told to re-run again", async () => {
+  const root = await approvedProject("demo", ["a", "b"]);
+  try {
+    const clean = pngWithRects([]);
+    const drift = pngWithRects([{ x: 10, y: 10, w: 10, h: 10 }]);
+    const write = async (a: Buffer, b: Buffer): Promise<void> => {
+      await fs.writeFile(actualPngPath(root, "demo", "a"), a);
+      await fs.writeFile(actualPngPath(root, "demo", "b"), b);
+    };
+
+    // RUN 1 drifts in capture `a`. RUN 2 drifts in capture `b`. Both reports are complete
+    // and readable; the drift simply moved, which is what a real animated frame does.
+    const second = await gradeTwice(
+      root,
+      ["a", "b"],
+      () => write(drift, clean),
+      () => write(clean, drift),
+    );
+
+    assert.equal(second.artifact.maskSuggestion?.kind, "moved");
+    assert.deepEqual(second.artifact.maskSuggestion, {
+      kind: "moved",
+      previousCaptures: ["a"],
+      currentCaptures: ["b"],
+    });
+
+    const out = await summaryOf(root, second.artifact);
+    assert.doesNotMatch(
+      out,
+      /re-run replay once more/,
+      "the operator has already done the characterization run; asking again is the loop they were stuck in",
+    );
+    // …and what IS said names both sides of the comparison that actually happened.
+    assert.match(out, /the previous run WAS compared, and none of its drift recurs here/);
+    assert.match(out, /it drifted in a, this run drifted in b/);
+    assert.match(out, /another replay is not the next step/);
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test("a GENUINE first run still asks for the characterization run (the advice is not simply deleted)", async () => {
+  // The other half of the split, and the reason it is a split rather than a deletion: with
+  // nothing to compare against, "run it again" is the honest and only next step.
+  const root = await approvedProject();
+  try {
+    await fs.writeFile(actualPngPath(root, "demo"), pngWithRects([{ x: 10, y: 10, w: 10, h: 10 }]));
+    const first = await grade(root);
+    assert.deepEqual(first.artifact.maskSuggestion, { kind: "first-run" });
+    assert.match(await summaryOf(root, first.artifact), /re-run replay once more to characterize/);
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+/*
+ * LITMUS, run 2026-08-11. The `if (artifact.maskSuggestion)` block deleted from
+ * `printSummary` (the verdict derived, written to the report, and never said):
+ *
+ *   ✖ a TOO-LOOSE refusal is PRINTED, in the human's terms, with no re-run advice
+ *     AssertionError [ERR_ASSERTION]: The input did not match the regular expression
+ *     /drift is diffuse; masks cannot cover it honestly/. Input:
+ *
+ *     '[loombridge trace] demo: PASS\n' +
+ *       '[loombridge trace] visual drift: cap (4.00%)\n' +
+ *       '[loombridge trace] pixel-drift regression (exit 1): actuation passed, 1 capture(s) …
+ *
+ * And with the block restored but the two print blocks swapped back (tolerance first, as it
+ * shipped), the mask line IS present and the ordering assertion is what fails:
+ *
+ *   ✖ a TOO-LOOSE refusal is PRINTED, in the human's terms, with no re-run advice
+ *     AssertionError [ERR_ASSERTION]: the mask verdict must lead the tolerance advice:
+ *     …
+ *     [loombridge trace] pixel drift only: max 4% across 1 capture(s); if this game
+ *       animates, re-approve the tolerance with `loombridge trace tolerance --id demo --set 0.02`
+ *     [loombridge trace] this value applies to every capture in the trace: …
+ *     [loombridge trace] drift is diffuse; masks cannot cover it honestly: the rects that
+ *       would cover it are only 59.7% drifted pixels, under the 60% tightness bar, …
+ *
+ * Both restored, it passes.
+ */
+test("a TOO-LOOSE refusal is PRINTED, in the human's terms, with no re-run advice", async () => {
+  const root = await approvedProject();
+  try {
+    // FOUR 10x10 BLOBS, two columns 37px apart: the `MIN_CLUSTER_TIGHTNESS` fixture below,
+    // reused because it is the shape that lands on `too-loose`. Four components do not fit
+    // in three rects, so the closest pair merges and the merged box swallows the gap as
+    // unchanged frame. Shifted 8px sideways between runs, which is far enough that the
+    // drift does not REPRODUCE (a new drift, not the game changing) while still sharing
+    // grid cells (the same region, not a new finding). Derived through the real grader
+    // rather than hand-written, so the verdict under test is one a replay can actually
+    // produce.
+    const blobs = (dx: number) => [
+      { x: dx, y: 0, w: 10, h: 10 },
+      { x: dx, y: 37, w: 10, h: 10 },
+      { x: 60 + dx, y: 0, w: 10, h: 10 },
+      { x: 60 + dx, y: 37, w: 10, h: 10 },
+    ];
+    const second = await gradeTwice(
+      root,
+      ["cap"],
+      async () => void (await fs.writeFile(actualPngPath(root, "demo"), pngWithRects(blobs(0)))),
+      async () => void (await fs.writeFile(actualPngPath(root, "demo"), pngWithRects(blobs(8)))),
+    );
+
+    const suggestion = second.artifact.maskSuggestion;
+    assert.equal(suggestion?.kind, "diffuse", JSON.stringify(suggestion));
+    assert.equal(
+      suggestion?.kind === "diffuse" && suggestion.refusal?.kind,
+      "too-loose",
+      `expected the tightness refusal, got ${JSON.stringify(suggestion)}`,
+    );
+
+    const out = await summaryOf(root, second.artifact);
+    // REQUIREMENT 1: what it refuses, and why, in terms an operator can act on, never a
+    // bare `kind` string, and never only in the JSON.
+    assert.match(out, /drift is diffuse; masks cannot cover it honestly/);
+    assert.match(out, /under the 60% tightness bar, so they are mostly unchanged frame/);
+    assert.doesNotMatch(out, /"too-loose"/, "the reason is explained, not echoed as a token");
+    // …and the characterization run is not asked for: one already happened.
+    assert.doesNotMatch(out, /re-run replay once more/);
+
+    // REQUIREMENT 4: the verdict LEADS. A tolerance is the blunter instrument, and an
+    // operator who reads "widen it" first never reaches the reason no mask exists.
+    const verdictAt = out.indexOf("masks cannot cover it honestly");
+    const toleranceAt = out.indexOf("re-approve the tolerance");
+    assert.ok(verdictAt >= 0 && toleranceAt >= 0, out);
+    assert.ok(verdictAt < toleranceAt, `the mask verdict must lead the tolerance advice:\n${out}`);
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test("when a mask IS suggestible the COMMAND is printed, not just the geometry", async () => {
+  // Requirement 3, at the print site: a human must never hand-assemble
+  // `--set <captureId>:<x>,<y>,<w>x<h>@<reason>` out of the report JSON.
+  const root = await approvedProject();
+  try {
+    const second = await gradeTwice(
+      root,
+      ["cap"],
+      async () =>
+        void (await fs.writeFile(actualPngPath(root, "demo"), pngWithRects([{ x: 10, y: 10, w: 10, h: 10 }]))),
+      async () =>
+        void (await fs.writeFile(actualPngPath(root, "demo"), pngWithRects([{ x: 12, y: 10, w: 10, h: 10 }]))),
+    );
+    assert.equal(second.artifact.maskSuggestion?.kind, "suggest");
+    const out = await summaryOf(root, second.artifact);
+    assert.match(out, /loombridge trace mask --id demo --set cap:12,10,10x10@ambient-animation/);
+    // The verdict leads here too: this is the case where it carries a command.
+    assert.ok(out.indexOf("trace mask --id demo") < out.indexOf("re-approve the tolerance"), out);
   } finally {
     await fs.rm(root, { recursive: true, force: true });
   }
@@ -1304,7 +1531,17 @@ test("drift in an UNRELATED region across two runs is two findings, not one mask
       driftClusters: [{ x: 80, y: 80, w: 5, h: 5 }],
     },
   ];
-  assert.deepEqual(deriveMaskSuggestion(current, previous, W, H), { kind: "first-run" });
+  // `moved`, NOT `suggest`: the invariant this test guards ("two findings, not one mask") is
+  // that no rect is ever offered here, and it holds. The WORD changed on purpose. Both runs
+  // are readable and neither drift lands where the other did, so the honest report is that a
+  // comparison happened and found nothing in common. It used to be `first-run`, which prints
+  // "re-run replay once more to characterize the drift" at an operator who has just done
+  // exactly that, forever: see `deriveMaskSuggestion`.
+  assert.deepEqual(deriveMaskSuggestion(current, previous, W, H), {
+    kind: "moved",
+    previousCaptures: ["cap"],
+    currentCaptures: ["cap"],
+  });
 
   // The bounding boxes of those same two drifts, once ONE distant speck is added to run one,
   // DO overlap: the old rule would have called this the same region and offered a rect.
@@ -1322,8 +1559,8 @@ test("drift in an UNRELATED region across two runs is two findings, not one mask
       W,
       H,
     )?.kind,
-    "first-run",
-    "a speck that stretches a hull does not put two drifts in the same cells",
+    "moved",
+    "a speck that stretches a hull does not put two drifts in the same cells (and still no rect)",
   );
 });
 

@@ -649,16 +649,18 @@ async function flowSection(
       // an operator who only ever runs `verify --live` must get the same actionable exit
       // from a pixel-only failure, naming `trace tolerance` (never `trace approve`).
       if (suggestTolerance) {
-        for (const line of driftSuggestionLines({ ...drift, traceId: asset.id })) {
-          console.error(`${TAG} flow: ${line}`);
-        }
-        // …and the mask half of the same exit, under the same gate and in the same words:
+        // The mask half FIRST, in the same order and the same words the trace verb uses:
         // masks for concentrated drift, tolerance for diffuse, and the refusals (a
-        // deterministic change, a diffuse drift, a single run) printed rather than hidden.
+        // deterministic change, a diffuse drift, a drift that moved, a single run) printed
+        // rather than hidden. The verdict leads because it is what decides whether a
+        // tolerance is the remaining option; see `printSummary` for the full reasoning.
         if (maskSuggestion) {
           for (const line of maskSuggestionLines(maskSuggestion, asset.id)) {
             console.error(`${TAG} flow: ${line}`);
           }
+        }
+        for (const line of driftSuggestionLines({ ...drift, traceId: asset.id })) {
+          console.error(`${TAG} flow: ${line}`);
         }
       }
       outcomes.push({

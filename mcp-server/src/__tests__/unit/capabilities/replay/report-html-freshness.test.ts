@@ -186,7 +186,7 @@ test("THE REPRODUCTION: a failing verify REPLACES the page a passing `trace repl
   const baseline = tinyPng(10);
   const { root, paths } = await projectWithApprovedTrace(baseline);
   try {
-    // 13:38 — the standalone door replays the trace and it MATCHES the frozen baseline.
+    // 13:38, the standalone door replays the trace and it MATCHES the frozen baseline.
     const first = await captured(() =>
       runTrace(["replay", "--id", "demo", "--root", root], { clientFactory: scriptedClient(baseline) }),
     );
@@ -199,7 +199,7 @@ test("THE REPRODUCTION: a failing verify REPLACES the page a passing `trace repl
     // make both of these assertions true forever.
     assert.match(passingHtml, /vstatus vstatus-match/, "the page a human would open shows the green run");
 
-    // 13:42 — `verify --live` re-drives the SAME trace against a game that now renders a
+    // 13:42, `verify --live` re-drives the SAME trace against a game that now renders a
     // different frame. This is the exact seam the unified door uses (`runFlowTrace`).
     const drifted = tinyPng(250);
     const second = await captured(() =>
