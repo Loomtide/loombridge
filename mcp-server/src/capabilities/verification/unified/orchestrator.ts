@@ -145,6 +145,16 @@ export interface UnifiedSectionDeps {
        */
       suggestTolerance: boolean;
       /**
+       * The absolute path of the HTML page this replay rendered for THIS run.
+       *
+       * REQUIRED, so the summary always has a page to name. The trace engine renders one
+       * on every replay it performs and deletes any older page it does not overwrite, so
+       * an optional field here could only mean "the operator gets no link", which is the
+       * state this seam was fixed out of: `verify` printed the JSON, the human went looking
+       * for a page, and the one on disk was a previous run's.
+       */
+      htmlPath: string;
+      /**
        * Q3: the mask verdict for this run, derived ONCE in `applyVisualDiff` from this
        * report and the previous one on disk. Optional here and only here, because
        * "nothing drifted" genuinely has no verdict to carry; the gating of whether it may
@@ -170,12 +180,17 @@ async function realDeps(): Promise<UnifiedSectionDeps> {
     },
     async runFlowTrace(layout, id, opts) {
       const { replayTraceForVerify, shouldSuggestTolerance } = await import("../../replay/trace.js");
-      const { artifact, exitTier, drift, maskSuggestion } = await replayTraceForVerify(layout, id, opts);
+      const { artifact, exitTier, drift, htmlPath, maskSuggestion } = await replayTraceForVerify(
+        layout,
+        id,
+        opts,
+      );
       // The suggestion is gated on the ARTIFACT, by the SAME predicate the trace verb
       // uses, so neither door can offer "widen the tolerance" for a harness fault.
       return {
         status: artifact.status,
         exitTier,
+        htmlPath,
         ...drift,
         suggestTolerance: shouldSuggestTolerance(artifact),
         ...(maskSuggestion ? { maskSuggestion } : {}),
@@ -628,11 +643,8 @@ async function flowSection(
   for (const asset of traces) {
     const before = await fingerprintReport(asset.paths.report);
     try {
-      const { status, exitTier, suggestTolerance, maskSuggestion, ...drift } = await deps.runFlowTrace(
-        layout,
-        asset.id,
-        { strictVisual: true, projectPathCanonical },
-      );
+      const { status, exitTier, suggestTolerance, maskSuggestion, htmlPath, ...drift } =
+        await deps.runFlowTrace(layout, asset.id, { strictVisual: true, projectPathCanonical });
       // R1's suggestion loop, at the unified door and in the SAME words as the trace verb:
       // an operator who only ever runs `verify --live` must get the same actionable exit
       // from a pixel-only failure, naming `trace tolerance` (never `trace approve`).
@@ -655,6 +667,10 @@ async function flowSection(
         status,
         exit: exitTier,
         drift,
+        // The page THIS replay rendered. The catch below deliberately has no counterpart:
+        // a trace that threw produced no run, so there is nothing to link, and the engine
+        // has already removed or overwritten whatever page was there.
+        htmlPath: reportPathFor(root, htmlPath) ?? htmlPath,
         ...(await bindReport(root, asset.paths.report, before)),
       });
     } catch (error) {
@@ -686,6 +702,10 @@ async function flowSection(
     anchored: traces.length > 0,
     reportPath: worst.reportPath,
     reportSha256: worst.reportSha256,
+    // The page for the asset whose verdict this section is REPORTING, chosen by the same
+    // `worst` rule as the JSON above it, so the link and the status word can never come
+    // from two different traces.
+    ...(worst.htmlPath ? { htmlPath: worst.htmlPath } : {}),
     ...(worst.note ? { note: worst.note } : {}),
     assets: outcomes,
   };
@@ -1050,12 +1070,23 @@ export function summaryLines(report: UnifiedVerifyReport, live: boolean): string
       ? ` [${section.assets.map(assetDetail).join(", ")}]`
       : "";
     const where = section.reportPath ? ` → ${section.reportPath}` : "";
+    // THE PAGE IS NAMED WHEREVER THE JSON IS (the whole point of carrying `htmlPath` up):
+    // a human told only about a verdict file goes looking for the pictures, and the file
+    // they find may be another run's. The spelling is `trace replay`'s own `html   → …`,
+    // deliberately, so the two doors read identically. It is a closure rather than a
+    // suffix on `where` because it is a SECOND line, and because the drift branch below
+    // returns early: a suffix would have to be repeated at both exits, which is exactly
+    // how one of them comes to lose it.
+    const withHtml = (line: string): void => {
+      lines.push(line);
+      if (section.htmlPath) lines.push(`${TAG} ${name}: html   → ${section.htmlPath}`);
+    };
     // R3/A3: DRIFT NAMES ITSELF, and it leads. The engine's own word for a trace whose
     // actuation succeeded is `pass`, so the previous line read "flow: pass (exit 1)" and
     // taught readers to distrust either the word or the number. The failing thing goes
     // first; the actuation result stays as the qualifier that it is.
     if (section.drift && section.drift.driftCaptures > 0) {
-      lines.push(
+      withHtml(
         `${TAG} ${name}: ${driftRegressionLine({ ...section.drift, exitTier: section.exit })}` +
           `${detail}${where}`,
       );
@@ -1071,7 +1102,7 @@ export function summaryLines(report: UnifiedVerifyReport, live: boolean): string
     // verbatim (the machine-readable `anchored` field sits beside it), so no consumer has to
     // learn a new status token.
     const word = section.exit === 0 && !section.anchored ? `${section.status} (unanchored)` : section.status;
-    lines.push(`${TAG} ${name}: ${word} (${qualifier})${detail}${anchor}${where}`);
+    withHtml(`${TAG} ${name}: ${word} (${qualifier})${detail}${anchor}${where}`);
   }
   if (report.notRun.length > 0) {
     // Name EVERY unmeasured anchor (A6). A partial that exits 0 must still say out loud

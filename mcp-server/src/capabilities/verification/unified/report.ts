@@ -206,6 +206,14 @@ export interface UnifiedAssetOutcome {
   exit: number;
   reportPath?: string;
   reportSha256?: string | null;
+  /**
+   * The human-readable page this run rendered for this asset, relative to the project root.
+   *
+   * Present only for the engines that render one (trace replay), and only when THIS run
+   * rendered it, on the same rule as `reportPath`: naming a page an earlier run left behind
+   * is how a red verdict came to sit next to a green picture.
+   */
+  htmlPath?: string;
   /** Why this asset carries no report of its own (M5: "no report produced this run"). */
   note?: string;
   /**
@@ -243,6 +251,15 @@ export interface UnifiedVerifySection {
    * evidence. When nothing was written, both are omitted and `note` says so.
    */
   reportSha256?: string | null;
+  /**
+   * The human-readable page for the asset this section's verdict came from, relative to
+   * the project root, when its engine rendered one THIS run.
+   *
+   * The JSON is what the roll-up binds; this is what an operator opens. Naming it in the
+   * summary is the difference between a human reading this run's frames and a human
+   * hunting for a file the tool never mentioned.
+   */
+  htmlPath?: string;
   /**
    * Why this section carries no report of its own, or any other one-line qualification
    * the summary must print alongside the status word.
