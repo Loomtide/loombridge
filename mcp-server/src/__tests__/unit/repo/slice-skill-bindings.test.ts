@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { pathToFileURL } from "node:url";
@@ -133,3 +133,98 @@ test("LITMUS: the scan flags a dangling binding, and clears a resolvable one", a
 
 // The validator semantics for `skill` (optional, but present-but-blank refused) live with the other
 // validator tests in `loombridge-slices.test.ts`. This file owns only the membership claim.
+
+// --- The OTHER place a skill name is put in front of an agent: shipped command prose ----------
+//
+// The guard above walks slice templates. It did not walk `commands/loombridge/*.md`, and those
+// ship to consumers too (scrubbed into `agent-surface/commands/`). So a command could name a
+// skill absent from CONSUMER_SKILLS and CI stayed green: `plan.md` named `hero-shot-authoring`
+// (added with the skill, never added to the list) and `genre-pack-authoring` (excluded as
+// dev-time), which is 2 dangling references in the single most-read command in the product.
+//
+// Same failure shape as the slice bindings, one file type over. This closes that side.
+
+const COMMANDS_DIR = path.resolve(REPO_ROOT, "commands/loombridge");
+
+/**
+ * Skill names a command puts in front of an agent.
+ *
+ * LIMITS, stated rather than implied: this matches the house convention of a backticked
+ * kebab-case name ADJACENT to the word "skill" (`` `x` skill ``, `` **`x`** skill ``,
+ * `` skill `x` ``). Prose that names a skill without that adjacency is not caught. It is a
+ * deliberate floor, not a ceiling: a narrow matcher that fires on the real convention beats a
+ * broad one that flags every backticked identifier in the corpus and gets suppressed.
+ */
+const SKILL_REF_RE =
+  /`([a-z0-9][a-z0-9-]{3,})`(?:\*\*)?\s+skill|skill\s+`([a-z0-9][a-z0-9-]{3,})`|\*\*`([a-z0-9][a-z0-9-]{3,})`\*\*\s+skill/g;
+
+/**
+ * THE prose scan. Both the real check and its LITMUS call THIS, for the reason documented on
+ * `scanBindings`: a LITMUS that re-implements the scan certifies nothing about the scan.
+ */
+function scanCommandSkillRefs(shipped: ReadonlySet<string>, label: string, text: string): string[] {
+  const dangling: string[] = [];
+  for (const m of text.matchAll(SKILL_REF_RE)) {
+    const name = m[1] ?? m[2] ?? m[3];
+    if (name && !shipped.has(name)) dangling.push(`${label}: "${name}"`);
+  }
+  return [...new Set(dangling)];
+}
+
+function commandFiles(): Array<{ name: string; text: string }> {
+  return readdirSync(COMMANDS_DIR)
+    .filter((f) => f.endsWith(".md"))
+    .sort()
+    .map((name) => ({ name, text: readFileSync(path.join(COMMANDS_DIR, name), "utf-8") }));
+}
+
+test("every skill a SHIPPED command names is a skill consumers receive", async () => {
+  const shipped = await consumerSkills();
+  const files = commandFiles();
+  assert.ok(files.length > 0, `no command markdown found under ${COMMANDS_DIR}`);
+
+  const dangling = files.flatMap((f) => scanCommandSkillRefs(shipped, f.name, f.text));
+
+  assert.deepEqual(
+    dangling,
+    [],
+    "shipped commands name skills consumers never receive. The command is installed into the " +
+      "project; the skill is not, so the agent is sent after guidance that is not there. Add it to " +
+      `CONSUMER_SKILLS (${[...shipped].sort().join(", ")}), or stop naming it in a shipped command:\n  ` +
+      dangling.join("\n  "),
+  );
+});
+
+test("the prose scan actually finds references (not vacuous on the real commands)", async () => {
+  const shipped = await consumerSkills();
+  const found = commandFiles().flatMap((f) =>
+    [...f.text.matchAll(SKILL_REF_RE)].map((m) => m[1] ?? m[2] ?? m[3]).filter(Boolean),
+  );
+  // If the convention changes and the matcher stops firing, the check above passes by checking
+  // nothing. Bind it to a floor that today's corpus clears.
+  assert.ok(found.length >= 4, `expected the prose scan to find real skill references, saw ${found.length}`);
+  assert.ok(found.every((n) => shipped.has(n!)), "every reference the scan finds must resolve");
+});
+
+test("LITMUS: the prose scan flags a dangling reference, and clears a resolvable one", async () => {
+  const shipped = await consumerSkills();
+
+  // The exact shape that shipped undetected: a skill that EXISTS in .skills/ but is not on the
+  // consumer list. "exists in the repo" is precisely the wrong question, so the fixture uses one.
+  assert.ok(!shipped.has("session-retro"), "fixture must name a real skill consumers do NOT receive");
+
+  assert.deepEqual(
+    scanCommandSkillRefs(shipped, "fixture.md", "Use the `session-retro` skill when mining."),
+    ['fixture.md: "session-retro"'],
+  );
+  // ...and the bolded form the commands actually use.
+  assert.deepEqual(
+    scanCommandSkillRefs(shipped, "fixture.md", "The **`session-retro`** skill covers it."),
+    ['fixture.md: "session-retro"'],
+  );
+  // ...and it is not always-red: a shipped skill and unrelated backticks both come back clean.
+  assert.deepEqual(
+    scanCommandSkillRefs(shipped, "fixture.md", "The **`asset-layer`** skill covers `--catalog-api`."),
+    [],
+  );
+});
