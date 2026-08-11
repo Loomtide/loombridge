@@ -150,11 +150,18 @@ env-var-only keys; nothing new is introduced here.
 2. **Should `doctor`'s backend row be a warning when nothing is available?** Leaning no: zero
    backends is a legitimate configuration (paste a reference, or let the agent draw one), so it
    is informational. A warning would imply a missing dependency that is not missing.
-3. **What exactly did the Ghost Relay build run for `codex exec`?** The skill records the
-   verified CLI surface (`codex exec [PROMPT]`, `-i/--image`, `-m/--model`, `codex-cli 0.145.0`)
-   but the image-production recipe is the maintainer's and is marked UNVERIFIED in the skill
-   until confirmed. It must not be invented: a plausible-looking wrong command is worse than an
-   admitted gap.
+3. ~~**What exactly did the Ghost Relay build run for `codex exec`?**~~ **ANSWERED (2026-08-11),
+   and the answer changed the shape of §3.** The build asked Claude to invoke `codex exec` and
+   have Codex draw the frame with **Codex's own imagegen skill**. There is no imagegen flag,
+   option or plugin on the Loombridge side to detect or configure: the capability is Codex's, so
+   its availability is a property of the user's Codex account and setup, which is precisely why
+   detection stops at "is the binary there" and never asserts what that binary can do.
+
+   Two things were verified against `codex-cli 0.145.0` while recording it, and both are now in
+   the skill because either one silently produces no hero shot: `-s/--sandbox` defaults can leave
+   the run unable to WRITE the PNG (`read-only` | `workspace-write` | `danger-full-access`, with
+   `-C/--cd` setting the writable root), and Codex is a separate agent that can see none of this
+   conversation, the contract, or the manifest, so the whole brief has to live in the prompt.
 
 ## LITMUS obligations for the implementation
 
