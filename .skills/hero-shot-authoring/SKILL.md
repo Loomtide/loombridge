@@ -67,10 +67,12 @@ choice is a surprise in the worst possible place.
 **This agent.** Compose the frame directly (HTML/CSS at native scale, then screenshot it). Use the
 `frontend-design` skill for the composition work. This is the default and needs nothing installed.
 
-**codex.** Available only if the user has it:
+**codex.** Available only if the user has it. `loombridge doctor` reports this for you in its
+`Hero-shot backends` row, so prefer that over probing by hand:
 
 ```bash
-command -v codex && codex --version    # verified surface: codex-cli 0.145.0
+loombridge doctor | grep 'Hero-shot backends'
+# -> 2 of 2 hero-shot generation backend(s) available: claude, codex-cli 0.145.0
 ```
 
 `codex exec` runs Codex non-interactively and takes the prompt as an argument or on stdin.
