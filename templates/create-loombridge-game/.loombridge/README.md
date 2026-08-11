@@ -4,6 +4,27 @@ This directory is the **single source of truth** for Loombridge's plan → build
 verify → doneness flow in this project: the acceptance contract, design target,
 captures, reports, and replays all live here.
 
+**One rule decides what a team commits.** Everything Loombridge re-derives from an
+anchor plus a run lives under `run/`, which carries its own `.gitignore`. Everything
+else here is meant to be committed:
+
+```
+.loombridge/
+  ACCEPTANCE.json  FEEL_SPEC.json  GAME_SPEC.md  SLICES.json  STATE.md   COMMITTED
+  design/     the approved hero shot (Design Target)                     COMMITTED
+  anchors/    traces/     recorded human demonstrations                  COMMITTED
+              baselines/  approved pixel baselines + manifest            COMMITTED
+              signoffs/   the human sign-off artifacts SLICES.json cites COMMITTED
+  tests/      stamped Unity results + binding manifest                   COMMITTED
+  verify/     captured op output the Tier-1 gates read                   COMMITTED
+  registry/   imported asset packs (project inputs)                      COMMITTED
+  run/        reports/  replays/  captures/  art/  backups/  handoff/    IGNORED
+              op-traces/
+```
+
+If it is not under `run/`, it is meant to be committed. An anchor whose evidence
+never leaves one machine is not a gate.
+
 It is intentionally near-empty in the template. Populate it by running `plan`
 from the project root. `plan` REFUSES to guess the genre (a guessed genre seeds
 that genre's whole contract and still claims `graded`), so name one:

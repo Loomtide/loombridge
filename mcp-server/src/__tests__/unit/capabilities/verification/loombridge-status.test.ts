@@ -156,7 +156,7 @@ test("L32: after a FAILED slice verify, status names the failing gate instead of
       proof: {
         runId: "run-l32",
         startedAt: "2026-01-01T00:00:00.000Z",
-        verdictPath: `.loombridge/reports/slices/${sliceId}.verdict.json`,
+        verdictPath: `.loombridge/run/reports/slices/${sliceId}.verdict.json`,
         captureManifest: [],
         checkpointId: null,
         approvedAt: null,
@@ -210,7 +210,7 @@ test("status routes verified slice to approval flow and reports proof warnings",
       proof: {
         runId: "run-framing-test",
         startedAt: "2026-01-01T00:00:00.000Z",
-        verdictPath: ".loombridge/reports/slices/framing.verdict.json",
+        verdictPath: ".loombridge/run/reports/slices/framing.verdict.json",
         captureManifest: ["framing/screen-rects.json", "framing/console.json"],
         checkpointId: null,
         approvedAt: null,
@@ -242,7 +242,7 @@ test("status echo prioritizes the approval seam over another unblocked slice", a
       proof: {
         runId: "run-framing",
         startedAt: "2026-01-01T00:00:00.000Z",
-        verdictPath: ".loombridge/reports/slices/framing.verdict.json",
+        verdictPath: ".loombridge/run/reports/slices/framing.verdict.json",
         captureManifest: [],
         checkpointId: "framing",
         approvedAt: "2026-01-01T00:00:00.000Z",
@@ -254,7 +254,7 @@ test("status echo prioritizes the approval seam over another unblocked slice", a
       proof: {
         runId: "run-ground",
         startedAt: "2026-01-01T00:00:00.000Z",
-        verdictPath: ".loombridge/reports/slices/ground-tiling.verdict.json",
+        verdictPath: ".loombridge/run/reports/slices/ground-tiling.verdict.json",
         captureManifest: [],
         checkpointId: "ground-tiling",
         approvedAt: "2026-01-01T00:00:00.000Z",
@@ -266,7 +266,7 @@ test("status echo prioritizes the approval seam over another unblocked slice", a
       proof: {
         runId: "run-player",
         startedAt: "2026-01-01T00:00:00.000Z",
-        verdictPath: ".loombridge/reports/slices/player-feel.verdict.json",
+        verdictPath: ".loombridge/run/reports/slices/player-feel.verdict.json",
         captureManifest: [],
         checkpointId: "player-feel",
         approvedAt: "2026-01-01T00:00:00.000Z",
@@ -278,7 +278,7 @@ test("status echo prioritizes the approval seam over another unblocked slice", a
       proof: {
         runId: "run-parallax",
         startedAt: "2026-01-01T00:00:00.000Z",
-        verdictPath: ".loombridge/reports/slices/parallax.verdict.json",
+        verdictPath: ".loombridge/run/reports/slices/parallax.verdict.json",
         captureManifest: [],
         checkpointId: "parallax",
       },
@@ -314,7 +314,7 @@ test("status reports stale slices and dirty currentBuild bindings", async () => 
       proof: {
         runId: "run-framing-proof",
         startedAt: "2026-01-01T00:00:00.000Z",
-        verdictPath: ".loombridge/reports/slices/framing.verdict.json",
+        verdictPath: ".loombridge/run/reports/slices/framing.verdict.json",
         captureManifest: [],
         checkpointId: null,
         approvedAt: null,

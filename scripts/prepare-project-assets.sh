@@ -4,7 +4,7 @@
 #
 # Usage:
 #   scripts/prepare-project-assets.sh --project PATH --profile asset-layer/profiles/2d-topdown-arena.json \
-#     --registry asset-layer/registry/switchyard-2d.json [--name switchyard] [--handoff-dir .loombridge/handoff]
+#     --registry asset-layer/registry/switchyard-2d.json [--name switchyard] [--handoff-dir .loombridge/run/handoff]
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -33,7 +33,7 @@ while [ "$#" -gt 0 ]; do
 done
 
 if [ -z "$PROJECT" ] || [ -z "$PROFILE" ] || [ -z "$REGISTRY" ]; then
-  echo "Usage: scripts/prepare-project-assets.sh --project=PATH --profile=PATH --registry=PATH [--name=assets] [--handoff-dir=.loombridge/handoff]" >&2
+  echo "Usage: scripts/prepare-project-assets.sh --project=PATH --profile=PATH --registry=PATH [--name=assets] [--handoff-dir=.loombridge/run/handoff]" >&2
   exit 2
 fi
 
@@ -41,7 +41,7 @@ case "$PROJECT" in /*) ;; *) PROJECT="$PWD/$PROJECT" ;; esac
 case "$PROFILE" in /*) ;; *) PROFILE="$REPO_ROOT/$PROFILE" ;; esac
 case "$REGISTRY" in /*) ;; *) REGISTRY="$REPO_ROOT/$REGISTRY" ;; esac
 if [ -z "$HANDOFF_DIR" ]; then
-  HANDOFF_DIR="$PROJECT/.loombridge/handoff"
+  HANDOFF_DIR="$PROJECT/.loombridge/run/handoff"
 else
   case "$HANDOFF_DIR" in /*) ;; *) HANDOFF_DIR="$PROJECT/$HANDOFF_DIR" ;; esac
 fi
@@ -85,3 +85,12 @@ popd >/dev/null
 echo "Prepared asset report: $REPORT"
 echo "Prepared attribution: $ATTRIBUTION"
 echo "Import accepted sprite entries using .assets[].import.toolArguments."
+# The handoff directory is under the RUN tier (ArtifactStorage S2), so it is gitignored:
+# both files above are re-derived by re-running this script against the same profile and
+# the same registry pack, and the pack itself is committed under .loombridge/registry/.
+# ATTRIBUTION IS THE ONE FILE THAT MAY NEED MORE THAN THAT. If a licence in your profile
+# requires attribution to travel WITH the distributed art, copy the markdown into the
+# project's own docs (or its credits screen); a licence obligation is not satisfied by a
+# file that can be regenerated, only by one that ships.
+echo "NOTE: $ATTRIBUTION is under the gitignored run/ tier. If a licence requires attribution"
+echo "      to ship with the art, copy it into the project's committed docs or credits."

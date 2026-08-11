@@ -80,7 +80,7 @@ test("plan scaffolds .loombridge/ for the platformer genre", async () => {
   }
   // `paths.traces` (`.loombridge/traces/`) used to be asserted here. The slot was DEAD:
   // `ensureScaffold` was its only non-test reference, no writer ever put a file in it, and
-  // replay traces go to `.loombridge/replays/traces/`. Asserting a directory nothing uses is
+  // replay traces go to `.loombridge/anchors/traces/`. Asserting a directory nothing uses is
   // not coverage, so both the slot and the assertion are gone.
   for (const d of [paths.design, paths.reports, paths.verifyInputs]) {
     assert.ok((await fs.stat(d)).isDirectory(), `${d} should be a directory`);

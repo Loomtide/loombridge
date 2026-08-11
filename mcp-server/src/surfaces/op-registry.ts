@@ -401,8 +401,8 @@ function buildOps(): OpDef[] {
       "pass view='game', and for a SEQUENCE of gameplay frames prefer " +
       "unity_runtime_capture_sequence with view='game', which ticks the game loop between " +
       "captures instead of sampling whatever the editor happens to be showing. " +
-      "For named artifacts, pass outputPath (for example captures/start.png or " +
-      ".loombridge/captures/start.png); the server writes the screenshot there and returns " +
+      "For named artifacts, pass outputPath (for example .loombridge/run/captures/start.png); " +
+      "the server writes the screenshot there and returns " +
       "JSON with path/width/height/format/sizeBytes/sha256. Do not scrape trace/artifacts " +
       "for agent-facing screenshots. " +
       "For debugging: pass focusLocator to render a deterministic close-up framed on one " +
@@ -770,7 +770,7 @@ function buildOps(): OpDef[] {
         output_path: {
           type: "string",
           description:
-            "Project-relative path for the snapshot JSON (e.g. '.loombridge/art/gameplay-geometry.json'). " +
+            "Project-relative path for the snapshot JSON (e.g. '.loombridge/run/art/gameplay-geometry.json'). " +
             "Absolute paths or paths escaping the project root are refused. Alias: outputPath.",
         },
         outputPath: { type: "string", description: "Alias for output_path." },

@@ -40,7 +40,9 @@ import {
   readState,
   standardReplayLayout,
   type LoombridgePaths,
+  type ReplayLayout,
 } from "../../../domain/state.js";
+import { MIGRATE_VERB, isTombstoneFile, legacyPaths } from "../../migrate/legacy-layout.js";
 import {
   sanitizeWorkspaceId,
   projectWorkspace,
@@ -452,6 +454,22 @@ async function discoverContractAsset(root: string, paths: LoombridgePaths): Prom
 // ── trace (demonstration + pixel baseline) ───────────────────────────────────
 
 /**
+ * The project-relative path of a STAMPED baseline still sitting at the pre-S2 location
+ * for `id`, or null.
+ *
+ * A tombstone does not count: after a correct migration every legacy baseline path holds
+ * one, and reporting that as "your approval is at the old path" would send an operator
+ * to a file whose whole content says the opposite.
+ */
+async function legacyApprovedBaselineFor(root: string, id: string): Promise<string | null> {
+  const dir = path.join(legacyPaths(root).replayBaselines, id);
+  const manifest = path.join(dir, TRACE_BASELINE_MANIFEST);
+  if (!(await fileExists(manifest))) return null;
+  if (await isTombstoneFile(manifest)) return null;
+  return `${path.relative(root, dir).split(path.sep).join("/")}/`;
+}
+
+/**
  * Recorded demonstrations and their approved pixel baselines. LIVE-only: replay
  * drives the trace against a running editor.
  *
@@ -462,8 +480,17 @@ async function discoverContractAsset(root: string, paths: LoombridgePaths): Prom
  *                                -> BROKEN (tier 2).
  *  - manifest verifies           -> runnable live, with approvedAt/approvedBy.
  */
-async function discoverTraceAssets(root: string): Promise<DiscoveredAsset[]> {
-  const layout = standardReplayLayout(root);
+export async function discoverTraceAssets(
+  root: string,
+  layoutOverride?: ReplayLayout,
+): Promise<DiscoveredAsset[]> {
+  // `layoutOverride` EXISTS FOR ONE REASON, and it is not flexibility. The migration
+  // tombstone (`capabilities/migrate/legacy-layout.ts`) has to be proved against the
+  // classification an OLD CLI performs, and the only honest way to do that is to run THIS
+  // function, unchanged, over the LEGACY directories. Handing it the old layout is that
+  // proof; re-implementing the classification in a test would prove only that the test
+  // agrees with itself. Production never passes it.
+  const layout = layoutOverride ?? standardReplayLayout(root);
   const ids = await discoverTraces(layout.replayTraces);
   const rows: DiscoveredAsset[] = [];
   for (const id of ids) {
@@ -484,9 +511,18 @@ async function discoverTraceAssets(root: string): Promise<DiscoveredAsset[]> {
     if (integrity.unstamped) {
       const hasFrames = await dirHasPng(baselineDir);
       row.notRunClass = "non-anchor";
-      row.reason = hasFrames
-        ? `unstamped baseline (no ${TRACE_BASELINE_MANIFEST}): re-approve with \`loombridge trace approve --id ${id}\` to stamp what approved it`
-        : `recorded, not approved: run \`loombridge trace replay --id ${id}\` then \`loombridge trace approve --id ${id}\``;
+      // THE HALF-MIGRATED CASE COMES FIRST (ArtifactStorage S2 M9). "Recorded, not
+      // approved" is the correct sentence for a demonstration nobody has approved, and
+      // exactly the wrong one for a demonstration whose approval is sitting at the
+      // pre-S2 path: its printed next action is `trace approve`, which freezes a NEW
+      // baseline over the one a human already signed off. The check is the LEGACY
+      // location, so it can only ever fire for a project that has not migrated.
+      const legacyBaseline = await legacyApprovedBaselineFor(root, id);
+      row.reason = legacyBaseline
+        ? `your approved baseline for '${id}' is at the OLD path (${legacyBaseline}); run \`${MIGRATE_VERB}\` — do NOT run \`trace approve\`, it would freeze new frames over the ones a human already approved`
+        : hasFrames
+          ? `unstamped baseline (no ${TRACE_BASELINE_MANIFEST}): re-approve with \`loombridge trace approve --id ${id}\` to stamp what approved it`
+          : `recorded, not approved: run \`loombridge trace replay --id ${id}\` then \`loombridge trace approve --id ${id}\``;
       rows.push(row);
       continue;
     }

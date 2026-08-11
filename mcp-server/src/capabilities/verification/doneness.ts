@@ -775,7 +775,7 @@ export function sfxGateRefusals(
 /**
  * THE UNIFIED-VERIFY SEAM, CONSUMED (H3).
  *
- * S1 shipped `.loombridge/reports/verify.json` as a roll-up that governed nothing: a
+ * S1 shipped `.loombridge/run/reports/verify.json` as a roll-up that governed nothing: a
  * unified run could exit 2 (a broken anchor, a trace baseline nobody stamped, a screens
  * comparison that never happened) while the CONTRACT section inside it passed and
  * flipped STATE to `verified-green`. An agent could then run `doneness`, get a 0, and
@@ -1472,7 +1472,7 @@ export function isFreshGreen(input: FreshGreenInput): FreshGreenResult {
     );
   }
   if (!verdict) {
-    reasons.push("no verdict at .loombridge/reports/build-verdict.json");
+    reasons.push("no verdict at .loombridge/run/reports/build-verdict.json");
   } else if (verdict.status !== "pass") {
     reasons.push(`verdict.status is \`${verdict.status ?? "(absent)"}\`, not \`pass\``);
   }
@@ -1644,7 +1644,7 @@ export async function isSliceDone(slice: SliceEntry, paths: LoombridgePaths): Pr
 
 export interface DonenessArgs {
   root: string;
-  /** Override the verdict path (default: `.loombridge/reports/build-verdict.json`). */
+  /** Override the verdict path (default: `.loombridge/run/reports/build-verdict.json`). */
   verdictPath?: string;
 }
 
@@ -2159,7 +2159,7 @@ function printUsage(): void {
       "Options:",
       "  --root <dir>        Project root (default: cwd)",
       "  --verdict <path>    Override verdict path",
-      "                      (default: .loombridge/reports/build-verdict.json)",
+      "                      (default: .loombridge/run/reports/build-verdict.json)",
       "  -h, --help          Show this help",
       "",
       "Exit: 0 fresh + green; 1 otherwise (with all reasons listed).",

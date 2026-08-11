@@ -41,7 +41,7 @@
         },
         "verdictPath": {
           "type": "string",
-          "description": "Per-slice verdict path, never overwritten: .loombridge/reports/slices/<sliceId>.verdict.json."
+          "description": "Per-slice verdict path, never overwritten: .loombridge/run/reports/slices/<sliceId>.verdict.json."
         },
         "captureManifest": {
           "type": "array",
@@ -63,7 +63,7 @@
         },
         "signoffArtifact": {
           "type": "string",
-          "description": "Durable root-relative sign-off artifact copied under .loombridge/reports/slices/<sliceId>/."
+          "description": "Durable root-relative sign-off artifact copied under .loombridge/anchors/signoffs/<sliceId>/."
         },
         "signoffSha256": {
           "type": "string",

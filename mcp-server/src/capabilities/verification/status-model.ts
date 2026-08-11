@@ -6,6 +6,7 @@ import { checkCaptureManifest } from "../../domain/capture-manifest.js";
 import { captureRecipesForFiles, type CaptureKind } from "../../domain/capture-recipes.js";
 import { inspectContractPresence } from "../../domain/contract-presence.js";
 import { fileExists, type CurrentBuildRef, type LoombridgePaths, type LoombridgeState } from "../../domain/state.js";
+import { fileSha256 } from "./evidence-ledger.js";
 import { gateInputFiles } from "./run-gates.js";
 import type { DesignStatusReport } from "./design.js";
 import {
@@ -298,6 +299,43 @@ export async function computeStatusModel(args: {
           warnings.push(`${slice.id}: proof.verdictPath escapes the project root: ${slice.proof.verdictPath}`);
         } else if (!(await fileExists(verdictPath))) {
           warnings.push(`${slice.id}: proof verdict file is missing: ${slice.proof.verdictPath}`);
+        }
+      }
+    }
+    // THE SIGN-OFF ARTIFACT NOW HAS A READER (ArtifactStorage S2 M4).
+    //
+    // Before this it was defined and not wired: `plan --go --signoff` wrote the file and
+    // stamped `signoffArtifact` + `signoffSha256` into SLICES.json, and NOTHING ever read
+    // either one back. A recorded approval nobody re-checks is a claim, not evidence, and
+    // the S2 move made that concrete: had the artifact stayed under `reports/` it would
+    // have landed in the ignored run tier, deletable by `git clean -fdx`, while
+    // SLICES.json went on saying `approved`.
+    //
+    // A WARNING, NOT A REFUSAL, and the line is drawn deliberately. `status` is the
+    // read-only surface; changing a slice's state from what SLICES.json records would be
+    // this module inventing a verdict. Naming the gap is what it can honestly do, and
+    // what a reviewer needs in order to see it.
+    if (slice.state === "approved" && slice.proof.signoffArtifact) {
+      const rel = slice.proof.signoffArtifact;
+      if (!isSafeCapturePath(rel)) {
+        warnings.push(`${slice.id}: proof.signoffArtifact is unsafe: ${rel}`);
+      } else {
+        const abs = path.resolve(args.paths.root, rel);
+        if (!isWithin(args.paths.root, abs)) {
+          warnings.push(`${slice.id}: proof.signoffArtifact escapes the project root: ${rel}`);
+        } else if (!(await fileExists(abs))) {
+          warnings.push(
+            `${slice.id}: the sign-off artifact this approval cites is MISSING: ${rel}. ` +
+              "SLICES.json still says `approved`; the evidence for it is not on disk.",
+          );
+        } else if (slice.proof.signoffSha256) {
+          const actual = await fileSha256(abs);
+          if (actual !== slice.proof.signoffSha256) {
+            warnings.push(
+              `${slice.id}: the sign-off artifact at ${rel} does not match the sha256 recorded ` +
+                "at approval; the bytes changed after the human signed off.",
+            );
+          }
         }
       }
     }

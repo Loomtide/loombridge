@@ -485,7 +485,7 @@ describe("loombridge install-bridge + doctor (Phase 2)", { timeout: 60000 }, () 
     const r = cli(["update", "--project", project]);
     assert.equal(r.status, 0, r.stderr);
     assert.match(r.stdout, /already up to date/);
-    await assert.rejects(fsp.access(path.join(project, ".loombridge", "backups", "LoombridgeInstall.json.bak")));
+    await assert.rejects(fsp.access(path.join(project, ".loombridge", "run", "backups", "LoombridgeInstall.json.bak")));
   });
 
   test("update: older install → swaps version, backs up under .loombridge/, prunes old tarball", async () => {
@@ -496,7 +496,7 @@ describe("loombridge install-bridge + doctor (Phase 2)", { timeout: 60000 }, () 
     assert.notEqual(readMeta(project).bridgeVersion, "0.0.9", "bridge version bumped");
     // The backup lands in the never-committed .loombridge/ surface — NOT in
     // ProjectSettings/, where a stray .bak dirties every consumer's git status.
-    await fsp.access(path.join(project, ".loombridge", "backups", "LoombridgeInstall.json.bak"));
+    await fsp.access(path.join(project, ".loombridge", "run", "backups", "LoombridgeInstall.json.bak"));
     await assert.rejects(
       fsp.access(path.join(project, "ProjectSettings", "LoombridgeInstall.json.bak")),
       "no .bak fallout in ProjectSettings/",
@@ -531,7 +531,7 @@ describe("loombridge install-bridge + doctor (Phase 2)", { timeout: 60000 }, () 
     const r = cli(["update", "--project", project, "--dry-run"]);
     assert.equal(r.status, 0, r.stderr);
     assert.equal(readMeta(project).bridgeVersion, "0.0.8", "version unchanged on dry-run");
-    await assert.rejects(fsp.access(path.join(project, ".loombridge", "backups", "LoombridgeInstall.json.bak")));
+    await assert.rejects(fsp.access(path.join(project, ".loombridge", "run", "backups", "LoombridgeInstall.json.bak")));
     assert.match(r.stdout, /skipped doctor/);
   });
 });

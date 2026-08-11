@@ -10,7 +10,7 @@
  * reads `ACCEPTANCE.json`/`SLICES.json`, never writes `STATE.md`, never calls the
  * Unity bridge, and never mutates the game. It reads exactly two inputs (the
  * contract + the capture dir) and writes only its own report artifacts under
- * `.loombridge/reports/` (the JSON record + the S7b human report — HTML + Markdown).
+ * `.loombridge/run/reports/` (the JSON record + the S7b human report — HTML + Markdown).
  * Live capture orchestration is NOT this slice.
  *
  * Exit-code contract (the verify-first loop), DERIVED in `minigameReportStatus`

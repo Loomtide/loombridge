@@ -8,7 +8,7 @@
  * collect the clicks, capture any declared outcomes WHILE Play Mode is still live,
  * and transform it all into a `ReplayTrace` (green by construction). Mirrors
  * `record-live`/`run-live` so the bridge wiring lives in one place; the caller
- * persists the trace (e.g. to `.loombridge/replays/traces/<id>.trace.json`).
+ * persists the trace (e.g. to `.loombridge/anchors/traces/<id>.trace.json`).
  *
  * `recordObservedTrace(send, …)` is the pure orchestration over a `BridgeSend`
  * (unit-testable against a fake send); `observeRecordLive(…)` adds the

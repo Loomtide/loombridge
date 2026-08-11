@@ -462,7 +462,7 @@ describe("bundled-bridge freshness", { timeout: 120000 }, () => {
     assert.deepEqual(readFileSync(projectTgz), tgzBefore, "the project's tarball must be byte-untouched");
     // The gate sits ABOVE the agent-surface reconcile and the backup step, so neither ran.
     await assert.rejects(
-      fsp.access(path.join(project, ".loombridge", "backups")),
+      fsp.access(path.join(project, ".loombridge", "run", "backups")),
       ".loombridge/backups must not exist: the refusal happens before the backup",
     );
     assert.doesNotMatch(r.stdout, /already up to date/);

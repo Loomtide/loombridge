@@ -215,7 +215,7 @@ async function plantSlicePlan(root: string, opts: { approved: boolean }): Promis
         proof: {
           runId: "run-hud-1",
           startedAt: "2026-07-29T00:00:00.000Z",
-          verdictPath: ".loombridge/reports/slices/hud.verdict.json",
+          verdictPath: ".loombridge/run/reports/slices/hud.verdict.json",
           captureManifest: [],
           checkpointId: opts.approved ? "hud" : null,
           approvedAt: opts.approved ? "2026-07-30T00:00:00.000Z" : null,

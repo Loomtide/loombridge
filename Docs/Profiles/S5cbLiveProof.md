@@ -382,7 +382,7 @@ re-derivation (surgical rejection). **A value hand-picked to satisfy the band ca
 because the raw live samples are the evidence and they refute it.** This closes the S4b self-grade hole
 on a *live*-captured trajectory, not just synthetic/offline fixtures.
 
-> Methodology notes: ran `verify` with `--root <scratch>` so the report (`.loombridge/reports/`) never
+> Methodology notes: ran `verify` with `--root <scratch>` so the report (`.loombridge/run/reports/`) never
 > touches the developer's sample project (verify-first non-mutation). `engine: not detected` in that
 > scratch root only downgrades a *clean pass* → incomplete; it does not affect a band `fail` or the
 > re-derivation verdicts (engine-independent). The frozen `~/.loombridge/runtime` had to be reinstalled

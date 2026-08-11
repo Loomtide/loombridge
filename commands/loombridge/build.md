@@ -79,7 +79,7 @@ constructs the scene. On a clean-room project, skipping this silently relies on 
 to be already imported in `Assets/`.
 
 Use `scripts/prepare-project-assets.sh` **from the repo root**, passing `--project
-<path-to-unity-project>`. The script writes to `<project>/.loombridge/handoff/`:
+<path-to-unity-project>`. The script writes to `<project>/.loombridge/run/handoff/`:
 
 - `<name>-asset-prepare-report.json` — the prepare report (provenance, license, sha256, accepted/rejected sprite list, and each entry's `import.toolArguments`).
 - `<name>-asset-attribution.md` — credits.
@@ -118,7 +118,7 @@ browser confirmation, deterministic project cache, attribution).
 > Do **not** run the repo-local prepare CLI (`node mcp-server/dist/capabilities/assets/prepare-cli.js`) with a
 > `--output`/`--cache` under the repo's `demos/.artifacts/` for a clean-room validation run — that stages
 > assets into the *repo*, not the target project. Use `loombridge-asset-prep --project <path>` so the
-> handoff lands under `<project>/.loombridge/handoff/`.
+> handoff lands under `<project>/.loombridge/run/handoff/`.
 
 ## 3. Route the intent (agent judgment — the part the CLI does NOT do)
 
@@ -131,7 +131,7 @@ prompt into ONE:
 | "lay out the level / platforms" | **level** → `platformer-level-design` | `unity_ops_batch` (or a generated editor script for very large layouts) |
 | "make the jump feel snappier" | **feel-tune** → FeelHarness solve→measure→tune | **`mcp-server/dist/capabilities/verification/tuning-runner.js`** — accelerates the iterate loop (mutations + measurement recipes in one pinned pass) |
 | "polish it for a recording" | **polish** → `game-polish-2d`, `parallax-2d` | `unity_ops_batch` for prop wiring |
-| phase is `verified-failing` | **fix-to-green** → read `.loombridge/reports/build-verdict.json` failures, fix each | re-run only the failing gates' captures |
+| phase is `verified-failing` | **fix-to-green** → read `.loombridge/run/reports/build-verdict.json` failures, fix each | re-run only the failing gates' captures |
 
 The phase narrows the choice: in `built-unverified` the sensible moves are fix-to-green or
 polish, not a fresh build. If the intent is ambiguous, ask the user.
@@ -436,7 +436,7 @@ node mcp-server/dist/surfaces/cli.js doneness --root .
 
 - **`verify`** with `--inputs <state-subdir>` reads that state's per-gate files, runs the
   Tier-1 gates, embeds `runId` + `producedAt` + the frozen `designTarget` in the verdict at
-  `.loombridge/reports/build-verdict.json`, merges the `--vlm` findings under `reviewFindings`
+  `.loombridge/run/reports/build-verdict.json`, merges the `--vlm` findings under `reviewFindings`
   (advisory to the Tier-1 `status`), updates `STATE.md`'s phase, and exits non-zero on
   `fail` (or on `warn` under `--strict`).
 - **`doneness`** reads `currentBuild.captureManifest` from `STATE.md` and checks every
@@ -461,15 +461,15 @@ runId for a fix-to-green pass), then run `doneness` again. **Never claim success
 
 ### Asset handoff consistency (when applicable)
 
-If `.loombridge/handoff/<genre>-asset-prepare-report.json` exists from the asset-prep step,
+If `.loombridge/run/handoff/<genre>-asset-prepare-report.json` exists from the asset-prep step,
 also run the consistency check — catches stale handoff prose, `registryAssets.used=false`
 contradictions, and asset-id drift between the prepare report and the verdict:
 
 ```bash
 node mcp-server/dist/capabilities/assets/handoff-consistency.js \
-  --prepare-report .loombridge/handoff/<genre>-asset-prepare-report.json \
-  --verdict .loombridge/reports/build-verdict.json \
-  --output .loombridge/handoff/asset-handoff-consistency.json
+  --prepare-report .loombridge/run/handoff/<genre>-asset-prepare-report.json \
+  --verdict .loombridge/run/reports/build-verdict.json \
+  --output .loombridge/run/handoff/asset-handoff-consistency.json
 ```
 
 ## 8. Finish with a real user handoff

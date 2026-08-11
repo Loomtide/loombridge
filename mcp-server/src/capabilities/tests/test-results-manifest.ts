@@ -21,7 +21,7 @@
  * limitation is documented rather than papered over, and it is the same one the unified
  * report already records for `runId`.
  *
- * THE SLOT IS COMMITTED (G5). Unlike `.loombridge/reports/`, `.loombridge/tests/` is meant
+ * THE SLOT IS COMMITTED (G5). Unlike `.loombridge/run/reports/`, `.loombridge/tests/` is meant
  * to be checked in: the stamped pair is evidence a reviewer can read without re-running a
  * multi-minute editor.
  */

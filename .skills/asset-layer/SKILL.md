@@ -53,13 +53,13 @@ loombridge assets registry-plan \
   --registry asset-layer/registry/<3d-pack>.json \
   --profile <3d-profile.json> \
   --preferred-license CC0-1.0 \
-  --output .loombridge/reports/registry-selection-plan.json
+  --output .loombridge/run/reports/registry-selection-plan.json
 
 # 2. Show candidates grouped by role, recommend a cohesive kit, get approval, then apply:
 loombridge assets registry-apply \
   --registry asset-layer/registry/<3d-pack>.json \
   --profile <3d-profile.json> \
-  --selections .loombridge/reports/registry-selections.json \
+  --selections .loombridge/run/reports/registry-selections.json \
   --approved-at "<ISO timestamp>"
 
 # Opted into the hosted catalog instead? Swap the source flag on BOTH commands
@@ -113,7 +113,7 @@ For clean-room Unity projects, prefer the repo helper over ad-hoc copying:
   --name switchyard
 ```
 
-Then read `.loombridge/handoff/switchyard-asset-prepare-report.json` and import every accepted `sprite`
+Then read `.loombridge/run/handoff/switchyard-asset-prepare-report.json` and import every accepted `sprite`
 asset using its `import.toolArguments`. Audio assets in the report should be copied/imported to the
 reported Unity path and wired to gameplay. Do not ship procedural art/audio when the report contains
 accepted non-placeholder candidates for the same primitive.
@@ -124,8 +124,8 @@ For human-visible demo runs, show the agent-selected prepared assets before impo
 cd <loombridge-repo>/mcp-server
 npm run build
 node dist/capabilities/assets/browser-payload.js \
-  --prepare-report "$PROJECT/.loombridge/handoff/switchyard-asset-prepare-report.json" \
-  --output "$PROJECT/.loombridge/handoff/switchyard-asset-browser-payload.json"
+  --prepare-report "$PROJECT/.loombridge/run/handoff/switchyard-asset-prepare-report.json" \
+  --output "$PROJECT/.loombridge/run/handoff/switchyard-asset-browser-payload.json"
 ```
 
 Open the resulting JSON with `unity_asset_browser_open`, then poll `unity_asset_picker_state`.
@@ -139,10 +139,10 @@ Before final handoff, verify the registry accounting against the prepare report:
 cd <loombridge-repo>/mcp-server
 npm run build
 npm run asset:handoff:check -- \
-  --prepare-report "$PROJECT/.loombridge/handoff/switchyard-asset-prepare-report.json" \
-  --verdict "$PROJECT/.loombridge/handoff/build-verdict.json,$PROJECT/.loombridge/handoff/final-verdict.json" \
-  --text "$PROJECT/.loombridge/handoff/SWITCHYARD_HANDOFF.md,$PROJECT/Assets/Scripts/Editor/SwitchyardSceneBuilder.cs" \
-  --output "$PROJECT/.loombridge/handoff/asset-handoff-consistency.json"
+  --prepare-report "$PROJECT/.loombridge/run/handoff/switchyard-asset-prepare-report.json" \
+  --verdict "$PROJECT/.loombridge/run/handoff/build-verdict.json,$PROJECT/.loombridge/run/handoff/final-verdict.json" \
+  --text "$PROJECT/.loombridge/run/handoff/SWITCHYARD_HANDOFF.md,$PROJECT/Assets/Scripts/Editor/SwitchyardSceneBuilder.cs" \
+  --output "$PROJECT/.loombridge/run/handoff/asset-handoff-consistency.json"
 ```
 
 This fails if a verdict says `registryAssets.used=false`, if a role lists an id that does not match

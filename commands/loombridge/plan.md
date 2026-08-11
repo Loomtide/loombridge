@@ -238,7 +238,7 @@ so the two agents cannot drift.
      --registry asset-layer/registry/<pack>.json \
      --profile <asset-profile.json> \
      --preferred-license CC0-1.0 \
-     --output .loombridge/reports/registry-selection-plan.json
+     --output .loombridge/run/reports/registry-selection-plan.json
    ```
 
    **Show the resulting slots/options to the developer and get explicit approval BEFORE
@@ -251,7 +251,7 @@ so the two agents cannot drift.
    loombridge assets registry-apply \
      --registry asset-layer/registry/<pack>.json \
      --profile <asset-profile.json> \
-     --selections .loombridge/reports/registry-selections.json \
+     --selections .loombridge/run/reports/registry-selections.json \
      --approved-at "<ISO timestamp>"
    ```
 
@@ -285,12 +285,12 @@ so the two agents cannot drift.
 
    ```bash
    loombridge assets generated-plan \
-     --annotations .loombridge/reports/generated-annotations.json \
-     --output .loombridge/reports/generated-asset-plan.json
+     --annotations .loombridge/run/reports/generated-annotations.json \
+     --output .loombridge/run/reports/generated-asset-plan.json
 
    loombridge assets generated-apply \
-     --annotations .loombridge/reports/generated-annotations.json \
-     --exports .loombridge/reports/generated-exports.json \
+     --annotations .loombridge/run/reports/generated-annotations.json \
+     --exports .loombridge/run/reports/generated-exports.json \
      --approved-at "<ISO timestamp>"
    ```
 

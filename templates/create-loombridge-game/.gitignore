@@ -11,24 +11,50 @@
 # bridge pins, ignore if you prefer the manifest ref to drive resolution.
 # Packages/packages-lock.json
 
-# Loombridge captures/reports are large + machine-specific; keep contract + design
-# target under version control, ignore the heavy run artifacts.
-.loombridge/captures/
-.loombridge/reports/
-.loombridge/replays/
-.loombridge/backups/
+# Loombridge: ONE rule, and it is structural (Docs/Design/ArtifactStorage.md).
+#
+# Everything Loombridge re-derives from an anchor plus a run lives under
+# .loombridge/run/. Everything else under .loombridge/ is meant to be COMMITTED: the
+# contract files, design/, tests/, verify/, registry/, and above all anchors/ (the
+# recorded human demonstrations and the approved pixel baselines). An anchor whose
+# evidence never leaves one machine is not a gate.
+#
+# THE TRAILING `*` IS LOAD-BEARING, and `.loombridge/run/` would be a bug. Git cannot
+# re-include anything inside an EXCLUDED DIRECTORY, so the directory form would also hide
+# .loombridge/run/.gitignore, the marker that makes the run tier ignore itself in a fresh
+# clone that has not run a Loombridge verb yet. Measured, not assumed: with the directory
+# form `git add .` stages neither the marker nor anything under it; with the `*` form it
+# stages the marker and nothing else.
+.loombridge/run/*
 
-# NOT ignored, on purpose: .loombridge/tests/ (the stamped Unity test results
-# .loombridge/tests/test-results.xml, their binding manifest
-# .loombridge/tests/test-results-manifest.json, and the run log
-# .loombridge/tests/test-run.log). `loombridge tests run` produces them and
-# `loombridge verify` grades them OFFLINE, so committing them is what lets a reviewer,
-# a CI job, or a later verify read the evidence without re-running a multi-minute
-# editor. Ignoring this directory would make the results local-only, and a gate whose
-# evidence never leaves one machine is not a gate. A guard test walks this file against
-# the path constants, so an ignore rule added here fails the suite.
+# Slice checkpoints. OUTSIDE .loombridge/ because snapshotSliceFixture copies the whole
+# state dir into this one, and Node refuses to copy a directory into a subdirectory of
+# itself (ERR_FS_CP_EINVAL). It can never move inside, so it needs its own rule.
+.loombridge-fixtures/
 
-# Legacy: CLIs before the .loombridge/backups/ move dropped the update backup here.
+# NOT ignored, on purpose:
+#
+#   .loombridge/anchors/  the recorded demonstrations (traces/), the approved pixel
+#     baselines (baselines/), and the human sign-off artifacts (signoffs/) that
+#     SLICES.json cites as the reason a slice is approved. A trace is the ONE artifact in
+#     the system that cannot be regenerated without a human replaying the game.
+#
+#   .loombridge/tests/  the stamped Unity test results (.loombridge/tests/test-results.xml),
+#     their binding manifest (.loombridge/tests/test-results-manifest.json), and the run log
+#     (.loombridge/tests/test-run.log). `loombridge tests run` produces them and
+#     `loombridge verify` grades them OFFLINE, so committing them is what lets a reviewer, a
+#     CI job, or a later verify read the evidence without re-running a multi-minute editor.
+#
+#   .loombridge/verify/  the captured op output the Tier-1 gates read, and the reason a
+#     clone can re-grade an approved slice with no editor at all.
+#
+#   .loombridge/registry/  imported asset packs. Project INPUTS: re-deriving one may need
+#     a hosted catalog a clone or a CI runner cannot reach.
+#
+# A guard test walks this file against the path constants, so an ignore rule added here
+# that contradicts the split fails the suite.
+
+# Legacy: CLIs before the .loombridge/run/backups/ move dropped the update backup here.
 ProjectSettings/LoombridgeInstall.json.bak
 
 # OS / editor noise

@@ -76,7 +76,7 @@ function doneSlice(id = "s1", runId = "run-s1"): SliceEntry {
     proof: {
       runId,
       startedAt: "2026-05-28T00:00:00.000Z",
-      verdictPath: `.loombridge/reports/slices/${id}.verdict.json`,
+      verdictPath: `.loombridge/run/reports/slices/${id}.verdict.json`,
       captureManifest: [`${id}/verify-manifest.json`],
       checkpointId: id,
       approvedAt: null,

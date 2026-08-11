@@ -137,7 +137,7 @@ function planWith(gates: string[], state: "built" | "approved"): SlicePlan {
         proof: {
           runId: RUN_ID,
           startedAt: STARTED_AT,
-          verdictPath: ".loombridge/reports/slices/core.verdict.json",
+          verdictPath: ".loombridge/run/reports/slices/core.verdict.json",
           captureManifest: ["core/verify-manifest.json", "core/screen-rects.json", "core/feel.json", "core/playability.json"],
           checkpointId: state === "approved" ? "core" : null,
           approvedAt: state === "approved" ? "2026-07-30T00:00:00.000Z" : null,
@@ -616,7 +616,7 @@ test("E16: a green slices roll-up records the verdict in STATE.md (the flat door
     assert.equal(after?.lastVerdict?.status, "pass");
     assert.equal(
       after?.lastVerdict?.verdictPath,
-      path.join(".loombridge", "reports", "verify.json"),
+      path.join(".loombridge", "run", "reports", "verify.json"),
       "the roll-up's verdict is the unified report, and STATE must point at the document that decided",
     );
     // A verdict record is not a re-mint: the run binding is carried through untouched.

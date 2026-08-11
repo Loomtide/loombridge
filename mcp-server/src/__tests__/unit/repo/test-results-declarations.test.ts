@@ -47,6 +47,13 @@ const EDITMODE_WORKFLOW = path.join(REPO_ROOT, ".github", "workflows", "unity-ed
  * parent hides its children), and a slash-free basename pattern (which git matches at any
  * depth). Trailing slashes and a leading `/` anchor are normalised away; `!` negations are
  * skipped, so a re-included path still reads as "not hidden".
+ *
+ * A TRAILING `/*` NORMALISES THE SAME WAY AS A TRAILING `/`, and that is not a shortcut:
+ * `.loombridge/run/*` and `.loombridge/run/` hide the same CONTENT, and the only thing
+ * that distinguishes them is whether git may still descend far enough to see a nested
+ * `.gitignore` (it may with the star, it may not without). Everything this predicate is
+ * asked about is content, so both forms have to read as hidden here; a predicate that
+ * reported the star form as "not hidden" would have made the run tier look committed.
  */
 export function gitignoreHides(lines: readonly string[], relPath: string): boolean {
   const segments = relPath.split("/").filter((s) => s.length > 0);
@@ -54,7 +61,7 @@ export function gitignoreHides(lines: readonly string[], relPath: string): boole
   for (const raw of lines) {
     const line = raw.trim();
     if (line.length === 0 || line.startsWith("#") || line.startsWith("!")) continue;
-    const pattern = line.replace(/^\//, "").replace(/\/+$/, "");
+    const pattern = line.replace(/^\//, "").replace(/\/\*$/, "").replace(/\/+$/, "");
     if (pattern.length === 0) continue;
     if (prefixes.includes(pattern)) return true;
     if (!pattern.includes("/") && segments.includes(pattern)) return true;
@@ -75,13 +82,21 @@ test("G5: the project template COMMITS the stamped test-results slot while repor
 
   // NON-VACUITY. The same predicate over the same file must still report the heavy run
   // artifacts as ignored, or the assertion above would pass on a `.gitignore` that ignores
-  // nothing at all (or on a predicate that always returns false).
+  // nothing at all (or on a predicate that always returns false). After ArtifactStorage S2
+  // the reports live under the run tier, which is the ONE ignore rule.
   assert.equal(
-    gitignoreHides(lines, `${LOOMBRIDGE_DIRNAME}/reports`),
+    gitignoreHides(lines, `${LOOMBRIDGE_DIRNAME}/run/reports`),
     true,
-    "reports/ must stay ignored: it is large, machine-specific, and regenerated every run",
+    "run/ must stay ignored: it is large, machine-specific, and regenerated every run",
   );
-  assert.equal(gitignoreHides(lines, `${LOOMBRIDGE_DIRNAME}/replays`), true);
+  // …and the anchors must NOT be, which is the finding the whole RFC exists for: the old
+  // template hid `.loombridge/replays/`, and that directory held both the approved pixel
+  // baselines and the recorded human demonstrations.
+  assert.equal(
+    gitignoreHides(lines, `${LOOMBRIDGE_DIRNAME}/anchors`),
+    false,
+    "anchors/ holds the recorded demonstrations and the approved baselines; ignoring them is the defect S2 fixes",
+  );
 
   // And the file says WHY, so the next person editing it does not helpfully "tidy up" by
   // adding the missing line.

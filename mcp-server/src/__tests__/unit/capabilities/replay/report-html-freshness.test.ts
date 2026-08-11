@@ -3,7 +3,7 @@
  *
  * Observed on a live consumer project. `loombridge verify --live` re-drove a trace, graded
  * 14 captures, found 2 over tolerance, exited 1, and wrote that failing verdict to
- * `.loombridge/replays/reports/kids-adventure.report.json` (13:42). It rendered no HTML, so
+ * `.loombridge/run/replays/reports/kids-adventure.report.json` (13:42). It rendered no HTML, so
  * `kids-adventure.report.html` was still the page a standalone `trace replay` had rendered
  * from a PASSING run four minutes earlier (13:38), with nothing on it saying so.
  *
@@ -168,7 +168,7 @@ const jsonFile = (paths: ReturnType<typeof standardReplayLayout>): string =>
  *
  *   ✖ THE REPRODUCTION: a failing verify REPLACES the page a passing `trace replay` left
  *     Error: ENOENT: no such file or directory, open
- *     '/var/folders/.../loombridge-html-fresh-IG70HE/.loombridge/replays/reports/demo.report.html'
+ *     '/var/folders/.../loombridge-html-fresh-IG70HE/.loombridge/run/replays/reports/demo.report.html'
  *
  * So the pre-fix code was reconstructed in full: `html: false` on the verify seam AND
  * `removeStaleHtmlReport` neutered to `return undefined`, which is exactly what shipped.

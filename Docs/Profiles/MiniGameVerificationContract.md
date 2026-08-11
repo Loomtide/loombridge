@@ -266,7 +266,7 @@ advisory note (not enforced), not a failure.
 - **S6f** — producer/QA/engineer CR report UX. **(shipped)**
 
 For S6b named screenshots, agents must call `unity_editor_screenshot` with an explicit
-`outputPath` such as `.loombridge/captures/start.png` or `captures/start.png`. The tool
+`outputPath` such as `.loombridge/run/captures/start.png` or `captures/start.png`. The tool
 returns JSON with the written path and image metadata. Do not discover named captures by
 scraping `trace/artifacts`; trace artifacts are recorder internals, not the capture-pack API.
 

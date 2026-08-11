@@ -128,7 +128,7 @@ test("profile mode runs standalone with no ACCEPTANCE.json/SLICES.json", async (
   assert.equal(report.engine.engine, "unity");
   assert.equal(report.status, "incomplete");
   assert.ok(report.summary.notMeasured > 0);
-  assert.equal(await exists(path.join(root, ".loombridge", "reports", "feel-profile.json")), false);
+  assert.equal(await exists(path.join(root, ".loombridge", "run", "reports", "feel-profile.json")), false);
 });
 
 test("profile report carries a producedBy build stamp (F5 #14 — audit provenance)", async () => {
@@ -169,7 +169,7 @@ test("unknown --profile exits 2 and lists the shipped ids", async () => {
   const root = await tmpRoot();
   const code = await runVerifyCli(["--profile", "floaty", "--root", root]);
   assert.equal(code, 2);
-  assert.equal(await exists(path.join(root, ".loombridge", "reports", "feel-profile.json")), false);
+  assert.equal(await exists(path.join(root, ".loombridge", "run", "reports", "feel-profile.json")), false);
 });
 
 test("--profile is mutually exclusive with --slice and --stage", async () => {
@@ -474,7 +474,7 @@ test("--setup-capture previews by default and writes a generic capture contract 
   assert.equal(contract.schemaVersion, "1");
   assert.equal(contract.interactions.find((i: any) => i.id === "jump-tap").kind, "ugui-tap");
   assert.equal(contract.interactions.find((i: any) => i.id === "run-joystick").kind, "ugui-hold-drag");
-  assert.equal(await exists(path.join(root, ".loombridge", "reports", "feel-profile.json")), false);
+  assert.equal(await exists(path.join(root, ".loombridge", "run", "reports", "feel-profile.json")), false);
   assert.equal(await exists(path.join(root, ".loombridge", "feel", "capture-contract.json")), false);
 });
 
@@ -508,7 +508,7 @@ test("profile report defaults to the external workspace feel/reports layout", as
   const code = await runVerifyCli(["--profile", "precision", "--root", root, "--workspace", workspace]);
   assert.equal(code, 0);
   assert.ok(await exists(workspaceReportPath(workspace)));
-  assert.equal(await exists(path.join(root, ".loombridge", "reports", "feel-profile.json")), false);
+  assert.equal(await exists(path.join(root, ".loombridge", "run", "reports", "feel-profile.json")), false);
 });
 
 // ── shared external-workspace standardization (matches the mini-game flow) ────
@@ -700,7 +700,7 @@ test("profile mode REFUSES contract-scoped flags (--inputs/--acceptance/--vlm) w
   assert.equal(await runVerifyCli(["--profile", "precision", "--root", root, "--acceptance", "x"]), 2);
   assert.equal(await runVerifyCli(["--profile", "precision", "--root", root, "--vlm", "x"]), 2);
   // none of the refused invocations wrote a report
-  assert.equal(await exists(path.join(root, ".loombridge", "reports", "feel-profile.json")), false);
+  assert.equal(await exists(path.join(root, ".loombridge", "run", "reports", "feel-profile.json")), false);
 });
 
 test("profile mode honors an explicit --output path (not the contract build-verdict.json default)", async () => {
@@ -711,7 +711,7 @@ test("profile mode honors an explicit --output path (not the contract build-verd
   assert.ok(await exists(path.join(root, "custom-report.html")));
   assert.ok(await exists(path.join(root, "custom-report.md")));
   // the contract-mode default verdict must NOT be written by profile mode
-  assert.equal(await exists(path.join(root, ".loombridge", "reports", "build-verdict.json")), false);
+  assert.equal(await exists(path.join(root, ".loombridge", "run", "reports", "build-verdict.json")), false);
 });
 
 test("profile mode explicit --output .html/.md never overwrites the JSON audit record", async () => {

@@ -524,7 +524,11 @@ async function buildImportedRegistryPacks(args: {
 
 async function writeImportedRegistryPacks(root: string, packs: Array<{ packId: string; registryPack: ReturnType<typeof catalogRecordsToRegistryPack> }>): Promise<void> {
   if (packs.length === 0) return;
-  const registryDir = path.join(loombridgePaths(root).dir, "registry");
+  // Through the `registry` SLOT, not a `path.join(paths.dir, "registry")` composed here.
+  // The write-path guard walks `LoombridgePaths` fields (W2); a destination composed off
+  // `.dir` was only ever caught by W6, and before W6 existed it was caught by luck (a
+  // nearby `console.error` happened to spell the path).
+  const registryDir = loombridgePaths(root).registry;
   await fs.mkdir(registryDir, { recursive: true });
   for (const pack of packs) {
     const outputPath = path.join(registryDir, `${pack.packId}.json`);

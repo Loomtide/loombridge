@@ -17,12 +17,21 @@ export const TRACE_DIR_ENV_VAR = "LOOMBRIDGE_TRACE_DIR";
  *
  * Resolution, in order:
  *  1. `LOOMBRIDGE_TRACE_DIR` — explicit override, used verbatim.
- *  2. A bound Unity project → `<project>/.loombridge/replays/traces`, matching the
+ *  2. A bound Unity project → `<project>/.loombridge/run/op-traces`, matching the
  *     contract that `.loombridge/` is the single source of truth per project.
  *  3. No bound project → a temp directory. Deliberately NOT cwd-relative: with no project
  *     to own the traces, writing into the caller's directory is what caused the problem.
  *
  * The directory is created lazily by the recorder, so an idle server writes nothing.
+ *
+ * WHY `run/op-traces` AND NOT `replays/traces` (ArtifactStorage S2 M6). This recorder is
+ * constructed at SERVER STARTUP, outside every CLI verb, and appends session JSONL plus
+ * screenshot artifacts on the first op. It used to share a directory with the recorded
+ * human demonstrations, which meant (a) an agent session re-created that directory purely
+ * by connecting, so "the legacy directory exists" could never be a safe migration signal,
+ * and (b) a machine-generated op log and an irreplaceable demonstration were
+ * indistinguishable by location. They are now different tiers as well as different
+ * directories: op traces are re-derivable run output, a demonstration is an anchor.
  */
 export function resolveTraceDirectory(
   binding: McpStartupProjectBinding,
@@ -33,11 +42,11 @@ export function resolveTraceDirectory(
     return override.trim();
   }
   if (binding.kind === "strict" || binding.kind === "cwd") {
-    // The dirname comes from the ONE constant. The `replays/traces` tail is spelled here
-    // rather than taken from `loombridgePaths().replayTraces` because `bridge/` may not
+    // The dirname comes from the ONE constant. The `run/op-traces` tail is spelled here
+    // rather than taken from `loombridgePaths().opTraces` because `bridge/` may not
     // import `domain/` (layering.test.ts). `__tests__/unit/repo/write-paths.test.ts` calls
     // THIS function and classifies what it returns, so the tail cannot drift unwatched.
-    return path.join(binding.target, LOOMBRIDGE_DIRNAME, "replays", "traces");
+    return path.join(binding.target, LOOMBRIDGE_DIRNAME, "run", "op-traces");
   }
   return path.join(os.tmpdir(), "loombridge", "traces");
 }

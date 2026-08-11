@@ -2,7 +2,7 @@
  * Contract presence — the refuse-on-missing-contract substrate (the extraction-shooter dogfood
  * core-hardening Epic 0; findings RCL-P04 / RCL-P01).
  *
- * The threat model: a build hand-creates a `.loombridge/captures/` directory and
+ * The threat model: a build hand-creates a `.loombridge/run/captures/` directory and
  * self-grades a "verification contract pass" with NO acceptance contract and NO
  * gate run. Captures are NOT a verification — nothing has been graded. The gate
  * verbs (`verify`/`doneness`) must REFUSE clearly when the contract is absent,
@@ -21,12 +21,17 @@ import path from "node:path";
 import { fileExists, type LoombridgePaths } from "./state.js";
 
 /**
- * Capture directory names that a build may hand-create under `.loombridge/`. The
+ * Capture directory paths, relative to `.loombridge/`, that a build may hand-create. The
  * gates read `.loombridge/verify/`; the extraction-shooter dogfood (RCL-P04) hand-created
- * `.loombridge/captures/`. Either one being non-empty with NO contract is the
+ * `.loombridge/run/captures/`. Any one of them being non-empty with NO contract is the
  * false-green shape we surface.
+ *
+ * `run/captures` is where ArtifactStorage S2 moved the ad-hoc screenshot destination.
+ * The LEGACY `captures` stays in the list rather than being replaced: a project that
+ * predates the move still has the directory, and a hand-created one there is exactly the
+ * same false green it always was. Both spellings, one decision.
  */
-export const CAPTURE_DIR_NAMES = ["verify", "captures"] as const;
+export const CAPTURE_DIR_NAMES = ["verify", "captures", "run/captures"] as const;
 
 export interface ContractPresence {
   /** Whether `.loombridge/` exists at all. */
@@ -79,6 +84,6 @@ export function noContractRefusal(contractPath: string, capturePresentDirs: stri
   const captureNote =
     capturePresentDirs.length > 0
       ? ` A ${capturePresentDirs.map((d) => `\`.loombridge/${d}/\``).join(" / ")} directory is present, but it is NOT a verification — nothing has been graded.`
-      : " A `.loombridge/captures/` directory is NOT a verification; nothing has been graded.";
+      : " A `.loombridge/run/captures/` directory is NOT a verification; nothing has been graded.";
   return `No acceptance contract found at ${contractPath} — run \`loombridge plan\` (or \`adopt\`) first.${captureNote}`;
 }

@@ -5,7 +5,7 @@
  * the scene, runs the caller's `demonstrate` callback (which drives the flow via
  * the `RecordingSession`), and returns the recorded `ReplayTrace`. Mirrors
  * `run-live` so the live-bridge wiring lives in exactly one place; the caller
- * persists the trace (e.g. to `.loombridge/replays/traces/<id>.trace.json`).
+ * persists the trace (e.g. to `.loombridge/anchors/traces/<id>.trace.json`).
  */
 
 import { UnityClient } from "../../bridge/unity-client.js";

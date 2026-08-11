@@ -54,7 +54,7 @@ license lives, and graded where it does not.**
 The same pattern covers the acceptance-contract and design-target anchors (committed by
 default). Trace pixel baselines are different: replay grading is LIVE by nature (it
 re-drives the editor), so it always needs a licensed editor and never runs in a
-license-less CI; the baselines under `.loombridge/replays/` are ignored by default and
+license-less CI; the baselines under `.loombridge/run/replays/` are ignored by default and
 committing them buys review visibility, not CI grading.
 
 **The honest trade:** CI grades what was produced; it cannot re-produce. If code changes

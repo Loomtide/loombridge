@@ -183,7 +183,7 @@ function resp(partial: Partial<BridgeResponse> & Pick<BridgeResponse, "status" |
 const inputSystemOk: Record<string, Handler> = {
   "input.begin_session": () => ({ data: { backend: "InputSystem", created: true } }),
 };
-const driverOpts = { captureDir: ".loombridge/replays/test/actual", pollIntervalMs: 1 };
+const driverOpts = { captureDir: ".loombridge/run/replays/test/actual", pollIntervalMs: 1 };
 
 test("driver: key-down/key-up open a session and issue the matching ops", async () => {
   const { send, calls } = fakeBridge(inputSystemOk);

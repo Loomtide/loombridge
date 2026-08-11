@@ -98,7 +98,7 @@ async function webSelectionForPlan(root: string, overrides: Record<string, Parti
       title: selected.label,
     };
   });
-  const selectionPath = path.join(root, ".loombridge/reports/web-selection.json");
+  const selectionPath = path.join(root, ".loombridge/run/reports/web-selection.json");
   await writeJson(selectionPath, {
     schemaVersion: "1",
     kind: "loombridge-asset-selection",
@@ -208,8 +208,8 @@ test("loombridge assets registry-plan/apply approves the manifest without hand-e
   await draftManifest(root, "registry");
   const registryPath = path.join(repoRoot, "asset-layer/registry/platformer-2d.json");
   const profilePath = path.join(repoRoot, "asset-layer/profiles/2d-platformer.json");
-  const planPath = path.join(root, ".loombridge/reports/registry-plan.json");
-  const selectionsPath = path.join(root, ".loombridge/reports/registry-selections.json");
+  const planPath = path.join(root, ".loombridge/run/reports/registry-plan.json");
+  const selectionsPath = path.join(root, ".loombridge/run/reports/registry-selections.json");
 
   assert.equal(await runAssets([
     "registry-plan",
@@ -253,8 +253,8 @@ test("loombridge assets registry-plan/apply approves a 3d-shooter manifest with 
   await draftManifest3dShooter(root);
   const registryPath = path.join(repoRoot, "asset-layer/registry/3d-shooter.json");
   const profilePath = path.join(repoRoot, "asset-layer/profiles/3d-shooter.json");
-  const planPath = path.join(root, ".loombridge/reports/registry-plan.json");
-  const selectionsPath = path.join(root, ".loombridge/reports/registry-selections.json");
+  const planPath = path.join(root, ".loombridge/run/reports/registry-plan.json");
+  const selectionsPath = path.join(root, ".loombridge/run/reports/registry-selections.json");
 
   assert.equal(await runAssets([
     "registry-plan",
@@ -307,8 +307,8 @@ test("loombridge assets registry-plan/apply can use a hosted catalog source inst
   const registryPath = path.join(repoRoot, "asset-layer/registry/platformer-2d.json");
   const profilePath = path.join(repoRoot, "asset-layer/profiles/2d-platformer.json");
   const catalogPath = path.join(root, "catalog.json");
-  const planPath = path.join(root, ".loombridge/reports/catalog-plan.json");
-  const selectionsPath = path.join(root, ".loombridge/reports/catalog-selections.json");
+  const planPath = path.join(root, ".loombridge/run/reports/catalog-plan.json");
+  const selectionsPath = path.join(root, ".loombridge/run/reports/catalog-selections.json");
   const registry = await loadRegistryPack(registryPath);
   const catalog = {
     schemaVersion: "1",
@@ -436,7 +436,7 @@ test("loombridge assets registry-apply --from-selection imports schema v2 pack i
   await draftManifest(root, "registry");
   const registryPath = path.join(repoRoot, "asset-layer/registry/platformer-2d.json");
   const profilePath = path.join(repoRoot, "asset-layer/profiles/2d-platformer.json");
-  const selectionPath = path.join(root, ".loombridge/reports/web-selection.json");
+  const selectionPath = path.join(root, ".loombridge/run/reports/web-selection.json");
   const packId = "kenney.3d-assets.blaster-kit";
   await writeJson(selectionPath, {
     schemaVersion: "2",
@@ -477,7 +477,7 @@ test("loombridge assets registry-apply --from-selection pack-only skips manifest
   const before = await fs.readFile(manifestPath, "utf-8");
   const registryPath = path.join(repoRoot, "asset-layer/registry/platformer-2d.json");
   const profilePath = path.join(repoRoot, "asset-layer/profiles/2d-platformer.json");
-  const selectionPath = path.join(root, ".loombridge/reports/web-selection.json");
+  const selectionPath = path.join(root, ".loombridge/run/reports/web-selection.json");
   const packId = "kenney.ui-space-shooter";
   await writeJson(selectionPath, {
     schemaVersion: "2",
@@ -580,7 +580,7 @@ test("loombridge assets registry-apply --from-selection rejects pack items under
   const before = await fs.readFile(path.join(root, ".loombridge/ASSET_MANIFEST.json"), "utf-8");
   const registryPath = path.join(repoRoot, "asset-layer/registry/platformer-2d.json");
   const profilePath = path.join(repoRoot, "asset-layer/profiles/2d-platformer.json");
-  const selectionPath = path.join(root, ".loombridge/reports/web-selection.json");
+  const selectionPath = path.join(root, ".loombridge/run/reports/web-selection.json");
   await writeJson(selectionPath, {
     schemaVersion: "1",
     kind: "loombridge-asset-selection",
@@ -609,7 +609,7 @@ test("loombridge assets registry-apply --from-selection rejects invalid pack ids
   const before = await fs.readFile(path.join(root, ".loombridge/ASSET_MANIFEST.json"), "utf-8");
   const registryPath = path.join(repoRoot, "asset-layer/registry/platformer-2d.json");
   const profilePath = path.join(repoRoot, "asset-layer/profiles/2d-platformer.json");
-  const selectionPath = path.join(root, ".loombridge/reports/web-selection.json");
+  const selectionPath = path.join(root, ".loombridge/run/reports/web-selection.json");
   await writeJson(selectionPath, {
     schemaVersion: "2",
     kind: "loombridge-asset-selection",
@@ -749,7 +749,7 @@ test("loombridge assets registry-apply --from-selection rejects malformed select
   const before = await fs.readFile(path.join(root, ".loombridge/ASSET_MANIFEST.json"), "utf-8");
   const registryPath = path.join(repoRoot, "asset-layer/registry/platformer-2d.json");
   const profilePath = path.join(repoRoot, "asset-layer/profiles/2d-platformer.json");
-  const selectionPath = path.join(root, ".loombridge/reports/web-selection.json");
+  const selectionPath = path.join(root, ".loombridge/run/reports/web-selection.json");
   await writeJson(selectionPath, {
     schemaVersion: "1",
     kind: "not-loombridge",
@@ -824,9 +824,9 @@ test("loombridge assets registry-apply --from-selection is deterministic for ide
 test("loombridge assets generated-plan/apply approves generated exports with provenance", async () => {
   const root = await tmpRoot();
   const manifest = await draftManifest(root, "generated");
-  const annotationsPath = path.join(root, ".loombridge/reports/generated-annotations.json");
-  const planPath = path.join(root, ".loombridge/reports/generated-plan.json");
-  const exportsPath = path.join(root, ".loombridge/reports/generated-exports.json");
+  const annotationsPath = path.join(root, ".loombridge/run/reports/generated-annotations.json");
+  const planPath = path.join(root, ".loombridge/run/reports/generated-plan.json");
+  const exportsPath = path.join(root, ".loombridge/run/reports/generated-exports.json");
 
   const annotations: GeneratedAssetAnnotation[] = manifest.assets.map((asset, i) => ({
     annotationId: `ann-${asset.id}`,
@@ -882,8 +882,8 @@ test("loombridge assets generated-plan/apply approves generated exports with pro
 test("loombridge assets resolves path flags against --root even when --root is last", async () => {
   const root = await tmpRoot();
   const manifest = await draftManifest(root, "generated");
-  const annotationsPath = path.join(root, ".loombridge/reports/generated-annotations.json");
-  const outputRel = ".loombridge/reports/generated-plan-root-last.json";
+  const annotationsPath = path.join(root, ".loombridge/run/reports/generated-annotations.json");
+  const outputRel = ".loombridge/run/reports/generated-plan-root-last.json";
 
   const annotations: GeneratedAssetAnnotation[] = manifest.assets.map((asset) => ({
     annotationId: `ann-${asset.id}`,
@@ -896,7 +896,7 @@ test("loombridge assets resolves path flags against --root even when --root is l
 
   assert.equal(await runAssets([
     "generated-plan",
-    "--annotations", ".loombridge/reports/generated-annotations.json",
+    "--annotations", ".loombridge/run/reports/generated-annotations.json",
     "--output", outputRel,
     "--root", root,
   ]), 0);

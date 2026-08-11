@@ -640,14 +640,20 @@ export function resolveSafeScreenshotOutputPath(
     : path.resolve(resolvedCwd, requestedPath);
 
   // Containment is enforced against the concrete artifact roots only. We do NOT
-  // whitelist the project cwd itself: doing so would let `.loombridge/../<path>` or
-  // `captures/../<path>` escape the artifact dirs and overwrite arbitrary files
-  // under the project root (the target only has to land somewhere below cwd).
-  // The `.loombridge` and `captures` roots already admit every legitimate relative
-  // path, and `..` escapes are correctly rejected by the path.relative check.
+  // whitelist the project cwd itself: doing so would let `.loombridge/../<path>`
+  // escape the artifact dirs and overwrite arbitrary files under the project root
+  // (the target only has to land somewhere below cwd). The `.loombridge` root already
+  // admits every legitimate relative path, and `..` escapes are correctly rejected by
+  // the path.relative check.
+  //
+  // TOP-LEVEL `captures/` IS NO LONGER ADMITTED (ArtifactStorage S2). It predated the
+  // `.loombridge/` layout, sat outside the state dir entirely, was ignored by the
+  // template `.gitignore` for reasons nobody could restate, and gave every screenshot a
+  // second home that no tier owned. The advertised destination is now
+  // `.loombridge/run/captures/`, which is inside the state dir and structurally ignored
+  // by the run tier's own marker.
   const allowedRoots = [
     loombridgePaths(resolvedCwd).dir,
-    path.resolve(resolvedCwd, "captures"),
     path.join(os.homedir(), "loombridge-runs"),
     path.resolve("/tmp"),
     path.resolve(os.tmpdir()),
@@ -660,7 +666,7 @@ export function resolveSafeScreenshotOutputPath(
 
   if (!isAllowed) {
     throw new Error(
-      "outputPath must stay under .loombridge/, captures/, ~/loombridge-runs, or /tmp",
+      "outputPath must stay under .loombridge/ (e.g. .loombridge/run/captures/), ~/loombridge-runs, or /tmp",
     );
   }
 

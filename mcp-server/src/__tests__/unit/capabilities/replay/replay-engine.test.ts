@@ -110,7 +110,7 @@ function fakeDriver(opts: FakeOptions = {}): ReplayDriver {
       return { reached: true };
     },
     async capture(id: string) {
-      return { artifact: `.loombridge/replays/level-1-success/actual/${id}.png`, sha256: "deadbeef" };
+      return { artifact: `.loombridge/run/replays/level-1-success/actual/${id}.png`, sha256: "deadbeef" };
     },
     async evaluateAssertion(assertion: Assertion) {
       if (opts.failAssertionId === assertion.id) {

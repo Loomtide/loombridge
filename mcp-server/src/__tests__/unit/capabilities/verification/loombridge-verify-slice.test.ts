@@ -1,7 +1,7 @@
 /**
  * `loombridge verify --slice <id>` (S2a) — data-driven gate selection from the
  * slice's `acceptance.gates` + a PER-SLICE verdict at
- * `.loombridge/reports/slices/<id>.verdict.json`.
+ * `.loombridge/run/reports/slices/<id>.verdict.json`.
  *
  * The harness mirrors verification-run-gates.test.ts: write the gate-input JSON
  * captures into a tmp `.loombridge/verify/<id>/`, write a SLICES.json + an
@@ -81,7 +81,7 @@ function builtPlanWith(gates: string[], runId = "run-s1-hud-1", id = "s1-hud"): 
   plan.slices[0]!.proof = {
     runId,
     startedAt: "2026-01-01T00:00:00.000Z",
-    verdictPath: `.loombridge/reports/slices/${id}.verdict.json`,
+    verdictPath: `.loombridge/run/reports/slices/${id}.verdict.json`,
     captureManifest: gates.map((g) => `${id}/${g}.json`),
     checkpointId: null,
     approvedAt: null,

@@ -138,7 +138,7 @@ async function readJson<T>(p: string): Promise<T | null> {
   }
 }
 
-/** The latest verify JSON report for a workspace — checks both the standalone (`.loombridge/reports`)
+/** The latest verify JSON report for a workspace — checks both the standalone (`.loombridge/run/reports`)
  *  and the guided (`reports`) locations, newest wins. Null when none is present. */
 async function loadReport(workspace: string): Promise<MinigameVerifyReport | null> {
   const candidates = [

@@ -195,7 +195,7 @@ export interface VerifyArgs {
   inputsExplicit?: boolean;
   /** Acceptance contract path (default `.loombridge/ACCEPTANCE.json`). */
   acceptancePath: string;
-  /** Verdict output path (default `.loombridge/reports/build-verdict.json`). */
+  /** Verdict output path (default `.loombridge/run/reports/build-verdict.json`). */
   outputPath: string;
   /** Whether `--output` was passed explicitly (profile mode has its own default). */
   outputExplicit?: boolean;
@@ -217,7 +217,7 @@ export interface VerifyArgs {
   /**
    * Slice-scoped verification (S2a). When set to a slice id from
    * `.loombridge/SLICES.json`, the run grades ONLY that slice's `acceptance.gates`
-   * and writes a PER-SLICE verdict to `.loombridge/reports/slices/<id>.verdict.json`.
+   * and writes a PER-SLICE verdict to `.loombridge/run/reports/slices/<id>.verdict.json`.
    * It does NOT touch the whole-game build-verdict.json or STATE's `lastVerdict`/
    * `phase`; a fresh pass bound to the slice proof flips `built -> verified`.
    * Mutually exclusive with `stage` — they are independent axes.
@@ -338,7 +338,7 @@ function refuseNothingGraded(args: { inputsDir: string; root: string; reportPath
  */
 export async function runVerify(args: VerifyArgs): Promise<number> {
   // Refuse-on-missing-contract (RCL-P04 / §3a refuse-when-you-can't-check). A
-  // build that hand-creates `.loombridge/captures/` and never authored a contract
+  // build that hand-creates `.loombridge/run/captures/` and never authored a contract
   // must NOT be able to run the gate to a vacuous green — there is nothing to
   // grade against. Refuse clearly and point at `loombridge plan`, rather than
   // failing later with a cryptic ENOENT on the contract read.
@@ -507,7 +507,7 @@ export async function runVerify(args: VerifyArgs): Promise<number> {
 /**
  * Slice-scoped verify (S2a). Selects the slice's `acceptance.gates` (NOT the
  * `--stage` phase enum), grades only those, and writes a PER-SLICE verdict to
- * `.loombridge/reports/slices/<id>.verdict.json`. The verdict is stamped with
+ * `.loombridge/run/reports/slices/<id>.verdict.json`. The verdict is stamped with
  * `producedAt`, the `runId` from `currentBuild` (null pre-S2b), the frozen
  * Design Target metadata, and a `slice: { id, gates }` binding so S2c doneness
  * can check freshness/fidelity and bind the verdict to the slice. It does NOT
@@ -1357,7 +1357,7 @@ function printUsage(): void {
       "project's verification assets (acceptance contract, approved trace baselines,",
       "feel snapshot, screen contract), PRINTS THE PLAN FIRST (one row per asset, with",
       "when and by what it was approved), then runs them into one report at",
-      ".loombridge/reports/verify.json. Nothing is written before the plan prints.",
+      ".loombridge/run/reports/verify.json. Nothing is written before the plan prints.",
       "Offline assets run by default; assets that need a running editor are listed as",
       "'needs --live' and never folded into a pass. A project with no assets prints the",
       "record/replay/approve on-ramp and exits 2.",
@@ -1393,8 +1393,8 @@ function printUsage(): void {
       "  --live                Also run the assets that need a running Unity editor",
       "                        (trace replay with pixel-drift gating, feel snapshot).",
       "  --report <path>       Unified report path, resolved relative to --root (default:",
-      "                        .loombridge/reports/verify.json, or",
-      "                        .loombridge/reports/verify-scoped.json under --only). Refused",
+      "                        .loombridge/run/reports/verify.json, or",
+      "                        .loombridge/run/reports/verify-scoped.json under --only). Refused",
       "                        when it would overwrite a project artifact or any file that is",
       "                        not a previous unified report.",
       `  --only <sections>     Comma-separated subset of ${UNIFIED_SECTION_NAMES.join("|")}.`,
@@ -1403,7 +1403,7 @@ function printUsage(): void {
       "                        unapproved asset still refuses (tier 2) whatever you selected:",
       "                        tampering is never scoped away. A scoped run's status is never",
       "                        `pass` (its ceiling is `partial`), it writes",
-      "                        .loombridge/reports/verify-scoped.json instead of the full",
+      "                        .loombridge/run/reports/verify-scoped.json instead of the full",
       "                        report, and `doneness` never certifies from it. Unknown or",
       "                        empty selections refuse (exit 2) before anything is written;",
       "                        a KNOWN section that matches no discovered asset is",
@@ -1419,7 +1419,7 @@ function printUsage(): void {
       "  --root <dir>          Project root (default: cwd)",
       "  --inputs <dir>        Captured op-output dir (default: .loombridge/verify)",
       "  --acceptance <path>   Contract (default: .loombridge/ACCEPTANCE.json)",
-      "  --output <path>       Verdict (default: .loombridge/reports/build-verdict.json)",
+      "  --output <path>       Verdict (default: .loombridge/run/reports/build-verdict.json)",
       "                        In --profile mode, overrides the profile report path",
       "                        (or setup capture contract path with --setup-capture).",
       "  --vlm <path>          Advisory VLM findings (optional)",
@@ -1440,7 +1440,7 @@ function printUsage(): void {
       "                        the full run (`verify` / omitted) writes build-verdict.json.",
       "  --slice <id>          Slice-scoped run — grade ONLY the slice's acceptance.gates",
       "                        (from .loombridge/SLICES.json) and write the per-slice verdict",
-      "                        to .loombridge/reports/slices/<id>.verdict.json. Defaults",
+      "                        to .loombridge/run/reports/slices/<id>.verdict.json. Defaults",
       "                        --inputs to .loombridge/verify/<id>/. Does NOT touch the",
       "                        whole-game build-verdict.json or STATE; a fresh pass",
       "                        flips the slice built -> verified. Mutually exclusive",

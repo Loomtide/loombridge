@@ -439,7 +439,7 @@ export async function run(args: string[], deps: UpdateRunDeps = {}): Promise<num
   }
 
   // Backup the install record before mutating (the plan's "backup before migrate").
-  // The backup lives under .loombridge/backups/ — NOT next to the record in
+  // The backup lives under .loombridge/run/backups/ — NOT next to the record in
   // ProjectSettings/, where a stray `.bak` shows up as an untracked file in every
   // consumer's `git status` after every update. `.loombridge/` run artifacts are the
   // one Loombridge surface consumers never commit.
@@ -449,13 +449,13 @@ export async function run(args: string[], deps: UpdateRunDeps = {}): Promise<num
       const backupDir = loombridgePaths(project).backups;
       mkdirSync(backupDir, { recursive: true });
       copyFileSync(metaPath, path.join(backupDir, "LoombridgeInstall.json.bak"));
-      console.log(`  -> backed up ${METADATA_RELPATH} -> .loombridge/backups/LoombridgeInstall.json.bak`);
+      console.log(`  -> backed up ${METADATA_RELPATH} -> .loombridge/run/backups/LoombridgeInstall.json.bak`);
     }
     // Heal the legacy location: older CLIs dropped the .bak beside the record.
     const legacyBak = `${metaPath}.bak`;
     if (existsSync(legacyBak)) {
       rmSync(legacyBak);
-      console.log(`  -> removed legacy ${METADATA_RELPATH}.bak (backups live in .loombridge/backups/ now)`);
+      console.log(`  -> removed legacy ${METADATA_RELPATH}.bak (backups live in .loombridge/run/backups/ now)`);
     }
   }
 

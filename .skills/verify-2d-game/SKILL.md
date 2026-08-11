@@ -3,7 +3,7 @@ name: verify-2d-game
 description: Run the Loombridge verification pipeline on a built 2D game — deterministic Tier-1 quality gates (asset/manifest, UI conformance, framing, playability, feel) plus an advisory VLM design review against the design mock. Use AFTER unity-2d-game + game-polish-2d have built and polished the game, to self-check it against a machine-checkable acceptance contract, drive a fix→re-run loop until green, and hand over build-verdict.json + a green `loombridge doneness` as proof.
 ---
 
-Use this skill to turn the human review pass — "the font is wrong, the player is clipped, it won at the wrong spot" — into reproducible self-checks the agent runs on itself. It is the third stage after `unity-2d-game` (build + feel) and `game-polish-2d` (presentation). The contract is `.loombridge/ACCEPTANCE.json`; the proof artifact is `.loombridge/reports/build-verdict.json` + a green `loombridge doneness`. The agent's primary tools are the **Loombridge CLI** (`loombridge verify --root . --inputs .loombridge/verify/<state> --strict`, `loombridge doneness`) and the **speed capture-runner** for the visual capture chunk; manual per-gate captures fill in the remaining gates. (A bare `loombridge verify` is the unified front door: it discovers the project's verification assets and refuses, exit 2, when nothing was graded; the per-state `--inputs` form above is the contract-mode invocation this skill drives.)
+Use this skill to turn the human review pass — "the font is wrong, the player is clipped, it won at the wrong spot" — into reproducible self-checks the agent runs on itself. It is the third stage after `unity-2d-game` (build + feel) and `game-polish-2d` (presentation). The contract is `.loombridge/ACCEPTANCE.json`; the proof artifact is `.loombridge/run/reports/build-verdict.json` + a green `loombridge doneness`. The agent's primary tools are the **Loombridge CLI** (`loombridge verify --root . --inputs .loombridge/verify/<state> --strict`, `loombridge doneness`) and the **speed capture-runner** for the visual capture chunk; manual per-gate captures fill in the remaining gates. (A bare `loombridge verify` is the unified front door: it discovers the project's verification assets and refuses, exit 2, when nothing was graded; the per-state `--inputs` form above is the contract-mode invocation this skill drives.)
 
 ## When to invoke
 
@@ -120,7 +120,7 @@ node mcp-server/dist/surfaces/cli.js verify --root . --inputs .loombridge/verify
 node mcp-server/dist/surfaces/cli.js doneness --root .
 ```
 
-`loombridge verify` writes the canonical `.loombridge/reports/build-verdict.json`; `loombridge doneness` returns 0 only when phase=verified-green AND verdict.runId === currentBuild.runId AND verdict.producedAt is on/after currentBuild.startedAt AND every captureManifest entry is present + safe **AND — for a design-targeted build — the verdict's `reviewFindings` references the frozen hero shot (`reference.heroShotSha256 === designTarget.pngSha256`), is independent (`independent` + `reviewerCount ≥ 2`), and passes every structural fidelity criterion** (§P0). Never claim handover without a `doneness` exit 0.
+`loombridge verify` writes the canonical `.loombridge/run/reports/build-verdict.json`; `loombridge doneness` returns 0 only when phase=verified-green AND verdict.runId === currentBuild.runId AND verdict.producedAt is on/after currentBuild.startedAt AND every captureManifest entry is present + safe **AND — for a design-targeted build — the verdict's `reviewFindings` references the frozen hero shot (`reference.heroShotSha256 === designTarget.pngSha256`), is independent (`independent` + `reviewerCount ≥ 2`), and passes every structural fidelity criterion** (§P0). Never claim handover without a `doneness` exit 0.
 
 > **Known limitation (M2 follow-up).** Today `loombridge verify` grades one state per
 > invocation. `doneness` enforces capture *presence* across every state, but multi-state
@@ -138,14 +138,14 @@ For each Tier-1 `failures[]` entry: reproduce (the gate already did) → fix the
 
 ### 6. Asset handoff consistency check (when applicable)
 
-If `.loombridge/handoff/<genre>-asset-prepare-report.json` exists, run the consistency check explicitly (the bare `npm run asset:handoff:check` script requires `--prepare-report` and exits 1 without it):
+If `.loombridge/run/handoff/<genre>-asset-prepare-report.json` exists, run the consistency check explicitly (the bare `npm run asset:handoff:check` script requires `--prepare-report` and exits 1 without it):
 
 ```bash
 node mcp-server/dist/capabilities/assets/handoff-consistency.js \
-  --prepare-report .loombridge/handoff/<genre>-asset-prepare-report.json \
-  --verdict .loombridge/reports/build-verdict.json \
-  --output .loombridge/handoff/asset-handoff-consistency.json \
-  [--text .loombridge/handoff/handoff.md,scripts/builder.cs]
+  --prepare-report .loombridge/run/handoff/<genre>-asset-prepare-report.json \
+  --verdict .loombridge/run/reports/build-verdict.json \
+  --output .loombridge/run/handoff/asset-handoff-consistency.json \
+  [--text .loombridge/run/handoff/handoff.md,scripts/builder.cs]
 ```
 
 This catches stale handoff prose, `registryAssets.used=false` contradictions, and asset ids in the verdict that don't match the prepare report.
@@ -162,7 +162,7 @@ Before handover, ALL of the following must hold — not just a green Tier-1 verd
 2. **PLAY-MODE frames with the HUD visible were captured** under `.loombridge/verify/<state>/frames/` — the live render, not the edit-mode scene view — by decoding each `unity_editor_screenshot` result's `image_base64` straight to the named frame file (no trace-dir glob, race-free). The capture-runner does this for scenario-pack frames when invoked with `--out .loombridge/verify/<state>/`; supplement with extra frames the VLM ensemble needs *into the same per-state `frames/` dir* so the `--vlm` file's relative `frames/<id>.png` paths resolve correctly under `run-gates`.
 3. **The independent adversarial ensemble ran against the frozen hero-shot IMAGE** — N ≥ 2 (recommend 3) fresh-context reviewers with NO build knowledge, each given ONLY the **frozen `.loombridge/design/hero-shot.png` bytes** (not contract attributes) + the frames + the rubric and prompted adversarially. Their flags were **unioned** into one `vlm-review.json` (worst status per criterion survives; a criterion passes only if ALL reviewers passed it), **stamped with `reference.heroShotSha256` + `independence: { independent: true, reviewerCount: N }`**, and produced and merged via `loombridge verify --vlm`. It appears under `reviewFindings`, and the Group-C fidelity subset is what `doneness` enforces (#1).
 4. **Every union `fail` is resolved or justified.** Each unioned `criteria[].status == "fail"` is either fixed in the build and re-verified — re-capture the frame, re-run the ensemble, re-union (the finding flips to pass/warn on the re-run) — OR carries a written one-line justification recorded next to the verdict. A `fail` left unaddressed and unexplained is NOT done.
-5. **Registry handoff consistency is green when registry assets were prepared.** If `.loombridge/handoff/*asset-prepare-report.json` exists, the asset-handoff check ran with no mismatches between prepare-report ids and verdict ids and no stale "registry skipped" prose.
+5. **Registry handoff consistency is green when registry assets were prepared.** If `.loombridge/run/handoff/*asset-prepare-report.json` exists, the asset-handoff check ran with no mismatches between prepare-report ids and verdict ids and no stale "registry skipped" prose.
 
 ## Reference files
 

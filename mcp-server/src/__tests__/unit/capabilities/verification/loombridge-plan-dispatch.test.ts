@@ -338,7 +338,7 @@ async function makeSliceDone(root: string, plan: SlicePlan, id: string): Promise
   slice.proof = {
     runId: `run-${id}`,
     startedAt: "2026-05-28T00:00:00.000Z",
-    verdictPath: `.loombridge/reports/slices/${id}.verdict.json`,
+    verdictPath: `.loombridge/run/reports/slices/${id}.verdict.json`,
     captureManifest: [`${id}/verify-manifest.json`],
     checkpointId: id,
     approvedAt: null,
@@ -396,7 +396,7 @@ test("await-approval mode — final --go clears currentBuild after all slices ap
       slice.proof = {
         runId: `run-${slice.id}`,
         startedAt: "2026-05-28T00:00:00.000Z",
-        verdictPath: `.loombridge/reports/slices/${slice.id}.verdict.json`,
+        verdictPath: `.loombridge/run/reports/slices/${slice.id}.verdict.json`,
         captureManifest: [],
         checkpointId: slice.id,
         approvedAt: "2026-05-28T02:00:00.000Z",
@@ -447,7 +447,7 @@ test("await-approval mode — --go --note --signoff copies durable artifact and 
     const framing = after.slices.find((s) => s.id === "framing")!;
     assert.equal(framing.state, "approved");
     assert.equal(framing.proof?.approvalNote, "No visible repeated ground seams in the frozen frame.");
-    assert.equal(framing.proof?.signoffArtifact, ".loombridge/reports/slices/framing/signoff.png");
+    assert.equal(framing.proof?.signoffArtifact, ".loombridge/anchors/signoffs/framing/signoff.png");
     const durable = path.join(root, framing.proof!.signoffArtifact!);
     const durableBytes = await fs.readFile(durable);
     assert.deepEqual(durableBytes, signoffBytes);
@@ -580,7 +580,7 @@ test("await-approval mode — --go refuses built-not-verified and verified-not-d
     plan.slices[0]!.proof = {
       runId: "run-framing",
       startedAt: "2026-05-28T00:00:00.000Z",
-      verdictPath: ".loombridge/reports/slices/framing.verdict.json",
+      verdictPath: ".loombridge/run/reports/slices/framing.verdict.json",
       captureManifest: [],
       checkpointId: null,
       approvedAt: null,

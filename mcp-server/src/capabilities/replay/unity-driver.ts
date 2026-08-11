@@ -59,7 +59,7 @@ export type BridgeSend = (
 export interface UnityDriverOptions {
   /**
    * Directory for capture PNGs (server-relative under `.loombridge/`|`captures/`,
-   * or absolute under an allowed root). Default `.loombridge/replays/actual`.
+   * or absolute under an allowed root). Default `.loombridge/run/replays/actual`.
    */
   captureDir?: string;
   /** Default wait budget for an anchor with no explicit timeout (ms). */
@@ -97,10 +97,10 @@ export interface UnityDriverOptions {
  * POSIX separators on purpose: this string is sent to the bridge as a server-relative
  * `outputPath` and joined with `/` at the call site, so `path.join` (which would emit `\`
  * on Windows) must not be used. The dirname comes from the ONE constant; the
- * `replays/actual` tail is not a `LoombridgePaths` slot, so
+ * `run/replays/actual` tail is not a `LoombridgePaths` slot, so
  * `__tests__/unit/repo/write-paths.test.ts` pins THIS export and classifies it.
  */
-export const UNITY_DRIVER_DEFAULT_CAPTURE_DIR = `${LOOMBRIDGE_DIRNAME}/replays/actual`;
+export const UNITY_DRIVER_DEFAULT_CAPTURE_DIR = `${LOOMBRIDGE_DIRNAME}/run/replays/actual`;
 
 const DEFAULTS = {
   captureDir: UNITY_DRIVER_DEFAULT_CAPTURE_DIR,

@@ -57,7 +57,8 @@
  */
 
 import assert from "node:assert/strict";
-import { readFileSync, readdirSync, statSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -68,7 +69,12 @@ import { filesHardCodingName } from "./unified-verify-declared-paths.test.js";
 import { gitignoreHides } from "./test-results-declarations.test.js";
 import { stripCommentary } from "./layering.test.js";
 
-import { LOOMBRIDGE_DIRNAME, loombridgePaths, type LoombridgePaths } from "../../../domain/state.js";
+import {
+  LOOMBRIDGE_DIRNAME,
+  RUN_GITIGNORE_BODY,
+  loombridgePaths,
+  type LoombridgePaths,
+} from "../../../domain/state.js";
 import { LOOMBRIDGE_HOME_DIRNAME } from "../../../domain/workspace-paths.js";
 import { resolveTraceDirectory } from "../../../bridge/trace-directory.js";
 import { UNITY_DRIVER_DEFAULT_CAPTURE_DIR } from "../../../capabilities/replay/unity-driver.js";
@@ -209,22 +215,32 @@ test("W1 LITMUS: the real scan fires on a planted third spelling", () => {
 /* ══════════════════════════════════════════════════════════════════════════ */
 
 /**
- * The categories a destination under `.loombridge/` may fall into today, and whether the
- * shipped project template commits or ignores each.
+ * The categories a destination under `.loombridge/` may fall into, and whether the shipped
+ * project template commits or ignores each.
  *
- * PR-B replaces this table with `anchors/`, `tests/`, `design/`, a contract file, and `run/`.
- * The `committed` column is where the RFC's finding is visible: `replays/` is IGNORED today
- * and holds both the recorded human demonstrations and the approved pixel baselines, which
- * is the RFC's mechanism 2 ("the one project-local anchor is gitignored by our own
- * template"). It is pinned here as TODAY'S FACT, not as an endorsement, so that the S2 move
- * changes an assertion a reviewer can read rather than changing nothing visible.
+ * PR-B (ArtifactStorage S2) narrowed this from six ad-hoc directories to the tiered set the
+ * RFC proposes. The `committed` column is the finding, inverted: `replays/` used to be
+ * IGNORED and held both the recorded human demonstrations and the approved pixel baselines
+ * (the RFC's mechanism 2, "the one project-local anchor is gitignored by our own template").
+ * Those are now `anchors/`, committed, and `run/` is the ONLY ignored entry.
+ *
+ * THE FOUR COMMITTED NON-ANCHOR ENTRIES ARE NOT LEFTOVERS, and each is a decision the RFC
+ * records rather than a directory nobody got round to moving:
+ *
+ *   `verify/`   the C# capture allowlist hard-codes `Path.Combine(projectRoot,
+ *               ".loombridge", "verify")` and THROWS outside it, so moving it is a
+ *               cross-language migration; and it is what lets a clone re-grade offline.
+ *   `tests/`    stamped evidence a reviewer reads without an editor (pre-existing rule).
+ *   `design/`   the approved hero shot.
+ *   `registry/` imported asset packs: project INPUTS whose re-derivation may need a hosted
+ *               catalog a clone or a CI runner cannot reach.
  */
 const ALLOWED_SUBDIRS: ReadonlyMap<string, { category: string; committed: boolean }> = new Map([
+  ["anchors", { category: "anchors", committed: true }],
   ["design", { category: "design", committed: true }],
-  ["reports", { category: "reports", committed: false }],
+  ["registry", { category: "registry", committed: true }],
+  ["run", { category: "run", committed: false }],
   ["tests", { category: "tests", committed: true }],
-  ["backups", { category: "backups", committed: false }],
-  ["replays", { category: "replays", committed: false }],
   ["verify", { category: "verify", committed: true }],
 ]);
 
@@ -301,10 +317,10 @@ const TOP_LEVEL_CHILDREN = [
   "GENRE_PROMOTION.json",
   "SLICES.json",
   "STATE.md",
-  "backups",
+  "anchors",
   "design",
-  "replays",
-  "reports",
+  "registry",
+  "run",
   "tests",
   "verify",
 ];
@@ -348,8 +364,87 @@ test("W2: the template's commit/ignore decision matches the layout's structural 
   // NON-VACUITY for the predicate itself: it must still report SOMETHING as hidden and
   // something as not, over the same real file, or the loop above would pass on a template
   // that ignores nothing.
-  assert.equal(gitignoreHides(lines, `${LOOMBRIDGE_DIRNAME}/reports`), true);
+  assert.equal(gitignoreHides(lines, `${LOOMBRIDGE_DIRNAME}/run`), true);
   assert.equal(gitignoreHides(lines, `${LOOMBRIDGE_DIRNAME}/design`), false);
+
+  // THE WHOLE IGNORE CONTRIBUTION IS ONE RULE, and that is the claim the RFC makes to a
+  // human ("if it is not under run/, it is meant to be committed"). Pinned by DERIVING the
+  // Loombridge-relevant lines from the file rather than by re-typing them: a second rule
+  // added here is a second thing a reader has to hold, and a second place the split can be
+  // wrong.
+  const loombridgeRules = lines
+    .map((l) => l.trim())
+    .filter((l) => l.length > 0 && !l.startsWith("#") && l.includes(LOOMBRIDGE_DIRNAME));
+  assert.deepEqual(loombridgeRules, [`${LOOMBRIDGE_DIRNAME}/run/*`, ".loombridge-fixtures/"]);
+});
+
+test("M2: the run tier's own .gitignore is `*` PLUS `!.gitignore`, proved with real git", () => {
+  // OBSERVED FAILURE THIS PINS. With a bare `*`, the marker matches its own pattern, so
+  // `git add .` stages NOTHING under `run/` including the marker itself: the file never
+  // reaches a clone, and a clone therefore does not ignore the run tier at all. The
+  // structural guarantee silently does nothing, and nothing in the suite notices, because
+  // every assertion about the file's CONTENT still passes.
+  //
+  // Run against real `git`, not against `gitignoreHides`: the question is what git does,
+  // and a hand-written model of git's rules is exactly the wrong thing to answer it with.
+  const root = mkdtempSync(path.join(os.tmpdir(), "loombridge-runignore-"));
+  const git = (...args: string[]): string =>
+    execFileSync("git", ["-C", root, ...args], { encoding: "utf-8" });
+  try {
+    mkdirSync(path.join(root, LOOMBRIDGE_DIRNAME, "run", "reports"), { recursive: true });
+    writeFileSync(path.join(root, ".gitignore"), readFileSync(TEMPLATE_GITIGNORE, "utf-8"));
+    writeFileSync(path.join(root, LOOMBRIDGE_DIRNAME, "run", ".gitignore"), RUN_GITIGNORE_BODY);
+    writeFileSync(path.join(root, LOOMBRIDGE_DIRNAME, "run", "reports", "verify.json"), "{}\n");
+    mkdirSync(path.join(root, LOOMBRIDGE_DIRNAME, "anchors", "traces"), { recursive: true });
+    writeFileSync(path.join(root, LOOMBRIDGE_DIRNAME, "anchors", "traces", "a.trace.json"), "{}\n");
+    git("init", "-q", ".");
+    git("config", "user.email", "guard@example.com");
+    git("config", "user.name", "guard");
+    git("add", ".");
+    const staged = git("diff", "--cached", "--name-only").split("\n").filter(Boolean).sort();
+
+    // The marker is COMMITTED, so it travels to a clone.
+    assert.ok(
+      staged.includes(`${LOOMBRIDGE_DIRNAME}/run/.gitignore`),
+      `the run-tier marker was not staged; git staged ${JSON.stringify(staged)}`,
+    );
+    // …and it is the ONLY thing under `run/` that is.
+    assert.deepEqual(
+      staged.filter((f) => f.startsWith(`${LOOMBRIDGE_DIRNAME}/run/`)),
+      [`${LOOMBRIDGE_DIRNAME}/run/.gitignore`],
+    );
+    // …while the anchors are staged, which is the other half of the split.
+    assert.ok(staged.includes(`${LOOMBRIDGE_DIRNAME}/anchors/traces/a.trace.json`));
+
+    // LITMUS, run against the SAME real git: strip the `!.gitignore` line and the marker
+    // stops being staged. Without this the assertion above could pass for reasons that
+    // have nothing to do with the negation.
+    writeFileSync(path.join(root, LOOMBRIDGE_DIRNAME, "run", ".gitignore"), "*\n");
+    // `reset` (unstage everything) rather than `rm --cached`: with no HEAD commit the
+    // latter refuses on a file whose staged content differs from the working tree, which
+    // would make this LITMUS fail for a reason that has nothing to do with the negation.
+    git("reset", "-q");
+    git("add", ".");
+    const bare = git("diff", "--cached", "--name-only").split("\n").filter(Boolean);
+    assert.equal(
+      bare.includes(`${LOOMBRIDGE_DIRNAME}/run/.gitignore`),
+      false,
+      "a bare `*` must hide the marker itself; if this stages, the negation is not what makes it committable",
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("M2: the template ships the run-tier marker, byte-identical to the constant the CLI writes", () => {
+  // TWO WRITERS, ONE BODY. `ensureRunGitignore` writes it into an existing project and the
+  // template ships it in a new one; a template that drifted from the constant would give a
+  // `create-loombridge-game` project a different rule from a migrated one, and the
+  // difference would only show up as an anchor somebody could not find in a clone.
+  assert.equal(
+    readFileSync(path.join(REPO_ROOT, "templates", "create-loombridge-game", LOOMBRIDGE_DIRNAME, "run", ".gitignore"), "utf-8"),
+    RUN_GITIGNORE_BODY,
+  );
 });
 
 test("W2 LITMUS: the classifier fires on a destination under an undeclared subdirectory", () => {
@@ -452,14 +547,11 @@ const EXCEPTIONS: ReadonlyMap<string, string> = new Map([
     "with no bound project the MCP trace dir is os.tmpdir()/loombridge/traces, deliberately NOT " +
       "cwd-relative; there is no project root to classify it against.",
   ],
-  [
-    "screenshot-allowlist.captures",
-    // Top-level `captures/` predates `.loombridge/` and is still admitted by the screenshot
-    // allowlist. The RFC (S2 scope) names it as one of the two directories the template
-    // `.gitignore` misses today. PR-B is where it stops being admitted, not PR-A.
-    "top-level captures/ predates the .loombridge/ layout and is still an allowlisted screenshot " +
-      "root; ArtifactStorage S2 folds it in, PR-A only pins that it is still there.",
-  ],
+  // `screenshot-allowlist.captures` USED TO BE EXCEPTED HERE, and PR-A recorded that S2
+  // would fold it in. It did: `resolveSafeScreenshotOutputPath` no longer admits a
+  // top-level `captures/`, so there is no destination left to except. The exception is
+  // deleted rather than kept-and-loosened, which is what the stale-exception LITMUS below
+  // exists to force.
 ]);
 
 /**
@@ -564,14 +656,20 @@ test("W3: every non-derived writer is classified, or excepted with a stated reas
   );
 });
 
-test("W3: the screenshot allowlist admits exactly the two project-root-relative roots it declares", () => {
+test("W3: the screenshot allowlist admits exactly ONE project-root-relative root", () => {
   // Derived by calling the real function, so a widened allowlist fails here rather than
   // quietly admitting a new write target under the project root.
-  assert.deepEqual(admittedScreenshotRoots(SCREENSHOT_PROBE_SEGMENTS, ROOT), [".loombridge", "captures"]);
+  //
+  // ONE, not two: ArtifactStorage S2 removed the top-level `captures/` root. It predated
+  // `.loombridge/`, sat outside the state dir, was ignored by the template for reasons
+  // nobody could restate, and gave every screenshot a second home that no tier owned. The
+  // advertised destination is `.loombridge/run/captures/`, inside the state dir and
+  // structurally ignored by the run tier's own marker.
+  assert.deepEqual(admittedScreenshotRoots(SCREENSHOT_PROBE_SEGMENTS, ROOT), [".loombridge"]);
 
-  // NON-VACUITY: the probe must still REFUSE the two directories a screenshot must never
+  // NON-VACUITY: the probe must still REFUSE the directories a screenshot must never
   // reach, or "admits exactly" above would be true of a function that admits everything.
-  assert.deepEqual(admittedScreenshotRoots(["Assets", "ProjectSettings"], ROOT), []);
+  assert.deepEqual(admittedScreenshotRoots(["Assets", "ProjectSettings", "captures"], ROOT), []);
 });
 
 test("W3 LITMUS: an EMPTY exceptions list reports `.loombridge-fixtures/`", () => {
@@ -600,9 +698,11 @@ test("W3 LITMUS: an EMPTY exceptions list reports `.loombridge-fixtures/`", () =
     problems.some((p) => p.startsWith("slices.getSliceFixtureDir ->") && p.includes("outside every declared prefix")),
     `an empty exceptions list must report the fixture dir; got ${JSON.stringify(problems)}`,
   );
-  // The other two exceptions carry weight too, by the same argument.
+  // The other exception carries weight too, by the same argument.
   assert.ok(problems.some((p) => p.startsWith("trace-directory.unbound ->")));
-  assert.ok(problems.some((p) => p.startsWith("screenshot-allowlist.captures ->")));
+  // …and the exception list is exactly the two that remain, so a third cannot be added
+  // without a reader noticing here.
+  assert.deepEqual([...EXCEPTIONS.keys()].sort(), ["slices.getSliceFixtureDir", "trace-directory.unbound"]);
 });
 
 test("W3 LITMUS: a stale exception is reported, so the list cannot rot into blanket permission", () => {
@@ -735,6 +835,19 @@ const PREFIX_RE = new RegExp(`(?<![A-Za-z0-9_-])${DIRNAME_RE_SOURCE}/(${SEGMENT_
 const SPLIT_JOIN_RE = new RegExp(`["']${DIRNAME_RE_SOURCE}["']\\s*,\\s*["'](${SEGMENT_CHARS})["']`, "g");
 
 /**
+ * THE TEMPLATE-LITERAL SPELLING: `` `${LOOMBRIDGE_DIRNAME}/anchors/traces/` ``.
+ *
+ * Composing off the CONSTANT is what W1 demands of every module, and it produces a string
+ * with no `.loombridge` text in it at all, so a plain scan is blind to precisely the code
+ * that is doing the right thing. The migration's whole remap table
+ * (`capabilities/migrate/legacy-layout.ts`) is written this way, and every legacy path it
+ * names is a path an S2 move had to relocate: the one table W5 most needs to see was the
+ * one it could not. Normalised into the joined form first, exactly like the split C#/`path.join`
+ * spelling above and for the same reason.
+ */
+const CONST_JOIN_RE = new RegExp(`\\$\\{LOOMBRIDGE_DIRNAME\\}/(${SEGMENT_CHARS})`, "g");
+
+/**
  * `~/.loombridge`, `$HOME/.loombridge`, `${HOME}/.loombridge`, `%USERPROFILE%\.loombridge`.
  *
  * The separator is part of the pattern, not part of the match: the scan's match starts at the
@@ -748,7 +861,9 @@ const HOME_PREFIX_RE = /(?:~|\$\{?HOME\}?|%USERPROFILE%)[/\\]$/;
 export function scanPrefixHits(files: readonly { file: string; text: string }[]): PrefixHit[] {
   const hits: PrefixHit[] = [];
   for (const { file, text } of files) {
-    const normalized = text.replace(SPLIT_JOIN_RE, `${LOOMBRIDGE_DIRNAME}/$1`);
+    const normalized = text
+      .replace(SPLIT_JOIN_RE, `${LOOMBRIDGE_DIRNAME}/$1`)
+      .replace(CONST_JOIN_RE, `${LOOMBRIDGE_DIRNAME}/$1`);
     for (const match of normalized.matchAll(PREFIX_RE)) {
       // Trailing sentence punctuation is prose, not part of the name: `.loombridge/SLICES.json.`
       // at the end of a sentence names `SLICES.json`.
@@ -769,43 +884,55 @@ export function scanPrefixHits(files: readonly { file: string; text: string }[])
  */
 const UNDERIVED_CHILDREN: ReadonlyMap<string, string> = new Map([
   [
-    "art",
-    "advertised by surfaces/op-registry.ts as the example output_path for the geometry snapshot " +
-      "op ('.loombridge/art/gameplay-geometry.json'); written through " +
-      "resolveSafeScreenshotOutputPath, which admits it only because it is under .loombridge/. " +
-      "No LoombridgePaths field, no template .gitignore rule.",
-  ],
-  [
-    "captures",
-    "advertised by surfaces/op-registry.ts as the example screenshot outputPath, scanned by " +
-      "domain/contract-presence.ts (CAPTURE_DIR_NAMES) as the hand-created false-green shape, " +
-      "and ignored by the shipped template .gitignore. Still not a LoombridgePaths field.",
-  ],
-  [
     "editor-allowlist.json",
     "packages/com.loomtide.loombridge/Editor/Core/EditorInvokeAllowlist.cs ConfigRelativePath, " +
       "read FRESH on every editor.invoke. C#, so no TypeScript walk can see it: moving it " +
-      "without moving the C# constant refuses every allowlisted invoke.",
+      "without moving the C# constant refuses every allowlisted invoke. DOES NOT MOVE " +
+      "(ArtifactStorage S2): human-authored config, and a committed named top-level file is " +
+      "exactly what it should be.",
   ],
   [
     "genre-contract.json",
     "capabilities/genre/genre.ts runInit default out path (LOOMBRIDGE_DIRNAME + " +
       "DEFAULT_CONTRACT_FILENAME). A real direct child in real consumer projects today, and the " +
-      "reason TOP_LEVEL_CHILDREN must not be read as the inventory.",
+      "reason TOP_LEVEL_CHILDREN must not be read as the inventory. DOES NOT MOVE " +
+      "(ArtifactStorage S2): already a correct committed named top-level file; it was simply " +
+      "missing from the pin.",
   ],
+]);
+
+/**
+ * THE PRE-S2 SEGMENTS: still SPELLED in the shipped tree, written by NOTHING.
+ *
+ * Every one of them is named by `capabilities/migrate/legacy-layout.ts` (the remap table
+ * and the refusal prose) or by the migration verb, because moving a project off them is
+ * the whole job. Declared as their own category rather than folded into
+ * `DOCUMENTED_ONLY_CHILDREN`, because the two say different things: a documented-only
+ * child is a slot nobody has built yet, a legacy child is a slot that was real and now has
+ * a tombstone on it.
+ *
+ * A migration that finished is one where this table can eventually be deleted. Deleting it
+ * EARLY is the failure it guards against: the remap rules would go with it, and a project
+ * that had not migrated would silently present as having no anchors.
+ */
+const LEGACY_CHILDREN: ReadonlyMap<string, string> = new Map([
   [
-    "handoff",
-    "scripts/prepare-project-assets.sh creates <project>/.loombridge/handoff/ and writes the " +
-      "asset-prepare report + attribution into it; scripts/new-test-project.sh points the agent " +
-      "at those filenames in prose. Shell, so no TypeScript walk can see it.",
+    "replays",
+    "the pre-S2 replay root. `traces/` and `baselines/` were ANCHORS living in a directory " +
+      "the shipped template ignored (the RFC's mechanism 2); `reports/` was run output. " +
+      "migrate-layout splits them and leaves a TOMBSTONE here so an older CLI reports a " +
+      "broken anchor instead of asking a human to re-record.",
   ],
+  ["reports", "pre-S2 verification reports; now run/reports/. Named by the remap table."],
+  ["backups", "pre-S2 bridge install backups; now run/backups/. Named by the remap table."],
   [
-    "registry",
-    "capabilities/assets/assets.ts writeImportedRegistryPacks composes " +
-      "path.join(loombridgePaths(root).dir, 'registry') and writes <packId>.json there. Composed " +
-      "off .dir, so no .loombridge/registry literal appears in the writing expression; W6 is the " +
-      "walk that sees the composition itself.",
+    "captures",
+    "pre-S2 ad-hoc screenshots; now run/captures/. Still scanned by " +
+      "domain/contract-presence.ts as the hand-created false-green shape, because a project " +
+      "that predates the move still has the directory.",
   ],
+  ["art", "pre-S2 art/geometry snapshots; now run/art/. Named by the remap table."],
+  ["handoff", "pre-S2 asset-prepare handoff; now run/handoff/. Named by the remap table."],
 ]);
 
 /**
@@ -820,12 +947,11 @@ const DOCUMENTED_ONLY_CHILDREN: ReadonlyMap<string, string> = new Map([
       "per-project contract slot. ASPIRATIONAL: nothing writes it. A migration owes it a decision " +
       "(adopt the new layout or delete the note), not a relocation.",
   ],
-  [
-    "traces",
-    "domain/state.ts records that paths.traces ('.loombridge/traces/') used to be scaffolded here " +
-      "and was DEAD. Kept as a note so the slot is not re-invented. Nothing writes it; a " +
-      "migration must not resurrect it.",
-  ],
+  // `traces` USED TO BE HERE, as the note in `domain/state.ts` recording that
+  // `.loombridge/traces/` was scaffolded and DEAD. The note survives; the top-level
+  // SPELLING does not, because the demonstrations now live at `.loombridge/anchors/traces/`
+  // and a `.loombridge/traces/` in the same paragraph would read as a live second slot.
+  // Its removal is enforced by the both-directions test below, not by anyone remembering.
 ]);
 
 /**
@@ -845,12 +971,13 @@ const HOME_ROOT_CHILDREN: ReadonlyMap<string, string> = new Map([
   ["runtime", "the frozen CLI runtime the `loombridge` bin execs. Renaming project state must never touch it."],
 ]);
 
-/** Every project-local segment the layout declares today, derived + underived + documented. */
+/** Every project-local segment the tree spells: derived + underived + documented + legacy. */
 const PROJECT_CHILDREN: ReadonlySet<string> = new Set([
   ...ALLOWED_SUBDIRS.keys(),
   ...TOP_LEVEL_CHILDREN,
   ...UNDERIVED_CHILDREN.keys(),
   ...DOCUMENTED_ONLY_CHILDREN.keys(),
+  ...LEGACY_CHILDREN.keys(),
 ]);
 
 /**
@@ -953,7 +1080,7 @@ test("W5: the inventory is exactly the declared tables, in both directions", () 
   );
 });
 
-test("W5 LITMUS: against the DERIVED tables alone, the scan reports the eight it was blind to", () => {
+test("W5 LITMUS: against the DERIVED tables alone, the scan reports the nine it was blind to", () => {
   // This is the finding, run as an assertion rather than written down as a claim. Feed the
   // REAL scan the tables W1 to W4 rest on (`loombridgePaths()`'s own children and nothing
   // else), and it names every destination those walks cannot see. Each of these is live in the
@@ -962,15 +1089,21 @@ test("W5 LITMUS: against the DERIVED tables alone, the scan reports the eight it
   assert.deepEqual(
     unclassifiedPrefixHits(PREFIX_HITS, derivedOnly, new Set(HOME_ROOT_CHILDREN.keys())).map((p) => p.split(" (")[0]),
     [
+      // The six PRE-S2 segments, every one of them named by the migration's remap table
+      // and by nothing else. That the derived tables cannot see them is the whole reason
+      // an S2 migration needed an inventory rather than a walk of `loombridgePaths()`.
       "project .loombridge/art",
+      "project .loombridge/backups",
       "project .loombridge/captures",
+      "project .loombridge/handoff",
+      "project .loombridge/replays",
+      "project .loombridge/reports",
+      // …plus the two committed named files no field produces, and the one aspirational
+      // slot nothing writes.
       "project .loombridge/editor-allowlist.json",
       "project .loombridge/games",
       "project .loombridge/genre-contract.json",
-      "project .loombridge/handoff",
-      "project .loombridge/registry",
-      "project .loombridge/traces",
-    ],
+    ].sort(),
     "the derived layout is NOT the inventory; if this list shrank, check whether the destination " +
       "was really routed through loombridgePaths() or merely stopped being spelled",
   );
@@ -1210,13 +1343,20 @@ const formatDirUse = (s: DirUseSite): string => `${s.file} ${s.kind} via ${s.cal
  */
 const EXPECTED_DIR_USES = [
   "capabilities/assets/asset-manifest.ts root-arg via fs.mkdir",
-  "capabilities/assets/assets.ts composes:registry via path.join",
   "capabilities/verification/slices.ts root-arg via fs.cp",
   "capabilities/verification/slices.ts root-arg via fs.mkdir",
-  "domain/contract-presence.ts composes:captures,verify via path.join",
+  // The false-green scan, and the one site that still composes off `.dir`. It reads
+  // `run/captures` AND the legacy top-level `captures`, because a project that predates
+  // ArtifactStorage S2 still has the old directory and a hand-created one there is exactly
+  // the same false green it always was.
+  "domain/contract-presence.ts composes:captures,run,verify via path.join",
   "domain/contract-presence.ts root-arg via fileExists",
   "surfaces/index.ts escapes via ArrayLiteralExpression",
 ];
+// `capabilities/assets/assets.ts composes:registry via path.join` USED TO BE HERE. S2
+// routed the registry through a `LoombridgePaths` FIELD, which is the fix W6's own header
+// recommends for a composed destination ("route it back through a field so W2 walks it,
+// not grow this scan into a dataflow engine"). One fewer composition, one more walked slot.
 
 /** Sites whose destination this scan CANNOT resolve, each with the reason it is acceptable. */
 const DIR_USE_EXCEPTIONS: ReadonlyMap<string, string> = new Map([

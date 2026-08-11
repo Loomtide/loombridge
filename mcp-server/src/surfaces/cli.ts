@@ -69,7 +69,7 @@ function printUsage(): void {
       "Verify (anchors a human approves once; deterministic gates forever after):",
       "  verify     Bare `verify` discovers this project's verification assets, PRINTS THE",
       "               PLAN first, runs the offline ones (`--live` adds trace replay + feel",
-      "               drift), and writes .loombridge/reports/verify.json. Exit 0 pass or",
+      "               drift), and writes .loombridge/run/reports/verify.json. Exit 0 pass or",
       "               live-skipped partial · 1 game defect/drift · 2 harness fault, broken",
       "               asset, or nothing graded. No assets → the on-ramp, exit 2.",
       "               Modes (see `verify --help`): --snapshot grades feel drift against the",
@@ -110,6 +110,11 @@ function printUsage(): void {
       "  minigame       Screen-contract helpers (setup/init/capture/finalize/baseline).",
       "  tuning-report  Deterministic telemetry run-set analysis (numbers only; humans judge fun).",
       "  mobile-audit   Advisory mobile-optimization audit (findings only, never a verdict).",
+      "  migrate-layout Move a pre-S2 project onto the anchors/ + run/ storage layout:",
+      "                   copy-verify-release (never a rename), the demonstration and its",
+      "                   approved baseline as ONE unit, a tombstone at each legacy path so",
+      "                   an OLDER CLI refuses loudly instead of asking for a re-record, and",
+      "                   every recorded path re-stamped. `--dry-run` prints the plan.",
       "  ask            (deprecated: use `status`) Read-only project explanation.",
       "",
       "Run 'loombridge <command> --help' for command options.",
@@ -241,6 +246,13 @@ export async function loombridgeCli(argv: string[]): Promise<number> {
     }
     case "genre": {
       const { run } = await import("../capabilities/genre/genre.js");
+      return run(rest);
+    }
+    case "migrate-layout": {
+      // A TOP-LEVEL verb, and deliberately not a flag on `verify`: it moves the one
+      // artifact in the system a human cannot regenerate, so it is something an operator
+      // asks for by name, never something another verb does on the way past.
+      const { run } = await import("../capabilities/migrate/migrate-layout.js");
       return run(rest);
     }
     case "setup": {

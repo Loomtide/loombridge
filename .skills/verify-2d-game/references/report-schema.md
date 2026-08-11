@@ -33,9 +33,9 @@ Produced by `run-gates.js` (aggregates the per-gate `GateReport`s). This is what
   running the consistency checker with its required flags from the repo root:
   ```bash
   node mcp-server/dist/capabilities/assets/handoff-consistency.js \
-    --prepare-report .loombridge/handoff/<genre>-asset-prepare-report.json \
-    --verdict .loombridge/reports/build-verdict.json \
-    --output .loombridge/handoff/asset-handoff-consistency.json
+    --prepare-report .loombridge/run/handoff/<genre>-asset-prepare-report.json \
+    --verdict .loombridge/run/reports/build-verdict.json \
+    --output .loombridge/run/handoff/asset-handoff-consistency.json
   ```
   (The bare `npm run asset:handoff:check` script omits `--prepare-report` and exits 1 — see the canonical
   command in SKILL.md §6 and `commands/loombridge/build.md` §7.)

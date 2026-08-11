@@ -438,7 +438,7 @@ test("F4 CLI: --profile with a reachable --layout passes the gate; report carrie
     const report = await readFeelProfileReport(workspace);
     assert.equal(report.reachability.status, "pass");
     assert.ok(report.reachability.envelope);
-    assert.equal(await fileExists(path.join(root, ".loombridge", "reports", "feel-profile.json")), false);
+    assert.equal(await fileExists(path.join(root, ".loombridge", "run", "reports", "feel-profile.json")), false);
   } finally {
     await fs.rm(root, { recursive: true, force: true });
   }
@@ -459,7 +459,7 @@ test("F4 CLI: --profile with an UNREACHABLE --layout exits 1 and stamps reachabi
     const report = await readFeelProfileReport(workspace);
     assert.equal(report.reachability.status, "fail");
     assert.equal(report.status, "fail");
-    assert.equal(await fileExists(path.join(root, ".loombridge", "reports", "feel-profile.json")), false);
+    assert.equal(await fileExists(path.join(root, ".loombridge", "run", "reports", "feel-profile.json")), false);
   } finally {
     await fs.rm(root, { recursive: true, force: true });
   }

@@ -163,16 +163,21 @@ test("writeScreenshotOutputPath: writes screenshot bytes and returns determinist
   }
 });
 
-test("resolveSafeScreenshotOutputPath: allows relative artifact roots only", () => {
+test("resolveSafeScreenshotOutputPath: the state dir is the ONLY project-relative root", () => {
   const cwd = "/Users/example/project";
 
   assert.equal(
-    resolveSafeScreenshotOutputPath("captures/start.png", cwd),
-    path.join(cwd, "captures/start.png"),
+    resolveSafeScreenshotOutputPath(".loombridge/run/captures/start.png", cwd),
+    path.join(cwd, ".loombridge/run/captures/start.png"),
   );
-  assert.equal(
-    resolveSafeScreenshotOutputPath(".loombridge/captures/start.png", cwd),
-    path.join(cwd, ".loombridge/captures/start.png"),
+  // A TOP-LEVEL `captures/` IS NO LONGER ADMITTED (ArtifactStorage S2). It predated the
+  // `.loombridge/` layout, sat outside the state dir entirely, and gave every screenshot a
+  // second home that neither tier owned: it was not an anchor and it was not under `run/`,
+  // so no rule said whether a team should commit it. The advertised destination is now
+  // `.loombridge/run/captures/`, which the run tier's own `.gitignore` covers.
+  assert.throws(
+    () => resolveSafeScreenshotOutputPath("captures/start.png", cwd),
+    /outputPath must stay under/,
   );
   assert.throws(
     () => resolveSafeScreenshotOutputPath("Assets/Scenes/Game.unity", cwd),
