@@ -837,6 +837,7 @@ const ALLOWED_NETWORK_SITES = new Map<string, string>([
   ["shared/diagnostics.ts: import node:child_process", "local diagnostics commands"],
   ["shared/child-stdio.ts: import node:child_process", "types only; stdio plumbing helper"],
   ["capabilities/setup/cli-self-update.ts: import node:child_process", "runs the local package manager"],
+  ["capabilities/setup/generation-backends.ts: import node:child_process", "probes for a LOCAL hero-shot generation CLI (`codex --version`); never fetches, never generates"],
   ["capabilities/tests/tests.ts: import node:child_process", "runs the local Unity test runner"],
   ["capabilities/minigame/minigame-run.ts: import node:child_process", "re-invokes this CLI locally"],
   ["capabilities/minigame/minigame-scene-entry.ts: import node:child_process", "re-invokes this CLI locally"],
