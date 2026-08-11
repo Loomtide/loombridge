@@ -38,6 +38,8 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
+import { LOOMBRIDGE_HOME_DIRNAME } from "../../domain/workspace-paths.js";
+
 /** The published package name. Kept in one place so the update command cannot drift from it. */
 export const NPM_PACKAGE_NAME = "loombridge";
 
@@ -96,7 +98,10 @@ export function classifyCliInstall(
 ): CliInstallInfo {
   const resolvedRoot = probe.realpath(packageRootPath);
 
-  const runtimeDir = path.join(probe.homedir(), ".loombridge", "runtime");
+  // The HOME root, not the project-local state dir: this is the frozen CLI runtime, which is
+  // about the machine and not about any one game. `LOOMBRIDGE_HOME_DIRNAME` is the constant
+  // for that, and it is deliberately independent of `LOOMBRIDGE_DIRNAME`.
+  const runtimeDir = path.join(probe.homedir(), LOOMBRIDGE_HOME_DIRNAME, "runtime");
   if (resolvedRoot === runtimeDir || resolvedRoot.startsWith(runtimeDir + path.sep)) {
     return {
       method: "frozen-runtime",

@@ -38,6 +38,7 @@
 import { copyFileSync, existsSync, mkdirSync, rmSync } from "node:fs";
 import path from "node:path";
 
+import { loombridgePaths } from "../../domain/state.js";
 import { packageRoot } from "../../shared/pkg-root.js";
 import { resolveBuildStamp } from "../../shared/build-stamp.js";
 import { installBridge } from "./install-bridge.js";
@@ -445,7 +446,7 @@ export async function run(args: string[], deps: UpdateRunDeps = {}): Promise<num
   if (!dryRun) {
     const metaPath = path.join(project, METADATA_RELPATH);
     if (existsSync(metaPath)) {
-      const backupDir = path.join(project, ".loombridge", "backups");
+      const backupDir = loombridgePaths(project).backups;
       mkdirSync(backupDir, { recursive: true });
       copyFileSync(metaPath, path.join(backupDir, "LoombridgeInstall.json.bak"));
       console.log(`  -> backed up ${METADATA_RELPATH} -> .loombridge/backups/LoombridgeInstall.json.bak`);

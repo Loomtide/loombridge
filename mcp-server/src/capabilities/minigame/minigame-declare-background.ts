@@ -24,6 +24,7 @@ import path from "node:path";
 import process from "node:process";
 import readline from "node:readline/promises";
 
+import { loombridgePaths } from "../../domain/state.js";
 import { ICON, tildify } from "../../shared/cli-ui.js";
 import { backgroundCandidatesFor, covers } from "./minigame-report-render.js";
 import { defaultWorkspace, findContract } from "./minigame-next.js";
@@ -141,7 +142,7 @@ async function readJson<T>(p: string): Promise<T | null> {
  *  and the guided (`reports`) locations, newest wins. Null when none is present. */
 async function loadReport(workspace: string): Promise<MinigameVerifyReport | null> {
   const candidates = [
-    path.join(workspace, ".loombridge", "reports", "minigame-verification.json"),
+    path.join(loombridgePaths(workspace).reports, "minigame-verification.json"),
     path.join(workspace, "reports", "minigame-verification.json"),
   ];
   let best: { report: MinigameVerifyReport; mtime: number } | null = null;

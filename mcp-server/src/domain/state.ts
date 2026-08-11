@@ -13,7 +13,14 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 
-export const LOOMBRIDGE_DIRNAME = ".loombridge";
+import { LOOMBRIDGE_DIRNAME } from "../shared/loombridge-dirname.js";
+
+/**
+ * Re-exported so every existing importer keeps reading it from here. The literal itself
+ * is spelled ONCE, in `shared/loombridge-dirname.ts`, because `bridge/` may not import
+ * `domain/` and still needs it. See that module for why the split falls there.
+ */
+export { LOOMBRIDGE_DIRNAME };
 
 /**
  * The `.loombridge/` subdirectory holding the stamped Unity test-results pair (the NUnit3
@@ -127,6 +134,12 @@ export interface LoombridgePaths {
    * for an unregistered genre (`capabilities/genre/genre-coverage.ts`).
    */
   genrePromotion: string;
+  /**
+   * `.loombridge/ADOPTION.json` — the `loombridge adopt` proposal record (`status:
+   * proposed-unverified`). A slot rather than a literal join onto `dir` at the writer, so the
+   * write-path guard walks it like every other destination.
+   */
+  adoption: string;
   /** `.loombridge/design/` — the Design Target Phase artifacts (plan §3c). */
   design: string;
   /** `.loombridge/reports/` */
@@ -136,8 +149,16 @@ export interface LoombridgePaths {
    * writes it; the unified `verify` door grades it OFFLINE). COMMITTED, unlike `reports/`.
    */
   tests: string;
-  /** `.loombridge/traces/` */
-  traces: string;
+  /**
+   * `.loombridge/backups/` — where `loombridge update` copies the bridge install record
+   * before mutating it, so a stray `.bak` never appears next to the record in
+   * `ProjectSettings/` (and therefore in every consumer's `git status`).
+   *
+   * WRITE-ONLY today: nothing reads it back. It is a slot rather than a literal join at the
+   * writer so the write-path guard walks it; a destination no guard walks is how a dead
+   * `traces` slot survived here for as long as it did.
+   */
+  backups: string;
   /** `.loombridge/replays/` — Replay Verification root (traces + reports + captures). */
   replays: string;
   /** `.loombridge/replays/traces/` — replay trace JSONs (`<id>.trace.json`). */
@@ -164,10 +185,11 @@ export function loombridgePaths(root: string): LoombridgePaths {
     slices: path.join(dir, "SLICES.json"),
     assetManifest: path.join(dir, "ASSET_MANIFEST.json"),
     genrePromotion: path.join(dir, "GENRE_PROMOTION.json"),
+    adoption: path.join(dir, "ADOPTION.json"),
     design: path.join(dir, "design"),
     reports: path.join(dir, "reports"),
     tests: path.join(dir, TEST_RESULTS_DIRNAME),
-    traces: path.join(dir, "traces"),
+    backups: path.join(dir, "backups"),
     replays: path.join(dir, "replays"),
     replayTraces: path.join(dir, "replays", "traces"),
     replayReports: path.join(dir, "replays", "reports"),
@@ -225,9 +247,18 @@ export function flatReplayLayout(workspace: string): ReplayLayout {
   };
 }
 
-/** Create the `.loombridge/` directory tree. Idempotent. */
+/**
+ * Create the `.loombridge/` directory tree. Idempotent.
+ *
+ * `paths.traces` (`.loombridge/traces/`) used to be scaffolded here. It was DEAD: this line
+ * was its only reference in non-test source, nothing ever wrote a file into it, and every
+ * replay trace goes to `paths.replayTraces` (`.loombridge/replays/traces/`). A directory
+ * declared in the layout and created on every `plan`, that no writer and no reader walks, is
+ * this repo's signature failure shape sitting inside the layout itself. Both the slot and
+ * this entry are gone; `__tests__/unit/repo/write-paths.test.ts` is what stops the next one.
+ */
 export async function ensureScaffold(paths: LoombridgePaths): Promise<void> {
-  for (const d of [paths.dir, paths.design, paths.reports, paths.traces, paths.verifyInputs]) {
+  for (const d of [paths.dir, paths.design, paths.reports, paths.verifyInputs]) {
     await fs.mkdir(d, { recursive: true });
   }
 }
