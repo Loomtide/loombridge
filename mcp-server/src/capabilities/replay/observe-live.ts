@@ -120,17 +120,52 @@ export interface ObserveStartStateSignal {
   property: string;
 }
 
+/**
+ * The bridge's grace period for the human to make Unity the ACTIVE OS application before
+ * `input.observe_start` begins recording (mirror of `InputHandler.DefaultActivationTimeoutMs`
+ * in the C# bridge). Declared here because the WIRE timeout below has to exceed it: the two
+ * numbers live in different languages and `replay-observe.test.ts` reads the C# constant off
+ * disk and binds them, so a change on either side that inverts the relationship fails a test
+ * instead of silently making the client give up before the bridge does.
+ */
+export const OBSERVE_ACTIVATION_GRACE_MS = 60_000;
+
+/**
+ * Wire timeout for `input.observe_start`. The default 10s op timeout would abort the call while
+ * the bridge is still waiting for the human's click, so state it explicitly, with headroom over
+ * the bridge's own grace for the reply to come back.
+ */
+export const OBSERVE_START_TIMEOUT_MS = OBSERVE_ACTIVATION_GRACE_MS + 30_000;
+
+/** A line for the human running the CLI (the caller adds its own prefix). */
+export type ObserveNotice = (message: string) => void;
+
 export async function observeLive(
   send: BridgeSend,
   stateSignal?: ObserveStartStateSignal,
   autoDetectStateSignal = false,
+  onNotice?: ObserveNotice,
 ): Promise<ObserveSession> {
   // Phase 2 / D1-B: when auto-detect is on the observer finds each scene's signal live, so a declared
   // stateSignal is ignored. Send only the flag in that case so the two modes can't both be active.
   const startParams = autoDetectStateSignal
     ? { autoDetectStateSignal: true }
     : (stateSignal ? { stateSignal } : {});
-  await send("input.observe_start", startParams);
+  const notify: ObserveNotice = onNotice ?? (() => {});
+  // BEFORE the send, because the send does not return until Unity is the active application:
+  // the human is looking at a terminal that would otherwise sit silent, and the instruction they
+  // need ("click Unity") is the very thing that unblocks it. The "press Enter to stop" prompt is
+  // printed by the caller only after this call resolves, so the human is never told to press
+  // Enter before being told that recording actually started.
+  notify(
+    `Click the Unity window now: recording starts when Unity is the ACTIVE application ` +
+      `(waiting up to ${Math.round(OBSERVE_ACTIVATION_GRACE_MS / 1000)}s). ` +
+      `Taps that arrive before that are swallowed by the editor and are never recorded.`,
+  );
+  const started = await send("input.observe_start", startParams, OBSERVE_START_TIMEOUT_MS);
+  if (started.status !== "error") {
+    notify(observeStartNotice(started.data));
+  }
   return {
     async stop(): Promise<StopResult> {
       const response = await send("input.observe_stop", {});
@@ -160,6 +195,25 @@ export async function observeLive(
       };
     },
   };
+}
+
+/**
+ * What to tell the human once `input.observe_start` has returned.
+ *
+ * Schema-tolerant in one direction only: a bridge that predates the activation gate reports
+ * neither field, which reads as "started" (its behaviour is unchanged and there is nothing
+ * honest to warn about). A bridge that DOES report it and says Unity was not active gets the
+ * loud line, because every gesture arriving in that state is dropped, so the human would
+ * otherwise demonstrate a whole flow into a recording that captured none of it.
+ */
+export function observeStartNotice(data: unknown): string {
+  const d = data as { applicationActive?: unknown; activationTimedOut?: unknown } | undefined;
+  const inactive = d?.activationTimedOut === true || d?.applicationActive === false;
+  return inactive
+    ? "WARNING: Unity did not become the active application. Recording started anyway, but every " +
+        "gesture that arrives while Unity is inactive is DROPPED, never recorded. Click the Unity " +
+        "window, then play your flow."
+    : "Recording. Play your flow in Unity now.";
 }
 
 function isNotObserved(data: unknown): boolean {

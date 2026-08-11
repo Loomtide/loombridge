@@ -218,6 +218,66 @@ namespace UnityBridge.Tests
                 "no session and no overrides is the one-shot case: focus is required");
         }
 
+        // ── the OBSERVER's delivery gate (would a HUMAN's click reach the game?) ──
+
+        // THE REPRODUCED FAILURE: a human ran `loombridge trace record` from a terminal, clicked
+        // the Unity Game view to bring Unity forward, and tapped a hub tile. The trace held that
+        // tap TWICE (both tagged with the hub scene) and replay died on step-2 with
+        // "Could not resolve locator" because step-1 had already navigated out of the hub. The
+        // activating click was swallowed by the editor (the game never processed it) but the
+        // observer recorded it, because Unity-INTERNAL Game-view focus is true even while Unity
+        // sits behind the terminal. Only the conjunction with OS-level application activity is
+        // "this click reaches the game": either half alone re-opens the phantom step.
+        //
+        // NOT executed by this agent (no Unity editor/licence available to it); this runs in
+        // .github/workflows/unity-editmode.yml. LITMUS to run there: change the predicate to
+        // `return gameViewFocused;` and the applicationActive:false rows must fail.
+        [Test]
+        public void GameViewInputFocused_RequiresBothWindowFocusAndApplicationActivity()
+        {
+            Assert.IsTrue(GameViewFocus.IsGameViewInputFocused(true, true),
+                "Game view frontmost inside Unity AND Unity frontmost in the OS: the click reaches the game");
+            Assert.IsFalse(GameViewFocus.IsGameViewInputFocused(true, false),
+                "the Game view can be Unity's frontmost window while Unity itself is backgrounded, "
+                + "that click is swallowed by the editor and must never be recorded");
+            Assert.IsFalse(GameViewFocus.IsGameViewInputFocused(false, true),
+                "an active Unity with another window frontmost does not deliver the click to the game");
+            Assert.IsFalse(GameViewFocus.IsGameViewInputFocused(false, false),
+                "neither half: nothing reaches the game");
+        }
+
+        // observe_start may WAIT for the human to activate the Unity window, which spans editor
+        // ticks, so it has to be dispatched through the executor's ASYNC path. On the sync path
+        // its `respond` would fire after the executor had already answered the request.
+        //
+        // NOT executed by this agent (no Unity editor/licence); runs in unity-editmode.yml.
+        // LITMUS to run there: make IsAsync `return false;` and this fails.
+        [Test]
+        public void ObserveStart_IsDispatchedAsync()
+        {
+            Assert.IsTrue(_handler.IsAsync("observe_start"),
+                "observe_start waits across editor ticks for the editor to become the active application");
+            Assert.IsFalse(_handler.IsAsync("key_tap"), "the driving ops stay synchronous");
+        }
+
+        // The Play-Mode refusal survived the move to the async path: it must reach onError, not
+        // throw past the executor's async dispatch, and must never begin observing.
+        //
+        // NOT executed by this agent (no Unity editor/licence); runs in unity-editmode.yml. These
+        // EditMode tests run OUTSIDE Play Mode, which is exactly the state under test.
+        [Test]
+        public void ObserveStart_OutsidePlayMode_ReportsPlayModeRequiredThroughOnError()
+        {
+            JObject responded = null;
+            BridgeException failed = null;
+            _handler.HandleOpAsync("observe_start", new JObject(),
+                r => responded = r, e => failed = e);
+
+            Assert.IsNull(responded, "observation must not start outside Play Mode");
+            Assert.IsNotNull(failed, "the refusal must arrive through the async error callback");
+            Assert.AreEqual(ErrorCodes.PLAY_MODE_REQUIRED, failed.Code);
+        }
+
         // The session half is a REAL query of live state, not a flag somebody sets: opening a
         // session on a focus-independent backend must make it true, and the query must read the
         // backend's own focus requirement rather than the backend's NAME.
