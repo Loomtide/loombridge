@@ -138,6 +138,24 @@ async function plantLegacyProject(
  * `discoverTraceAssets` is the REAL production classifier, handed the LEGACY layout. That
  * is exactly the code path an old binary runs, and running it is the only honest way to
  * make a claim about a binary this repo no longer contains.
+ *
+ * LITMUS, OBSERVED. Defuse the tombstone writer in `migrate-layout.ts` (iterate an empty
+ * array instead of `unit.tombstones`), rebuild, re-run, and the REAL checks fail, verbatim:
+ *
+ *   ✖ M1: an OLD CLI on a MIGRATED project reads BROKEN (tier 2), not absent
+ *     AssertionError [ERR_ASSERTION]: the row must still EXIST: an absent row is the on-ramp
+ *
+ *     0 !== 1
+ *
+ *   ✖ M1: the NEW CLI reads the tombstone as the migration marker, never as work to redo
+ *     AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+ *     + actual - expected
+ *
+ *     + 'none'
+ *     - 'tombstoned'
+ *
+ * `0 !== 1` IS THE WHOLE DEFECT, printed as an assertion: zero rows is what an old CLI sees
+ * without the tombstone, and zero rows is the on-ramp that asks for a re-record.
  */
 test("M1: an OLD CLI on a MIGRATED project reads BROKEN (tier 2), not absent", async () => {
   const root = await tmpProject("migrate-tombstone-");

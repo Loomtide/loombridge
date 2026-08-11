@@ -387,6 +387,15 @@ test("M2: the run tier's own .gitignore is `*` PLUS `!.gitignore`, proved with r
   //
   // Run against real `git`, not against `gitignoreHides`: the question is what git does,
   // and a hand-written model of git's rules is exactly the wrong thing to answer it with.
+  //
+  // LITMUS, OBSERVED. Drop `!.gitignore` from `RUN_GITIGNORE_BODY` and from the shipped
+  // template file, rebuild, re-run, and the REAL check below fails, verbatim:
+  //
+  //   ✖ M2: the run tier's own .gitignore is `*` PLUS `!.gitignore`, proved with real git
+  //     AssertionError [ERR_ASSERTION]: the run-tier marker was not staged; git staged [".gitignore",".loombridge/anchors/traces/a.trace.json"]
+  //
+  // Note what that staged list contains and what it does not: the anchors made it, and the
+  // marker did not. On a fresh clone that project's run tier would not be ignored at all.
   const root = mkdtempSync(path.join(os.tmpdir(), "loombridge-runignore-"));
   const git = (...args: string[]): string =>
     execFileSync("git", ["-C", root, ...args], { encoding: "utf-8" });
