@@ -992,6 +992,23 @@ export type MaskSuggestion =
     }
   | {
       /**
+       * A previous run DID record drift on these captures, and its fingerprint could not
+       * be read, so no comparison was possible. Distinct from `first-run` (nothing to
+       * compare at all) and from `moved` (a comparison that ran and found nothing in
+       * common). It used to be folded into `first-run`, which stated as fact ("no previous
+       * run recorded drift") the opposite of what had actually happened, and printed the
+       * same "re-run once more" advice for both.
+       *
+       * Another run IS the right next step here, and for a reason worth stating: this run
+       * has just written a readable fingerprint, so the next one has something to compare
+       * against.
+       */
+      kind: "uncomparable";
+      /** The captures whose predecessor drifted with an unreadable fingerprint, sorted. */
+      captures: string[];
+    }
+  | {
+      /**
        * A previous run's drift WAS compared, and none of it landed where this run's did.
        * Distinct from `first-run`, which means there was nothing to compare at all: the
        * two used to share a word, and so shared the "re-run once more to characterize"
@@ -1051,12 +1068,15 @@ export function deriveMaskSuggestion(
   const reproduced: string[] = [];
   let everyReproductionExact = true;
   const nondeterministic: CaptureDriftEvidence[] = [];
-  // A capture whose predecessor drifted but whose fingerprint could NOT be read. It makes
-  // the previous run unusable as a comparison, which is a different thing from a
+  // The captures whose predecessor drifted but whose fingerprint could NOT be read. They
+  // make the previous run unusable as a comparison, which is a different thing from a
   // comparison that ran and found nothing in common, and only the latter may be reported
   // as such. Without this, an unreadable (or hand-mangled) grid would be laundered into
   // the confident claim "none of the previous run's drift recurs here".
-  let uncomparable = false;
+  //
+  // NAMED, not counted: the verdict says WHICH captures could not be compared, so the
+  // operator can look at those reports rather than at the word "unreadable".
+  const uncomparable: string[] = [];
   for (const capture of drifted) {
     const before = previousById.get(capture.captureId);
     if (!before?.drifted) continue;
@@ -1075,7 +1095,7 @@ export function deriveMaskSuggestion(
     const beforeGrid = asDriftGrid(before.driftGrid);
     const nowGrid = asDriftGrid(capture.driftGrid);
     if (beforeGrid === null || nowGrid === null) {
-      uncomparable = true;
+      uncomparable.push(capture.captureId);
       continue;
     }
     if (driftGridSimilarity(beforeGrid, nowGrid) >= REPRODUCED_DRIFT_SIMILARITY) {
@@ -1104,11 +1124,16 @@ export function deriveMaskSuggestion(
     //
     // The signal is the INPUT, not a guess: `previous` is this run's predecessor evidence
     // as read off the report on disk, so "a prior run recorded drift" is a fact rather
-    // than an inference. Nothing about the refusal logic moves; only which of two facts
+    // than an inference. Nothing about the refusal logic moves; only which of three facts
     // gets reported. And the claim is only made when it can be MADE: a fingerprint this
-    // run could not read leaves the question open, which is still "run it again".
+    // run could not read leaves the question open, which is still "run it again", but it
+    // is NOT the same statement as "there was no previous run", and it may not borrow that
+    // one's words. `first-run` asserts an absence; asserting it over a predecessor that
+    // demonstrably drifted is a false statement about the evidence, and it is the one an
+    // operator uses to decide whether the run they were asked for has already happened.
+    if (uncomparable.length > 0) return { kind: "uncomparable", captures: [...uncomparable].sort() };
     const priorDrifted = previous.filter((p) => p.drifted).map((p) => p.captureId).sort();
-    if (uncomparable || priorDrifted.length === 0) return { kind: "first-run" };
+    if (priorDrifted.length === 0) return { kind: "first-run" };
     return {
       kind: "moved",
       previousCaptures: priorDrifted,
@@ -1224,7 +1249,24 @@ function diffuseLine(refusal: DriftClusterRefusal | undefined): string {
 export function maskSuggestionLines(suggestion: MaskSuggestion, traceId: string): string[] {
   switch (suggestion.kind) {
     case "first-run":
-      return ["re-run replay once more to characterize the drift before masking."];
+      // THE LINE STATES THE FACT IT RESTS ON, not only the instruction. "Re-run once more"
+      // alone is unfalsifiable: an operator who HAS re-run reads the same sentence and
+      // cannot tell whether the tool ignored their run or never saw it. Observed live: a
+      // run's output was re-read as a second run's, and the verdict was called a regression
+      // for an hour, because nothing in the line said what the tool had actually found on
+      // disk. Naming the finding makes the sentence checkable against the operator's own
+      // history: if they have re-run and this still prints, the report they are reading is
+      // not the run they made.
+      return [
+        "no previous run recorded drift for this trace, so there is nothing to compare this drift " +
+          "against yet; re-run replay once more to characterize the drift before masking.",
+      ];
+    case "uncomparable":
+      return [
+        `a previous run DID record drift on ${captureList(suggestion.captures)}, and its drift fingerprint ` +
+          "could not be read, so no comparison was possible. This run has written a readable one: " +
+          "re-run replay once more and the next run can characterize the drift.",
+      ];
     case "identical":
       return [
         suggestion.exact

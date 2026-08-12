@@ -1089,14 +1089,19 @@ test("MX1 LITMUS: a GENUINELY shuffled drift (similarity ~0.5) still earns its s
 
 test("MX1: a previous report with NO fingerprint (or a mangled one) asks for another run, never a rect", () => {
   // The previous grid arrives through a report.json an operator can edit. Absence of
-  // evidence is not evidence, so it lands on `first-run`, and every malformed shape lands
-  // there too rather than being coerced into agreement OR into disagreement (the direction
-  // that would MINT a suggestion).
+  // evidence is not evidence, so it lands on `uncomparable`, and every malformed shape
+  // lands there too rather than being coerced into agreement OR into disagreement (the
+  // direction that would MINT a suggestion).
   //
-  // `first-run` here is load-bearing and is NOT the `moved` case: the predecessor drifted on
-  // this very capture, so "none of its drift recurs here" would be a claim about a
-  // comparison that could not be made. An unreadable fingerprint leaves the question open,
-  // and the open question is what "run it again" is for.
+  // `uncomparable` is NOT the `moved` case: the predecessor drifted on this very capture,
+  // so "none of its drift recurs here" would be a claim about a comparison that could not
+  // be made. An unreadable fingerprint leaves the question open, and the open question is
+  // what "run it again" is for.
+  //
+  // It is not the `first-run` case either, and that split is the fix for a live
+  // misdiagnosis: `first-run` ASSERTS an absence ("no previous run recorded drift"), and
+  // saying that over a predecessor that demonstrably drifted is a false statement about
+  // the evidence, printed to the one person deciding whether to re-run.
   const clusters = [{ x: 10, y: 10, w: 7, h: 7 }];
   const current = [
     { captureId: "cap", drifted: true, driftDiffSha: "b", driftGrid: gridOfRects(clusters), driftClusters: clusters },
@@ -1109,7 +1114,7 @@ test("MX1: a previous report with NO fingerprint (or a mangled one) asks for ano
         W,
         H,
       ),
-      { kind: "first-run" },
+      { kind: "uncomparable", captures: ["cap"] },
       `a ${JSON.stringify(grid)} fingerprint is not evidence of anything`,
     );
     assert.equal(asDriftGrid(grid), null);
@@ -1136,8 +1141,13 @@ test("TWO-RUN LITMUS: an IDENTICAL drift twice prints the regression warning, ne
     const first = await grade(root);
     assert.equal(first.artifact.visualDrift, true);
     assert.deepEqual(first.artifact.maskSuggestion, { kind: "first-run" });
+    // The line NAMES the finding it rests on, not only the instruction: see
+    // `maskSuggestionLines` and the two-run door test in
+    // `replay-drift-characterization.test.ts` for why an unfalsifiable "run it again" is
+    // the sentence that cost a live investigation.
     assert.deepEqual(maskSuggestionLines(first.artifact.maskSuggestion!, "demo"), [
-      "re-run replay once more to characterize the drift before masking.",
+      "no previous run recorded drift for this trace, so there is nothing to compare this drift " +
+        "against yet; re-run replay once more to characterize the drift before masking.",
     ]);
     await fs.writeFile(
       path.join(standardReplayLayout(root).replayReports, "demo.report.json"),
