@@ -18,8 +18,16 @@ export interface CaptureImage {
   base64?: string;
   /** Approved baseline PNG as base64, when one exists. */
   baselineBase64?: string;
-  /** Visual verdict vs the baseline (`unreadable` = a capture gap, not drift). */
-  visualStatus?: "match" | "drift" | "no-baseline" | "unreadable";
+  /**
+   * Visual verdict vs the baseline (`unreadable` = a capture gap, not drift;
+   * `not-compared` = the anchor was untrusted, so nothing graded this frame).
+   *
+   * ABSENT IS RENDERED, NOT SKIPPED. A capture with a frame and no verdict is a frame
+   * nothing compared, and the page says exactly that: see {@link captureFigure}.
+   */
+  visualStatus?: "match" | "drift" | "no-baseline" | "unreadable" | "not-compared";
+  /** Why the harness lost this capture, when it did (`CaptureResult.harnessFault`). */
+  harnessFault?: string;
   /** Fraction of perceptually-differing pixels, in [0,1]. */
   diffFraction?: number;
   /**
@@ -93,7 +101,67 @@ export function statusClass(status: string): string {
   return STATUS_CLASSES.has(status) ? `status-${status}` : "status-unknown";
 }
 
-const VSTATUS_CLASSES: ReadonlySet<string> = new Set(["match", "drift", "no-baseline", "unreadable"]);
+const VSTATUS_CLASSES: ReadonlySet<string> = new Set([
+  "match",
+  "drift",
+  "no-baseline",
+  "unreadable",
+  "not-compared",
+]);
+
+/**
+ * The badge this page leads with, and the sentence under it.
+ *
+ * BX2, AT THE SURFACE A HUMAN ACTUALLY OPENS. `artifact.status` answers one question ("did
+ * the actuation diverge?") and it is honestly `pass` for a run whose frames nothing could
+ * compare. That run exits 2. The console summary has stated the worst tier since the
+ * aligned slice; this page did not, and the gap was a real false green on a consumer
+ * project: a green PASS badge over fifteen frames the pixel gate had refused to grade,
+ * with nothing on the page saying so. The verdict word and the exit code now agree, and
+ * the actuation result is named INSIDE the harness-fault sentence rather than replaced by
+ * it, so no fact is lost.
+ *
+ * Exported so a test can pin the mapping without parsing HTML.
+ */
+export function reportVerdict(
+  artifact: Pick<
+    ReplayRunArtifact,
+    | "status"
+    | "visualHarnessFault"
+    | "visualHarnessFaultReason"
+    | "comparisonsExpected"
+    | "comparisonsPerformed"
+  >,
+): { badge: string; color: string; note?: string } {
+  // The page reads the coverage numbers for itself rather than trusting the flag, exactly
+  // as `replayExitCode` does: `trace report` renders from an on-disk JSON that a hand edit
+  // can strip a boolean out of, and the badge must not be the one surface that believes it.
+  const expected = artifact.comparisonsExpected;
+  const short =
+    typeof expected === "number" && expected > 0 && (artifact.comparisonsPerformed ?? 0) < expected;
+  if (artifact.visualHarnessFault || short) {
+    const why = artifact.visualHarnessFaultReason
+      ? ` Reason: ${artifact.visualHarnessFaultReason}.`
+      : " The reason was not recorded in this report; re-run to capture it.";
+    // The coverage is quoted whenever the report carries it, because "0 of 15" and "14 of
+    // 15" are different situations and the sentence must not flatten them.
+    const coverage =
+      typeof expected === "number"
+        ? ` Pixel gate coverage: ${artifact.comparisonsPerformed ?? 0} of ${expected} approved frame(s) compared.`
+        : "";
+    return {
+      badge: "HARNESS FAULT",
+      // The `blocked` amber, because that is this vocabulary's "no verdict was produced",
+      // which is exactly what an ungraded capture leaves behind (the fleet roll-up maps a
+      // harness fault onto `blocked` for the same reason).
+      color: STATUS_COLOR.blocked!,
+      note:
+        `Actuation ${artifact.status}, but this run holds NO opinion about the frames it did not ` +
+        `compare against an approved baseline: never a pass, never drift.${why}${coverage}`,
+    };
+  }
+  return { badge: artifact.status.toUpperCase(), color: STATUS_COLOR[artifact.status] ?? "#57606a" };
+}
 
 /** Whitelist the visual-status css class (same trust boundary as `statusClass`). */
 function vstatusClass(visualStatus: string): string {
@@ -105,8 +173,10 @@ export function renderReplayReportHtml(
   captures: CaptureImage[],
   chrome: ReportChrome = {},
 ): string {
-  const color = STATUS_COLOR[artifact.status] ?? "#57606a";
+  const verdict = reportVerdict(artifact);
+  const color = verdict.color;
   const blocked = artifact.blockedReason ? ` (${esc(artifact.blockedReason)})` : "";
+  const harnessBanner = verdict.note ? `<div class="fault">${esc(verdict.note)}</div>` : "";
 
   const divergence = artifact.firstDivergence
     ? section(
@@ -210,20 +280,25 @@ export function renderReplayReportHtml(
   .vstatus-drift { color: #cf222e; background: #fff5f5; }
   .vstatus-none { color: #57606a; background: #f6f8fa; }
   .vstatus-unreadable { color: #9a6700; background: #fff8c5; }
+  .vstatus-not-compared { color: #9a6700; background: #fff8c5; }
+  .gate-full { color: #1a7f37; background: #eaffea; }
+  .gate-short { color: #9a6700; background: #fff8c5; }
+  .fault { font-size: 13px; color: #7d4e00; background: #fff8c5; border: 1px solid #d4a72c; border-radius: 6px; padding: 8px 10px; margin: 0 0 16px; }
   .terms { font-size: 13px; color: #9a6700; background: #fff8c5; border-radius: 6px; padding: 6px 10px; margin: 0 0 16px; }
   .mask { position: absolute; border: 2px dashed #bf3989; background: rgba(191,57,137,.12); box-sizing: border-box; pointer-events: none; }
   .mask b { position: absolute; bottom: 100%; left: 0; font-size: 10px; font-weight: 600; color: #fff; background: #bf3989; padding: 0 4px; border-radius: 3px 3px 0 0; white-space: nowrap; }
 </style>
 </head>
 <body>
-  <h1>${esc(artifact.traceId)} <span class="badge">${esc(artifact.status.toUpperCase())}${blocked}</span></h1>
+  <h1>${esc(artifact.traceId)} <span class="badge">${esc(verdict.badge)}${blocked}</span></h1>
   <div class="meta">
     reset: <code>${esc(String(artifact.resetTier ?? "none"))}</code> ·
     ${esc(artifact.startedAt)} → ${esc(artifact.finishedAt)} · ${artifact.durationMs} ms${
       artifact.visualDrift ? ` · <span class="vstatus vstatus-drift">visual drift</span>` : ""
-    }
+    }${coverageLine(artifact)}
   </div>
   ${shaLine}
+  ${harnessBanner}
   ${terms}
   ${divergence}
   ${section("Segments", `<table><thead><tr><th>segment</th><th>status</th><th>anchors reached</th><th>captures</th></tr></thead><tbody>${segmentsRows}</tbody></table>`)}
@@ -233,6 +308,31 @@ export function renderReplayReportHtml(
 </body>
 </html>
 `;
+}
+
+/**
+ * "pixel gate: 15 of 15 approved frame(s) compared", in the header meta, on EVERY anchored
+ * run including a green one.
+ *
+ * A green page is exactly where this number does the work: it is what turns "PASS" from an
+ * assertion into a measured claim, and its absence is what let a page that compared none
+ * of its fifteen approved frames look identical to one that compared all of them. Absent
+ * only when there is no stamped anchor, where there is no denominator to state.
+ */
+function coverageLine(
+  artifact: Pick<ReplayRunArtifact, "comparisonsExpected" | "comparisonsPerformed">,
+): string {
+  if (typeof artifact.comparisonsExpected !== "number") return "";
+  const performed = artifact.comparisonsPerformed ?? 0;
+  // ITS OWN CLASS NAMES, not the per-capture `vstatus-match` / `vstatus-not-compared`.
+  // These are a RUN-level count, and reusing a capture verdict's class would make "the page
+  // contains a matched capture" and "the page states full coverage" indistinguishable to
+  // any reader keyed on the class, tests included.
+  const klass = performed < artifact.comparisonsExpected ? "gate-short" : "gate-full";
+  return (
+    ` · <span class="vstatus ${klass}">pixel gate: ${performed} of ${artifact.comparisonsExpected}` +
+    ` approved frame(s) compared</span>`
+  );
 }
 
 function captureFigure(c: CaptureImage, chrome: ReportChrome): string {
@@ -247,10 +347,21 @@ function captureFigure(c: CaptureImage, chrome: ReportChrome): string {
     ? `${frame(c.baselineBase64, "baseline")}${frame(c.base64, "actual")}`
     : frame(c.base64, "actual");
 
-  let visual = "";
+  // EVERY FIGURE CARRIES A VERDICT, INCLUDING "nobody graded this one".
+  //
+  // The bound field is `visualStatus`, and the old shape (`else if (c.visualStatus)`) is
+  // the anti-pattern this repo refuses by name: a falsy value SKIPPED the label, so the
+  // frame rendered under a green page with no chip at all and read as unremarkable. The
+  // absence is precisely the interesting case, because it is what a refused pixel gate
+  // leaves behind, so it is now the loudest one. `harnessFault` names the cause when the
+  // capture step itself is what failed.
+  let visual: string;
   if (c.visualStatus === "no-baseline") {
     visual = `<span class="vstatus vstatus-none">no baseline</span>`;
-  } else if (c.visualStatus) {
+  } else if (c.visualStatus === undefined) {
+    const why = c.harnessFault ? `: ${c.harnessFault}` : "";
+    visual = `<span class="vstatus vstatus-not-compared">not compared${esc(why)}</span>`;
+  } else {
     const pct = c.diffFraction !== undefined ? ` · ${(c.diffFraction * 100).toFixed(2)}%` : "";
     visual = `<span class="vstatus ${vstatusClass(c.visualStatus)}">${esc(c.visualStatus)}${pct}</span>`;
   }

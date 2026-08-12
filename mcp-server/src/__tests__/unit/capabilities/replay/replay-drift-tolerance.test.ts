@@ -369,7 +369,9 @@ test("GRADE-TIME VERIFICATION LITMUS: an over-cap manifest is a HARNESS FAULT, n
     });
     const capture = artifact.segments[0]!.captures[0]!;
     // DELIBERATE CHANGE (live conflation finding): artifact-level fault, capture ungraded.
-    assert.equal(capture.visualStatus, undefined, "the capture itself is ungraded, not unreadable");
+    // "Ungraded" is RECORDED as `not-compared`, never left absent: an absent field is what
+    // made a refused pixel gate look, in the report, exactly like one that had nothing to do.
+    assert.equal(capture.visualStatus, "not-compared", "the capture itself is ungraded, not unreadable");
     assert.equal(artifact.visualHarnessFault, true);
     assert.equal(artifact.visualDrift, undefined, "an unreadable anchor is never reported as a game defect");
     assert.equal(capture.toleranceUsed, undefined, "nothing was graded, so no terms are claimed");
@@ -392,8 +394,8 @@ test("GRADE-TIME VERIFICATION: a TAMPERED baseline frame is a harness fault at g
       await applyVisualDiff(standardReplayLayout(root), "demo", artifact);
       return 0;
     });
-    // Same deliberate change as above: artifact-level fault, capture left ungraded.
-    assert.equal(artifact.segments[0]!.captures[0]!.visualStatus, undefined);
+    // Same deliberate change as above: artifact-level fault, capture left ungraded and SAYING SO.
+    assert.equal(artifact.segments[0]!.captures[0]!.visualStatus, "not-compared");
     assert.equal(artifact.visualHarnessFault, true);
     assert.equal(artifact.visualHarnessFault, true);
     assert.equal(artifact.visualDrift, undefined);

@@ -408,7 +408,14 @@ test("a CLOCK DISCIPLINE mismatch refuses the pixel comparison as a harness faul
     await captured(() => applyVisualDiff(paths, "demo", unaligned));
     assert.equal(unaligned.visualHarnessFault, true, "wall-clock run vs aligned anchor is a harness fault");
     assert.notEqual(unaligned.visualDrift, true, "…and NEVER drift");
-    assert.equal(unaligned.segments[0]!.captures[0]!.visualStatus, undefined, "an untrusted anchor grades nothing");
+    // UNGRADED IS WRITTEN DOWN, not left absent. This assertion used to read `undefined`,
+    // which is how the false green survived: a capture nothing compared was byte-identical
+    // in the report to a capture the tool never considered.
+    assert.equal(
+      unaligned.segments[0]!.captures[0]!.visualStatus,
+      "not-compared",
+      "an untrusted anchor grades nothing, and SAYS SO",
+    );
 
     // A different FPS is just as incomparable as no alignment at all.
     const wrongFps = artifactWith(actual, png, { alignedCaptureFps: 30 });

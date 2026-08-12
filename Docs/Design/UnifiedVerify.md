@@ -197,6 +197,16 @@ S1 shipped as described, plus four things this RFC did not originally specify:
   rather than a change to gate semantics: replay `blocked` maps to exit 2 in both doors, and an
   unreadable actual or baseline PNG is `visualStatus: "unreadable"` plus a harness marker (exit
   2), never reported as pixel drift. A corrupt file is a capture gap, not a game defect.
+- **A replay states its pixel-gate coverage, and a shortfall is exit 2.** The approved
+  baseline manifest declares its own denominator (`pngs[]`), so a run records
+  `comparisonsExpected` / `comparisonsPerformed` and `replayExitCode` refuses a run that
+  graded fewer approved frames than the anchor declares. A capture the run left ungraded is
+  written down as `visualStatus: "not-compared"` with a run-level `visualHarnessFaultReason`,
+  never as an absent field: the observed false green was a report whose captures carried only
+  `id, artifact, sha256, framesElapsed` beside `"status": "pass"`, under a rendered page that
+  led with a green PASS badge. The rendered page states the tier the run earned, and the
+  grade-time anchor check binds the baseline to the trace file being replayed, which the
+  `trace replay` door previously left to the unified door alone.
 - **Bare `verify` routes on a POSITIVE allowlist** (`--root`, `--strict`, `--live`, `--report`,
   `--id`, `--workspace`). Every other flag reaches the legacy paths exactly as before, and a
   guard test fails if a newly added flag is classified in neither direction. One declared tier

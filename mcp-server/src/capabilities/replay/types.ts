@@ -326,8 +326,22 @@ export interface FirstDivergence {
  * cannot be decoded (truncated write, zero-byte capture, a corrupted baseline) says
  * nothing about the game, and reporting it as drift is exactly the
  * "harness fault presented as a game defect" failure this repo refuses.
+ *
+ * `not-compared` is the OTHER harness-tier outcome, and it exists because its absence was
+ * a false green on a real project: when the ANCHOR as a whole cannot be trusted (a pacing
+ * or capture-clock mismatch, masks pointing at a frame size that no longer exists) every
+ * capture is left ungraded, and the report used to record that by writing NOTHING. A
+ * capture object carrying only `id, artifact, sha256, framesElapsed` is indistinguishable
+ * from a capture the tool forgot about, and every reader of the report had to infer
+ * "never compared" from an absence. The state is now WRITTEN DOWN: a bound field is
+ * present and explicit, never omitted on a run that says `pass`.
  */
-export type VisualCaptureStatus = "match" | "drift" | "no-baseline" | "unreadable";
+export type VisualCaptureStatus =
+  | "match"
+  | "drift"
+  | "no-baseline"
+  | "unreadable"
+  | "not-compared";
 
 export interface CaptureResult {
   id: string;
@@ -431,6 +445,35 @@ export interface ReplayReport {
    * default, so a report written before this field existed still parses.
    */
   visualHarnessFault?: boolean;
+  /**
+   * WHY the pixel gate held no opinion, in one sentence, ON DISK.
+   *
+   * The boolean above tiers the run; it does not tell a reader what to fix, and the
+   * reasons used to exist only on the stderr of the process that produced the report.
+   * That made the rendered page structurally unable to explain itself: `trace report`
+   * re-renders from this JSON alone, so a page describing a refused run could never name
+   * the term that refused. Written wherever `visualHarnessFault` is written, by the same
+   * statement, so the two cannot come apart.
+   */
+  visualHarnessFaultReason?: string;
+  /**
+   * THE PIXEL GATE'S COVERAGE, as two numbers the verdict reads.
+   *
+   * `comparisonsExpected` is the anchor's OWN declared denominator: how many frames a
+   * human approved (`manifest.pngs.length`). `comparisonsPerformed` is how many of them
+   * this run actually graded. Present together whenever a stamped baseline exists, absent
+   * together when there is no anchor to have a denominator.
+   *
+   * WHY THEY ARE ON THE ARTIFACT AND NOT JUST IN A LOCAL. The run-level "did anything get
+   * compared?" fact used to live in a local `anyCompared`, which reached the tolerance
+   * stamp and nothing else: no exit code, no roll-up, nothing on disk. So a run that
+   * graded one of three approved frames, or zero of them, was silently indistinguishable
+   * from a run that graded all three, and exited 0. A comparison that did not happen is
+   * now a fact ON the report, which means it is a fact the exit code can read (see
+   * `replayExitCode`) and a later reader can audit without re-running anything.
+   */
+  comparisonsExpected?: number;
+  comparisonsPerformed?: number;
   /**
    * A3: the pixel tolerance this RUN graded at, resolved from the approved baseline
    * manifest (absent field = the 0.5% default). Recorded per run as well as per capture
