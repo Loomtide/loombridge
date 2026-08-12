@@ -1003,7 +1003,7 @@ async function replayOneTrace(
   // grading frames captured under two different clocks.
   if (aligned.fps !== undefined) artifact.alignedCaptureFps = aligned.fps;
   // Visual regression: compare each capture to its approved baseline (if any).
-  await applyVisualDiff(paths, id, artifact);
+  await applyVisualDiff(paths, id, artifact, { tracePath: traceFile });
 
   const reportJson = path.join(paths.replayReports, `${id}.report.json`);
   const body = `${JSON.stringify(artifact, null, 2)}\n`;
@@ -1180,14 +1180,49 @@ export async function discoverReports(dir: string): Promise<string[]> {
  * doors cannot drift apart.
  */
 export function replayExitCode(
-  artifact: Pick<ReplayRunArtifact, "status" | "visualDrift" | "visualHarnessFault">,
+  artifact: Pick<
+    ReplayRunArtifact,
+    "status" | "visualDrift" | "visualHarnessFault" | "comparisonsExpected" | "comparisonsPerformed"
+  >,
   strictVisual: boolean,
 ): number {
   if (artifact.status === "blocked") return 2;
   if (artifact.visualHarnessFault) return 2;
+  // A RUN THAT DID NOT COMPARE WHAT A HUMAN APPROVED CANNOT EXIT 0, and the tier is read
+  // from the report's own two numbers rather than trusted from the boolean above. The
+  // boolean is set by the same pass that computes the numbers, so in a report this tool
+  // wrote they always agree; the numbers matter for a report it did NOT write, since a
+  // hand-edited verdict that drops the flag still has to carry a denominator it can meet.
+  if (comparisonShortfall(artifact) !== null) return 2;
   if (artifact.status !== "pass") return 1;
   if (artifact.visualDrift && strictVisual) return 1;
   return 0;
+}
+
+/**
+ * The pixel gate's coverage shortfall for a run, or null when there is none.
+ *
+ * THE DENOMINATOR IS THE ANCHOR'S OWN. `comparisonsExpected` is stamped from
+ * `manifest.pngs.length`, the count of frames a human actually approved, so "did the gate
+ * run?" is answerable without re-reading the baseline directory.
+ *
+ * THE ABSENT COUNTERPART IS A REFUSAL, NOT A SKIP. When a report declares an expectation
+ * and carries no `comparisonsPerformed`, the missing field reads as ZERO, never as
+ * "assume it was met": that is the exact shape a hand-edited or truncated report takes,
+ * and treating it as satisfied would let a verdict pass by deleting a field. A report with
+ * NO `comparisonsExpected` had no anchor to be measured against (no baseline yet, or a
+ * legacy unstamped one), which is a different statement from "compared nothing", and the
+ * unified door already refuses to treat an unstamped baseline as an anchor at all.
+ *
+ * Pure and exported: this predicate is the whole of the "compared nothing" guarantee.
+ */
+export function comparisonShortfall(
+  artifact: Pick<ReplayRunArtifact, "comparisonsExpected" | "comparisonsPerformed">,
+): { expected: number; performed: number } | null {
+  const expected = artifact.comparisonsExpected;
+  if (typeof expected !== "number" || !(expected > 0)) return null;
+  const performed = typeof artifact.comparisonsPerformed === "number" ? artifact.comparisonsPerformed : 0;
+  return performed < expected ? { expected, performed } : null;
 }
 
 /**
@@ -2044,9 +2079,19 @@ export async function applyVisualDiff(
   paths: ReplayLayout,
   id: string,
   artifact: ReplayRunArtifact,
+  opts: { tracePath?: string } = {},
 ): Promise<void> {
   const baselineDir = path.join(paths.replayBaselines, id);
-  const integrity = await verifyTraceBaseline(baselineDir);
+  // THE ANCHOR IS CHECKED AGAINST THE DEMONSTRATION IT WAS APPROVED FOR, at grade time,
+  // by THIS door and not only by the unified one. `verifyTraceBaseline` has always been
+  // able to re-hash the trace; this call site simply never handed it the path, so editing
+  // an approved trace made `loombridge verify` say "the baseline was approved for a
+  // different demonstration" while `loombridge trace replay` graded the new demonstration
+  // against the old frames and exited 0. `tracePath` names a NON-DEFAULT location (the
+  // `--trace` override); it can never turn the binding off, because the default is the
+  // trace this id is replayed from.
+  const tracePath = opts.tracePath ?? path.join(paths.replayTraces, `${id}.trace.json`);
+  const integrity = await verifyTraceBaseline(baselineDir, { tracePath });
   let tolerance = DEFAULT_DRIFT_FRACTION;
   let maskRects: MaskRect[] = [];
   let frameWidth = 0;
@@ -2126,9 +2171,14 @@ export async function applyVisualDiff(
   const previousEvidence = await readPreviousDriftEvidence(paths, id);
 
   let anyDrift = false;
-  let anyUnreadable = false;
-  let anyCaptureFault = false;
-  let anyCompared = false;
+  // WHICH captures the harness lost, by name, so the reason written to the report can say
+  // so. Booleans were enough to tier the run and never enough to explain it.
+  const unreadableCaptures: string[] = [];
+  const faultedCaptures: string[] = [];
+  // WHICH approved anchors this run actually graded. The old `anyCompared` boolean could
+  // not tell "one of three" from "three of three", so a run that quietly stopped comparing
+  // most of the baseline looked exactly like a full one.
+  const gradedCaptures = new Set<string>();
   const evidence: CaptureDriftEvidence[] = [];
   for (const segment of artifact.segments) {
     for (const capture of segment.captures) {
@@ -2138,7 +2188,7 @@ export async function applyVisualDiff(
       // run's tier: a starved editor would read as "one fewer comparison" and the run would
       // come out green.
       if (capture.harnessFault) {
-        anyCaptureFault = true;
+        faultedCaptures.push(capture.id);
         console.error(
           `[loombridge trace] capture "${capture.id}" is a HARNESS FAULT (no comparable frame, ` +
             `not drift): ${capture.harnessFault}`,
@@ -2154,7 +2204,7 @@ export async function applyVisualDiff(
       // Grading such a frame against an aligned anchor would compare two disciplines while
       // both sides claimed one. Refuse the comparison; never guess, and never grade.
       if (artifact.alignedCaptureFps !== undefined && !(typeof capture.framesElapsed === "number" && capture.framesElapsed > 0)) {
-        anyCaptureFault = true;
+        faultedCaptures.push(capture.id);
         capture.harnessFault ??=
           `the aligned stamp carries no frame evidence (framesElapsed ${capture.framesElapsed ?? "absent"})`;
         console.error(
@@ -2171,6 +2221,17 @@ export async function applyVisualDiff(
         // these PNGs decode fine, and stamping them "unreadable" would make approve
         // refuse the very report that re-anchors at a new pacing (found live: the
         // pacing-mismatch escape hatch was refused by the capture-gap rule it tripped).
+        //
+        // THE SKIP IS RECORDED, NOT SILENT (the false green this fixes). Leaving every
+        // visual field ABSENT here produced a report whose captures read
+        // `{id, artifact, sha256, framesElapsed}` beside `status: "pass"`, which is the
+        // exact shape of a run in which the pixel gate was never asked to do anything.
+        // Observed on a real consumer project: the rendered page showed a green PASS
+        // badge over fifteen frames nothing had compared. `not-compared` is a
+        // capture-level statement of the run-level refusal, and it deliberately does NOT
+        // set `harnessFault`, which would make `approve` refuse the very report the
+        // refusal tells the operator to re-anchor from.
+        capture.visualStatus = "not-compared";
         continue;
       }
       let baselineExists = true;
@@ -2220,7 +2281,7 @@ export async function applyVisualDiff(
             ? { driftClusterRefusal: diff.driftClusterRefusal }
             : {}),
         });
-        anyCompared = true;
+        gradedCaptures.add(capture.id);
         if (diff.status === "drift") anyDrift = true;
       } catch (error) {
         // Unreadable actual/baseline → the comparison could not be made. Never a
@@ -2229,7 +2290,7 @@ export async function applyVisualDiff(
         // game defect. `replayExitCode` reads `visualHarnessFault` for the tier.
         capture.baseline = baselinePath;
         capture.visualStatus = "unreadable";
-        anyUnreadable = true;
+        unreadableCaptures.push(capture.id);
         console.error(
           `[loombridge trace] visual diff UNREADABLE for "${capture.id}" (capture gap, not drift): ${message(error)}`,
         );
@@ -2237,7 +2298,64 @@ export async function applyVisualDiff(
     }
   }
   if (anyDrift) artifact.visualDrift = true;
-  if (anyUnreadable || anyCaptureFault || baselineFault !== null) artifact.visualHarnessFault = true;
+
+  // THE COVERAGE, WRITTEN DOWN ON EVERY RUN THAT HAS AN ANCHOR TO BE MEASURED AGAINST.
+  //
+  // The denominator is the manifest's own `pngs[]`: the frames a human approved. Nothing
+  // else in this function knew that number, which is why a run could grade one of three
+  // approved frames, or none of them, and still come out green: each capture reported its
+  // own outcome honestly and no one ever counted them against what was promised.
+  //
+  // An UNSTAMPED (legacy or absent) baseline yields no numbers at all, and that is a
+  // different statement from zero: there is no approved set to fall short of, the per
+  // capture verdict is `no-baseline`, and the unified door already refuses to treat such a
+  // directory as an anchor. Recording `expected: 0` there would be inventing a promise
+  // nobody made.
+  const declaredAnchors = integrity.manifest?.pngs.map((png) => png.captureId) ?? null;
+  if (declaredAnchors !== null) {
+    artifact.comparisonsExpected = declaredAnchors.length;
+    artifact.comparisonsPerformed = gradedCaptures.size;
+  }
+  const ungradedAnchors = (declaredAnchors ?? []).filter((captureId) => !gradedCaptures.has(captureId));
+
+  // THE TIER AND ITS REASON ARE WRITTEN BY THE SAME STATEMENT, so no later edit can set
+  // one without the other. The reason is what the rendered page and any second reader of
+  // the report have to work with: before it existed, every explanation lived on the stderr
+  // of the process that wrote the file, and `trace report` re-rendering from the JSON alone
+  // could not have named the term that refused even if it had wanted to.
+  const harnessReasons = [
+    ...(baselineFault !== null ? [baselineFault] : []),
+    ...(faultedCaptures.length > 0
+      ? [`the capture step failed for ${faultedCaptures.join(", ")} (no frame to grade)`]
+      : []),
+    ...(unreadableCaptures.length > 0
+      ? [`a PNG could not be decoded for ${unreadableCaptures.join(", ")} (capture gap, not drift)`]
+      : []),
+    ...(ungradedAnchors.length > 0
+      ? [
+          `the approved baseline declares ${declaredAnchors!.length} frame(s) but this run compared ` +
+            `${gradedCaptures.size}: ${ungradedAnchors.join(", ")} ${
+              ungradedAnchors.length === 1 ? "was" : "were"
+            } never graded`,
+        ]
+      : []),
+  ];
+  if (harnessReasons.length > 0) {
+    artifact.visualHarnessFault = true;
+    artifact.visualHarnessFaultReason = harnessReasons.join("; ");
+  }
+  // SAID OUT LOUD, AND SAID SEPARATELY from the anchor faults above, which have already
+  // printed their own line. A shortfall with no other fault is the silent case: every
+  // capture in the report looks fine and the run simply stopped short of the anchor.
+  if (ungradedAnchors.length > 0 && baselineFault === null) {
+    console.error(
+      `[loombridge trace] the pixel gate did NOT cover its anchor for "${id}" (harness fault, not a game ` +
+        `defect): ${gradedCaptures.size} of ${declaredAnchors!.length} approved frame(s) were compared; ` +
+        `${ungradedAnchors.join(", ")} never reached the comparison. A run that did not grade what a human ` +
+        "approved holds no opinion about those frames, so it is never a pass.",
+    );
+  }
+  const anyCompared = gradedCaptures.size > 0;
   if (anyCompared) artifact.toleranceUsed = tolerance;
   if (anyCompared && maskRects.length > 0) {
     artifact.maskRects = maskRects;
@@ -2263,13 +2381,21 @@ export async function applyVisualDiff(
   }
 }
 
-/** The frame size the captures were compared at, for a baseline that stamped none. */
+/**
+ * The frame size the captures were COMPARED at, for a baseline that stamped none.
+ *
+ * The predicate names the two statuses a comparison actually produces rather than
+ * excluding the ones that do not. "Anything with a status" would now admit
+ * `not-compared`, whose frame was never measured against a baseline, and would grow a new
+ * hole every time the vocabulary gains a member.
+ */
 async function comparedFrameDims(
   artifact: ReplayRunArtifact,
 ): Promise<{ frameWidth: number; frameHeight: number }> {
   for (const segment of artifact.segments) {
     for (const capture of segment.captures) {
-      if (!capture.artifact || capture.visualStatus === undefined) continue;
+      if (!capture.artifact) continue;
+      if (capture.visualStatus !== "match" && capture.visualStatus !== "drift") continue;
       try {
         const image = await readPng(capture.artifact);
         return { frameWidth: image.width, frameHeight: image.height };
@@ -2439,6 +2565,10 @@ async function writeHtmlReport(
         baselineBase64: await readBase64(capture.baseline, paths),
         visualStatus: capture.visualStatus,
         diffFraction: capture.diffFraction,
+        // The cause rides to the page. A capture the harness lost renders as a red
+        // "actual missing" tile, which says WHAT happened and never why, and the page is
+        // the one artifact a human keeps after the terminal scrollback is gone.
+        ...(capture.harnessFault !== undefined ? { harnessFault: capture.harnessFault } : {}),
         ...(capture.maskedFraction !== undefined ? { maskedFraction: capture.maskedFraction } : {}),
         masks: masksForCapture(maskRects, capture.id),
       });
@@ -2533,13 +2663,29 @@ export function printSummary(
   // trust the word over the code. The JSON keeps the engine's word (that layer's answer is
   // still true and other tools read it); the human line states the tier the run earned and
   // names the actuation result inside it, in that order.
-  if (artifact.visualHarnessFault) {
+  const shortfall = comparisonShortfall(artifact);
+  if (artifact.visualHarnessFault || shortfall !== null) {
     console.error(
       `[loombridge trace] ${id}: HARNESS FAULT (exit 2): actuation ${artifact.status}${blocked}. ` +
         "No comparable frames, so this run holds NO opinion about the pixels: never a pass, never drift.",
     );
+    // THE REASON RIDES WITH THE HEADLINE. It was already printed at the moment it was
+    // found, which can be hundreds of lines earlier in a fleet run, and a reader who
+    // scrolls to the verdict should not have to scroll back to learn what refused.
+    if (artifact.visualHarnessFaultReason) {
+      console.error(`[loombridge trace]   reason: ${artifact.visualHarnessFaultReason}`);
+    }
   } else {
     console.error(`[loombridge trace] ${id}: ${artifact.status.toUpperCase()}${blocked}`);
+  }
+  // THE COVERAGE IS STATED ON EVERY ANCHORED RUN, GREEN ONES INCLUDED. "15 of 15 approved
+  // frames compared" is the sentence that makes a green run mean something, and it is the
+  // sentence whose absence let "0 of 15" pass unnoticed.
+  if (typeof artifact.comparisonsExpected === "number") {
+    console.error(
+      `[loombridge trace]   pixel gate: ${artifact.comparisonsPerformed ?? 0} of ` +
+        `${artifact.comparisonsExpected} approved frame(s) compared.`,
+    );
   }
   if (artifact.blockedDetail) {
     console.error(`[loombridge trace]   cause: ${artifact.blockedDetail}`);

@@ -538,7 +538,8 @@ test("DIMS MISMATCH at apply time is a MANIFEST-level harness fault, never a per
     // The pacing precedent exactly: the ANCHOR is at fault, so the captures are left
     // UNGRADED rather than stamped unreadable (they decode fine, and calling them
     // unreadable would make `approve` refuse the very report that re-anchors them).
-    assert.equal(capture.visualStatus, undefined);
+    // Ungraded is STATED (`not-compared`), never inferred from an absent field.
+    assert.equal(capture.visualStatus, "not-compared");
     assert.equal(capture.toleranceUsed, undefined, "nothing was graded, so no terms are claimed");
     assert.equal(artifact.visualHarnessFault, true);
     assert.equal(artifact.visualDrift, undefined, "a broken anchor is never reported as a game defect");
@@ -583,7 +584,7 @@ test("MX3: the grade-time dims check still catches what the verifier's ONE decod
     const { artifact, out } = await grade(root, "demo", ["cap", "cap2"]);
     assert.equal(artifact.visualHarnessFault, true);
     assert.equal(artifact.visualDrift, undefined);
-    assert.equal(artifact.segments[0]!.captures[0]!.visualStatus, undefined, "the ANCHOR is at fault");
+    assert.equal(artifact.segments[0]!.captures[0]!.visualStatus, "not-compared", "the ANCHOR is at fault");
     assert.match(out, /masks are stamped but the approved frames are not all one size \(100x100 and 200x200/);
   } finally {
     await fs.rm(root, { recursive: true, force: true });
@@ -1924,7 +1925,7 @@ test("MX9: an UNGRADED run's header states the ANCHOR's real terms, never the st
     const { artifact, out } = await grade(root);
     assert.match(out, /approved at 2x pacing but this run replayed at 1x/);
     assert.equal(artifact.toleranceUsed, undefined, "nothing was graded, so no terms were claimed by the RUN");
-    assert.equal(artifact.segments[0]!.captures[0]!.visualStatus, undefined);
+    assert.equal(artifact.segments[0]!.captures[0]!.visualStatus, "not-compared");
     await persistReport(root, artifact);
 
     await captured(() => run(["report", "--id", "demo", "--root", root]));
