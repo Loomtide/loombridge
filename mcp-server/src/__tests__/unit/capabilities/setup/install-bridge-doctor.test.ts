@@ -535,3 +535,69 @@ describe("loombridge install-bridge + doctor (Phase 2)", { timeout: 60000 }, () 
     assert.match(r.stdout, /skipped doctor/);
   });
 });
+
+// --- SNP-O01: doctor reports local asset registries ------------------------------------------
+//
+// H3 from the adversarial review: this row shipped with NO test, and deleting it whole kept the
+// suite green. It also read the WRONG directory in its first cut, reporting "none" while the
+// machine had packs installed, so both the presence check and the direction it looks matter.
+
+describe("doctor: local asset registry row (SNP-O01)", () => {
+  /**
+   * `spawnSync`, not `execFileSync`: an unwired fixture project legitimately exits 1 (no bridge
+   * installed), and `execFileSync` throws on that, which would make these tests fail for a reason
+   * that has nothing to do with the row under test.
+   */
+  function doctorReport(project: string): { code: number; checks: { id: string; status: string; detail: string }[] } {
+    const r = spawnSync(process.execPath, [CLI_DIST, "doctor", "--project", project, "--ci"], {
+      encoding: "utf-8", stdio: ["ignore", "pipe", "pipe"],
+    });
+    const parsed = JSON.parse(r.stdout ?? "{}") as { checks: { id: string; status: string; detail: string }[] };
+    return { code: r.status ?? -1, checks: parsed.checks ?? [] };
+  }
+
+  async function unityProject(): Promise<string> {
+    const root = await fsp.mkdtemp(path.join(os.tmpdir(), "loombridge-doctor-registry-"));
+    await fsp.mkdir(path.join(root, "Assets"), { recursive: true });
+    await fsp.mkdir(path.join(root, "ProjectSettings"), { recursive: true });
+    await fsp.writeFile(path.join(root, "ProjectSettings", "ProjectVersion.txt"), "m_EditorVersion: 6000.3.20f1\n", "utf-8");
+    return root;
+  }
+
+  test("the row exists, is INFO, and never affects the exit code", async () => {
+    const project = await unityProject();
+    const row = doctorReport(project).checks.find((c) => c.id === "assets.registry");
+    assert.ok(row, "the assets.registry row must be present: a check that vanishes reads like one that passed");
+    assert.equal(row.status, "info", "an empty registry is a supported configuration, never a warning");
+
+    // ...and adding packs must not change the exit code, which only `fail` rows may move.
+    const before = doctorReport(project).code;
+    const dir = path.join(project, ".loombridge", "registry");
+    await fsp.mkdir(dir, { recursive: true });
+    await fsp.writeFile(path.join(dir, "p.json"), "{}", "utf-8");
+    assert.equal(doctorReport(project).code, before, "an INFO row must never move the exit code");
+  });
+
+  test("it reports PROJECT-imported packs, and says which directory it means", async () => {
+    const project = await unityProject();
+    const dir = path.join(project, ".loombridge", "registry");
+    await fsp.mkdir(dir, { recursive: true });
+    await fsp.writeFile(path.join(dir, "imported-pack.json"), "{}", "utf-8");
+
+    const row = doctorReport(project).checks.find((c) => c.id === "assets.registry");
+    assert.match(row!.detail, /imported-pack\.json/);
+    assert.match(row!.detail, /project:/, "the two registry locations must be distinguishable");
+    assert.match(row!.detail, /machine:/);
+  });
+
+  test("LITMUS: a non-pack file is not counted as a pack", async () => {
+    // Guards the count from the other side: `.endsWith(".json")` alone counted directories too.
+    const project = await unityProject();
+    const dir = path.join(project, ".loombridge", "registry");
+    await fsp.mkdir(path.join(dir, "a-directory.json"), { recursive: true });
+    await fsp.writeFile(path.join(dir, "notes.txt"), "not a pack", "utf-8");
+
+    const row = doctorReport(project).checks.find((c) => c.id === "assets.registry");
+    assert.match(row!.detail, /project: none imported/, `a directory and a .txt are not packs: ${row!.detail}`);
+  });
+});

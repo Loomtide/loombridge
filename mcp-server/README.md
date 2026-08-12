@@ -213,7 +213,7 @@ never configured.
 **The endpoint is configuration, never a baked-in default.** Pass `--catalog-api <baseUrl>` /
 `--catalog <url>`, or set `LOOMBRIDGE_ASSET_CATALOG_URL` and pass no source flag at all: the verbs
 fall back to it and refuse by name when it is unset. This repo names no deployment host, and the
-current base URL is published alongside the asset store (`https://assetstore.loomtide.ai/`). There is no upload or publish
+base URL is not published at a fixed path, so obtain it from whoever operates the catalog and set it once via `LOOMBRIDGE_ASSET_CATALOG_URL`. There is no upload or publish
 path in this build: the authoring verbs live on the private side of the seam and refuse here.
 External developer quickstart (browse + prepare against the public catalog, no credentials):
 `../Docs/Assets/PublicCatalogQuickstart.md`.

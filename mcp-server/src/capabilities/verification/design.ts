@@ -385,6 +385,8 @@ function printUsage(): void {
 }
 
 interface DesignFlags {
+  /** `--help` anywhere in a subcommand's args: print usage instead of refusing. See parseFlags. */
+  help?: boolean;
   root: string;
   imagePath?: string;
   htmlPath?: string;
@@ -395,6 +397,8 @@ interface DesignFlags {
   approve: boolean;
   requireApproved: boolean;
 }
+
+const DESIGN_ACTIONS: ReadonlySet<string> = new Set(["status", "set", "approve"]);
 
 const DESIGN_TARGET_KINDS: ReadonlySet<DesignTargetKind> = new Set([
   "composition-reference",
@@ -419,6 +423,9 @@ function parseFlags(args: string[]): DesignFlags {
     else if (a === "--note") f.note = args[(i += 1)] ?? undefined;
     else if (a === "--approve") f.approve = true;
     else if (a === "--require-approved") f.requireApproved = true;
+    // SNP-T02: `target set --help` used to exit 2 with `unknown argument "--help"`, so a
+    // subcommand could not be asked how it works. Asking for help is never a usage error.
+    else if (a === "--help" || a === "-h") f.help = true;
     else throw new Error(`unknown argument "${a}".`);
   }
   return f;
@@ -438,6 +445,18 @@ export async function run(args: string[]): Promise<number> {
     console.error(`[loombridge target] ${error instanceof Error ? error.message : String(error)}`);
     printUsage();
     return 2;
+  }
+
+  // Order matters: an UNKNOWN action must stay a usage error even with --help, or a typo'd or
+  // hallucinated subcommand reports success. Validate the action first, then honour help.
+  if (!DESIGN_ACTIONS.has(action)) {
+    console.error(`[loombridge target] unknown action "${action}".`);
+    printUsage();
+    return 2;
+  }
+  if (flags.help) {
+    printUsage();
+    return 0;
   }
 
   try {

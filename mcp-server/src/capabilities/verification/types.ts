@@ -170,6 +170,27 @@ export interface RangeBand {
 export interface PerspectiveFramingSection {
   /** Descriptive projection intent, e.g. "orthographic-or-high-angle". Not enforced directly. */
   projection?: string;
+  /**
+   * Direct vertical-FOV pin for a perspective rig with NO ground-extent claim
+   * (e.g. a first-person camera aimed at the horizon, where the visible ground
+   * width is unbounded by design). When set, the framing gate enforces
+   * projection=perspective + this FOV against the captured camera instead of
+   * the visibleGroundWidthM band. Distinct from `perspectiveFallback`, which is
+   * the FOV a band-armed top-down contract sanctions for its extent math.
+   */
+  fieldOfViewDeg?: number;
+  /**
+   * EXPLICIT declaration that this rig makes no finite ground-extent claim, e.g. a
+   * horizon-facing first-person or over-shoulder camera whose visible ground width is
+   * unbounded by design.
+   *
+   * Required to silence the extent check. Omitting it leaves the check armed-with-noise
+   * (WARN), because the one thing this gate may never be is disarmable BY OMISSION: the
+   * `visibleGroundWidthM` band is what caught the dogfood ~54m over-wide frame, and a
+   * top-down contract rewritten to drop its band must not go quietly green. Declaring both
+   * this and a band is a contradiction and is refused at validation.
+   */
+  groundExtent?: "unbounded";
   /** Allowed camera pitch-DOWN band, degrees (0 = horizon, 90 = straight down). */
   pitchDownDeg?: RangeBand;
   /** Orthographic half-height, if an orthographic rig is used (width = 2·size·aspect). */
@@ -208,7 +229,15 @@ export function isPerspectiveFramingSection(
   return (
     c.pitchDownDeg !== undefined ||
     c.perspectiveFallback !== undefined ||
-    c.visibleGroundWidthM !== undefined
+    c.visibleGroundWidthM !== undefined ||
+    // Direct perspective pin (3d-shooter pack shape): `projection: "perspective"`
+    // and/or a top-level fieldOfViewDeg. The 2D CameraFramingSection never
+    // carries either, so this cannot re-route a pixel-perfect contract. Without
+    // this arm the pack's own template fell through to the 2D ortho branch,
+    // which demands an orthographic camera and crashes on the absent
+    // worldPosition.
+    c.fieldOfViewDeg !== undefined ||
+    c.projection === "perspective"
   );
 }
 

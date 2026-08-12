@@ -2,31 +2,66 @@
   "schemaVersion": "1",
   "game": "3d-shooter-reference",
   "source": {
-    "note": "Minimal genre-neutral reference acceptance template for the 3d-shooter SEED (first slice of the 3D-shooter genre). It exercises the required, genre-neutral contract sections (fonts/palette/hud/framing/feel/juice/manifest/win) for a single-player, non-Fusion 3D shooter and deliberately OMITS the optional platformer-only sections (platformer/reachability/placement/render/props/physics). The feel section carries ONLY the core shooter metrics that this seed gate-enforces today (fireIntervalMs, fireInputToSpawnLatency, ttkMs); additional 3D-shooter measurements (projectileSpeed, aimTurnRateDegPerSec, lookInputToYawLatencyMs, shotAimAlignmentDeg, hitstopMs, screenShakeMag, hitscanImpactLatencyMs, enemyReactionLatencyMs, coverBlocksDamage, waveObjectiveComplete, wallSlideTangentRatio) are measure-only proof capabilities unless a GenreContract promotes them with explicit gate bands. wallSlideTangentRatio (dogfood learnings §2 wall-slide feel gate, binds to deriveWallSlideTangentRatio) proves diagonal-into-wall input preserves tangent motion — relevant to strafing into cover/geometry — and the 3d-topdown-arena pack carries its default band. The 3C lookInputToYawLatencyMs + shotAimAlignmentDeg pair was promoted from a bridge gap to measurable-now with committed live evidence (demos/evidence-bundles/3d-shooter-3c-controller-camera). Recoil/ADS and broad aiming quality remain explicit gaps. This is a seed for `plan --genre 3d-shooter`, not a hand-tuned shipping contract, and not a 'production-ready 3D shooter' claim."
+    "note": "Minimal genre-neutral reference acceptance template for the 3d-shooter SEED (first slice of the 3D-shooter genre). It exercises the required, genre-neutral contract sections (fonts/palette/hud/framing/feel/juice/manifest/win) for a single-player, non-Fusion 3D shooter and deliberately OMITS the optional platformer-only sections (platformer/reachability/placement/render/props/physics). The feel section carries ONLY the core shooter metrics that this seed gate-enforces today (fireIntervalMs, fireInputToSpawnLatency, ttkMs); additional 3D-shooter measurements (projectileSpeed, aimTurnRateDegPerSec, lookInputToYawLatencyMs, shotAimAlignmentDeg, hitstopMs, screenShakeMag, hitscanImpactLatencyMs, enemyReactionLatencyMs, coverBlocksDamage, waveObjectiveComplete, wallSlideTangentRatio) are measure-only proof capabilities unless a GenreContract promotes them with explicit gate bands. wallSlideTangentRatio (dogfood learnings \u00a72 wall-slide feel gate, binds to deriveWallSlideTangentRatio) proves diagonal-into-wall input preserves tangent motion \u2014 relevant to strafing into cover/geometry \u2014 and the 3d-topdown-arena pack carries its default band. The 3C lookInputToYawLatencyMs + shotAimAlignmentDeg pair was promoted from a bridge gap to measurable-now with committed live evidence (demos/evidence-bundles/3d-shooter-3c-controller-camera). Recoil/ADS and broad aiming quality remain explicit gaps. This is a seed for `plan --genre 3d-shooter`, not a hand-tuned shipping contract, and not a 'production-ready 3D shooter' claim."
   },
-
   "fonts": {
     "global": {
       "family": "Press Start 2P",
       "note": "HUD font; pixel display face."
     },
     "byRole": {
-      "ammo": { "family": "Press Start 2P" },
-      "health": { "family": "Press Start 2P" },
-      "score": { "family": "Press Start 2P" }
+      "ammo": {
+        "family": "Press Start 2P"
+      },
+      "health": {
+        "family": "Press Start 2P"
+      },
+      "score": {
+        "family": "Press Start 2P"
+      }
     }
   },
-
   "palette": {
     "entries": [
-      { "hex": "#0d1015", "roles": ["background"], "name": "ink" },
-      { "hex": "#4dd0e1", "roles": ["hud-accent"], "name": "cyan" },
-      { "hex": "#ff4d8d", "roles": ["juice", "health"], "name": "magenta" },
-      { "hex": "#ffd166", "roles": ["score", "ammo"], "name": "gold" },
-      { "hex": "#ffffff", "roles": ["reticle"], "name": "hud-white" }
+      {
+        "hex": "#0d1015",
+        "roles": [
+          "background"
+        ],
+        "name": "ink"
+      },
+      {
+        "hex": "#4dd0e1",
+        "roles": [
+          "hud-accent"
+        ],
+        "name": "cyan"
+      },
+      {
+        "hex": "#ff4d8d",
+        "roles": [
+          "juice",
+          "health"
+        ],
+        "name": "magenta"
+      },
+      {
+        "hex": "#ffd166",
+        "roles": [
+          "score",
+          "ammo"
+        ],
+        "name": "gold"
+      },
+      {
+        "hex": "#ffffff",
+        "roles": [
+          "reticle"
+        ],
+        "name": "hud-white"
+      }
     ]
   },
-
   "hud": {
     "elements": [
       {
@@ -73,9 +108,11 @@
       }
     ]
   },
-
   "framing": {
-    "aspect": { "w": 16, "h": 9 },
+    "aspect": {
+      "w": 16,
+      "h": 9
+    },
     "cameraMode": "third-person-follow",
     "camera": {
       "projection": "perspective",
@@ -83,58 +120,100 @@
       "nearClip": 0.3,
       "farClip": 1000,
       "backgroundColorHex": "#0d1015",
-      "note": "Single perspective rig framing a bounded 3D range. The seed fixture uses a third-person follow camera behind the player; the pack contract NAMES one perspective (third-person) per the extraction plan, and does not claim a 2D orthographic/pixel-art frame."
+      "note": "Single perspective rig framing a bounded 3D range. The seed fixture uses a third-person follow camera behind the player; the pack contract NAMES one perspective (third-person) per the extraction plan, and does not claim a 2D orthographic/pixel-art frame.",
+      "groundExtent": "unbounded"
     },
     "playerAnchor": {
       "centerXFraction": 0.5,
       "tolerance": 0.12,
-      "note": "Third-person follow — the player reads near screen-center horizontally. Informational; no per-frame follow assertion in the seed."
+      "note": "Third-person follow \u2014 the player reads near screen-center horizontally. Informational; no per-frame follow assertion in the seed."
     },
     "verticalPan": false,
     "note": "16:9 perspective range. Not a 2D pixel frame: no native-resolution / pixel-scale / orthographic-size claims."
   },
-
   "feel": {
-    "fireIntervalMs": { "target": 133, "unit": "ms", "band": { "percent": 10 }, "note": "cadence between shots; measure-only, binds to the fireIntervalMs calculator (dimension-agnostic counter edges)" },
-    "fireInputToSpawnLatency": { "target": 50, "unit": "ms", "band": { "percent": 20 }, "note": "fire input onset to projectile spawn; measure-only (aspirational target, not gate-enforced)" },
-    "ttkMs": { "target": 300, "unit": "ms", "band": { "percent": 30 }, "note": "first-hit to reference-enemy death; measure-only, binds to the ttkMs calculator (hit/death edges)" }
+    "fireIntervalMs": {
+      "target": 133,
+      "unit": "ms",
+      "band": {
+        "percent": 10
+      },
+      "note": "cadence between shots; measure-only, binds to the fireIntervalMs calculator (dimension-agnostic counter edges)"
+    },
+    "fireInputToSpawnLatency": {
+      "target": 50,
+      "unit": "ms",
+      "band": {
+        "percent": 20
+      },
+      "note": "fire input onset to projectile spawn; measure-only (aspirational target, not gate-enforced)"
+    },
+    "ttkMs": {
+      "target": 300,
+      "unit": "ms",
+      "band": {
+        "percent": 30
+      },
+      "note": "first-hit to reference-enemy death; measure-only, binds to the ttkMs calculator (hit/death edges)"
+    }
   },
-
   "juice": {
     "hitStop": {
       "ms": 80,
       "frames": 5,
       "playerFlashWhite": false,
-      "note": "Design intent for a generated build — brief impact freeze on enemy hit/kill. The hit-stop WINDOW DURATION (hitstopMs) is now measurable in 3D and live-proven in the repo-owned fixture (demos/evidence-bundles/3d-impact-feedback/, deriveHitstopMs, causality-gated); this ms/frames target stays design intent, not a gate-enforced band. See methodology-gaps.md."
+      "note": "Design intent for a generated build \u2014 brief impact freeze on enemy hit/kill. The hit-stop WINDOW DURATION (hitstopMs) is now measurable in 3D and live-proven in the repo-owned fixture (demos/evidence-bundles/3d-impact-feedback/, deriveHitstopMs, causality-gated); this ms/frames target stays design intent, not a gate-enforced band. See methodology-gaps.md."
     },
     "screenShake": {
       "amplitudePx": 4,
       "decayMs": 180,
       "trigger": "fire-and-hit",
-      "note": "Design intent for a generated build — small kick on fire, larger on hit/kill. The camera-DISPLACEMENT magnitude (screenShakeMag) is now measurable in true 3D and live-proven in the repo-owned fixture (demos/evidence-bundles/3d-impact-feedback/, deriveScreenShakeMag hypot(dx,dy,dz), Z load-bearing, causality-gated); this px/decay target stays design intent, not a gate-enforced band. See methodology-gaps.md."
+      "note": "Design intent for a generated build \u2014 small kick on fire, larger on hit/kill. The camera-DISPLACEMENT magnitude (screenShakeMag) is now measurable in true 3D and live-proven in the repo-owned fixture (demos/evidence-bundles/3d-impact-feedback/, deriveScreenShakeMag hypot(dx,dy,dz), Z load-bearing, causality-gated); this px/decay target stays design intent, not a gate-enforced band. See methodology-gaps.md."
     }
   },
-
   "manifest": {
     "matching": "regex",
     "caseSensitive": false,
     "extrasAreFailure": false,
     "elements": [
-      { "nameRegex": "player|hero|gunner", "type": "GameObject", "primitive": "player", "required": true },
-      { "nameRegex": "enemy|mob|drone|grunt|target", "type": "GameObject", "primitive": "enemy", "minCount": 1, "required": true },
-      { "nameRegex": "projectile|bullet|shot", "type": "GameObject", "primitive": "projectile", "required": true },
-      { "nameRegex": "weapon|gun|muzzle", "type": "GameObject", "primitive": "weapon", "required": true },
-      { "nameRegex": "GameManager|CombatController", "type": "GameObject", "required": true }
+      {
+        "nameRegex": "player|hero|gunner",
+        "type": "GameObject",
+        "primitive": "player",
+        "required": true
+      },
+      {
+        "nameRegex": "enemy|mob|drone|grunt|target",
+        "type": "GameObject",
+        "primitive": "enemy",
+        "minCount": 1,
+        "required": true
+      },
+      {
+        "nameRegex": "projectile|bullet|shot",
+        "type": "GameObject",
+        "primitive": "projectile",
+        "required": true
+      },
+      {
+        "nameRegex": "weapon|gun|muzzle",
+        "type": "GameObject",
+        "primitive": "weapon",
+        "required": true
+      },
+      {
+        "nameRegex": "GameManager|CombatController",
+        "type": "GameObject",
+        "required": true
+      }
     ]
   },
-
   "win": {
     "rule": "all-enemies-defeated",
     "endStateMode": "modal",
     "restartAction": "R",
     "note": "Win when every reference enemy in the range is defeated; reaching a zero-enemy state flips the GameManager win flag."
   },
-
   "verification": {
     "gates": {
       "platform-tiles": "not_applicable",

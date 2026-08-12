@@ -235,6 +235,27 @@ export function validateAcceptanceContract(input: unknown): AcceptanceValidation
       // declared) REQUIRES the visibleGroundWidthM band: arming the ground-extent
       // gate is opt-out-with-noise, never disarmable by omission (the gate
       // additionally WARNs at grade time for pre-rule contracts).
+      // The explicit extent opt-out. Two rules, both about keeping the gate un-disarmable:
+      //   1. the only accepted value is "unbounded" (a typo must not read as an opt-out);
+      //   2. declaring it ALONGSIDE a band is a contradiction, since the band arms the very
+      //      check the opt-out silences. Refusing the pair stops a contract carrying both and
+      //      leaving which one wins up to gate-evaluation order.
+      if (cam.groundExtent !== undefined && cam.groundExtent !== "unbounded") {
+        push(
+          issues,
+          "INVALID_FRAMING_CAMERA",
+          `framing.camera.groundExtent must be "unbounded" when present (got ${JSON.stringify(cam.groundExtent)}). It is the explicit declaration that a horizon-facing rig makes no finite ground-extent claim.`,
+          "framing.camera.groundExtent",
+        );
+      }
+      if (cam.groundExtent === "unbounded" && cam.visibleGroundWidthM !== undefined) {
+        push(
+          issues,
+          "INVALID_FRAMING_CAMERA",
+          'framing.camera declares BOTH groundExtent "unbounded" and a visibleGroundWidthM band. They contradict: the band arms the ground-extent check and the opt-out silences it. Declare exactly one.',
+          "framing.camera.groundExtent",
+        );
+      }
       const perspectiveShaped = cam.pitchDownDeg !== undefined || cam.perspectiveFallback !== undefined;
       if (perspectiveShaped && cam.visibleGroundWidthM === undefined) {
         push(

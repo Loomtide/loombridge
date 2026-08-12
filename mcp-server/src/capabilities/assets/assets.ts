@@ -37,9 +37,10 @@ import {
   writeAssetManifest,
   type AssetManifest,
 } from "./asset-manifest.js";
+import { DEFAULT_ASSET_GENRE, knownAssetGenres, resolveAssetGenreProfile } from "./asset-genre-profile.js";
 import { loombridgePaths } from "../../domain/state.js";
 
-type AssetCommand = "registry-plan" | "registry-apply" | "generated-plan" | "generated-apply" | "pack-ingest" | "cover-build" | "discover";
+type AssetCommand = "roles" | "registry-plan" | "registry-apply" | "generated-plan" | "generated-apply" | "pack-ingest" | "cover-build" | "discover";
 
 export interface RunAssetsOptions {
   catalogFetch?: CatalogFetch;
@@ -61,6 +62,8 @@ export interface RunAssetsOptions {
 export interface ParsedArgs {
   action?: AssetCommand;
   root: string;
+  /** `assets roles --genre <id>`: which genre's role profile to print. */
+  genre?: string;
   registryPath?: string;
   catalogPath?: string;
   catalogApiUrl?: string;
@@ -141,7 +144,12 @@ function printUsage(authoringAvailable: boolean): void {
     [
       `Usage: loombridge assets <registry-plan|registry-apply|generated-plan|generated-apply${authoringVerbs}> [options]`,
       "",
-      "Registry:",
+      "Discover:",
+    "  roles           [--genre <id>] [--root <dir>]   which asset roles a genre requires, which are",
+    "                  registry-sourced vs generated in hybrid mode, and the primitives each accepts.",
+    "                  Defaults to the genre in this project's ASSET_MANIFEST.json.",
+    "",
+    "Registry:",
       "  registry-plan   (--registry <path> | --catalog <path-or-url> | --catalog-api <baseUrl>) --profile <path> [--output <path>] [--preferred-license <spdx>]",
       "  registry-apply  (--registry <path> | --catalog <path-or-url> | --catalog-api <baseUrl>) --profile <path> (--selections <json> | --from-selection <web-selection.json>) --approved-at <iso> [--preferred-license <spdx>] [--strict-roles]",
       "",
@@ -165,7 +173,7 @@ function printUsage(authoringAvailable: boolean): void {
 function parseArgs(args: string[]): ParsedArgs {
   const first = args[0];
   if (!first || first === "--help" || first === "-h") return { root: process.cwd(), help: true };
-  if (!["registry-plan", "registry-apply", "generated-plan", "generated-apply", "pack-ingest", "cover-build", "discover"].includes(first)) {
+  if (!["roles", "registry-plan", "registry-apply", "generated-plan", "generated-apply", "pack-ingest", "cover-build", "discover"].includes(first)) {
     console.error(`[loombridge assets] unknown action "${first}".`);
     return { root: process.cwd(), help: true };
   }
@@ -195,6 +203,7 @@ function parseArgs(args: string[]): ParsedArgs {
     else if (arg === "--generated-set-id") parsed.generatedSetId = args[(i += 1)] ?? "";
     else if (arg === "--produced-from-hash") parsed.producedFromHash = args[(i += 1)] ?? "";
     else if (arg === "--strict-roles") parsed.strictRoles = true;
+    else if (arg === "--genre") parsed.genre = args[(i += 1)] ?? "";
     else if (arg === "--manifest") parsed.manifestPath = path.resolve(parsed.root, args[(i += 1)] ?? "");
     else if (arg === "--public-base-url") parsed.publicBaseUrl = args[(i += 1)] ?? "";
     else if (arg === "--reviewer") parsed.reviewer = args[(i += 1)] ?? "";
@@ -233,6 +242,72 @@ export async function writeJsonOrStdout(outputPath: string | undefined, value: u
   }
   await fs.mkdir(path.dirname(outputPath), { recursive: true });
   await fs.writeFile(outputPath, serialized, "utf-8");
+}
+
+/**
+ * `loombridge assets roles`: which roles a genre requires, and how each is sourced.
+ *
+ * SNP-P02: a real 3d-shooter plan run spent 32 of 78 shell calls reading Loombridge's own
+ * `src/`/`dist/` from inside the consumer project, and `asset-genre-profile.ts` was one of the
+ * files it opened, purely to learn which roles the genre needs and which are generated in hybrid
+ * mode. That is a discoverability failure, not curiosity: the information is deterministic, cheap,
+ * and was reachable only by reading the tool's source. This prints it.
+ *
+ * Genre resolution: `--genre` wins; otherwise the project's ASSET_MANIFEST.json; otherwise the
+ * known genres are listed and it REFUSES rather than silently defaulting to platformer, because
+ * defaulting is exactly what made `reticle` look unknown (SNP-T01).
+ */
+async function runRoles(parsed: ParsedArgs): Promise<number> {
+  let genre = parsed.genre?.trim();
+  let source = "--genre";
+  if (!genre) {
+    const manifest = await readAssetManifest(loombridgePaths(parsed.root));
+    if (manifest) {
+      // An ABSENT genre on a real manifest is not missing information: it IS the platformer
+      // default, which is how every other consumer reads it (`resolveAssetGenreProfile(undefined)`).
+      // Refusing here would break the single most common project, since a platformer draft omits
+      // the key entirely. Refuse only when there is no manifest AND no flag.
+      genre = manifest.genre?.trim() || DEFAULT_ASSET_GENRE;
+      source = manifest.genre?.trim() ? "ASSET_MANIFEST.json" : "ASSET_MANIFEST.json (genre absent: the default)";
+    }
+  }
+  if (!genre) {
+    console.error(
+      `[loombridge assets] no genre: pass --genre <id>, or run this from a project that has ` +
+        `.loombridge/ASSET_MANIFEST.json. Known genres: ${knownAssetGenres().join(", ")}.`,
+    );
+    return 2;
+  }
+  if (!knownAssetGenres().includes(genre)) {
+    console.error(
+      `[loombridge assets] unknown genre "${genre}" (from ${source}). ` +
+        `Known genres: ${knownAssetGenres().join(", ")}.`,
+    );
+    return 2;
+  }
+
+  const profile = resolveAssetGenreProfile(genre);
+  const lines: string[] = [
+    `genre: ${profile.id}   (from ${source})`,
+    `required roles: ${profile.requiredRoles.length}`,
+    "",
+    "  ROLE                  HYBRID SOURCE   ACCEPTED REGISTRY PRIMITIVES",
+  ];
+  for (const role of profile.requiredRoles) {
+    const generated = profile.hybridGeneratedRoles.has(role);
+    const rule = profile.roleSelectionRules[role];
+    const primitives = rule?.primitives?.length ? rule.primitives.join(", ") : "(none: generated only)";
+    const tags = rule?.requiredTags?.length ? `  [tags: ${rule.requiredTags.join(", ")}]` : "";
+    lines.push(`  ${role.padEnd(21)} ${(generated ? "generated" : "registry").padEnd(15)} ${primitives}${tags}`);
+  }
+  lines.push(
+    "",
+    "In hybrid mode the `generated` roles are authored from the approved hero shot",
+    "(`loombridge assets generated-plan`); the rest are selected from a registry or catalog",
+    "(`loombridge assets registry-plan`).",
+  );
+  console.log(lines.join("\n"));
+  return 0;
 }
 
 async function readProjectManifest(root: string): Promise<AssetManifest> {
@@ -752,6 +827,8 @@ export async function run(args: string[], options: RunAssetsOptions = {}): Promi
 
   try {
     switch (parsed.action) {
+      case "roles":
+        return await runRoles(parsed);
       case "registry-plan":
         return await runRegistryPlan(parsed, options);
       case "registry-apply":
