@@ -91,6 +91,10 @@ import {
   standardReplayLayout,
   type ReplayLayout,
 } from "../../domain/state.js";
+import {
+  comparisonShortfall as sharedComparisonShortfall,
+  type ComparisonCoverage,
+} from "../../domain/comparison-coverage.js";
 import { unityConnectionHint, unityConnectionLostHint } from "../../shared/cli-ui.js";
 import { printNextStep } from "../minigame/minigame-next.js";
 import { readPng } from "../verification/analyze-frames.js";
@@ -1268,29 +1272,40 @@ export function replayExitCode(
 }
 
 /**
- * The pixel gate's coverage shortfall for a run, or null when there is none.
+ * This run's pixel-gate coverage as the SHARED vocabulary shape
+ * (`domain/comparison-coverage.ts`).
  *
  * THE DENOMINATOR IS THE ANCHOR'S OWN. `comparisonsExpected` is stamped from
  * `manifest.pngs.length`, the count of frames a human actually approved, so "did the gate
  * run?" is answerable without re-reading the baseline directory.
  *
- * THE ABSENT COUNTERPART IS A REFUSAL, NOT A SKIP. When a report declares an expectation
- * and carries no `comparisonsPerformed`, the missing field reads as ZERO, never as
- * "assume it was met": that is the exact shape a hand-edited or truncated report takes,
- * and treating it as satisfied would let a verdict pass by deleting a field. A report with
- * NO `comparisonsExpected` had no anchor to be measured against (no baseline yet, or a
- * legacy unstamped one), which is a different statement from "compared nothing", and the
- * unified door already refuses to treat an unstamped baseline as an anchor at all.
+ * Exported so every reader of a replay report (the exit code, the unified flow section,
+ * the rendered page) asks the same question of the same two numbers.
+ */
+export function replayComparisonCoverage(
+  artifact: Pick<ReplayRunArtifact, "comparisonsExpected" | "comparisonsPerformed">,
+): ComparisonCoverage {
+  return { expected: artifact.comparisonsExpected, performed: artifact.comparisonsPerformed };
+}
+
+/**
+ * The pixel gate's coverage shortfall for a run, or null when there is none.
  *
- * Pure and exported: this predicate is the whole of the "compared nothing" guarantee.
+ * THE PREDICATE IS THE SHARED ONE. It used to live here, and living here was the problem:
+ * the screen contract, the feel snapshot and the evidence ledger each had the same
+ * "count what the anchor declared" obligation and none of them could reach this function,
+ * so each of them shipped a counting hole of its own. The rules it enforces (an absent
+ * numerator reads as ZERO, an absent DENOMINATOR is not the same statement as zero, the
+ * tier is always harness) are documented once, in the domain module.
+ *
+ * Kept as a named export with the replay artifact's own shape because the exit code, the
+ * approve path and this capability's tests all read it, and because a call site that says
+ * `comparisonShortfall(artifact)` is clearer than one that assembles a coverage object.
  */
 export function comparisonShortfall(
   artifact: Pick<ReplayRunArtifact, "comparisonsExpected" | "comparisonsPerformed">,
 ): { expected: number; performed: number } | null {
-  const expected = artifact.comparisonsExpected;
-  if (typeof expected !== "number" || !(expected > 0)) return null;
-  const performed = typeof artifact.comparisonsPerformed === "number" ? artifact.comparisonsPerformed : 0;
-  return performed < expected ? { expected, performed } : null;
+  return sharedComparisonShortfall(replayComparisonCoverage(artifact));
 }
 
 /**

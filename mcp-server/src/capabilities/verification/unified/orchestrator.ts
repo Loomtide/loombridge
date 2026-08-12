@@ -81,6 +81,12 @@ import {
 } from "../../tests/test-results-manifest.js";
 import { gradedGates } from "../run-gates.js";
 import {
+  anchoredByComparison,
+  comparisonShortfall,
+  comparisonShortfallSentence,
+  type ComparisonCoverage,
+} from "../../../domain/comparison-coverage.js";
+import {
   discoverVerificationAssets,
   type AbsentAssetFamily,
   type DiscoveredAsset,
@@ -183,6 +189,18 @@ export interface UnifiedSectionDeps {
        * so a harness fault can never be answered with "mask it".
        */
       maskSuggestion?: MaskSuggestion;
+      /**
+       * THE PIXEL GATE'S COVERAGE FOR THIS TRACE: how many frames the approved baseline
+       * declares, and how many this replay actually graded
+       * (`domain/comparison-coverage.ts`).
+       *
+       * REQUIRED, so a caller that forgets it fails to compile, for the same reason
+       * `anchored` is required on a section. This is the fact the section's `anchored`
+       * derivation reads; an optional field would default to "no coverage", and a fake
+       * that omitted it would quietly reproduce the bug this replaced (the section used
+       * to claim an anchor from `traces.length > 0`, which is discovery's opinion).
+       */
+      comparisons: ComparisonCoverage;
     } & DriftFacts
   >;
   runFeel(args: { root: string; workspace: string; strict: boolean }): Promise<number>;
@@ -215,7 +233,8 @@ async function realDeps(): Promise<UnifiedSectionDeps> {
       return runVerifyMinigame(args);
     },
     async runFlowTrace(layout, id, opts) {
-      const { replayTraceForVerify, shouldSuggestTolerance } = await import("../../replay/trace.js");
+      const { replayComparisonCoverage, replayTraceForVerify, shouldSuggestTolerance } =
+        await import("../../replay/trace.js");
       const { artifact, exitTier, drift, htmlPath, maskSuggestion } = await replayTraceForVerify(
         layout,
         id,
@@ -228,6 +247,9 @@ async function realDeps(): Promise<UnifiedSectionDeps> {
         exitTier,
         htmlPath,
         ...drift,
+        // Read off the ARTIFACT this replay just wrote, never re-derived here: the report
+        // on disk and the section's anchor claim have to be the same two numbers.
+        comparisons: replayComparisonCoverage(artifact),
         suggestTolerance: shouldSuggestTolerance(artifact),
         ...(maskSuggestion ? { maskSuggestion } : {}),
       };
@@ -664,7 +686,19 @@ async function contractSection(
     exit,
     // The contract's frozen half is the approved design target, and only a target that
     // is BOTH approved and unchanged since approval is an anchor a comparison used.
-    anchored: asset.approvedAt !== undefined,
+    //
+    // TWO MORE TERMS, both about THIS RUN rather than about what discovery found. An
+    // approved target says an anchor exists; it says nothing about whether this run graded
+    // anything against the contract it belongs to. So the section also requires that this
+    // run WROTE the verdict (M5: a previous run's file on disk is not evidence that this
+    // one measured anything) and that the verdict names at least one graded gate, read
+    // from the verdict's own gates + checks by the same pure predicate the engine refuses
+    // on. A run that graded nothing cannot be the anchored section that lets the whole
+    // roll-up exit 0.
+    anchored:
+      asset.approvedAt !== undefined &&
+      binding.reportPath !== undefined &&
+      countGradedGates(verdict) > 0,
     ...binding,
     ...(refused ? { note: "nothing graded" } : {}),
   };
@@ -679,7 +713,20 @@ type VerdictShape = { status?: string; gates?: Record<string, string>; checks?: 
  */
 function refusedNothingGraded(exit: number, verdict: VerdictShape | null): boolean {
   if (exit !== 2 || !verdict?.gates || !verdict.checks) return false;
-  return gradedGates({ gates: verdict.gates, checks: verdict.checks } as Parameters<typeof gradedGates>[0]).length === 0;
+  return countGradedGates(verdict) === 0;
+}
+
+/**
+ * How many gates this verdict actually graded, from the verdict's own gates + checks.
+ *
+ * Shared by the nothing-graded refusal above and by the section's `anchored` derivation,
+ * so "did this run grade anything?" has ONE answer. An unreadable or shapeless verdict
+ * counts as ZERO: an absent numerator is never "assume it was met"
+ * (`domain/comparison-coverage.ts`).
+ */
+function countGradedGates(verdict: VerdictShape | null): number {
+  if (!verdict?.gates || !verdict.checks) return 0;
+  return gradedGates({ gates: verdict.gates, checks: verdict.checks } as Parameters<typeof gradedGates>[0]).length;
 }
 
 /**
@@ -710,25 +757,53 @@ async function screensSection(
     quietNext: true,
     baselineRefOverride: asset.paths.baseline,
   });
-  const report = await readJson<{ status?: string; baseline?: { present?: boolean } }>(outputPath);
+  const report = await readJson<{
+    status?: string;
+    baseline?: { present?: boolean; comparisons?: ComparisonCoverage };
+  }>(outputPath);
 
   // A3: discovery verified an approved layout baseline (H1 makes that a precondition
   // for running at all), so a comparison that reports it as not-present means the two
   // disagree about what is on disk. That is a broken asset (harness tier), never a
   // quiet pass over no baseline.
-  const compared = report?.baseline?.present === true;
+  const present = report?.baseline?.present === true;
+  // AND IT MUST HAVE COMPARED WHAT THE ANCHOR DECLARES. `present` only says a manifest
+  // parsed (`minigame-baseline.ts` sets it unconditionally once it does), so it was never
+  // a statement about the run: it is satisfied by a comparison that walked every declared
+  // state and graded none of them. The counts are.
+  const shortfall = comparisonShortfall(report?.baseline?.comparisons);
+  const compared = present && shortfall === null;
   const tier = compared ? exit : 2;
-  if (!compared && report !== null) {
+  // ANCHORED IS STRICTER THAN THE TIER, and deliberately so. A shortfall is a harness
+  // fault (tier 2 above). A report carrying NO counts at all is a different statement: it
+  // is a document that cannot show what it compared, which forfeits the anchor claim
+  // without inventing a failure. `anchoredByComparison` answers false for both.
+  //
+  // AND IT MUST BE THIS RUN'S REPORT (M5, the rule `bindReport` already applies to the
+  // sha): a file a previous run left on disk is not evidence that this one compared
+  // anything.
+  const binding = await bindReport(root, outputPath, before);
+  const anchored =
+    present && binding.reportPath !== undefined && anchoredByComparison(report?.baseline?.comparisons);
+  if (!present && report !== null) {
     console.error(
       `${TAG} screens: the approved layout baseline at ${path.relative(root, asset.paths.baseline!)} ` +
         "was discovered but the comparison could not use it (broken asset, harness tier 2).",
+    );
+  } else if (shortfall !== null) {
+    console.error(
+      `${TAG} screens: ${comparisonShortfallSentence({
+        label: `the approved layout baseline at ${path.relative(root, asset.paths.baseline!)}`,
+        subject: "declared state",
+        shortfall,
+      })}`,
     );
   }
   return {
     status: report?.status ?? tierWord(tier),
     exit: tier,
-    anchored: compared,
-    ...(await bindReport(root, outputPath, before)),
+    anchored,
+    ...binding,
   };
 }
 
@@ -748,11 +823,25 @@ async function flowSection(
 ): Promise<UnifiedVerifySection> {
   const layout = standardReplayLayout(root);
   const outcomes: UnifiedAssetOutcome[] = [];
+  // What each trace's pixel gate was asked to compare and what it did. A trace that THREW
+  // records nothing here, which is the honest answer: it produced no comparison at all.
+  const coverage: ComparisonCoverage[] = [];
   for (const asset of traces) {
     const before = await fingerprintReport(asset.paths.report);
     try {
-      const { status, exitTier, suggestTolerance, maskSuggestion, htmlPath, ...drift } =
+      const { status, exitTier, suggestTolerance, maskSuggestion, htmlPath, comparisons, ...drift } =
         await deps.runFlowTrace(layout, asset.id, { strictVisual: true, projectPathCanonical });
+      coverage.push(comparisons);
+      const shortfall = comparisonShortfall(comparisons);
+      if (shortfall !== null) {
+        console.error(
+          `${TAG} flow: ${comparisonShortfallSentence({
+            label: `trace "${asset.id}"`,
+            subject: "approved frame",
+            shortfall,
+          })}`,
+        );
+      }
       // R1's suggestion loop, at the unified door and in the SAME words as the trace verb:
       // an operator who only ever runs `verify` must get the same actionable exit
       // from a pixel-only failure, naming `trace tolerance` (never `trace approve`).
@@ -806,10 +895,29 @@ async function flowSection(
     // about tolerances, and an absent block can never be read as "0 captures drifted, so
     // this was checked".
     ...(worst.drift && worst.drift.driftCaptures > 0 ? { drift: worst.drift } : {}),
-    // Every trace that reaches this section passed baseline-manifest verification at
-    // discovery (unstamped and tampered baselines never become runnable rows), so a
-    // section that executed at all compared a frozen anchor.
-    anchored: traces.length > 0,
+    // ANCHORED IS DERIVED FROM THE RUN, from the pixel gate's own two numbers per trace.
+    //
+    // It used to read `traces.length > 0`, justified by "every trace that reaches this
+    // section passed baseline-manifest verification at discovery". That justification is
+    // the bug: discovery's opinion is a PLAN, not evidence. It says an anchor existed and
+    // was well-formed at the moment the row was classified; it cannot say the replay
+    // compared a single frame against it, and a replay that graded none of fifteen
+    // approved frames satisfied it exactly as well as one that graded all fifteen. It is
+    // the same reasoning `applyVisualDiff`'s own docstring uses to justify re-verifying
+    // the baseline at GRADE time rather than trusting discovery.
+    //
+    // EVERY trace, not any: this section's `anchored` is the claim "the flow section
+    // compared what its anchors declared", and one fully-ungraded trace among three makes
+    // that claim false. (Such a run is already tier 2 through `replayExitCode`, so this
+    // does not invent a failure; it stops the run from CALLING itself anchored.)
+    //
+    // The `traces.length > 0` term is NOT the old rule surviving: it is the empty-section
+    // guard, because `[].every(...)` is `true` and a section that ran nothing must never
+    // report an anchor.
+    anchored:
+      traces.length > 0 &&
+      coverage.length === traces.length &&
+      coverage.every((c) => anchoredByComparison(c)),
     reportPath: worst.reportPath,
     reportSha256: worst.reportSha256,
     // The page for the asset whose verdict this section is REPORTING, chosen by the same
@@ -1130,15 +1238,37 @@ async function feelSection(
 ): Promise<UnifiedVerifySection> {
   const before = await fingerprintReport(asset.paths.report);
   const exit = await deps.runFeel({ root, workspace, strict: opts.strict });
-  const report = await readJson<{ status?: string }>(asset.paths.report);
+  const report = await readJson<{
+    status?: string;
+    summary?: { total?: number; missing?: number };
+  }>(asset.paths.report);
+  const binding = await bindReport(root, asset.paths.report, before);
+  // THE SNAPSHOT'S OWN DENOMINATOR is `manifest.metrics`, which the drift report carries
+  // as `summary.total` (one row per baseline metric, always). A metric the current capture
+  // did not measure is `missing`: a capture gap, so it was NOT compared. Everything else
+  // (match, drift, and a value REJECTED by re-derivation) produced a real comparison
+  // against the frozen value.
+  const coverage: ComparisonCoverage = {
+    expected: report?.summary?.total,
+    performed:
+      typeof report?.summary?.total === "number"
+        ? report.summary.total - (report.summary.missing ?? 0)
+        : undefined,
+  };
   return {
     status: report?.status ?? tierWord(exit),
     exit,
-    // Discovery only marks a feel row runnable when `verifySnapshotIntegrity` passed
-    // AND the snapshot's `projectRoot` stamp names this project, so an executed feel
-    // section is by construction a comparison against a frozen, owned anchor.
-    anchored: asset.approvedAt !== undefined,
-    ...(await bindReport(root, asset.paths.report, before)),
+    // ANCHORED IS DERIVED FROM THE RUN. It used to be `asset.approvedAt !== undefined`,
+    // which is discovery's finding that an approved, owned, integrity-checked snapshot
+    // EXISTS. That an anchor exists is not that a comparison happened against it, and the
+    // two come apart exactly when the current capture measured none of the frozen metrics.
+    // The report's own counts answer the question the section is actually asking.
+    //
+    // THIS RUN'S report, not a previous one: a section that produced no report this run
+    // has nothing to derive an anchor from, whatever is left on disk (the same M5 rule
+    // `bindReport` applies to the sha).
+    anchored: binding.reportPath !== undefined && anchoredByComparison(coverage),
+    ...binding,
   };
 }
 

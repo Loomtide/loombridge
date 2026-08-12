@@ -47,12 +47,13 @@ import { isWithin } from "../../domain/capture-paths.js";
 import type { LoombridgePaths } from "../../domain/state.js";
 import { isSliceDone } from "./doneness.js";
 import {
+  evidenceCoverageRefusals,
   fileSha256,
   originSummary,
   readEvidenceLedger,
   staleEvidenceRefusals,
 } from "./evidence-ledger.js";
-import { contractCoverageRefusals, runGates } from "./run-gates.js";
+import { contractCoverageRefusals, runGates, sliceEvidenceFiles } from "./run-gates.js";
 import { getSliceVerdictPath, getSliceVerifyDir, type SliceEntry, type SlicePlan } from "./slices.js";
 import type { AcceptanceContract } from "./types.js";
 
@@ -168,6 +169,29 @@ async function rollUpOneSlice(args: {
       );
     }
   }
+
+  // THE LEDGER'S DENOMINATOR, CHECKED BEFORE ITS CONTENTS ARE TRUSTED.
+  //
+  // `staleEvidenceRefusals` below iterates `ledger.files`, so its thoroughness is exactly
+  // the length of that array: a ledger with no entries re-hashed nothing and refused
+  // nothing. Nothing here ever cross-checked it against `sliceEvidenceFiles`, the
+  // deterministic set `verify --slice` minted it from, even though the slice's own
+  // `acceptance.gates` is right there and re-derives it for free. Demonstrated: mutate a
+  // graded evidence byte inside the passing band (so the re-grade below still reproduces
+  // the stored verdict) and trim `evidence.files` from 4 to 0, and this roll-up went from
+  // `exit 2 / refused` to `exit 0 / pass / anchored: true`.
+  //
+  // ORDER IS DELIBERATE: the coverage refusal is pushed BEFORE the byte-identity refusals,
+  // so an operator reading the list sees "your verdict names 0 of 4 files" before (or
+  // instead of) a silence that would otherwise read as "all four are fine".
+  refusals.push(
+    ...evidenceCoverageRefusals({
+      ledger,
+      declaredFiles: sliceEvidenceFiles(slice.acceptance.gates),
+      label,
+      reverifyHint: hint,
+    }),
+  );
 
   // L107 at door level: the approval must still describe the bytes on disk.
   refusals.push(...(await staleEvidenceRefusals({ ledger, inputsDir, label, reverifyHint: hint })));

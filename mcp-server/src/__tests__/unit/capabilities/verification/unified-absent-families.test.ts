@@ -42,6 +42,7 @@ import {
 } from "../../../../capabilities/verification/unified/report.js";
 import { run as runTrace } from "../../../../capabilities/replay/trace.js";
 import { DEFAULT_DRIFT_FRACTION } from "../../../../capabilities/replay/visual-diff.js";
+import type { ComparisonCoverage } from "../../../../domain/comparison-coverage.js";
 import { fileExists, loombridgePaths, standardReplayLayout } from "../../../../domain/state.js";
 import { traceShaOnDisk } from "../../../_support/replay-fixtures.js";
 import { REACHABLE_EDITOR } from "../../../_support/live-editor.js";
@@ -124,6 +125,7 @@ function cleanFlow(): {
   driftCaptures: number;
   maxDiffFraction: number;
   toleranceUsed: number;
+  comparisons: ComparisonCoverage;
 } {
   return {
     status: "pass",
@@ -133,6 +135,8 @@ function cleanFlow(): {
     driftCaptures: 0,
     maxDiffFraction: 0,
     toleranceUsed: DEFAULT_DRIFT_FRACTION,
+    // A clean replay graded the one frame its approved baseline declares.
+    comparisons: { expected: 1, performed: 1 },
   };
 }
 

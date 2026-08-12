@@ -35,6 +35,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 
 import { deriveRepoIdentity, projectBindingPairError } from "../../shared/repo-identity.js";
+import type { ComparisonCoverage } from "../../domain/comparison-coverage.js";
 
 import type { MinigameContract } from "./profiles/types.js";
 import { readFrameImage, type DecodedImage } from "./frame-facts.js";
@@ -160,6 +161,28 @@ export interface BaselineCompareResult {
   regressions: string[];
   /** State ids whose BASELINE file was missing/corrupt — cannot compare (→ incomplete). */
   incompleteStates: string[];
+  /**
+   * HOW MANY COMPARISONS THIS RUN WAS SUPPOSED TO PERFORM, AND HOW MANY IT DID
+   * (`domain/comparison-coverage.ts`).
+   *
+   * The denominator is the APPROVED MANIFEST'S own `states[]`: the states a human froze,
+   * which is not the same set as the contract's (`approve` skips a state nobody captured,
+   * e.g. an outcome-gated screen). Present whenever a readable approved manifest was
+   * found at `ref`; ABSENT when no baseline is approved yet, or when the manifest is
+   * REFUSED and so cannot state a denominator at all. In both absent cases there is no
+   * anchor to fall short of, and `expected: 0` would invent a promise nobody made.
+   *
+   * WHY IT EXISTS. The per-state results below each report honestly, and nothing counted
+   * them against what was declared, so a state that fell through every bucket was
+   * invisible: a state whose rects load and whose PNG does not was pushed `compared:false`
+   * into NEITHER `regressions` NOR `incompleteStates`, on the grounds that the gate
+   * runner's `captureAbsent` owned it. It does not: `captureAbsent` fires on the RECTS
+   * alone, while this loader (`loadStateInputs`) refuses on PNG **or** rects, so the
+   * PNG-only gap belonged to nobody. Demonstrated: a half-black baseline `start.png` (a
+   * ~50% diff, 25x the threshold) plus a deleted current `start.png` produced
+   * `exitCode 0`, `status "pass"`, `regressions []`.
+   */
+  comparisons?: ComparisonCoverage;
 }
 
 // ── pure comparison ──────────────────────────────────────────────────────────
@@ -550,6 +573,10 @@ export async function compareToBaseline(
       })),
       regressions: [],
       incompleteStates: contract.states.map((cs) => cs.id),
+      // NO COUNTS, deliberately: a refused manifest cannot state its own denominator, and
+      // inventing one would be inventing a promise nobody made. It needs none, because
+      // every declared state is already an incomplete above (harness tier), and a section
+      // with no counts is `anchored: false` by construction.
     };
   }
   if (load.status === "absent") {
@@ -570,9 +597,18 @@ export async function compareToBaseline(
   for (const cs of contract.states) {
     const current = await loadStateInputs(capturesDir, cs.id);
     if (!current) {
-      // Current capture absent — a capture/harness gap already owned by the gate
-      // runner's `captureAbsent` (→ incomplete). NOT a regression, and not double-counted
-      // here: record it for the report but leave the incomplete to captureAbsent.
+      // Current capture absent — a capture/harness gap. The gate runner's `captureAbsent`
+      // owns the states whose RECTS are gone, so the incomplete is left to it rather than
+      // double-counted here.
+      //
+      // BUT THE TWO ABSENCE PREDICATES COVER DIFFERENT SETS, and that difference used to
+      // be a hole nothing walked: `loadStateInputs` returns null on a missing PNG **or**
+      // missing rects, while `captureAbsent` fires on the rects alone. A state with
+      // readable rects and no PNG therefore left this branch owned by nobody and reached
+      // exit 0. It no longer can, and NOT because this branch learned to guess which of
+      // the two gaps it is looking at: it is `comparisons` below that counts every state
+      // this loop failed to compare, so a hole cannot exist without showing up in the
+      // denominator. See `domain/comparison-coverage.ts`.
       states.push({
         state: cs.id,
         compared: false,
@@ -604,5 +640,24 @@ export async function compareToBaseline(
     states,
     regressions,
     incompleteStates,
+    // THE DENOMINATOR IS THE ANCHOR'S OWN: `manifest.states`, the states a human actually
+    // approved, exactly as the replay gate counts against `manifest.pngs`.
+    //
+    // NOT `contract.states`. The contract declares states nobody ever bundled: `approve`
+    // SKIPS an uncaptured state (an outcome-gated screen a read-only verifier cannot
+    // drive), so counting the contract would invent a shortfall on every run of a project
+    // that has one, and a gate that cries wolf about states nobody approved is a gate
+    // people learn to route around.
+    //
+    // COUNTED FROM THE LOOP THAT JUST RAN, not from the buckets it filled. `compared` is
+    // set only where a present-vs-present comparison actually happened, so this counts
+    // comparisons rather than opinions about them, and a state that fell through every
+    // bucket is still a state that was never compared.
+    comparisons: (() => {
+      const comparedStates = new Set(states.filter((s) => s.compared).map((s) => s.state));
+      const declared = manifest.states.map((s) => s.id);
+      const ungraded = declared.filter((id) => !comparedStates.has(id));
+      return { expected: declared.length, performed: declared.length - ungraded.length, ungraded };
+    })(),
   };
 }

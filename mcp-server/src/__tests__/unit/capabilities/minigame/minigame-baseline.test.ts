@@ -526,6 +526,150 @@ test("verify --minigame: a CURRENT capture absent is INCOMPLETE, never a regress
   }
 });
 
+/*
+ * THE COUNTING GUARD (the audit's Finding 3), and WHY THE TEST ABOVE MISSED IT.
+ *
+ * The test above deletes `start.ui-rects.json`. That is the one of the two capture files
+ * the gate runner's `captureAbsent` watches, so it proves the branch that already worked.
+ * Nobody ever deleted the PNG alone, and the two absence predicates do not cover the same
+ * set: `loadStateInputs` returns null on a missing PNG **or** missing rects, while
+ * `captureAbsent` fires on the rects alone. A state with readable rects and no PNG was
+ * therefore pushed `compared: false` into NEITHER `regressions` NOR `incompleteStates`
+ * and fell out of the run entirely.
+ *
+ * That is the suite-wide pattern the audit named: the tests ask "does this gate produce
+ * the right verdict when it runs?" and never "did it run at all?". Both existing absence
+ * tests grade a gate that DID run. This one grades a gate that did not.
+ *
+ * The scenario is the audit's, exactly: a baseline `start.png` replaced with a half-black
+ * frame (a ~50% diff, 25x the 2% threshold) plus a DELETED current `start.png`. Before
+ * the fix this produced `exitCode 0`, `status "pass"`, `regressions []`.
+ *
+ * LITMUS, run 2026-08-12. `compareToBaseline`'s `comparisons` stamp deleted (which is
+ * exactly the pre-fix code: the per-state loop and its `continue` are untouched by this
+ * change, so the ONLY thing the fix adds is the count), rebuilt, re-run:
+ *
+ *   ✖ MOAT: a state whose PNG is gone but whose RECTS load must never reach exit 0 (9.531667ms)
+ *     AssertionError [ERR_ASSERTION]: a comparison that did not happen is the HARNESS tier, never exit 0
+ *
+ *     0 !== 2
+ *
+ *   ℹ pass 21
+ *   ℹ fail 1
+ *
+ * `0 !== 2` IS the audit's finding: a ~50% pixel diff against the approved anchor, and
+ * the tool exits 0. Restored: 22 pass, 0 fail.
+ */
+test("MOAT: a state whose PNG is gone but whose RECTS load must never reach exit 0", async () => {
+  const root = await tmp("s6e-png-only-gap-");
+  const ref = path.join(root, "baseline");
+  try {
+    const contractPath = path.join(root, "c.json");
+    await writeJson(contractPath, makeContract(ref));
+    const caps = path.join(root, "caps");
+    await writeCleanPack(caps);
+    assert.equal(await approve(root, contractPath, caps), 0);
+
+    // POSITIVE CONTROL: the untouched pack compares clean and green.
+    const control = await verify(root, contractPath, caps, path.join(root, "control.json"));
+    assert.equal(control.code, 0, "control: a clean pack passes");
+
+    // BREAK, both halves of the audit's scenario:
+    //  1. the BASELINE 'start' frame becomes half black, so a comparison that HAPPENED
+    //     would be a loud regression;
+    //  2. the CURRENT 'start.png' is deleted while its rects stay readable, so the
+    //     comparison does not happen and `captureAbsent` never fires.
+    await fs.writeFile(
+      path.join(ref, "start.png"),
+      pngBuffer(W, H, (x, y) => (y < H / 2 ? [0, 0, 0] : WHITE)),
+    );
+    await fs.rm(path.join(caps, "start.png"));
+
+    const { code, report } = await verify(root, contractPath, caps, path.join(root, "r.json"));
+    assert.equal(code, 2, "a comparison that did not happen is the HARNESS tier, never exit 0");
+    assert.equal(report.status, "incomplete");
+    assert.deepEqual(report.baseline?.regressions, [], "…and never a game/regression verdict either");
+    assert.deepEqual(
+      report.baseline?.comparisons,
+      { expected: 2, performed: 1, ungraded: ["start"] },
+      "the report says on disk how many comparisons it owed and how many it made",
+    );
+    // Named per state, in the harness bucket: "1 of 2" says the gate is broken, "start"
+    // says what to re-capture.
+    assert.ok(
+      report.cr.incompleteHarness.some(
+        (f) => f.source === "baseline" && f.state === "start" && f.detail.includes("COMPARED NOTHING"),
+      ),
+      `the ungraded state must be named: ${JSON.stringify(report.cr.incompleteHarness)}`,
+    );
+
+    // RESTORE the current PNG: the comparison happens, and now it is the REGRESSION the
+    // half-black baseline always was. This is what proves the guard did not simply make
+    // everything fail.
+    await fs.writeFile(path.join(caps, "start.png"), pngBuffer(W, H, white));
+    const restored = await verify(root, contractPath, caps, path.join(root, "restored.json"));
+    assert.equal(restored.code, 1, "compared at last: a real regression, the game tier");
+    assert.deepEqual(restored.report.baseline?.regressions, ["start"]);
+    assert.deepEqual(restored.report.baseline?.comparisons, { expected: 2, performed: 2, ungraded: [] });
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test("the denominator is the ANCHOR's states, so a state nobody approved is no shortfall", async () => {
+  // THE FALSE-FAILURE HALF of the counting rule, and the reason the denominator is the
+  // MANIFEST's `states[]` rather than the contract's. `approve` SKIPS a state with no
+  // capture (an outcome-gated screen a read-only verifier cannot drive), so the contract
+  // declares states the anchor never froze. Counting the contract would report a
+  // permanent shortfall on every run of such a project, and a gate that cries wolf about
+  // states nobody approved is a gate people learn to route around.
+  //
+  // LITMUS, run 2026-08-12. The denominator switched to `contract.states`, rebuilt, re-run:
+  //
+  //   ✖ the denominator is the ANCHOR's states, so a state nobody approved is no shortfall
+  //     AssertionError [ERR_ASSERTION]: the anchor declares ONE state, and this run compared it
+  //
+  //   ℹ pass 22
+  //   ℹ fail 1
+  //
+  // (the run also flips to exit 2 there: a project with one outcome-gated screen would
+  // have been permanently red.) Restored: 23 pass, 0 fail.
+  const root = await tmp("s6e-partial-anchor-");
+  const ref = path.join(root, "baseline");
+  try {
+    const contractPath = path.join(root, "c.json");
+    // 'win' is OUTCOME-GATED: not asserted by design, never captured, never bundled.
+    await writeJson(
+      contractPath,
+      assertValidMinigameContract({
+        ...makeContract(ref),
+        states: [
+          { id: "start", kind: "start", requiredInFrame: ["btn"] },
+          { id: "win", kind: "success_reward", requiredInFrame: ["btn", "dyn"], outcomeGated: true },
+        ],
+      }),
+    );
+    const caps = path.join(root, "caps");
+    await writeState(caps, "start", [captureObject("btn", BTN_RECT)], pngBuffer(W, H, white));
+    assert.equal(await approve(root, contractPath, caps), 0);
+
+    const { code, report } = await verify(root, contractPath, caps, path.join(root, "r.json"));
+    assert.deepEqual(
+      report.baseline?.comparisons,
+      { expected: 1, performed: 1, ungraded: [] },
+      "the anchor declares ONE state, and this run compared it",
+    );
+    assert.deepEqual(report.baseline?.regressions, []);
+    assert.equal(code, 0, "a project with an outcome-gated state must not be permanently red");
+    assert.ok(
+      !report.cr.incompleteHarness.some((f) => f.source === "baseline" && f.detail.includes("COMPARED NOTHING")),
+      `no phantom baseline shortfall: ${JSON.stringify(report.cr.incompleteHarness)}`,
+    );
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
 test("verify --minigame: a BASELINE state file missing is INCOMPLETE, never a silent pass", async () => {
   const root = await tmp("s6e-baseabsent-");
   const ref = path.join(root, "baseline");

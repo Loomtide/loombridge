@@ -670,6 +670,48 @@ be silent about what it did not.
 - **The same gaps ride in `verify.json` and the `loombridge_verify` MCP payload**, so a CI
   consumer and an agent see what the human saw rather than having to regex stderr.
 
+### Comparison-counting delivery notes (the denominator wave)
+
+An audit found eight confirmed paths to exit 0 with nothing actually compared. They were one
+bug with one shape: **a gate that reports its per-item verdicts and never counts them against
+what the anchor declared.** "No verdict about item X" then prints identically to "no problem
+with item X". The replay pixel gate was fixed first and in isolation; this wave promotes that
+fix to a rule every gate reads.
+
+- **The contract is shared vocabulary** (`domain/comparison-coverage.ts`): `expected`,
+  `performed`, `ungraded`, plus `comparisonShortfall` / `anchoredByComparison`. It lives in
+  `domain/` because four capabilities (replay, minigame, feel, verification) each need it and
+  none of them may import another. That predicate is now the whole of the "compared nothing"
+  guarantee, in one place rather than four.
+- **Every anchor already declares its own denominator**, so none had to be invented: a trace
+  baseline's `manifest.pngs`, a screen contract's `states[]`, a feel snapshot's
+  `manifest.metrics`, a slice verdict's `sliceEvidenceFiles(acceptance.gates)`.
+- **The refusal reads the NUMBERS, never a boolean beside them.** A gate writes its harness
+  flag and its counts in the same statement, so they agree in any report this tool produced;
+  the counts are what matter for a report it did NOT produce. Deleting a flag from a
+  hand-edited verdict cannot launder a shortfall. An absent numerator reads as ZERO; an absent
+  DENOMINATOR is "no anchor", which is a different statement and is never a pass either.
+- **A shortfall refuses at the harness tier (2), naming the shortfall PER ITEM.** A gate that
+  could not run is not evidence the game is broken.
+- **Two counting holes closed.** (1) The screen contract: a state whose rects loaded and whose
+  PNG did not fell between the two absence predicates (`captureAbsent` watches the rects, the
+  baseline loader refuses on either file) and reached exit 0 over a ~50% pixel diff against
+  the approved anchor. (2) The evidence ledger: `readEvidenceLedger` refused an ABSENT
+  `evidence` block but accepted `files: []`, and the re-hash loop iterates `files`, so trimming
+  a ledger from 4 entries to 0 took a mutated slice from `exit 2 / refused` to
+  `exit 0 / pass / anchored: true`. The rule that module documents was implemented for the
+  block and not for its contents. Moving the names into `missing` instead of deleting them
+  refuses too, or `missing` would simply become the next hiding place.
+- **`anchored` now means "this run compared something a human froze", derived from the run.**
+  `resolveUnifiedOutcome` was always sound; its INPUTS lied. Five of six sections derived
+  `anchored` from DISCOVERY (`traces.length > 0`, `asset.approvedAt !== undefined`) or from
+  parsing (`baseline.present`, set the moment a manifest parses). Discovery's opinion is a
+  PLAN, not evidence: it says an anchor existed when the row was classified, never that a
+  comparison happened against it. Flow, screens and feel now read their own run's counts; the
+  contract section additionally requires that THIS run wrote the verdict and that the verdict
+  names at least one graded gate. `tests` stays permanently unanchored, and `slices` already
+  derived from the run.
+
 ## Out of scope
 
 - Aligning the windows OUTSIDE the settle (action dispatch round trips, anchor polling), the
