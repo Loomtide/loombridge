@@ -1,11 +1,11 @@
 import {
-  REQUIRED_ASSET_ROLES,
   assertValidAssetManifest,
   type AssetManifest,
   type HeroRegion,
   type ManifestGeneratedExport,
   type RequiredAssetRole,
 } from "./asset-manifest.js";
+import { resolveAssetGenreProfile } from "./asset-genre-profile.js";
 import { createHash } from "node:crypto";
 
 export interface GeneratedAssetAnnotation {
@@ -134,14 +134,17 @@ export function generatedAssetCacheKey(input: GeneratedAssetProviderCacheInput):
   return createHash("sha256").update(JSON.stringify(normalized)).digest("hex");
 }
 
-function annotationByRole(annotations: GeneratedAssetAnnotation[]): {
+function annotationByRole(
+  annotations: GeneratedAssetAnnotation[],
+  requiredRoles: readonly string[],
+): {
   byRole: Map<RequiredAssetRole, GeneratedAssetAnnotation>;
   issues: GeneratedAssetIssue[];
 } {
   const byRole = new Map<RequiredAssetRole, GeneratedAssetAnnotation>();
   const issues: GeneratedAssetIssue[] = [];
   for (const annotation of annotations) {
-    if (!REQUIRED_ASSET_ROLES.includes(annotation.role)) {
+    if (!requiredRoles.includes(annotation.role)) {
       issues.push({
         code: "UNKNOWN_ROLE",
         role: annotation.role,
@@ -182,7 +185,9 @@ export function buildGeneratedAssetPlan(
   options: { producedFromHash?: string; generatedSetId?: string } = {},
 ): GeneratedAssetPlan {
   const generatedSetId = sourceIdForGenerated(manifest, options.generatedSetId);
-  const { byRole, issues } = annotationByRole(annotations);
+  // Roles are validated against the manifest's asset genre (e.g. 3d-shooter has
+  // reticle/impact-vfx), not the platformer default constant.
+  const { byRole, issues } = annotationByRole(annotations, resolveAssetGenreProfile(manifest.genre).requiredRoles);
   if (!generatedSetId) {
     for (const asset of manifest.assets.filter((candidate) => candidate.source === "generated")) {
       issues.push({
