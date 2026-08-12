@@ -943,16 +943,31 @@ test("PARTIAL: a live-only skip still NAMES the unmeasured anchor, and needs an 
 });
 
 test("a green contract plus an UNAPPROVED trace is partial at the HARNESS tier, never exit 0", async () => {
-  // The `--live` partial exits 0 because the operator chose it. Every other unmeasured
+  // The offline partial exits 0 because the operator chose it. Every other unmeasured
   // anchor is a coverage gap the run could not close, and a green contract must not be
   // allowed to round it up: an unapproved demonstration is exactly the "no frozen thing to
   // compare against" case the whole product exists to refuse.
+  //
+  // `--offline` IS REQUIRED HERE, and this is the one place in the suite where LiveByDefault
+  // changed what a REAL-deps test does. This fixture's trace is unapproved, which makes it a
+  // CAPTURE-ONLY row: a live run re-drives it for its frames, and `runVerifyCli` resolves
+  // PRODUCTION deps, so on a developer's machine with an editor open the suite would open a
+  // socket and drive somebody's game. The classification under test (`why: "non-anchor"`)
+  // comes from `notRunFor` and is identical either way, so nothing is lost by asking for the
+  // door this test is actually about.
+  //
+  // Worth recording: the live preflight is what MADE this visible. A run that cannot reach an
+  // editor now refuses before writing, so on a headless CI runner any test that would drive a
+  // real editor through this door fails loudly instead of passing quietly on the one machine
+  // that happens to have Unity open.
   const root = await plannedProject("unified-cli-nonanchor-", { graded: true });
   const workspace = await tmpDir("unified-cli-ws-");
   try {
     await plantTrace(root, "never-approved");
 
-    const { result, lines } = await captured(() => runVerifyCli(["--root", root, "--workspace", workspace]));
+    const { result, lines } = await captured(() =>
+      runVerifyCli(["--root", root, "--workspace", workspace, "--offline"]),
+    );
     assert.equal(result, 2, "an unmeasurable anchor keeps the exit at the harness tier");
     assert.match(lines.join("\n"), /trace 'never-approved'.*recorded, not approved/);
 
