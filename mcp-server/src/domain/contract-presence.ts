@@ -26,12 +26,12 @@ import { fileExists, type LoombridgePaths } from "./state.js";
  * `.loombridge/run/captures/`. Any one of them being non-empty with NO contract is the
  * false-green shape we surface.
  *
- * `run/captures` is where ArtifactStorage S2 moved the ad-hoc screenshot destination.
- * The LEGACY `captures` stays in the list rather than being replaced: a project that
- * predates the move still has the directory, and a hand-created one there is exactly the
- * same false green it always was. Both spellings, one decision.
+ * `run/captures` is where ArtifactStorage S2 moved the ad-hoc screenshot destination, and
+ * it is the ONLY spelling scanned. The pre-S2 top-level `captures` was dropped with the
+ * rest of the S2 migration machinery: no published version ever shipped that layout, so no
+ * project can be in it (see `Docs/Design/ArtifactStorage.md`, "Why S2 shipped no migration").
  */
-export const CAPTURE_DIR_NAMES = ["verify", "captures", "run/captures"] as const;
+export const CAPTURE_DIR_NAMES = ["verify", "run/captures"] as const;
 
 export interface ContractPresence {
   /** Whether `.loombridge/` exists at all. */

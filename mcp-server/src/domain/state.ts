@@ -119,8 +119,7 @@ export interface LoombridgeState {
  * STRUCTURAL, not a list: `run/` carries its own `.gitignore`, so "if it is not under
  * `run/`, it is meant to be committed" is a rule a human can hold and a clone inherits.
  *
- * Named constants rather than inline strings because the migration
- * (`capabilities/migrate/migrate-layout.ts`) and the write-path guard both have to spell
+ * Named constants rather than inline strings because the write-path guard has to spell
  * the same two words, and a second spelling of a tier root is the "declared path nothing
  * walks" failure applied to the layout itself.
  */

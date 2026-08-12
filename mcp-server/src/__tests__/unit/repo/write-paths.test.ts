@@ -19,10 +19,11 @@
  * exist, so walking that object walks all of them." THAT WAS FALSE, and believing it is
  * exactly how a migration ships that relocates the derived slots and strands the rest.
  * `filesHardCodingName` matches a whole quoted string EQUAL to the dirname, so it never saw
- * `".loombridge/registry"`, `.loombridge/handoff`, `.loombridge/genre-contract.json`,
- * `.loombridge/editor-allowlist.json`, `.loombridge/captures/`, `.loombridge/art/`, or the C#
- * `Path.Combine(projectRoot, ".loombridge", "verify")` that gates every `capture.invoke_static`.
- * All of those are real and shipped, and W1 to W4 were green over every one of them.
+ * `".loombridge/registry"`, `.loombridge/run/handoff`, `.loombridge/genre-contract.json`,
+ * `.loombridge/editor-allowlist.json`, `.loombridge/run/captures/`, `.loombridge/run/art/`, or
+ * the C# `Path.Combine(projectRoot, ".loombridge", "verify")` that gates every
+ * `capture.invoke_static`. All of those are real and shipped, and W1 to W4 were green over
+ * every one of them.
  *
  * SIX WALKS, none of which hand-lists what it checks. Each states its own narrow claim:
  *   W1  the dirname ALONE (a whole quoted `.loombridge`) is spelled twice, and both are
@@ -644,11 +645,10 @@ function nonDerivedDestinations(): WriteDestination[] {
     //
     // READ THE SCOPE. These entries are the allowlist's ROOTS, not its destinations.
     // `<root>/.loombridge` classifies as `state-dir` trivially, and that says nothing about
-    // where a screenshot actually lands: the two paths the op registry advertises,
-    // `.loombridge/captures/start.png` and `.loombridge/art/gameplay-geometry.json`, both
-    // classify `null`, and neither is a `LoombridgePaths` field. W5 is what inventories them
-    // (`captures` and `art` are `UNDERIVED_CHILDREN` there). Do not read a green W3 as
-    // "screenshots land in a declared slot".
+    // where a screenshot actually lands: the two paths the op registry advertises are
+    // `.loombridge/run/captures/start.png` and `.loombridge/run/art/gameplay-geometry.json`,
+    // and it is W2 (they are derived fields under `run/`) that classifies those. Do not read
+    // a green W3 as "screenshots land in a declared slot".
     ...admittedScreenshotRoots(SCREENSHOT_PROBE_SEGMENTS, ROOT).map((segment) => ({
       label: `screenshot-allowlist.${segment === LOOMBRIDGE_DIRNAME ? "state-dir" : segment}`,
       value: path.resolve(ROOT, segment),
@@ -802,7 +802,7 @@ test("W4 LITMUS: the predicate fires on a three-member set", () => {
  * (CLAUDE.md, "the recurring blind spot: declared paths nothing walks"). Three of the
  * destinations below are not TypeScript at all:
  *
- *   - `scripts/prepare-project-assets.sh` creates `.loombridge/handoff/` in a CONSUMER project.
+ *   - `scripts/prepare-project-assets.sh` creates `.loombridge/run/handoff/` in a CONSUMER project.
  *   - `Editor/Handlers/CaptureHandler.cs` hard-codes `Path.Combine(projectRoot, ".loombridge",
  *     "verify")` as the C# write allowlist and THROWS `INVALID_PARAMS` outside it. Move
  *     `verify/` in TypeScript alone and every `capture.invoke_static` starts refusing while
@@ -848,11 +848,12 @@ const SPLIT_JOIN_RE = new RegExp(`["']${DIRNAME_RE_SOURCE}["']\\s*,\\s*["'](${SE
  *
  * Composing off the CONSTANT is what W1 demands of every module, and it produces a string
  * with no `.loombridge` text in it at all, so a plain scan is blind to precisely the code
- * that is doing the right thing. The migration's whole remap table
- * (`capabilities/migrate/legacy-layout.ts`) is written this way, and every legacy path it
- * names is a path an S2 move had to relocate: the one table W5 most needs to see was the
- * one it could not. Normalised into the joined form first, exactly like the split C#/`path.join`
- * spelling above and for the same reason.
+ * that is doing the right thing. The S2 migration's remap table was written entirely this
+ * way, and every path it named was a path the move had to relocate: the one table W5 most
+ * needed to see was the one it could not, which is why this normalisation exists. That
+ * table is gone; the blind spot it exposed is not, so neither is this rule. Normalised into
+ * the joined form first, exactly like the split C#/`path.join` spelling above and for the
+ * same reason.
  */
 const CONST_JOIN_RE = new RegExp(`\\$\\{LOOMBRIDGE_DIRNAME\\}/(${SEGMENT_CHARS})`, "g");
 
@@ -910,39 +911,15 @@ const UNDERIVED_CHILDREN: ReadonlyMap<string, string> = new Map([
   ],
 ]);
 
-/**
- * THE PRE-S2 SEGMENTS: still SPELLED in the shipped tree, written by NOTHING.
- *
- * Every one of them is named by `capabilities/migrate/legacy-layout.ts` (the remap table
- * and the refusal prose) or by the migration verb, because moving a project off them is
- * the whole job. Declared as their own category rather than folded into
- * `DOCUMENTED_ONLY_CHILDREN`, because the two say different things: a documented-only
- * child is a slot nobody has built yet, a legacy child is a slot that was real and now has
- * a tombstone on it.
- *
- * A migration that finished is one where this table can eventually be deleted. Deleting it
- * EARLY is the failure it guards against: the remap rules would go with it, and a project
- * that had not migrated would silently present as having no anchors.
- */
-const LEGACY_CHILDREN: ReadonlyMap<string, string> = new Map([
-  [
-    "replays",
-    "the pre-S2 replay root. `traces/` and `baselines/` were ANCHORS living in a directory " +
-      "the shipped template ignored (the RFC's mechanism 2); `reports/` was run output. " +
-      "migrate-layout splits them and leaves a TOMBSTONE here so an older CLI reports a " +
-      "broken anchor instead of asking a human to re-record.",
-  ],
-  ["reports", "pre-S2 verification reports; now run/reports/. Named by the remap table."],
-  ["backups", "pre-S2 bridge install backups; now run/backups/. Named by the remap table."],
-  [
-    "captures",
-    "pre-S2 ad-hoc screenshots; now run/captures/. Still scanned by " +
-      "domain/contract-presence.ts as the hand-created false-green shape, because a project " +
-      "that predates the move still has the directory.",
-  ],
-  ["art", "pre-S2 art/geometry snapshots; now run/art/. Named by the remap table."],
-  ["handoff", "pre-S2 asset-prepare handoff; now run/handoff/. Named by the remap table."],
-]);
+// A `LEGACY_CHILDREN` TABLE USED TO SIT HERE, declaring the six pre-S2 segments
+// (`replays`, `reports`, `backups`, `captures`, `art`, `handoff`) that the S2 migration
+// verb and its remap table were the last things in the tree to spell. It went with them:
+// the migration machinery was deleted one day after it landed, because no published
+// version ever shipped the pre-S2 layout and there is therefore no project that can be in
+// it (`Docs/Design/ArtifactStorage.md`, "Why S2 shipped no migration"). Nothing in the
+// scanned corpus spells any of those segments now, and the both-directions check below is
+// what proves that rather than anyone remembering: a table entry with no spelling behind
+// it FAILS, exactly as a spelling with no table entry does.
 
 /**
  * Named in shipped source but written by NOTHING today. Classified rather than dropped: a
@@ -980,13 +957,12 @@ const HOME_ROOT_CHILDREN: ReadonlyMap<string, string> = new Map([
   ["runtime", "the frozen CLI runtime the `loombridge` bin execs. Renaming project state must never touch it."],
 ]);
 
-/** Every project-local segment the tree spells: derived + underived + documented + legacy. */
+/** Every project-local segment the tree spells: derived + underived + documented. */
 const PROJECT_CHILDREN: ReadonlySet<string> = new Set([
   ...ALLOWED_SUBDIRS.keys(),
   ...TOP_LEVEL_CHILDREN,
   ...UNDERIVED_CHILDREN.keys(),
   ...DOCUMENTED_ONLY_CHILDREN.keys(),
-  ...LEGACY_CHILDREN.keys(),
 ]);
 
 /**
@@ -1089,26 +1065,24 @@ test("W5: the inventory is exactly the declared tables, in both directions", () 
   );
 });
 
-test("W5 LITMUS: against the DERIVED tables alone, the scan reports the nine it was blind to", () => {
+test("W5 LITMUS: against the DERIVED tables alone, the scan reports the three it was blind to", () => {
   // This is the finding, run as an assertion rather than written down as a claim. Feed the
   // REAL scan the tables W1 to W4 rest on (`loombridgePaths()`'s own children and nothing
   // else), and it names every destination those walks cannot see. Each of these is live in the
   // shipped tree right now.
+  //
+  // THIS LIST WAS NINE. The other six were the pre-S2 segments (`art`, `backups`,
+  // `captures`, `handoff`, `replays`, `reports`), spelled by the S2 migration verb's remap
+  // table and by nothing else in the scanned corpus. Deleting that machinery deleted the
+  // last spelling of each, so they are gone from the OBSERVED side too, which is why the
+  // both-directions check above stays green with no table to describe them. Three remain,
+  // and the argument they make is unchanged: the derived layout is not the inventory.
   const derivedOnly = new Set([...ALLOWED_SUBDIRS.keys(), ...TOP_LEVEL_CHILDREN]);
   assert.deepEqual(
     unclassifiedPrefixHits(PREFIX_HITS, derivedOnly, new Set(HOME_ROOT_CHILDREN.keys())).map((p) => p.split(" (")[0]),
     [
-      // The six PRE-S2 segments, every one of them named by the migration's remap table
-      // and by nothing else. That the derived tables cannot see them is the whole reason
-      // an S2 migration needed an inventory rather than a walk of `loombridgePaths()`.
-      "project .loombridge/art",
-      "project .loombridge/backups",
-      "project .loombridge/captures",
-      "project .loombridge/handoff",
-      "project .loombridge/replays",
-      "project .loombridge/reports",
-      // …plus the two committed named files no field produces, and the one aspirational
-      // slot nothing writes.
+      // The two committed named files no field produces, and the one aspirational slot
+      // nothing writes.
       "project .loombridge/editor-allowlist.json",
       "project .loombridge/games",
       "project .loombridge/genre-contract.json",
@@ -1207,8 +1181,8 @@ test("W5 LITMUS: the scan fires on a planted destination, in each language it cl
  *     under any name is in scope. A `.dir` use added anywhere in non-test source fails the pin
  *     below until someone classifies it.
  *   RELIABLE: THE COMPOSED SEGMENT, WHEN THE TYPE SYSTEM KNOWS IT. A string literal
- *     (`"registry"`) and an `as const` union (`CAPTURE_DIR_NAMES` yields `"verify" | "captures"`)
- *     both resolve, and both exist today.
+ *     (`"registry"`) and an `as const` union (`CAPTURE_DIR_NAMES` yields
+ *     `"verify" | "run/captures"`) both resolve, and both exist today.
  *   REFUSED, NEVER SKIPPED: a `path.join(dir, x)` whose `x` is not literal-typed is reported
  *     as `composes:UNRESOLVABLE` and fails unless it is excepted with a stated reason. This is
  *     the §"refuse when a bound field is absent" rule applied to a scan.
@@ -1355,10 +1329,10 @@ const EXPECTED_DIR_USES = [
   "capabilities/verification/slices.ts root-arg via fs.cp",
   "capabilities/verification/slices.ts root-arg via fs.mkdir",
   // The false-green scan, and the one site that still composes off `.dir`. It reads
-  // `run/captures` AND the legacy top-level `captures`, because a project that predates
-  // ArtifactStorage S2 still has the old directory and a hand-created one there is exactly
-  // the same false green it always was.
-  "domain/contract-presence.ts composes:captures,run,verify via path.join",
+  // `verify/` and `run/captures/`. It USED to read a third, the pre-S2 top-level
+  // `captures`, and that entry went with the rest of the S2 migration machinery: no
+  // published version ever shipped the layout it was scanning for.
+  "domain/contract-presence.ts composes:run,verify via path.join",
   "domain/contract-presence.ts root-arg via fileExists",
   "surfaces/index.ts escapes via ArrayLiteralExpression",
 ];
@@ -1374,8 +1348,8 @@ const DIR_USE_EXCEPTIONS: ReadonlyMap<string, string> = new Map([
     "resolveSafeScreenshotOutputPath's `allowedRoots`: the state dir is a CONTAINMENT root here, " +
       "compared with path.relative, never composed into a destination. What lands under it is " +
       "decided by the caller's requested path, so there is nothing for a static scan to resolve. " +
-      "The destinations that actually occur (.loombridge/captures/, .loombridge/art/) are " +
-      "inventoried by W5 as UNDERIVED_CHILDREN instead.",
+      "The destinations that actually occur (.loombridge/run/captures/, .loombridge/run/art/) " +
+      "are derived `LoombridgePaths` fields, so W2 walks them instead.",
   ],
 ]);
 

@@ -39,7 +39,6 @@ import {
   type LoombridgeState,
   type ReplayLayout,
 } from "../../../domain/state.js";
-import { legacyLayoutRefusal, scanLegacyLayout } from "../../migrate/legacy-layout.js";
 import { phaseForStatus } from "../verify.js";
 import { isInside, projectWorkspace, sanitizeWorkspaceId } from "../../../domain/workspace-paths.js";
 import {
@@ -244,25 +243,6 @@ export async function runUnifiedVerify(opts: UnifiedVerifyOpts): Promise<number>
   const root = path.resolve(opts.root);
   const paths = loombridgePaths(root);
   const deps: UnifiedSectionDeps = { ...(await realDeps()), ...opts.deps };
-
-  // THE PRE-S2 LAYOUT REFUSAL, FIRST, before anything is written or even discovered.
-  //
-  // Discovery reads `.loombridge/anchors/`, so a project that has not run
-  // `migrate-layout` presents as having NO trace anchor rather than a misplaced one, and
-  // "no anchor" is the on-ramp: a printed instruction to record a new demonstration over
-  // one that is sitting right there. Refusing is the only honest answer, because a run
-  // that graded a demonstration whose approved frames it could not see is a verdict
-  // nobody can audit.
-  //
-  // The predicate is FILE CONTENT, never directory existence (see `legacy-layout.ts`):
-  // an MCP session re-creates the legacy trace directory simply by connecting, so an
-  // existence test would turn a correct migration into a permanent exit-2 loop.
-  const legacyRefusal = legacyLayoutRefusal(await scanLegacyLayout(root), TAG);
-  if (legacyRefusal.length > 0) {
-    for (const line of legacyRefusal) console.error(line);
-    console.error(`${TAG} nothing was written and nothing ran.`);
-    return 2;
-  }
 
   // `--only` IS VALIDATED FIRST (F13), before the report path is even resolved: the
   // selection decides WHICH default report this run may write, and a malformed selector
