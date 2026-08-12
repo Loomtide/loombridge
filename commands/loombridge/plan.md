@@ -211,8 +211,8 @@ so the two agents cannot drift.
    `--catalog-api <baseUrl>` (it appends `/v1/assets/search`). The endpoint is configuration:
    pass the flag, or set `LOOMBRIDGE_ASSET_CATALOG_URL` and pass no source flag at all (it is
    the no-flag default for `--catalog`, a shard directory or `.jsonl` URL; with it unset the
-   verbs refuse by name). No deployment host is baked into Loombridge, and the current base URL is published alongside
-   the asset store. The web-store domain serves `/api/...`, not `/v1/...`, so it is not the
+   verbs refuse by name). No deployment host is baked into Loombridge, and the base URL is
+   not published at a fixed path, so obtain it from whoever operates the catalog and set it once via `LOOMBRIDGE_ASSET_CATALOG_URL`. The web-store domain serves `/api/...`, not `/v1/...`, so it is not the
    `--catalog-api` base: do not pass it there.
 
    - **Registry:** compose/build from recorded registry assets (the committed
@@ -231,7 +231,18 @@ so the two agents cannot drift.
    ```
 
    This writes a **draft** `.loombridge/ASSET_MANIFEST.json` bound to the frozen hero shot. Do
-   not hand-edit it to approved. Use the deterministic `loombridge assets` approval helpers so
+   not hand-edit it to approved.
+
+   **First, ask what this genre actually needs:**
+
+   ```bash
+   loombridge assets roles          # or: --genre <id>
+   ```
+
+   It prints the required roles, which are registry-sourced versus authored from the hero shot in
+   hybrid mode, and the registry primitives each role accepts. Read it rather than assuming a
+   platformer-shaped role list: the genres differ, and assuming otherwise is what broke a real
+   3d-shooter run. Use the deterministic `loombridge assets` approval helpers so
    the candidate list, selected IDs, output paths, licenses, source metadata, and provenance
    are all produced through validated code.
 

@@ -11,6 +11,12 @@ Use this skill when preparing curated art for Loombridge demos through the asset
 
 Resolve every required role in this order, the same for 2D and 3D:
 
+**Before selecting anything, ask what the genre needs:** `loombridge assets roles` prints the
+required roles for this project's genre, which are registry-sourced and which are authored from the
+hero shot in hybrid mode, and the registry primitives each role accepts. It reads the project's
+ASSET_MANIFEST.json, or takes `--genre <id>`. Do not infer the role list from a platformer example:
+genres differ, and assuming otherwise is what broke a real 3d-shooter run.
+
 1. **Local registry / profile fixtures and generated assets (the default path).**
    `asset-layer/registry/*.json` + `asset-layer/profiles/*.json`, or assets generated from the
    approved hero-shot annotations. No network, no account, no configuration, so an
@@ -20,8 +26,8 @@ Resolve every required role in this order, the same for 2D and 3D:
    hosted search API via `--catalog-api <baseUrl>` (the CLI appends `/v1/assets/search`). The
    endpoint is configuration: pass `--catalog-api <baseUrl>` for the search API, or set
    `LOOMBRIDGE_ASSET_CATALOG_URL` and pass no source flag at all (it is the no-flag default for
-   `--catalog`, a shard directory or `.jsonl` URL). No deployment host is baked into Loombridge; the current base URL
-   is published alongside the asset store. The web-store domain serves `/api/...`, not
+   `--catalog`, a shard directory or `.jsonl` URL). No deployment host is baked into Loombridge; the base URL is
+   not published at a fixed path, so obtain it from whoever operates the catalog and set it once via `LOOMBRIDGE_ASSET_CATALOG_URL`. The web-store domain serves `/api/...`, not
    `/v1/...`, so do not pass it to `--catalog-api`. When the developer has opted in, query the
    catalog per role, present candidates grouped by role, recommend a cohesive set, and STOP
    for approval before applying.

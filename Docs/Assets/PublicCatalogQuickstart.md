@@ -6,8 +6,8 @@ assets — with no private GitHub token and no checked-out private mirror.
 > **The catalog is optional and its endpoint is configuration.** Loombridge bakes in no host, and this
 > doc deliberately names no deployment: every command below takes the base URL from you. The public
 > catalog is published at scale (66,859 assets across sprite/audio/model/vector) behind a company-run
-> **read-only** search API exposing `/v1/assets/search`, and the current base URL is published
-> alongside the asset store (`https://assetstore.loomtide.ai/`).
+> **read-only** search API exposing `/v1/assets/search`. Its base URL is not published at a fixed
+> path, so obtain it from whoever operates the catalog and set `LOOMBRIDGE_ASSET_CATALOG_URL`.
 >
 > **Everything here works without it.** The default asset path is the registry packs committed in
 > `asset-layer/registry/*.json`; see [`AssetPriority.md`](AssetPriority.md).
@@ -25,9 +25,8 @@ A public catalog URL points at a **profile shard directory** (the CLI probes it 
 the shape `<base>/v1/catalog/public/<profile>`, e.g. `…/v1/catalog/public/2d-platformer` for the
 bundled first seed (a curated `2d-platformer` set of CC0 assets).
 
-**This repo does not name the `<base>`.** Get the current one from the asset store
-(`https://assetstore.loomtide.ai/`), or point at any catalog of your own that serves the same
-shards. Every command below reads it from your environment, so there is exactly one place to put it:
+**This repo does not name the `<base>`.** It is not published at a fixed path: obtain it from
+whoever operates the catalog, or point at any catalog of your own that serves the same shards. Every command below reads it from your environment, so there is exactly one place to put it:
 
 ```bash
 export LOOMBRIDGE_ASSET_CATALOG_URL="<base>/v1/catalog/public/2d-platformer"
