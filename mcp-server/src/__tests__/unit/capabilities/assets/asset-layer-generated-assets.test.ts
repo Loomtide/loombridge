@@ -249,3 +249,62 @@ test("generated slice bindings resolve manifest paths without registry lookup", 
   assert.ok(framing.assets.every((asset) => asset.paths.every((p) => p.startsWith("Assets/Art/Generated/"))));
   assert.ok(framing.assets.every((asset) => asset.provenance.origin === "hero-shot-annotation"));
 });
+
+// --- Roles are the MANIFEST GENRE's, not the platformer default ------------------------------
+//
+// Found on a real `loombridge plan` run against a 3d-shooter project: hybrid mode died with
+// "Unknown generated asset annotation role 'reticle'". `manifest-selection.ts` and
+// `asset-manifest.ts` already resolved roles via `resolveAssetGenreProfile(manifest.genre)`;
+// `generated-assets.ts` was the last caller still reading the static `REQUIRED_ASSET_ROLES`,
+// which is literally `PLATFORMER_REQUIRED_ASSET_ROLES`. So every non-platformer genre had its
+// own required roles rejected as unknown, on the generated AND apply paths (apply builds the
+// plan internally, so the single choke point covers both).
+
+function threeDShooterManifest() {
+  return createDraftAssetManifest({
+    mode: "hybrid",
+    genre: "3d-shooter",
+    heroShot: { path: ".loombridge/design/hero-shot.png", sha256: HASH },
+  });
+}
+
+function reticleAnnotation(): GeneratedAssetAnnotation {
+  return {
+    annotationId: "ann-reticle",
+    role: "reticle" as GeneratedAssetAnnotation["role"],
+    heroRegion: { x: 0, y: 0, w: 32, h: 32 },
+    requiredOutputs: ["main"],
+    prompt: "Crosshair reticle from the approved hero shot.",
+    styleLock: "match annotation reticle",
+  };
+}
+
+test("REGRESSION: a 3d-shooter role is accepted on the generated path", () => {
+  const plan = buildGeneratedAssetPlan(threeDShooterManifest(), [reticleAnnotation()]);
+  assert.deepEqual(
+    plan.issues.filter((issue) => issue.code === "UNKNOWN_ROLE"),
+    [],
+    "`reticle` is a required role of 3d-shooter and must not be rejected as unknown",
+  );
+});
+
+test("LITMUS: validation still REFUSES a role the manifest's genre does not declare", () => {
+  // Without this, "accept everything" passes the regression above. A platformer manifest (genre
+  // absent ⇒ the platformer default) must still reject `reticle`, and must still accept its own
+  // roles: the fix changes WHICH list is consulted, never whether one is.
+  const platformer = manifest();
+  const rejected = buildGeneratedAssetPlan(platformer, [reticleAnnotation()]);
+  assert.equal(
+    rejected.issues.some((issue) => issue.code === "UNKNOWN_ROLE" && issue.role === "reticle"),
+    true,
+    "a 3d-shooter role must stay unknown on a platformer manifest",
+  );
+
+  const ownRole = platformer.assets[0]!.role as GeneratedAssetAnnotation["role"];
+  const accepted = buildGeneratedAssetPlan(platformer, [{ ...reticleAnnotation(), role: ownRole }]);
+  assert.equal(
+    accepted.issues.some((issue) => issue.code === "UNKNOWN_ROLE"),
+    false,
+    `the platformer's own role "${ownRole}" must still be accepted`,
+  );
+});
