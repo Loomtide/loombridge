@@ -2762,7 +2762,15 @@ export function printSummary(
       console.error(`[loombridge trace] ${line}`);
     }
   }
-  console.error(`[loombridge trace] report → ${path.relative(root, reportJson)}`);
+  // WHICH RUN THIS OUTPUT BELONGS TO. Two consecutive replays of an unchanged project
+  // print byte-identical summaries, so a scrollback paste and a fresh run are the same
+  // text, and "did you re-run?" is unanswerable from the output. Observed live: a run's
+  // own output was read as its successor's, and the two-run drift discriminator was
+  // reported as broken on that reading. `finishedAt` is the artifact's own stamp and is
+  // written into the report beside the path, so the line and the file can be compared.
+  console.error(
+    `[loombridge trace] report → ${path.relative(root, reportJson)} (run finished ${artifact.finishedAt})`,
+  );
   if (htmlPath) console.error(`[loombridge trace] html   → ${path.relative(root, htmlPath)}`);
 }
 
