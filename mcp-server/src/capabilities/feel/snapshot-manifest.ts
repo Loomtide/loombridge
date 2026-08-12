@@ -374,6 +374,31 @@ export async function verifySnapshotIntegrity(dir: string): Promise<SnapshotInte
         failures.push(`manifest metric '${id}' (${entry.value}) != frozen measurements (${frozen})`);
       }
     }
+    // AND THE REVERSE WALK, which is what makes `manifest.metrics` a DENOMINATOR rather
+    // than a claim. Everything downstream counts it: `compareSnapshot` emits one row per
+    // manifest metric, `summary.total` is that row count, and the unified door reads that
+    // number as both `expected` and `performed`. Walking only manifest -> measurements
+    // meant a metric DELETED from `manifest.metrics` had nothing left to disagree with, so
+    // the shrunken number became the evidence for `anchored: true`.
+    //
+    // Demonstrated end to end (real approve, real `verify --snapshot`): a runSpeed drift of
+    // +1.0 against a 0.14 tolerance exits 1 with `total: 3`; delete `runSpeed` from
+    // `manifest.metrics` and the SAME drifted capture exits 0, `status: "clean"`,
+    // `total: 2`, `anchored: true`.
+    //
+    // EXACT, not heuristic: `snapshot approve` freezes every measured metric, so the two
+    // sets are equal at approve time by construction, and the measurements file's own
+    // sha256 is checked above. A metric that was never measured (a coverage gap) is in
+    // NEITHER set, so an honest partial snapshot is untouched by this.
+    for (const id of Object.keys(measurements.metrics)) {
+      if (!(id in manifest.metrics)) {
+        failures.push(
+          `frozen measurements carry '${id}' but the manifest does not declare it: the approved anchor was ` +
+            "shrunk after approve, and a smaller denominator is not a smaller obligation " +
+            "(re-capture and re-approve to change what is frozen)",
+        );
+      }
+    }
     const view = rederiveView(measurements);
     for (const [metric, reason] of view.distrusted) {
       if (metric in manifest.metrics) {

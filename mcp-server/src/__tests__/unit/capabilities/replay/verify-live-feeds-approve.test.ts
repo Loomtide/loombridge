@@ -45,6 +45,7 @@ import test from "node:test";
 import zlib from "node:zlib";
 
 import {
+  replayComparisonCoverage,
   replayTraceForVerify,
   run as runTrace,
   shouldSuggestTolerance,
@@ -140,6 +141,9 @@ function liveFlowDeps(png: Buffer, seen: string[]): Partial<UnifiedSectionDeps> 
         exitTier,
         htmlPath,
         ...drift,
+        // Derived from the artifact exactly as `realDeps` derives it, so this walk of the
+        // whole composition cannot answer the coverage question differently.
+        comparisons: replayComparisonCoverage(artifact),
         suggestTolerance: shouldSuggestTolerance(artifact),
         ...(maskSuggestion ? { maskSuggestion } : {}),
       };

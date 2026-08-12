@@ -34,6 +34,7 @@ import path from "node:path";
 import type { CheckStatus, GateCheck, GateCheckAnnotation, GateReport, SeamAnnotation } from "../verification/gates/types.js";
 import { ICON, tildify } from "../../shared/cli-ui.js";
 import { loombridgePaths, nowIso } from "../../domain/state.js";
+import { comparisonShortfall, type ComparisonCoverage } from "../../domain/comparison-coverage.js";
 import { assertValidMinigameContract } from "./profiles/validator.js";
 import { AGE_BANDS, resolveDevices, VISUAL_PROFILES, type DeviceSpec, type MinigameContract } from "./profiles/types.js";
 import { perDeviceKey } from "./minigame-capture-plan.js";
@@ -190,6 +191,16 @@ export interface MinigameBaselineSection {
   regressions: string[];
   /** State ids whose baseline file was missing/corrupt (→ incomplete). */
   incompleteStates: string[];
+  /**
+   * THE GATE'S COVERAGE, ON DISK: how many declared states the approved baseline expected
+   * this run to compare, and how many it did (`domain/comparison-coverage.ts`).
+   *
+   * Written wherever a manifest was found, so a later reader (the unified door's
+   * `anchored` derivation, an auditor, a human) can ask "did this gate actually run?"
+   * without re-walking the captures directory. Absent when no baseline is approved yet:
+   * that is "no anchor", which is a different statement from "compared nothing".
+   */
+  comparisons?: ComparisonCoverage;
 }
 
 /**
@@ -321,8 +332,9 @@ function deviceLabelMap(contract: MinigameContract): Map<string, string> {
  *   - FAIL: any graded `fail` (an object missing INSIDE a present capture, etc.),
  *     any flow `game_fail`, or a graded `warn` under `--strict`.
  *   - INCOMPLETE: a `captureAbsent` state (wholly-missing capture — a capture/HARNESS
- *     gap, S6d), a flow `harness_fault`/`missing_evidence`, OR nothing substantively
- *     graded (every per-state check vacuous AND no flow pass).
+ *     gap, S6d), a flow `harness_fault`/`missing_evidence`, a BASELINE COVERAGE SHORTFALL
+ *     (the approved baseline declares more states than this run compared), OR nothing
+ *     substantively graded (every per-state check vacuous AND no flow pass).
  *   - PASS: otherwise.
  *
  * The load-bearing S6d rule: a `harness_fault` or any `captureAbsent` **forces
@@ -343,6 +355,19 @@ export function minigameReportStatus(
     regressions?: string[];
     /** State ids whose BASELINE file was missing/corrupt — can't compare (→ incomplete, S6e). */
     baselineIncomplete?: string[];
+    /**
+     * THE BASELINE GATE'S COVERAGE: what the anchor declared vs what this run compared.
+     *
+     * READ AS TWO NUMBERS, NOT AS A LIST OR A FLAG. `baselineIncomplete` above is a
+     * curated bucket, and the whole class of bug this closes is a state that belongs to
+     * no bucket: it fell out of the compare loop uncompared and nothing counted it. The
+     * counts cannot have that hole, because the denominator comes from the APPROVED
+     * MANIFEST and the numerator from the comparisons that actually ran. An absent
+     * numerator reads as
+     * zero; an absent `comparisons` altogether means no baseline is approved, which is
+     * not a shortfall. See `domain/comparison-coverage.ts`.
+     */
+    baselineComparisons?: ComparisonCoverage;
     /** The input-response (liveness) verdict (slice 3) — game_fail → fail, missing → incomplete. */
     inputResponse?: InputResponseReport;
     /** States that collapse sequential sub-screens (G8) — can't be verified as one frame → incomplete. */
@@ -377,6 +402,7 @@ export function minigameReportStatus(
   if (
     captureAbsent.length > 0 ||
     baselineIncomplete.length > 0 ||
+    comparisonShortfall(opts.baselineComparisons) !== null ||
     sequentialStates.length > 0 ||
     flowOutcome === "harness_fault" ||
     flowOutcome === "missing_evidence" ||
@@ -734,7 +760,31 @@ function buildBaselineSection(
     states,
     regressions: result.regressions,
     incompleteStates: result.incompleteStates,
+    ...(result.comparisons ? { comparisons: result.comparisons } : {}),
   };
+  // THE SHORTFALL IS A FINDING IN ITS OWN RIGHT, named per state. The per-state loop above
+  // only speaks for states that landed in `regressions` or `incompleteStates`; a state that
+  // was never compared and landed in neither used to produce no finding at all, which is
+  // how a ~50% pixel diff against a half-black baseline reported `pass`. The refusal names
+  // every ungraded state because "3 of 4" tells an operator the gate is broken and
+  // "3 of 4: start" tells them what to re-capture.
+  const shortfall = comparisonShortfall(result.comparisons);
+  if (shortfall !== null) {
+    for (const state of shortfall.ungraded) {
+      // Never duplicated: a state already reported as an unreadable BASELINE has its own
+      // finding above, with its own next action.
+      if (result.incompleteStates.includes(state)) continue;
+      incomplete.push({
+        source: "baseline",
+        state,
+        detail:
+          `State '${state}' was declared by the approved baseline but this run COMPARED NOTHING for it ` +
+          `(${shortfall.performed} of ${shortfall.expected} declared state(s) compared). A comparison that did ` +
+          "not happen is a capture/harness gap, never a pass and never a game defect.",
+        nextAction: `Re-capture '${state}' (both '${state}.png' and '${state}.ui-rects.json') and re-run verify.`,
+      });
+    }
+  }
   return { section, regressions, incomplete };
 }
 
@@ -913,6 +963,7 @@ export async function buildMinigameReport(
   let baselineFindings: { regressions: MinigameFinding[]; incomplete: MinigameFinding[] } | undefined;
   let regressions: string[] = [];
   let baselineIncomplete: string[] = [];
+  let baselineComparisons: ComparisonCoverage | undefined;
   const refDir = resolveBaselineRef(contract, args.root, args.baselineRefOverride);
   if (refDir) {
     const result = await compareToBaseline(contract, args.capturesDir, refDir, baselineThresholds(contract));
@@ -921,6 +972,7 @@ export async function buildMinigameReport(
     baselineFindings = { regressions: built.regressions, incomplete: built.incomplete };
     regressions = result.regressions;
     baselineIncomplete = result.incompleteStates;
+    baselineComparisons = result.comparisons;
   }
 
   const ctx: FlowContext = { captureAbsent: verdict.captureAbsent, flow: verdict.flow, regressions, outcomeGated: verdict.outcomeGated };
@@ -930,6 +982,7 @@ export async function buildMinigameReport(
     flow: verdict.flow,
     regressions,
     baselineIncomplete,
+    baselineComparisons,
     inputResponse: verdict.inputResponse,
     sequentialStates: verdict.sequentialStates,
   });

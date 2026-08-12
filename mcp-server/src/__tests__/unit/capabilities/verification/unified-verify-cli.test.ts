@@ -38,6 +38,7 @@ import {
   DEFAULT_DRIFT_FRACTION,
   type MaskSuggestion,
 } from "../../../../capabilities/replay/visual-diff.js";
+import type { ComparisonCoverage } from "../../../../domain/comparison-coverage.js";
 import { run as runMinigame } from "../../../../capabilities/minigame/minigame.js";
 import { resolveCliProjectPin } from "../../../../capabilities/setup/cli-project-pin.js";
 import { createDraftAssetManifest, type AssetManifest } from "../../../../capabilities/assets/asset-manifest.js";
@@ -192,6 +193,7 @@ function cleanFlow(status = "pass", htmlPath = DOUBLE_HTML_PATH): {
   driftCaptures: number;
   maxDiffFraction: number;
   toleranceUsed: number;
+  comparisons: ComparisonCoverage;
 } {
   return {
     status,
@@ -201,6 +203,10 @@ function cleanFlow(status = "pass", htmlPath = DOUBLE_HTML_PATH): {
     driftCaptures: 0,
     maxDiffFraction: 0,
     toleranceUsed: DEFAULT_DRIFT_FRACTION,
+    // A CLEAN RUN COMPARED WHAT ITS ANCHOR DECLARED. The field is REQUIRED on the seam so
+    // a fake has to state this, rather than inherit an anchor from the mere existence of a
+    // trace row, which is the derivation the flow section replaced.
+    comparisons: { expected: 1, performed: 1 },
   };
 }
 
@@ -230,6 +236,8 @@ function driftedFlow(
     driftCaptures: overrides.driftCaptures ?? 1,
     maxDiffFraction: overrides.maxDiffFraction ?? 0.013,
     toleranceUsed: overrides.toleranceUsed ?? DEFAULT_DRIFT_FRACTION,
+    // A DRIFTED run still COMPARED: drift is the result of a comparison that happened.
+    comparisons: { expected: 1, performed: 1 },
   };
 }
 
@@ -631,6 +639,70 @@ test("screens execute OFFLINE against the discovered baseline and write to the v
   }
 });
 
+/*
+ * THE SAME COUNTING RULE, END TO END THROUGH THE UNIFIED DOOR (Findings 3 + the screens
+ * half of the `anchored` fix), against the REAL engine rather than a double.
+ *
+ * `minigame-baseline.test.ts` owns the engine-level guard. This one exists because the
+ * door had a second, independent hole on the same fact: it derived
+ * `compared = report.baseline.present === true`, and `present` is set unconditionally the
+ * moment the manifest PARSES (`minigame-baseline.ts`), so it was satisfied by a comparison
+ * that walked every declared state and graded none of them. Two layers each trusting the
+ * other's "an anchor exists" is how a section reported an anchor it never compared.
+ *
+ * LITMUS, run 2026-08-12. `anchored` in `screensSection` restored to `present`, rebuilt,
+ * re-run:
+ *
+ *   ✖ MOAT: a screens section whose capture is half-missing is not anchored, and exits 2
+ *     AssertionError [ERR_ASSERTION]: `present` only means the manifest parsed; it is not a comparison
+ *
+ *     true !== false
+ *
+ *   ℹ pass 43
+ *   ℹ fail 1
+ *
+ * Restored: 44 pass, 0 fail.
+ */
+test("MOAT: a screens section whose capture is half-missing is not anchored, and exits 2", async () => {
+  const root = await tmpDir("unified-cli-screens-gap-");
+  const { workspace, contractPath } = await screenWorkspace("unified-cli-screens-gap-ws-");
+  try {
+    await approveScreens(root, workspace, contractPath);
+    // CONTROL: the approved pack re-verifies clean and anchored (pinned in full by the
+    // test above; repeated here so the break below is attributable to the break alone).
+    assert.equal((await captured(() => runVerifyCli(["--root", root, "--workspace", workspace]))).result, 0);
+    assert.equal((await readUnified(root)).sections.screens?.anchored, true);
+
+    // BREAK: delete ONE state's PNG and leave its rects readable. This is the gap that
+    // belonged to neither absence predicate: `captureAbsent` watches the rects, the
+    // baseline loader refuses on either file.
+    await fs.rm(path.join(workspace, "captures", "active.png"));
+
+    const { result, lines } = await captured(() => runVerifyCli(["--root", root, "--workspace", workspace]));
+    const report = await readUnified(root);
+    assert.equal(
+      report.sections.screens?.anchored,
+      false,
+      "`present` only means the manifest parsed; it is not a comparison",
+    );
+    assert.equal(result, 2, "a declared state that was never compared is the harness tier");
+    assert.equal(report.sections.screens?.exit, 2);
+    assert.match(
+      lines.join("\n"),
+      /declares 2 declared state\(s\) but this run compared 1.*active was never compared/s,
+      lines.join("\n"),
+    );
+
+    // RESTORE: the capture comes back and the section is anchored and green again.
+    await fs.writeFile(path.join(workspace, "captures", "active.png"), whitePng());
+    assert.equal((await captured(() => runVerifyCli(["--root", root, "--workspace", workspace]))).result, 0);
+    assert.equal((await readUnified(root)).sections.screens?.anchored, true);
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+    await fs.rm(workspace, { recursive: true, force: true });
+  }
+});
+
 test("a layout baseline approved for ANOTHER project is BROKEN: tier 2, and it never executes", async () => {
   const root = await tmpDir("unified-cli-foreign-");
   const otherProject = await tmpDir("unified-cli-other-");
@@ -832,6 +904,102 @@ test("LiveByDefault: with NO editor reachable the run REFUSES first, names --off
     });
     assert.deepEqual(seen, ["happy-path"], "with an editor, the same argv drives the trace");
     assert.equal(ok, 0);
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+    await fs.rm(workspace, { recursive: true, force: true });
+  }
+});
+
+/*
+ * MOAT: `anchored` MEANS "THIS RUN COMPARED SOMETHING A HUMAN FROZE".
+ *
+ * `resolveUnifiedOutcome` is sound as written: a zero-anchored run cannot exit 0. Its
+ * INPUTS were the lie. The flow section derived `anchored: traces.length > 0`, justified
+ * in a comment by "every trace that reaches this section passed baseline-manifest
+ * verification at discovery". Discovery's opinion is a PLAN, not evidence: it says an
+ * anchor existed and was well-formed when the row was classified, and it cannot say the
+ * replay compared one frame against it. A replay that graded none of fifteen approved
+ * frames satisfied `traces.length > 0` exactly as well as one that graded all fifteen.
+ *
+ * WHY THE EXISTING TESTS MISSED IT. Every flow test in this file drives a double that
+ * returns a clean tier, and asserts on the tier and the words. None of them asked what the
+ * replay actually compared, because until PR #80 the report could not answer: the fact
+ * lived in a local variable inside the diff loop. So the suite could only test the verdict
+ * of a gate that ran, never whether it ran.
+ *
+ * LITMUS, run 2026-08-12. `anchored` in `flowSection` restored to `traces.length > 0`,
+ * rebuilt, re-run:
+ *
+ *   ✖ MOAT: a flow section that COMPARED NOTHING is not anchored, and cannot exit 0
+ *     AssertionError [ERR_ASSERTION]: a section that compared no approved frame must not claim an anchor
+ *
+ *     true !== false
+ *
+ *   ℹ pass 42
+ *   ℹ fail 1
+ *
+ * Restored: 43 pass, 0 fail.
+ */
+test("MOAT: a flow section that COMPARED NOTHING is not anchored, and cannot exit 0", async () => {
+  const root = await unityLikeProject("unified-cli-uncompared-");
+  const workspace = await tmpDir("unified-cli-ws-");
+  try {
+    await plantApprovedTrace(root, "happy-path");
+
+    // POSITIVE CONTROL: the same fixture, the same argv, a replay that compared the frame
+    // its anchor declares. Anchored, and exit 0.
+    const control = await argvRun(["--root", root, "--workspace", workspace], {
+      ...REACHABLE_EDITOR,
+      async runFlowTrace() {
+        return cleanFlow();
+      },
+    });
+    assert.equal(control.result, 0, "control: a compared anchor exits 0");
+    assert.equal((await readUnified(root)).sections.flow?.anchored, true);
+
+    // BREAK: the replay ran and produced a green actuation verdict, but its pixel gate
+    // graded NONE of the frames the approved baseline declares. This is the fifteen-frames
+    // shape, observed on a real consumer project.
+    const { result, lines } = await argvRun(["--root", root, "--workspace", workspace], {
+      ...REACHABLE_EDITOR,
+      async runFlowTrace() {
+        return { ...cleanFlow(), comparisons: { expected: 15, performed: 0, ungraded: ["f1", "f15"] } };
+      },
+    });
+
+    const report = await readUnified(root);
+    assert.equal(
+      report.sections.flow?.anchored,
+      false,
+      "a section that compared no approved frame must not claim an anchor",
+    );
+    // FXH: the ONLY executed section is unanchored, so the run cannot exit 0 either.
+    assert.equal(result, 2, "a self-produced green is the harness tier, never a pass");
+    assert.equal(report.status, "partial");
+    const text = lines.join("\n");
+    assert.match(text, /declares 15 approved frame\(s\) but this run compared 0/, text);
+    assert.match(text, /f1, f15 were never compared/, "the refusal names the ungraded captures");
+    assert.match(text, /no frozen human approval was compared in: flow/);
+
+    // AND A PARTIAL COMPARISON IS NOT AN ANCHOR EITHER: 14 of 15 approved frames is not
+    // "the anchor was compared", it is a gate that fell 1 short.
+    await argvRun(["--root", root, "--workspace", workspace], {
+      ...REACHABLE_EDITOR,
+      async runFlowTrace() {
+        return { ...cleanFlow(), comparisons: { expected: 15, performed: 14, ungraded: ["f15"] } };
+      },
+    });
+    assert.equal((await readUnified(root)).sections.flow?.anchored, false, "14 of 15 is still a shortfall");
+
+    // RESTORE: the control again, so the guard is not simply "flow is never anchored".
+    const restored = await argvRun(["--root", root, "--workspace", workspace], {
+      ...REACHABLE_EDITOR,
+      async runFlowTrace() {
+        return cleanFlow();
+      },
+    });
+    assert.equal(restored.result, 0);
+    assert.equal((await readUnified(root)).sections.flow?.anchored, true);
   } finally {
     await fs.rm(root, { recursive: true, force: true });
     await fs.rm(workspace, { recursive: true, force: true });
@@ -1087,10 +1255,22 @@ test("--live: the feel section carries the engine's own tier, pass and integrity
               seen.push(args);
               // The real engine writes its drift report here; the double does the same so
               // the section's report binding is exercised rather than stubbed away.
+              //
+              // INCLUDING `summary`, which the real engine ALWAYS writes and which the
+              // section's `anchored` derivation now reads. A clean run compared every
+              // baseline metric; a run that broke on integrity never got to compare one,
+              // and `snapshot-verify` writes exactly that (`summary.total: 0`) for it.
               await fs.mkdir(path.dirname(feelPaths(workspace).driftReport), { recursive: true });
               await fs.writeFile(
                 feelPaths(workspace).driftReport,
-                JSON.stringify({ status: engineExit === 0 ? "clean" : "blocked", at: `${engineExit}` }),
+                JSON.stringify({
+                  status: engineExit === 0 ? "clean" : "blocked",
+                  at: `${engineExit}`,
+                  summary:
+                    engineExit === 0
+                      ? { total: 2, match: 2, drift: 0, rejected: 0, missing: 0 }
+                      : { total: 0, match: 0, drift: 0, rejected: 0, missing: 0 },
+                }),
                 "utf-8",
               );
               return engineExit;
@@ -1106,10 +1286,16 @@ test("--live: the feel section carries the engine's own tier, pass and integrity
       assert.equal(report.sections.feel?.status, engineExit === 0 ? "clean" : "blocked", "…and its own word");
       assert.equal(report.status, expectedStatus);
       assert.equal(result, engineExit);
+      // ANCHORED IS DERIVED FROM THE RUN, not from discovery having found an approved,
+      // owned, integrity-checked snapshot. It used to read `asset.approvedAt !== undefined`,
+      // which is true for BOTH iterations of this loop: the run that compared two frozen
+      // metrics and the run that compared none of them claimed the same anchor.
       assert.equal(
         report.sections.feel?.anchored,
-        true,
-        "a feel row only becomes runnable after integrity + ownership verified, so it is anchored",
+        engineExit === 0,
+        engineExit === 0
+          ? "a run that compared every frozen metric is anchored"
+          : "a run whose report shows NO metric compared cannot claim an anchor",
       );
       // FX10: the feel workspace lives OUTSIDE the project by design, so a blind
       // `path.relative` would store `../../..`, a path nothing can walk without knowing
@@ -1498,6 +1684,9 @@ test("--live: NO suggestion is printed when the trace is a harness fault, only w
               driftCaptures: 0,
               maxDiffFraction: 0,
               toleranceUsed: DEFAULT_DRIFT_FRACTION,
+              // A harness fault that compared nothing: the anchor declares a frame and
+              // this run graded none of it.
+              comparisons: { expected: 1, performed: 0 },
             };
           },
         },

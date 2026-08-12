@@ -320,6 +320,105 @@ test("LITMUS L107: one mutated evidence byte makes the roll-up REFUSE, naming th
   }
 });
 
+/*
+ * THE COUNTING GUARD (the audit's Finding 6), and WHY THE TEST ABOVE MISSED IT.
+ *
+ * The L107 test above mutates a byte and watches `staleEvidenceRefusals` catch it. That
+ * proves the check works ON THE FILES THE LEDGER NAMES. Nothing asked how many files the
+ * ledger was supposed to name: `readEvidenceLedger` refuses an ABSENT `evidence` block but
+ * accepts `files: []`, and `staleEvidenceRefusals` iterates `ledger.files`, so a ledger
+ * with no entries re-hashed nothing, refused nothing, and certified. The rule the module
+ * documents ("An ABSENT ledger is a REFUSAL, not a legacy path") was implemented for the
+ * block and not for its contents.
+ *
+ * Same suite-wide pattern as the screen-contract hole: the tests ask "does this check
+ * produce the right refusal when it runs?" and never "over how many files did it run?".
+ *
+ * This is the audit's demonstration exactly: mutate a graded evidence byte INSIDE the
+ * passing band (so the re-grade still reproduces the stored verdict and the only thing
+ * that could notice is the sha binding), then trim `evidence.files` from 4 to 0. Before
+ * the fix the roll-up went from `exit 2 / refused` to `exit 0 / pass / anchored: true`.
+ *
+ * LITMUS, run 2026-08-12. The `evidenceCoverageRefusals` push deleted from
+ * `rollUpOneSlice` (the real path, driven through `evaluateSliceRollup`), rebuilt,
+ * re-run:
+ *
+ *   ✖ MOAT: an EMPTY evidence ledger cannot certify a mutated slice (the counting guard)
+ *     AssertionError [ERR_ASSERTION]: `files: []` means NOTHING was re-hashed: that is a harness refusal, never exit 0
+ *
+ *     0 !== 2
+ *
+ *   ℹ pass 16
+ *   ℹ fail 1
+ *
+ * Restored: 17 pass, 0 fail.
+ */
+test("MOAT: an EMPTY evidence ledger cannot certify a mutated slice (the counting guard)", async () => {
+  const fixture = await approvedFixture();
+  try {
+    assert.equal((await rollUp(fixture)).exit, 0, "control: the minted verdict rolls up green");
+
+    // BREAK 1: the same in-band byte the L107 test uses. The re-grade still passes, so
+    // only the evidence binding can object.
+    const feelPath = path.join(fixture.sliceDir, "feel.json");
+    const originalFeel = await fs.readFile(feelPath, "utf-8");
+    await fs.writeFile(feelPath, originalFeel.replace('"runSpeed": 8', '"runSpeed": 8.0001'), "utf-8");
+    const stale = await rollUp(fixture);
+    assert.equal(stale.exit, 2, "control: with the shas present, the mutation is caught");
+
+    // BREAK 2: hand-trim the ledger so there is nothing left to re-hash. Everything else
+    // about the verdict is untouched: same status, same gates, same runId.
+    const verdictPath = getSliceVerdictPath(fixture.paths, "core");
+    const verdict = JSON.parse(await fs.readFile(verdictPath, "utf-8"));
+    const files = verdict.evidence.files;
+    assert.equal(files.length, 4, "the fixture really does declare four evidence files");
+    verdict.evidence.files = [];
+    await fs.writeFile(verdictPath, `${JSON.stringify(verdict, null, 2)}\n`, "utf-8");
+
+    const laundered = await rollUp(fixture);
+    assert.equal(
+      laundered.exit,
+      2,
+      "`files: []` means NOTHING was re-hashed: that is a harness refusal, never exit 0",
+    );
+    assert.equal(laundered.anchored, false, "…and an approval bound to no bytes is not an anchor");
+    assert.ok(
+      laundered.refusals.some((r) => r.includes("declare 4 evidence file(s)") && r.includes("accounts for 0")),
+      `the refusal must state the denominator: ${laundered.refusals.join(" | ")}`,
+    );
+    for (const name of ["feel.json", "playability.json", "screen-rects.json", "verify-manifest.json"]) {
+      assert.ok(
+        laundered.refusals.some((r) => r.includes(name) && r.includes("records NO sha")),
+        `every unaccounted file must be NAMED, missing ${name}: ${laundered.refusals.join(" | ")}`,
+      );
+    }
+
+    // THE OTHER WAY AROUND THE SAME COUNT: move the names into `missing` instead of
+    // deleting them. A file the run recorded as absent at grade time graded no bytes, so
+    // it counts as not performed too, or `missing` would simply become the new hiding place.
+    verdict.evidence.missing = files.map((f: { file: string }) => f.file);
+    await fs.writeFile(verdictPath, `${JSON.stringify(verdict, null, 2)}\n`, "utf-8");
+    const viaMissing = await rollUp(fixture);
+    assert.equal(viaMissing.exit, 2);
+    assert.ok(
+      viaMissing.refusals.some((r) => r.includes("feel.json") && r.includes("recorded as MISSING at grade time")),
+      viaMissing.refusals.join(" | "),
+    );
+
+    // RESTORE both halves: the ledger comes back, the byte comes back, and the roll-up
+    // certifies again. A guard that made everything refuse would prove nothing.
+    verdict.evidence.files = files;
+    verdict.evidence.missing = [];
+    await fs.writeFile(verdictPath, `${JSON.stringify(verdict, null, 2)}\n`, "utf-8");
+    await fs.writeFile(feelPath, originalFeel, "utf-8");
+    const restored = await rollUp(fixture);
+    assert.equal(restored.exit, 0, "restored: green again");
+    assert.equal(restored.anchored, true);
+  } finally {
+    await cleanup(fixture);
+  }
+});
+
 test("a DELETED evidence file is refused the same way (absent is never a skipped check)", async () => {
   const fixture = await approvedFixture();
   try {

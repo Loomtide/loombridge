@@ -670,6 +670,95 @@ be silent about what it did not.
 - **The same gaps ride in `verify.json` and the `loombridge_verify` MCP payload**, so a CI
   consumer and an agent see what the human saw rather than having to regex stderr.
 
+### Comparison-counting delivery notes (the denominator wave)
+
+An audit found eight confirmed paths to exit 0 with nothing actually compared. They were one
+bug with one shape: **a gate that reports its per-item verdicts and never counts them against
+what the anchor declared.** "No verdict about item X" then prints identically to "no problem
+with item X". The replay pixel gate was fixed first and in isolation; this wave promotes that
+fix to a rule every gate reads.
+
+- **The contract is shared vocabulary** (`domain/comparison-coverage.ts`): `expected`,
+  `performed`, `ungraded`, plus `comparisonShortfall` / `anchoredByComparison`. It lives in
+  `domain/` because four capabilities (replay, minigame, feel, verification) each need it and
+  none of them may import another. That predicate is now the whole of the "compared nothing"
+  guarantee, in one place rather than four.
+- **Every anchor already declares its own denominator**, so none had to be invented: a trace
+  baseline's `manifest.pngs`, a screen contract's `states[]`, a feel snapshot's
+  `manifest.metrics`, a slice verdict's `sliceEvidenceFiles(acceptance.gates)`.
+- **The refusal reads the NUMBERS, never a boolean beside them.** A gate writes its harness
+  flag and its counts in the same statement, so they agree in any report this tool produced;
+  the counts are what matter for a report it did NOT produce. Deleting a flag from a
+  hand-edited verdict cannot launder a shortfall. An absent numerator reads as ZERO; an absent
+  DENOMINATOR is "no anchor", which is a different statement and is never a pass either.
+- **A shortfall refuses at the harness tier (2), naming the shortfall PER ITEM.** A gate that
+  could not run is not evidence the game is broken.
+- **Two counting holes closed.** (1) The screen contract: a state whose rects loaded and whose
+  PNG did not fell between the two absence predicates (`captureAbsent` watches the rects, the
+  baseline loader refuses on either file) and reached exit 0 over a ~50% pixel diff against
+  the approved anchor. (2) The evidence ledger: `readEvidenceLedger` refused an ABSENT
+  `evidence` block but accepted `files: []`, and the re-hash loop iterates `files`, so trimming
+  a ledger from 4 entries to 0 took a mutated slice from `exit 2 / refused` to
+  `exit 0 / pass / anchored: true`. The rule that module documents was implemented for the
+  block and not for its contents. Moving the names into `missing` instead of deleting them
+  refuses too, or `missing` would simply become the next hiding place.
+- **`anchored` now means "this run compared something a human froze", derived from the run.**
+  `resolveUnifiedOutcome` was always sound; its INPUTS lied. Five of six sections derived
+  `anchored` from DISCOVERY (`traces.length > 0`, `asset.approvedAt !== undefined`) or from
+  parsing (`baseline.present`, set the moment a manifest parses). Discovery's opinion is a
+  PLAN, not evidence: it says an anchor existed when the row was classified, never that a
+  comparison happened against it. Flow, screens and feel now read their own run's counts; the
+  contract section additionally requires that THIS run wrote the verdict and that the verdict
+  names at least one graded gate. `tests` stays permanently unanchored, and `slices` already
+  derived from the run.
+
+### Then the attack moved: SHRINKING the denominator
+
+An adversarial review of the wave above attacked the new mechanism rather than the gates, and
+found that counting comparisons had **moved** the false green rather than removed it. You can
+no longer skip a check. You could still delete the thing you owed, and the shrunken number
+then became the positive evidence for `anchored: true`. Both were demonstrated end to end
+against real `approve` + real `verify`, and both are closed here.
+
+- **Screens (F1).** The denominator is `manifest.states`, and `loadBaselineManifest` parsed the
+  file, checked `kind`, checked the repoIdentity/projectPath pair, and stopped. Nothing walked
+  the `<id>.png` files beside it, and `pngSha256` was **write-only**: stamped at approve and
+  read nowhere in the capability. Deleting one line from `states[]` took the run from
+  `exit 2 / comparisons {expected: 2, performed: 1, ungraded: ["start"]}` to
+  `exit 0 / pass / comparisons {expected: 1, performed: 1}`, with the trimmed state's frame
+  still present in both directories. `verifyScreensBundle` now does what `verifyTraceBaseline`
+  has always done for the trace baseline: re-hash every declared frame against its stamped sha,
+  and refuse any `<id>.png` / `<id>.ui-rects.json` in the bundle the manifest does not declare.
+  It runs INSIDE the loader, so the denominator cannot be obtained without the check having
+  run, and `writeBaselineBundle` prunes stale files on every approve so an undeclared file is
+  never something an honest approve left behind.
+- **Feel (F2).** `verifySnapshotIntegrity` walked `manifest.metrics` to the frozen measurements
+  and never walked back, so a metric DELETED from the manifest had nothing left to disagree
+  with. A `runSpeed` drift of +1.0 against a 0.14 tolerance exits 1 with `total: 3`; delete
+  `runSpeed` from `manifest.metrics` and the SAME capture exits 0, `clean`, `total: 2`,
+  `anchored: true`. The reverse walk is now a named refusal. It is exact rather than heuristic
+  because `snapshot approve` freezes every measured metric, so the two sets are equal at
+  approve time by construction; a metric that was never measured (a coverage gap) is in neither
+  set and is untouched.
+
+**The general rule this wave leaves behind:** a denominator that nothing walks is a number the
+anchor asserts about itself. Every `expected` must be recomputable from artifacts on disk, by
+the same code path that reads it.
+
+#### Known-open, deliberately not widened here
+
+- **F3: the `contract` section has no denominator at all.** `anchored` is
+  `countGradedGates(verdict) > 0`, so one graded gate out of twelve satisfies it, and "graded"
+  means an evaluator ran against `ACCEPTANCE.json`, never "compared bytes a human froze". The
+  adversary could not reach exit 0 through it. The honest denominator is the contract's own
+  selected gate list; that is the follow-up.
+- **F4: `doneness` reads the evidence ledger for reporting only** and never counts it, so it
+  could summarize a ledger the slice roll-up refuses. Reachable only with a stale green
+  `verify.json`, which `unifiedVerifyRefusals` already narrows.
+- **F5: SFX gate ids are in `SUPPORTED_GATE_IDS` but not `GATE_SPECS`**, so an SFX-only slice
+  yields `expected: 0` and a vacuous coverage check. The re-grade divergence check appears to
+  cover it; confirm before adding a second mechanism.
+
 ## Out of scope
 
 - Aligning the windows OUTSIDE the settle (action dispatch round trips, anchor polling), the

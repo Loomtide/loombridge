@@ -23,12 +23,21 @@
  * 3. **Origin is RE-DERIVED per file** (`domain/evidence-origin.ts`), never read from a
  *    typed field, and it is reported rather than gated: this module's refusals are
  *    about run BINDING and byte identity, not about who wrote the file.
+ * 4. **The ledger is counted against its own denominator.** Rule 2 was implemented for
+ *    the `evidence` BLOCK and not for its CONTENTS, so `files: []` parsed, re-hashed
+ *    nothing, refused nothing, and certified. `evidenceCoverage` measures the ledger
+ *    against `sliceEvidenceFiles(acceptance.gates)`, the deterministic set that minted
+ *    it. See that function for the demonstrated false green.
  */
 
 import { createHash } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 
+import {
+  comparisonShortfall,
+  type ComparisonCoverage,
+} from "../../domain/comparison-coverage.js";
 import {
   deriveEvidenceOrigin,
   isCliWritten,
@@ -232,6 +241,86 @@ export async function staleEvidenceRefusals(args: {
           `evidence that no longer exists; re-verify: ${args.reverifyHint}`,
       );
     }
+  }
+  return refusals;
+}
+
+// ── the ledger's own denominator (the counting rule) ──────────────────────────
+
+/**
+ * The ledger's coverage of the evidence set the slice's gates DECLARE
+ * (`domain/comparison-coverage.ts`).
+ *
+ * THE DENOMINATOR IS DETERMINISTIC AND IT ALREADY EXISTED. `sliceEvidenceFiles(gates)` is
+ * the exact list `verify --slice` minted this ledger from, so "how many files should this
+ * verdict be able to name?" is answerable from the slice's own gate list, without trusting
+ * the verdict about it.
+ *
+ * WHY THIS IS THE WHOLE FIX. `readEvidenceLedger` refuses an ABSENT `evidence` block and
+ * accepts `files: []`, and `staleEvidenceRefusals` iterates `ledger.files`, so a ledger
+ * with zero entries produced zero checks and zero refusals. The rule the module's own
+ * docstring states ("An ABSENT ledger is a REFUSAL, not a legacy path") was implemented
+ * for the block and not for its contents. Demonstrated: mutate a graded evidence byte
+ * INSIDE the passing band, so the re-grade still reproduces the stored verdict, then trim
+ * `evidence.files` from 4 to 0. The roll-up went from `exit 2 / refused` to
+ * `exit 0 / pass / anchored: true`.
+ *
+ * A FILE RECORDED IN `missing` COUNTS AS NOT PERFORMED, and that closes the obvious way
+ * around this: if only "no entry at all" refused, the same hand-edit could move the names
+ * into `missing` instead of deleting them. It is also the honest reading on its own terms.
+ * `missing` means the declared input was not on disk when the gates ran, so that gate
+ * graded no bytes, and a certificate cannot rest on it. (`verify --slice` already refuses
+ * to mint a verdict whose gates did not all check, so an honest passing verdict has an
+ * empty `missing`; this is the second lock on that door, not a new rule.)
+ *
+ * EXTRA entries beyond the declared set are NOT a shortfall: they are re-hashed like any
+ * other, so they can only make the verdict harder to satisfy.
+ */
+export function evidenceCoverage(
+  ledger: EvidenceLedger,
+  declaredFiles: readonly string[],
+): ComparisonCoverage {
+  const declared = [...new Set(declaredFiles)].sort();
+  const recorded = new Set(ledger.files.map((f) => f.file));
+  const ungraded = declared.filter((file) => !recorded.has(file));
+  return {
+    expected: declared.length,
+    performed: declared.length - ungraded.length,
+    ungraded,
+  };
+}
+
+/**
+ * One refusal sentence per declared evidence file this verdict cannot account for, or an
+ * empty array when the ledger covers its denominator.
+ *
+ * REFUSES FROM THE COUNTS, then names the files. The count is what decides (deleting a
+ * field cannot launder it); the names are what an operator acts on.
+ */
+export function evidenceCoverageRefusals(args: {
+  ledger: EvidenceLedger;
+  declaredFiles: readonly string[];
+  label: string;
+  reverifyHint: string;
+}): string[] {
+  const coverage = evidenceCoverage(args.ledger, args.declaredFiles);
+  const shortfall = comparisonShortfall(coverage);
+  if (shortfall === null) return [];
+
+  const recordedMissing = new Set(args.ledger.missing);
+  const refusals = [
+    `${args.label}: this slice's gates declare ${shortfall.expected} evidence file(s) but the verdict's ledger ` +
+      `accounts for ${shortfall.performed}, so ${shortfall.expected - shortfall.performed} graded input(s) are bound ` +
+      `to no bytes at all: a verdict that cannot say which bytes it graded is no verdict. ${args.reverifyHint}`,
+  ];
+  for (const file of shortfall.ungraded) {
+    refusals.push(
+      recordedMissing.has(file)
+        ? `${args.label}: evidence file "${file}" is recorded as MISSING at grade time, so the gate that reads it ` +
+          "graded no bytes; a certificate cannot rest on an input that was not there"
+        : `${args.label}: evidence file "${file}" is declared by this slice's gates but the verdict records NO sha ` +
+          "for it, so nothing binds that gate's result to any bytes on disk",
+    );
   }
   return refusals;
 }
