@@ -17,7 +17,10 @@
  * 2. **A row that did not execute never folds into pass.** Broken, non-anchor, draft,
  *    and live-only-skipped rows all land in `notRun`, and `resolveUnifiedOutcome` is the
  *    single place that decides what that costs. Only the operator's own `--live`
- *    omission may still exit 0.
+ *    omission may still exit 0. A `--live` run additionally re-drives an UNANCHORED trace
+ *    for its FRAMES (`captureUngradedTrace`), which is what makes `record` -> `verify --live`
+ *    -> `approve` a real loop; that changes nothing about this rule, because a capture is not
+ *    a measurement and the row keeps its class and its tier.
  * 3. **Offline by default, `--live` opt-in** (D2). The dominant runtime of this door is
  *    CI, and live-by-default would make the least specific command the one most likely
  *    to hit the post-reload stall family.
@@ -362,7 +365,12 @@ export async function runUnifiedVerify(opts: UnifiedVerifyOpts): Promise<number>
     record("screens", await runSection("screens", () => screensSection(deps, opts, root, paths, screensAsset)));
   }
   const traceAssets = runnable.filter((a) => a.kind === "trace");
-  if (traceAssets.length > 0) {
+  // THE OTHER HALF OF STEP 2 OF THE LOOP. These rows are already in `notRun` with their own
+  // tier and stay there: nothing below grades them, records a section for them, or touches
+  // the outcome. They are re-driven for FRAMES, because `loombridge approve` promotes
+  // `<id>.report.json` and only a replay writes one. See `DiscoveredAsset.captureOnly`.
+  const captureOnlyTraces = assets.filter((a) => a.kind === "trace" && willCaptureOnly(a, opts.live, only));
+  if (traceAssets.length > 0 || captureOnlyTraces.length > 0) {
     // PIN THE EDITOR (F-pin). `endpoint-discovery-latest.json` is a single shared
     // pointer every running editor overwrites on its heartbeat, so an UNPINNED replay
     // drives whichever project published most recently. Observed live: identical
@@ -370,7 +378,14 @@ export async function runUnifiedVerify(opts: UnifiedVerifyOpts): Promise<number>
     // trace verb resolves the pin the same way; the unified door must not be the one
     // path that replays a demonstration against someone else's game.
     const projectPathCanonical = resolveCliProjectPin({ root });
-    record("flow", await runSection("flow", () => flowSection(deps, root, traceAssets, projectPathCanonical)));
+    if (traceAssets.length > 0) {
+      record("flow", await runSection("flow", () => flowSection(deps, root, traceAssets, projectPathCanonical)));
+    }
+    // AFTER the graded section, deliberately: the verdict-bearing work runs first, so an
+    // editor that dies during a capture-only drive cannot cost the run its measurement.
+    for (const asset of captureOnlyTraces) {
+      await captureUngradedTrace(deps, root, asset, projectPathCanonical);
+    }
   }
 
   const testsAsset = runnable.find((a) => a.kind === "test-results");
@@ -722,6 +737,92 @@ async function flowSection(
 }
 
 /**
+ * Will THIS run re-drive `asset` for frames alone? One predicate, read by the plan line and
+ * by the drive loop, so the plan cannot promise a capture the run does not perform (or stay
+ * silent about one it does).
+ *
+ * Three conditions, and each is load-bearing:
+ *
+ *  - `captureOnly` on the row: discovery decided there is nothing here to grade. Never
+ *    inferred from `runnable === "no"` alone, which also covers rows of other kinds and
+ *    future classes with no capture step at all;
+ *  - `--live`: a replay drives a running editor. Without it the row is simply not run, which
+ *    is what it has always been;
+ *  - the SELECTION. `--only tests` on a project with an unapproved trace must not start
+ *    driving that trace: the row's tier is never scoped away (F2, it stays in `notRun`), but
+ *    an operator who scoped the flow section out did not ask for an editor to be driven.
+ */
+function willCaptureOnly(
+  asset: DiscoveredAsset,
+  live: boolean,
+  only: readonly UnifiedSectionName[] | null,
+): boolean {
+  if (asset.captureOnly !== true) return false;
+  if (!live) return false;
+  return only === null || only.includes(SECTION_FOR_KIND[asset.kind]);
+}
+
+/**
+ * Re-drive ONE trace that has no anchor to grade against, for its FRAMES.
+ *
+ * THIS PRODUCES NO VERDICT, and the shape of the function is the guarantee: it returns
+ * `void`, records no section, and touches neither `executed` nor `notRun`. The row was
+ * classified before anything ran and keeps its class; a run whose only trace is capture-only
+ * still has zero executed sections and still exits 2, because capturing frames is not
+ * measuring a game. `resolveUnifiedOutcome` never learns this happened.
+ *
+ * What it changes is that the loop the on-ramp prints is now TRUE. `record` writes a trace,
+ * this writes the run report, `approve` promotes it, and the next `verify --live` grades it.
+ * Before, step 2 wrote nothing for exactly the two states a human is in right after
+ * recording: a fresh project dead-ended (`approve` refused and reprinted the same loop), and
+ * a RE-RECORDED id was worse than a dead end, because `approve` fell back to the most recent
+ * report on disk, which was the PREVIOUS demonstration's, and minted an anchor stamping the
+ * current trace's sha onto old frames at exit 0.
+ *
+ * A THROW IS THIS ROW'S PROBLEM AND NOTHING ELSE'S, the `flowSection` rule: the row is
+ * already tier 2, so an editor that could not be driven costs the run nothing it was not
+ * already paying, and the other sections keep their verdicts.
+ */
+async function captureUngradedTrace(
+  deps: UnifiedSectionDeps,
+  root: string,
+  asset: DiscoveredAsset,
+  projectPathCanonical: string | undefined,
+): Promise<void> {
+  const layout = standardReplayLayout(root);
+  console.error(
+    `${TAG} flow: trace '${asset.id}' has no anchor this run can grade against, so it is NOT GRADED. ` +
+      "Re-driving it to capture the frames `loombridge approve` promotes.",
+  );
+  // The SAME "did this run write it" rule `bindReport` uses (M5). A previous run's report
+  // left on disk is not evidence that this one captured anything, and saying so would send
+  // the operator to `approve` with a stale file: the precise failure this whole path exists
+  // to end.
+  const before = await fingerprintReport(asset.paths.report);
+  let status: string;
+  try {
+    ({ status } = await deps.runFlowTrace(layout, asset.id, { strictVisual: true, projectPathCanonical }));
+  } catch (error) {
+    console.error(
+      `${TAG} flow: trace '${asset.id}' could not be driven (harness fault, not a game defect): ${message(error)}`,
+    );
+    return;
+  }
+  if (!reportWasWritten(before, await fingerprintReport(asset.paths.report))) {
+    console.error(
+      `${TAG} flow: trace '${asset.id}' left no run report this run, so there is nothing for ` +
+        "`loombridge approve` to promote.",
+    );
+    return;
+  }
+  console.error(
+    `${TAG} flow: trace '${asset.id}' captured (drive status: ${status}); NOT GRADED, because nothing ` +
+      `human-approved was compared. Freeze these frames with: loombridge approve --id ${asset.id}`,
+  );
+  console.error(`${TAG} flow:   run report → ${path.relative(root, asset.paths.report!)}`);
+}
+
+/**
  * The stamped Unity test run, graded OFFLINE (T1/T6).
  *
  * There is no engine to delegate to and no editor to launch: `loombridge tests run` is the
@@ -1012,6 +1113,15 @@ export function planLines(
  * operator selected, and the plan must say so rather than reporting it as merely scoped out.
  */
 function disposition(asset: DiscoveredAsset, live: boolean, only: readonly UnifiedSectionName[] | null): string {
+  // A CAPTURE-ONLY ROW SAYS BOTH HALVES, because both are true and each alone is a lie. It
+  // is NOT GRADED (there is no frozen anchor, or the one on disk cannot be trusted), and this
+  // live run DOES re-drive it and leave a run report behind for `approve`. The old single
+  // clause, "will not run: this `verify --live` run captures its frames", contradicted itself
+  // in one sentence and described a capture that never happened.
+  if (asset.runnable === "no" && willCaptureOnly(asset, live, only)) {
+    const why = asset.broken ? `BROKEN: ${asset.broken}` : (asset.reason ?? "no frozen anchor");
+    return `NOT GRADED (${why}); this --live run still re-drives it and captures its frames for \`loombridge approve\``;
+  }
   if (asset.broken) return `BROKEN, will not run: ${asset.broken}`;
   if (asset.runnable === "no") return `will not run: ${asset.reason ?? "not runnable"}`;
   if (only && !only.includes(SECTION_FOR_KIND[asset.kind])) {
@@ -1074,10 +1184,15 @@ export function onRampLines(root: string, opts: { acceptanceAbsent: boolean } = 
     `${TAG} REFUSED: no verification assets found under ${root}, so nothing was checked.`,
     `${TAG} a run that checked nothing is not a pass (exit 2). No report was written.`,
     `${TAG} the cheapest universal anchor is a recorded demonstration, so ask your human to play the game once:`,
-    `${TAG}   1. loombridge trace record --id <name>             (a HUMAN plays it; this session IS the approval)`,
-    `${TAG}   2. loombridge trace replay --id <name>             (re-drive the demonstration and capture frames)`,
-    `${TAG}   3. loombridge trace approve --id <name>            (freeze those frames as the baseline)`,
-    `${TAG} then run: loombridge verify --live`,
+    // THREE STEPS, NOT FOUR, and the two that need a person are the two named as verbs. The
+    // on-ramp used to spell `trace record` -> `trace replay` -> `trace approve` -> `verify
+    // --live`, which taught a separate `trace replay` step that `verify --live` already
+    // performs: it re-drives the trace and writes the very `<id>.report.json` that approve
+    // promotes. Naming it anyway made the loop read as one command longer than it is.
+    `${TAG}   1. loombridge record                               (a HUMAN plays it; this session IS the approval)`,
+    `${TAG}   2. loombridge verify --live                        (re-drives the demonstration and captures frames)`,
+    `${TAG}   3. loombridge approve                              (freeze those frames as the baseline)`,
+    `${TAG} then run: loombridge verify --live                   (now graded against the frozen frames)`,
   ];
   // F7, THE OTHER DOOR. The on-ramp above is door two (an existing game: approve an anchor,
   // then re-measure it forever). An agent that reaches this text while BUILDING a new game

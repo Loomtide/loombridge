@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -107,6 +108,7 @@ async function writeReport(
   await fs.mkdir(reports, { recursive: true });
   const artifact = {
     traceId: id,
+    traceSha256: traceSha(id),
     status: "pass",
     resetTier: "scene-load",
     segments: [{ id: "s", status: "pass", anchorsReached: [], captures }],
@@ -128,18 +130,29 @@ async function writeTrace(root: string, id: string): Promise<string> {
   const traces = path.join(root, ".loombridge", "anchors", "traces");
   await fs.mkdir(traces, { recursive: true });
   const file = path.join(traces, `${id}.trace.json`);
-  await fs.writeFile(
-    file,
-    JSON.stringify({
-      schemaVersion: "0.1",
-      id,
-      start: { scene: "Assets/Scenes/Game.unity", reset: "scene-load" },
-      input: { backend: "ui-events" },
-      segments: [{ id: "s", actions: [] }],
-      outcome: { expected: "success" },
-    }),
-  );
+  await fs.writeFile(file, traceBody(id));
   return file;
+}
+
+/**
+ * The trace bytes, spelled ONCE so `writeReport` can stamp the sha of the demonstration its
+ * report claims to be a run of. `approve` refuses a report whose `traceSha256` is not the sha
+ * of the trace on disk, which is what stops a re-recording from promoting the previous
+ * demonstration's frames.
+ */
+function traceBody(id: string): string {
+  return JSON.stringify({
+    schemaVersion: "0.1",
+    id,
+    start: { scene: "Assets/Scenes/Game.unity", reset: "scene-load" },
+    input: { backend: "ui-events" },
+    segments: [{ id: "s", actions: [] }],
+    outcome: { expected: "success" },
+  });
+}
+
+function traceSha(id: string): string {
+  return createHash("sha256").update(Buffer.from(traceBody(id))).digest("hex");
 }
 
 // These cases never touch the Unity bridge: `--id` validation rejects before
@@ -684,7 +697,7 @@ test("trace replay: bare with NO traces REFUSES (exit 2), names `trace record`, 
       });
       assert.equal(exit, 2, `${label}: ${err}`);
       assert.match(err, /there is nothing to replay/, label);
-      assert.match(err, /loombridge trace record/, `${label}: the refusal names the recording verb`);
+      assert.match(err, /loombridge record/, `${label}: the refusal names the recording verb`);
       assert.deepEqual(bridge.calls, [], `${label}: refuses before any bridge call`);
     }
   } finally {
@@ -917,7 +930,7 @@ test("trace approve: IDENTICAL mtimes tie-break by name, the same way on every c
   }
 });
 
-test("trace approve: bare with NO reports REFUSES (exit 2), names `trace replay`, freezes nothing", async () => {
+test("trace approve: bare with NO reports REFUSES (exit 2), names the loop that produces one, freezes nothing", async () => {
   // LITMUS: delete the `if (recent === null) { … return null; }` refusal from
   // `resolveApproveTargetId` (`if (recent === null) return "";` instead) and this fails: the
   // empty id falls through to the loader, which names a path nobody typed and exits in the
@@ -940,8 +953,9 @@ test("trace approve: bare with NO reports REFUSES (exit 2), names `trace replay`
     for (const [label, root] of [["missing reports dir", missing], ["empty reports dir", empty]] as const) {
       const { exit, err } = await capturedRun(["approve", "--root", root], {});
       assert.equal(exit, 2, `${label}: ${err}`);
-      assert.match(err, /there is nothing to approve/, label);
-      assert.match(err, /loombridge trace replay/, `${label}: the refusal names the replay verb`);
+      assert.match(err, /nothing to approve/, label);
+      assert.match(err, /loombridge record/, `${label}: the refusal names the act that starts the loop`);
+      assert.match(err, /loombridge verify --live/, `${label}: …and the one that produces the run`);
       await assert.rejects(fs.access(baselinesDir(root)), `${label}: nothing was frozen`);
     }
   } finally {
@@ -1079,6 +1093,8 @@ test("trace approve: copies the run's captures to the baseline dir (exit 0)", as
     await fs.writeFile(actualPng, Buffer.from("png-bytes"));
     const artifact = {
       traceId: "demo",
+      // The binding `approve` requires: this report is a run of THAT demonstration.
+      traceSha256: traceSha("demo"),
       status: "pass",
       resetTier: "scene-load",
       segments: [

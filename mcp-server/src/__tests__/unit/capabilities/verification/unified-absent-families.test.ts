@@ -43,6 +43,7 @@ import {
 import { run as runTrace } from "../../../../capabilities/replay/trace.js";
 import { DEFAULT_DRIFT_FRACTION } from "../../../../capabilities/replay/visual-diff.js";
 import { fileExists, loombridgePaths, standardReplayLayout } from "../../../../domain/state.js";
+import { traceShaOnDisk } from "../../../_support/replay-fixtures.js";
 
 async function tmpDir(prefix: string): Promise<string> {
   return fs.mkdtemp(path.join(os.tmpdir(), prefix));
@@ -94,6 +95,8 @@ async function traceOnlyProject(): Promise<{ root: string; workspace: string }> 
     path.join(layout.replayReports, `${id}.report.json`),
     JSON.stringify({
       traceId: id,
+      // The binding `approve` requires: this report is a run of THAT demonstration.
+      traceSha256: await traceShaOnDisk(layout, id),
       status: "pass",
       resetTier: "scene-load",
       segments: [{ id: "s", status: "pass", anchorsReached: [], captures: [{ id: "cap", artifact: actualPng }] }],

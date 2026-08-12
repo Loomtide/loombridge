@@ -287,13 +287,15 @@ During `trace record`, play the flow normally in Unity, then press Enter in the 
 confirms Loombridge can drive the recorded flow again. This is a sanity check before capture; it does not
 replace the capture pack.
 
-`--aligned` belongs to the OTHER pipeline, not to this one. If you go on to freeze this trace's frames as a
-pixel baseline with `trace approve` (the ratchet loop: `trace replay` → `trace approve` → re-replay against
-the frozen frames), add `--aligned` to the replay so each capture settle runs inside the bridge's pinned tick
-loop and lands at the same game time every run. The capture pack this quickstart builds is a different
+The capture CLOCK belongs to the OTHER pipeline, not to this one. If you go on to freeze this trace's frames
+as a pixel baseline with `loombridge approve` (the ratchet loop: `loombridge record` → `loombridge verify
+--live` → `loombridge approve` → `verify --live` again), each capture settle runs inside the bridge's pinned
+tick loop and lands at the same game time every run. That is the DEFAULT now for a trace with no stamped
+baseline, so there is no flag to remember; `--aligned-fps <n>` picks a rate other than 60, and a baseline
+already approved under wall-clock keeps its own clock. The capture pack this quickstart builds is a different
 artifact: `minigame capture` drives the screens for the SCREEN CONTRACT, which grades layout and text, not
-pixels, so an aligned settle changes nothing it measures. The full rules for the flag (what it stamps into
-the baseline, what a clock mismatch refuses, and the residual it does not cover) are in the ratchet section
+pixels, so the settle clock changes nothing it measures. The full rules (what the clock stamps into the
+baseline, what a clock mismatch refuses, and the residual it does not cover) are in the ratchet section
 of the `verify` command doc.
 
 ### 3. Capture the screens

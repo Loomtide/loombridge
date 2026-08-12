@@ -20,6 +20,7 @@
  */
 
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -126,20 +127,30 @@ function pngWithBlackPixels(blackPixels: number): Buffer {
   return Buffer.concat([sig, chunk("IHDR", ihdr), chunk("IDAT", deflateSync(raw)), chunk("IEND", Buffer.alloc(0))]);
 }
 
+/**
+ * The trace bytes, spelled ONCE so a hand-built report can stamp the sha of the
+ * demonstration it claims to be a run of. `approve` refuses a report whose `traceSha256` is
+ * not the sha of the trace on disk.
+ */
+function traceBody(id: string): string {
+  return JSON.stringify({
+    schemaVersion: "0.1",
+    id,
+    start: { scene: "Assets/Scenes/Game.unity", reset: "scene-load" },
+    input: { backend: "ui-events" },
+    segments: [{ id: "s", actions: [] }],
+    outcome: { expected: "success" },
+  });
+}
+
+function traceSha(id: string): string {
+  return createHash("sha256").update(Buffer.from(traceBody(id))).digest("hex");
+}
+
 async function writeTrace(root: string, id: string): Promise<void> {
   const traces = path.join(root, ".loombridge", "anchors", "traces");
   await fs.mkdir(traces, { recursive: true });
-  await fs.writeFile(
-    path.join(traces, `${id}.trace.json`),
-    JSON.stringify({
-      schemaVersion: "0.1",
-      id,
-      start: { scene: "Assets/Scenes/Game.unity", reset: "scene-load" },
-      input: { backend: "ui-events" },
-      segments: [{ id: "s", actions: [] }],
-      outcome: { expected: "success" },
-    }),
-  );
+  await fs.writeFile(path.join(traces, `${id}.trace.json`), traceBody(id));
 }
 
 /** The capture path a report/artifact points at. */
@@ -158,6 +169,7 @@ async function writeReport(
     path.join(reports, `${id}.report.json`),
     JSON.stringify({
       traceId: id,
+      traceSha256: traceSha(id),
       status: "pass",
       resetTier: "scene-load",
       segments: [{ id: "s", status: "pass", anchorsReached: [], captures }],

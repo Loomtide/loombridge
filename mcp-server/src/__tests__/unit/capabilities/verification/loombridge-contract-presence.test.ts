@@ -479,8 +479,10 @@ test("runLoombridgeVerifyTool REFUSES (exit 2) with a verbatim headline when the
     // F7: the door-one pointer, printed because there is no acceptance contract on disk.
     assert.match(text, /loombridge plan is the other door/);
     assert.match(text, /no ACCEPTANCE\.json/);
-    // …and the door-two on-ramp is still the primary answer for an EXISTING game.
-    assert.match(text, /loombridge trace record --id <name>/);
+    // …and the door-two on-ramp is still the primary answer for an EXISTING game. It names
+    // the two HUMAN acts as top-level verbs now (`record`, `approve`), with `verify --live`
+    // between them; `trace replay` is no longer a step, because `verify --live` performs it.
+    assert.match(text, /loombridge record/);
     // A refused run writes NO verdict and NO unified report (never a fake pass).
     assert.equal(payload.verdictExists, false);
     assert.equal(payload.verdictStatus, null);
@@ -722,7 +724,7 @@ test("M-M7: the payload carries notRun/deselected as ROWS, not only as prose", a
           id: "happy-path",
           why: "non-anchor",
           reason:
-            "recorded, not approved: run `loombridge trace replay --id happy-path` then `loombridge trace approve --id happy-path`",
+            "recorded, not approved: no frozen frames to grade against yet; freeze this run's with `loombridge approve --id happy-path`",
         },
       ],
       "the skipped anchor is a ROW with its class, not a sentence in the log",

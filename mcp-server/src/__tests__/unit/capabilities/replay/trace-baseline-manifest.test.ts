@@ -23,6 +23,7 @@ import {
   verifyTraceBaseline,
 } from "../../../../capabilities/replay/trace-baseline-manifest.js";
 import { standardReplayLayout } from "../../../../domain/state.js";
+import { traceShaOnDisk } from "../../../_support/replay-fixtures.js";
 
 /** Stage a replayed-but-unapproved project: a trace, a report, and one capture PNG. */
 async function stageReplayed(id = "demo"): Promise<{ root: string; layout: ReturnType<typeof standardReplayLayout> }> {
@@ -48,6 +49,8 @@ async function stageReplayed(id = "demo"): Promise<{ root: string; layout: Retur
     path.join(layout.replayReports, `${id}.report.json`),
     JSON.stringify({
       traceId: id,
+      // The binding `approve` requires: this report is a run of THAT demonstration.
+      traceSha256: await traceShaOnDisk(layout, id),
       status: "pass",
       resetTier: "scene-load",
       segments: [{ id: "s", status: "pass", anchorsReached: [], captures: [{ id: "cap", artifact: actualPng }] }],

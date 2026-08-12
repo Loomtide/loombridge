@@ -535,6 +535,34 @@ export interface TraceBaselineIntegrityResult {
 }
 
 /**
+ * Does this baseline directory hold APPROVED FRAMES?
+ *
+ * `unstamped` (no manifest) covers two states that read identically in the integrity
+ * result and mean opposite things:
+ *
+ *  - NO FRAMES: nothing was ever approved for this trace. There is no anchor, and no
+ *    discipline to preserve, so a replay is free to choose its own clock and pacing.
+ *  - FRAMES, NO MANIFEST: a LEGACY anchor (approved before stamping existed, or one whose
+ *    manifest was lost). Those frames were captured under the only discipline that existed
+ *    then: a wall-clock settle at the demonstration's own pacing. Treating that absence as
+ *    "no opinion" and re-clocking the replay grades two disciplines against each other and
+ *    reports the phase skew as drift, which is the exact false failure the clock check
+ *    exists to prevent (observed: `diffFraction: 1`, `visualStatus: "drift"`, no fault).
+ *
+ * Lives HERE, beside the manifest reader, because "what does an absent manifest mean?" is a
+ * question about the baseline directory's own vocabulary, and the two callers that must
+ * agree about it (the clock resolver and the grader) would otherwise each keep a private
+ * copy of the predicate.
+ */
+export async function baselineHasApprovedFrames(dir: string): Promise<boolean> {
+  try {
+    return (await fs.readdir(dir)).some((entry) => entry.endsWith(".png"));
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Verify an approved trace baseline end to end, recomputing every sha from disk.
  * Modeled on `verifySnapshotIntegrity`: each check is a NAMED refusal so a caller
  * can print why, and nothing recorded in the manifest is taken on trust.

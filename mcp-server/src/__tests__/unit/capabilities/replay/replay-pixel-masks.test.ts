@@ -207,20 +207,31 @@ function gridOfRects(rects: readonly { x: number; y: number; w: number; h: numbe
   return driftGridOf(bitmapOfRects(rects), W, H);
 }
 
+/**
+ * The trace bytes, spelled ONCE so the report helper below can stamp the sha of the
+ * demonstration it claims to be a run of. `approve` refuses a report whose `traceSha256` is
+ * not the sha of the trace on disk, which is the binding that stops a re-recording from
+ * promoting the previous demonstration's frames.
+ */
+function traceBody(id: string): string {
+  return JSON.stringify({
+    schemaVersion: "0.1",
+    id,
+    start: { scene: "Assets/Scenes/Game.unity", reset: "scene-load" },
+    input: { backend: "ui-events" },
+    segments: [{ id: "s", actions: [] }],
+    outcome: { expected: "success" },
+  });
+}
+
+function traceSha(id: string): string {
+  return createHash("sha256").update(Buffer.from(traceBody(id))).digest("hex");
+}
+
 async function writeTrace(root: string, id: string): Promise<void> {
   const traces = standardReplayLayout(root).replayTraces;
   await fs.mkdir(traces, { recursive: true });
-  await fs.writeFile(
-    path.join(traces, `${id}.trace.json`),
-    JSON.stringify({
-      schemaVersion: "0.1",
-      id,
-      start: { scene: "Assets/Scenes/Game.unity", reset: "scene-load" },
-      input: { backend: "ui-events" },
-      segments: [{ id: "s", actions: [] }],
-      outcome: { expected: "success" },
-    }),
-  );
+  await fs.writeFile(path.join(traces, `${id}.trace.json`), traceBody(id));
 }
 
 function actualPngPath(root: string, id: string, capture = "cap"): string {
@@ -239,6 +250,7 @@ async function writeReport(root: string, id: string, captureIds: string[]): Prom
 function artifactFor(root: string, id = "demo", captureIds = ["cap"]): ReplayRunArtifact {
   return {
     traceId: id,
+    traceSha256: traceSha(id),
     status: "pass",
     resetTier: "scene-load",
     segments: [
@@ -780,7 +792,16 @@ test("MX3: an inflated stamped denominator is a BROKEN row in unified discovery,
     assert.equal(row.notRunClass, "broken");
     assert.match(row.broken ?? "", /the stamped frame size 200x200 is not the size of the approved frames/);
     assert.equal(row.maskedFraction, undefined, "a broken row never quotes a fraction it could not measure");
-    assert.match(planLines(root, assets, notes, true).join("\n"), /BROKEN, will not run/);
+    // THE WORD `BROKEN` LEADS IN BOTH PLANS. With no `--live` there is nothing to drive, so
+    // the row simply will not run. With `--live` it is still re-driven for FRAMES ONLY (the
+    // capture-only path that makes `record` -> `verify --live` -> `approve` re-anchorable),
+    // and the plan says NOT GRADED in the same clause, so neither reading can be mistaken
+    // for a row that graded anything.
+    assert.match(planLines(root, assets, notes, false).join("\n"), /BROKEN, will not run/);
+    assert.match(
+      planLines(root, assets, notes, true).join("\n"),
+      /NOT GRADED \(BROKEN: the stamped frame size 200x200 is not the size of the approved frames/,
+    );
   } finally {
     await fs.rm(root, { recursive: true, force: true });
     await fs.rm(workspace, { recursive: true, force: true });

@@ -47,7 +47,11 @@ import {
   workspacesRoot,
 } from "../../../domain/workspace-paths.js";
 import { discoverTraces } from "../../replay/trace.js";
-import { TRACE_BASELINE_MANIFEST, verifyTraceBaseline } from "../../replay/trace-baseline-manifest.js";
+import {
+  TRACE_BASELINE_MANIFEST,
+  baselineHasApprovedFrames,
+  verifyTraceBaseline,
+} from "../../replay/trace-baseline-manifest.js";
 import { DEFAULT_DRIFT_FRACTION, maskAnchorTerms } from "../../replay/visual-diff.js";
 import { feelPaths } from "../../feel/feel-workspace.js";
 import { FEEL_SNAPSHOT_MANIFEST, verifySnapshotIntegrity } from "../../feel/snapshot-manifest.js";
@@ -99,7 +103,7 @@ export const ASSET_KIND_CATALOG = [
   {
     kind: "trace",
     covers: "a recorded demonstration re-driven and compared pixel-for-pixel to its approved frames",
-    nextAction: "loombridge trace record --id <name>, then `trace replay`, then `trace approve`",
+    nextAction: "loombridge record, then `loombridge verify --live`, then `loombridge approve`",
   },
   {
     kind: "feel-snapshot",
@@ -277,6 +281,24 @@ export interface DiscoveredAsset {
   maskedFraction?: number;
   /** How many of those rects are scoped to ONE capture (so not every frame is hidden equally). */
   maskScopedCount?: number;
+  /**
+   * THIS ROW HAS NOTHING TO GRADE, BUT A LIVE RUN CAN STILL CAPTURE ITS FRAMES.
+   *
+   * Set IFF `runnable === "no"`, and it changes NOTHING about the calculus: the row still
+   * lands in `notRun` with its own `notRunClass` tier, still cannot contribute a pass, and
+   * still never becomes a section. What it adds is the one thing the taught loop needs and
+   * did not have. Right after `loombridge record` there is no anchor, so nothing grades; the
+   * loop's next step is `loombridge approve`, and approve promotes `<id>.report.json`, which
+   * only a replay writes. With the row simply dropped, `verify --live` wrote no report, and
+   * the operator was told to approve a run that did not exist (a fresh project dead-ends,
+   * and a RE-RECORDED id silently promoted the previous demonstration's report).
+   *
+   * So the row is driven for FRAMES ONLY: capture, write the report, grade nothing, and stay
+   * exactly as unmeasured as it was. Capturing frames must never make an unanchored trace
+   * look measured, which is why this is a separate flag rather than a fourth `runnable`
+   * value: `runnable` decides what may GRADE, and nothing here may.
+   */
+  captureOnly?: true;
   paths: DiscoveredAssetPaths;
 }
 
@@ -482,11 +504,18 @@ export async function discoverTraceAssets(root: string): Promise<DiscoveredAsset
 
     const integrity = await verifyTraceBaseline(baselineDir, { tracePath });
     if (integrity.unstamped) {
-      const hasFrames = await dirHasPng(baselineDir);
+      const hasFrames = await baselineHasApprovedFrames(baselineDir);
       row.notRunClass = "non-anchor";
+      // THE SENTENCE STATES WHAT IS NOT MEASURED, and the CAPTURE half is the plan's job to
+      // say (`disposition`), not this row's. The reason used to read "will not run: … this
+      // `verify --live` run captures its frames", a sentence that contradicts itself inside
+      // one line and was false besides: nothing captured anything, because the row was
+      // dropped before the flow section. `captureOnly` below is what makes the capture real,
+      // and the plan prints it against the row that actually gets driven.
       row.reason = hasFrames
-        ? `unstamped baseline (no ${TRACE_BASELINE_MANIFEST}): re-approve with \`loombridge trace approve --id ${id}\` to stamp what approved it`
-        : `recorded, not approved: run \`loombridge trace replay --id ${id}\` then \`loombridge trace approve --id ${id}\``;
+        ? `unstamped baseline (no ${TRACE_BASELINE_MANIFEST}): nothing here records what approved these frames, so they cannot anchor a verdict; re-freeze with \`loombridge approve --id ${id}\``
+        : `recorded, not approved: no frozen frames to grade against yet; freeze this run's with \`loombridge approve --id ${id}\``;
+      row.captureOnly = true;
       rows.push(row);
       continue;
     }
@@ -494,6 +523,13 @@ export async function discoverTraceAssets(root: string): Promise<DiscoveredAsset
       row.notRunClass = "broken";
       row.reason = "the approved baseline cannot be trusted";
       row.broken = integrity.failures.join("; ");
+      // A BROKEN ANCHOR IS ALSO A CAPTURE-ONLY ROW, and it is the shape a human hits most
+      // often: re-recording an anchored id makes the baseline's `traceSha256` disagree with
+      // the trace on disk, which is exactly "broken". That is the NORMAL way a demonstration
+      // is updated, and the loop has to leave a fresh run behind for `approve` to re-anchor
+      // from. Nothing is graded here either: the anchor is untrusted, `applyVisualDiff`
+      // refuses the pixel comparison for the same reason, and the row keeps its tier-2 class.
+      row.captureOnly = true;
       rows.push(row);
       continue;
     }
@@ -1035,14 +1071,6 @@ async function stampedProjectRoots(workspace: string): Promise<ProjectBinding[]>
 async function dirExists(dir: string): Promise<boolean> {
   try {
     return (await fs.stat(dir)).isDirectory();
-  } catch {
-    return false;
-  }
-}
-
-async function dirHasPng(dir: string): Promise<boolean> {
-  try {
-    return (await fs.readdir(dir)).some((e) => e.endsWith(".png"));
   } catch {
     return false;
   }

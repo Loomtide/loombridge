@@ -37,6 +37,7 @@ import {
 } from "../../../../capabilities/feel/snapshot-manifest.js";
 import { BASELINE_MANIFEST } from "../../../../capabilities/minigame/minigame-baseline.js";
 import { loombridgePaths, standardReplayLayout, updateState } from "../../../../domain/state.js";
+import { traceShaOnDisk } from "../../../_support/replay-fixtures.js";
 import { writeSlicePlan } from "../../../../capabilities/verification/slices.js";
 import { REPO_ROOT } from "../../../_support/paths.js";
 import { plantGitRepo } from "../../../_support/git-repo-fixture.js";
@@ -99,6 +100,8 @@ async function plantApprovedTrace(root: string, id: string): Promise<void> {
     path.join(layout.replayReports, `${id}.report.json`),
     JSON.stringify({
       traceId: id,
+      // The binding `approve` requires: this report is a run of THAT demonstration.
+      traceSha256: await traceShaOnDisk(layout, id),
       status: "pass",
       resetTier: "scene-load",
       segments: [{ id: "s", status: "pass", anchorsReached: [], captures: [{ id: "cap", artifact: actualPng }] }],
@@ -406,7 +409,7 @@ test("a recorded-but-UNAPPROVED trace is a visible non-anchor row that never exe
     assert.equal(row.runnable, "no");
     assert.equal(row.notRunClass, "non-anchor");
     assert.equal(row.broken, undefined, "unapproved is a provenance gap, not tampering");
-    assert.ok(row.reason?.includes("trace approve"), row.reason);
+    assert.ok(row.reason?.includes("loombridge approve"), row.reason);
     assert.equal(row.approvedAt, undefined);
     assert.equal(resolveUnifiedOutcome({ executed: [{ section: "contract", exit: 0, anchored: true }], notRun: [notRunFor(row)] }).exit, 2);
   } finally {
