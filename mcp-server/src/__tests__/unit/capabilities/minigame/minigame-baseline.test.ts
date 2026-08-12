@@ -541,24 +541,33 @@ test("verify --minigame: a CURRENT capture absent is INCOMPLETE, never a regress
  * the right verdict when it runs?" and never "did it run at all?". Both existing absence
  * tests grade a gate that DID run. This one grades a gate that did not.
  *
- * The scenario is the audit's, exactly: a baseline `start.png` replaced with a half-black
- * frame (a ~50% diff, 25x the 2% threshold) plus a DELETED current `start.png`. Before
- * the fix this produced `exitCode 0`, `status "pass"`, `regressions []`.
+ * The scenario is the audit's: an approved baseline whose `start` frame is half black (a
+ * ~50% diff, 25x the 2% threshold, against the white frame the game now renders) plus a
+ * DELETED current `start.png`. Before the counting fix this produced `exitCode 0`,
+ * `status "pass"`, `regressions []`.
+ *
+ * THE HALF-BLACK BASELINE IS APPROVED, NOT WRITTEN OVER (F1). The audit's own script edited
+ * `ref/start.png` in place, which `verifyScreensBundle`'s re-hash now refuses as a tampered
+ * anchor before any counting happens, and a counting guard whose fixture is rejected on
+ * other grounds is a vacuous counting guard. So the half-black frame is CAPTURED and
+ * approved (the sha is stamped for it), then the game's current frame goes back to white:
+ * the same ~50% divergence, on an anchor with clean integrity.
  *
  * LITMUS, run 2026-08-12. `compareToBaseline`'s `comparisons` stamp deleted (which is
  * exactly the pre-fix code: the per-state loop and its `continue` are untouched by this
  * change, so the ONLY thing the fix adds is the count), rebuilt, re-run:
  *
- *   ✖ MOAT: a state whose PNG is gone but whose RECTS load must never reach exit 0 (9.531667ms)
+ *   ✖ MOAT: a state whose PNG is gone but whose RECTS load must never reach exit 0 (10.822833ms)
  *     AssertionError [ERR_ASSERTION]: a comparison that did not happen is the HARNESS tier, never exit 0
  *
  *     0 !== 2
  *
  *   ℹ pass 21
- *   ℹ fail 1
+ *   ℹ fail 5
  *
  * `0 !== 2` IS the audit's finding: a ~50% pixel diff against the approved anchor, and
- * the tool exits 0. Restored: 22 pass, 0 fail.
+ * the tool exits 0. (The other four are this file's sibling counting assertions, which
+ * read the same stamp; only this one is a false GREEN.) Restored: 26 pass, 0 fail.
  */
 test("MOAT: a state whose PNG is gone but whose RECTS load must never reach exit 0", async () => {
   const root = await tmp("s6e-png-only-gap-");
@@ -575,14 +584,17 @@ test("MOAT: a state whose PNG is gone but whose RECTS load must never reach exit
     assert.equal(control.code, 0, "control: a clean pack passes");
 
     // BREAK, both halves of the audit's scenario:
-    //  1. the BASELINE 'start' frame becomes half black, so a comparison that HAPPENED
-    //     would be a loud regression;
+    //  1. the APPROVED 'start' frame is half black, so a comparison that HAPPENED would be
+    //     a loud regression against the white frame the game renders now. Captured and
+    //     re-approved rather than written over the bundle, so the anchor's integrity is
+    //     clean and this test grades the COUNT and nothing else;
     //  2. the CURRENT 'start.png' is deleted while its rects stay readable, so the
     //     comparison does not happen and `captureAbsent` never fires.
     await fs.writeFile(
-      path.join(ref, "start.png"),
+      path.join(caps, "start.png"),
       pngBuffer(W, H, (x, y) => (y < H / 2 ? [0, 0, 0] : WHITE)),
     );
+    assert.equal(await approve(root, contractPath, caps), 0, "the half-black frame is APPROVED, not injected");
     await fs.rm(path.join(caps, "start.png"));
 
     const { code, report } = await verify(root, contractPath, caps, path.join(root, "r.json"));
@@ -665,6 +677,222 @@ test("the denominator is the ANCHOR's states, so a state nobody approved is no s
       !report.cr.incompleteHarness.some((f) => f.source === "baseline" && f.detail.includes("COMPARED NOTHING")),
       `no phantom baseline shortfall: ${JSON.stringify(report.cr.incompleteHarness)}`,
     );
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+/*
+ * F1 — SHRINKING THE DENOMINATOR (the adversary's attack on the counting fix above).
+ *
+ * Counting comparisons closed "skip the check". It opened "shrink what you owe". The
+ * screens denominator is `manifest.states`, and `loadBaselineManifest` used to parse the
+ * file, check `kind`, check the repoIdentity/projectPath pair, and stop. Nothing walked the
+ * `<id>.png` files sitting beside it, so deleting one line from `states[]` made the gate
+ * stop owing a comparison it had just been caught skipping. The frozen `start.png` is still
+ * on disk in both directories; the run simply no longer mentions it.
+ *
+ * Demonstrated end to end (real approve, real `runVerifyMinigame`), on the exact fixture the
+ * test above uses:
+ *
+ *   control-clean:           exit=0 pass        comparisons={expected:2, performed:2}
+ *   the test above:          exit=2 incomplete  comparisons={expected:2, performed:1, ungraded:["start"]}
+ *   attack-manifest-trimmed: exit=0 pass        comparisons={expected:1, performed:1}
+ *
+ * The fix mirrors `verifyTraceBaseline` (`replay/trace-baseline-manifest.ts`), which has
+ * done both halves for the trace baseline all along: re-hash every declared PNG against its
+ * stamped `pngSha256`, and sweep the directory for bundle files the manifest does NOT
+ * declare. The sweep is the half that catches THIS attack, because the trimmed state's files
+ * are still there.
+ *
+ * LITMUS, run 2026-08-12. The undeclared sweep removed from `verifyScreensBundle` (the
+ * re-hash left in place, so this is precisely "one of the two halves"), rebuilt, re-run:
+ *
+ *   ✖ MOAT (F1): trimming a state out of the approved manifest must not shrink the denominator (20.193084ms)
+ *     AssertionError [ERR_ASSERTION]: a hand-trimmed anchor is a REFUSED anchor, never a smaller one
+ *
+ *     0 !== 2
+ *
+ *   ℹ pass 25
+ *   ℹ fail 1
+ *
+ * `0 !== 2` is the attack reaching exit 0. Restored: 26 pass, 0 fail.
+ */
+test("MOAT (F1): trimming a state out of the approved manifest must not shrink the denominator", async () => {
+  const root = await tmp("s6e-trimmed-anchor-");
+  const ref = path.join(root, "baseline");
+  try {
+    const contractPath = path.join(root, "c.json");
+    await writeJson(contractPath, makeContract(ref));
+    const caps = path.join(root, "caps");
+    await writeCleanPack(caps);
+    assert.equal(await approve(root, contractPath, caps), 0);
+
+    // POSITIVE CONTROL: the untouched bundle passes, and owes two comparisons.
+    const control = await verify(root, contractPath, caps, path.join(root, "control.json"));
+    assert.equal(control.code, 0, "control: a clean pack passes");
+    assert.deepEqual(control.report.baseline?.comparisons, { expected: 2, performed: 2, ungraded: [] });
+
+    // The audit's fixture: an APPROVED half-black 'start' frame (a ~50% diff, 25x the
+    // threshold, against the white frame the game renders now) plus a deleted CURRENT
+    // 'start.png'. The counting fix catches this as a shortfall. The frame is captured and
+    // re-approved rather than written into the bundle, so the anchor's integrity is clean
+    // and the attack below is the only thing this test is measuring.
+    await fs.writeFile(
+      path.join(caps, "start.png"),
+      pngBuffer(W, H, (x, y) => (y < H / 2 ? [0, 0, 0] : WHITE)),
+    );
+    assert.equal(await approve(root, contractPath, caps), 0);
+    await fs.rm(path.join(caps, "start.png"));
+    const caught = await verify(root, contractPath, caps, path.join(root, "caught.json"));
+    assert.equal(caught.code, 2, "the counting fix: a comparison that did not happen is the harness tier");
+    assert.deepEqual(caught.report.baseline?.comparisons, { expected: 2, performed: 1, ungraded: ["start"] });
+
+    // THE ATTACK: hand-edit `start` out of the manifest's `states[]`. Nothing else moves —
+    // `start.png` and `start.ui-rects.json` are still in the bundle, and the rects the
+    // gate runner reads are untouched, so every other gate still passes.
+    const manifestPath = path.join(ref, BASELINE_MANIFEST);
+    const doc = JSON.parse(await fs.readFile(manifestPath, "utf-8")) as BaselineManifest;
+    const trimmed = { ...doc, states: doc.states.filter((s) => s.id !== "start") };
+    assert.deepEqual(trimmed.states.map((s) => s.id), ["win"], "the fixture really did shrink the anchor");
+    await fs.writeFile(manifestPath, JSON.stringify(trimmed, null, 2), "utf-8");
+
+    const attack = await verify(root, contractPath, caps, path.join(root, "attack.json"));
+    assert.equal(attack.code, 2, "a hand-trimmed anchor is a REFUSED anchor, never a smaller one");
+    assert.equal(attack.report.status, "incomplete");
+    assert.deepEqual(attack.report.baseline?.regressions, [], "harness fault is never a game defect");
+    assert.equal(
+      attack.report.baseline?.comparisons,
+      undefined,
+      "a refused manifest states no denominator at all: `anchored: false` by construction",
+    );
+    assert.match(
+      attack.report.baseline?.refused ?? "",
+      /start\.png' is not declared/,
+      `the refusal must name the undeclared file: ${JSON.stringify(attack.report.baseline?.refused)}`,
+    );
+
+    // RESTORE the manifest: the bundle grades again (and is the shortfall it always was).
+    // This is what proves the guard did not simply make every baseline fail.
+    await fs.writeFile(manifestPath, JSON.stringify(doc, null, 2), "utf-8");
+    const restored = await verify(root, contractPath, caps, path.join(root, "restored.json"));
+    assert.deepEqual(restored.report.baseline?.comparisons, { expected: 2, performed: 1, ungraded: ["start"] });
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+/*
+ * F1b — THE OTHER HALF: `pngSha256` was WRITE-ONLY.
+ *
+ * It is stamped at approve (`writeBaselineBundle`) and, before this change, read nowhere in
+ * the capability: every other `pngSha256` in the tree belongs to the design-target hero
+ * shot, a different artifact. A stamped-and-never-checked field on an anchor is the
+ * "defined but not wired" shape CLAUDE.md calls a finding on its own, and it is what let an
+ * operator RE-FREEZE the anchor to match a regressed capture without ever running
+ * `baseline approve`: swap both frames for the same new bytes and the perceptual diff is
+ * zero, so the run is green against an anchor no human approved.
+ *
+ * LITMUS, run 2026-08-12. The re-hash loop removed from `verifyScreensBundle` (the
+ * undeclared sweep left in place), rebuilt, re-run:
+ *
+ *   ✖ MOAT (F1b): a declared state whose PNG bytes changed since approve is refused (8.321833ms)
+ *     AssertionError [ERR_ASSERTION]: a re-frozen anchor is not an approved anchor
+ *
+ *     0 !== 2
+ *
+ *   ℹ pass 25
+ *   ℹ fail 1
+ *
+ * Restored: 26 pass, 0 fail.
+ */
+test("MOAT (F1b): a declared state whose PNG bytes changed since approve is refused", async () => {
+  const root = await tmp("s6e-reswapped-frame-");
+  const ref = path.join(root, "baseline");
+  try {
+    const contractPath = path.join(root, "c.json");
+    await writeJson(contractPath, makeContract(ref));
+    const caps = path.join(root, "caps");
+    await writeCleanPack(caps);
+    assert.equal(await approve(root, contractPath, caps), 0);
+    assert.equal((await verify(root, contractPath, caps, path.join(root, "control.json"))).code, 0);
+
+    // THE ATTACK: 'start' regressed to a half-black frame, so re-freeze the BASELINE to the
+    // same bytes. Both files exist, both are declared, the diff is exactly zero.
+    const regressed = pngBuffer(W, H, (x, y) => (y < H / 2 ? [0, 0, 0] : WHITE));
+    await fs.writeFile(path.join(caps, "start.png"), regressed);
+    await fs.writeFile(path.join(ref, "start.png"), regressed);
+
+    const attack = await verify(root, contractPath, caps, path.join(root, "attack.json"));
+    assert.equal(attack.code, 2, "a re-frozen anchor is not an approved anchor");
+    assert.equal(attack.report.status, "incomplete");
+    assert.deepEqual(attack.report.baseline?.regressions, []);
+    assert.match(
+      attack.report.baseline?.refused ?? "",
+      /start\.png' sha256 mismatch/,
+      `the refusal must name the edited frame: ${JSON.stringify(attack.report.baseline?.refused)}`,
+    );
+
+    // The honest path: `baseline approve` re-stamps the sha, and the bundle grades again.
+    assert.equal(await approve(root, contractPath, caps), 0);
+    const reapproved = await verify(root, contractPath, caps, path.join(root, "reapproved.json"));
+    assert.equal(reapproved.code, 0, "re-approving is the change path, and it works");
+    assert.deepEqual(reapproved.report.baseline?.comparisons, { expected: 2, performed: 2, ungraded: [] });
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test("F1 false-failure check: re-approving PRUNES a state the new bundle no longer declares", async () => {
+  // The undeclared sweep would turn a real project permanently red if `approve` could leave
+  // a stale `<id>.png` behind: mark a state outcome-gated (or lose its capture) and
+  // re-approve, and the previous run's files would sit in the bundle undeclared forever.
+  // `writeBaselineBundle` prunes them, exactly as `trace baseline approve` already does.
+  //
+  // OBSERVED BEFORE THE PRUNE EXISTED, which is why this is not a hypothetical: this test
+  // failed on the very first run, against the sweep alone.
+  //
+  // LITMUS, run 2026-08-12. The `pruneUndeclaredBundleFiles` call in `writeBaselineBundle`
+  // replaced with an empty list, rebuilt, re-run:
+  //
+  //   ✖ F1 false-failure check: re-approving PRUNES a state the new bundle no longer declares (5.703166ms)
+  //     AssertionError [ERR_ASSERTION]: Missing expected rejection: the stale frame is pruned, not left undeclared
+  //
+  //   ℹ pass 25
+  //   ℹ fail 1
+  //
+  // Restored: 26 pass, 0 fail.
+  const root = await tmp("s6e-prune-stale-");
+  const ref = path.join(root, "baseline");
+  try {
+    const contractPath = path.join(root, "c.json");
+    await writeJson(contractPath, makeContract(ref));
+    const caps = path.join(root, "caps");
+    await writeCleanPack(caps);
+    assert.equal(await approve(root, contractPath, caps), 0);
+    await fs.access(path.join(ref, "win.png"));
+
+    // 'win' becomes outcome-gated: never captured, never bundled from here on.
+    await writeJson(
+      contractPath,
+      assertValidMinigameContract({
+        ...makeContract(ref),
+        states: [
+          { id: "start", kind: "start", requiredInFrame: ["btn"] },
+          { id: "win", kind: "success_reward", requiredInFrame: ["btn", "dyn"], outcomeGated: true },
+        ],
+      }),
+    );
+    await fs.rm(path.join(caps, "win.png"));
+    await fs.rm(path.join(caps, "win.ui-rects.json"));
+    await fs.rm(path.join(caps, "win.console.json"));
+    assert.equal(await approve(root, contractPath, caps), 0);
+
+    await assert.rejects(fs.access(path.join(ref, "win.png")), "the stale frame is pruned, not left undeclared");
+    await assert.rejects(fs.access(path.join(ref, "win.ui-rects.json")));
+    const { code, report } = await verify(root, contractPath, caps, path.join(root, "r.json"));
+    assert.equal(code, 0, "an outcome-gated state must not make the project permanently red");
+    assert.deepEqual(report.baseline?.comparisons, { expected: 1, performed: 1, ungraded: [] });
   } finally {
     await fs.rm(root, { recursive: true, force: true });
   }

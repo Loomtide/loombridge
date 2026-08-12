@@ -712,6 +712,53 @@ fix to a rule every gate reads.
   names at least one graded gate. `tests` stays permanently unanchored, and `slices` already
   derived from the run.
 
+### Then the attack moved: SHRINKING the denominator
+
+An adversarial review of the wave above attacked the new mechanism rather than the gates, and
+found that counting comparisons had **moved** the false green rather than removed it. You can
+no longer skip a check. You could still delete the thing you owed, and the shrunken number
+then became the positive evidence for `anchored: true`. Both were demonstrated end to end
+against real `approve` + real `verify`, and both are closed here.
+
+- **Screens (F1).** The denominator is `manifest.states`, and `loadBaselineManifest` parsed the
+  file, checked `kind`, checked the repoIdentity/projectPath pair, and stopped. Nothing walked
+  the `<id>.png` files beside it, and `pngSha256` was **write-only**: stamped at approve and
+  read nowhere in the capability. Deleting one line from `states[]` took the run from
+  `exit 2 / comparisons {expected: 2, performed: 1, ungraded: ["start"]}` to
+  `exit 0 / pass / comparisons {expected: 1, performed: 1}`, with the trimmed state's frame
+  still present in both directories. `verifyScreensBundle` now does what `verifyTraceBaseline`
+  has always done for the trace baseline: re-hash every declared frame against its stamped sha,
+  and refuse any `<id>.png` / `<id>.ui-rects.json` in the bundle the manifest does not declare.
+  It runs INSIDE the loader, so the denominator cannot be obtained without the check having
+  run, and `writeBaselineBundle` prunes stale files on every approve so an undeclared file is
+  never something an honest approve left behind.
+- **Feel (F2).** `verifySnapshotIntegrity` walked `manifest.metrics` to the frozen measurements
+  and never walked back, so a metric DELETED from the manifest had nothing left to disagree
+  with. A `runSpeed` drift of +1.0 against a 0.14 tolerance exits 1 with `total: 3`; delete
+  `runSpeed` from `manifest.metrics` and the SAME capture exits 0, `clean`, `total: 2`,
+  `anchored: true`. The reverse walk is now a named refusal. It is exact rather than heuristic
+  because `snapshot approve` freezes every measured metric, so the two sets are equal at
+  approve time by construction; a metric that was never measured (a coverage gap) is in neither
+  set and is untouched.
+
+**The general rule this wave leaves behind:** a denominator that nothing walks is a number the
+anchor asserts about itself. Every `expected` must be recomputable from artifacts on disk, by
+the same code path that reads it.
+
+#### Known-open, deliberately not widened here
+
+- **F3: the `contract` section has no denominator at all.** `anchored` is
+  `countGradedGates(verdict) > 0`, so one graded gate out of twelve satisfies it, and "graded"
+  means an evaluator ran against `ACCEPTANCE.json`, never "compared bytes a human froze". The
+  adversary could not reach exit 0 through it. The honest denominator is the contract's own
+  selected gate list; that is the follow-up.
+- **F4: `doneness` reads the evidence ledger for reporting only** and never counts it, so it
+  could summarize a ledger the slice roll-up refuses. Reachable only with a stale green
+  `verify.json`, which `unifiedVerifyRefusals` already narrows.
+- **F5: SFX gate ids are in `SUPPORTED_GATE_IDS` but not `GATE_SPECS`**, so an SFX-only slice
+  yields `expected: 0` and a vacuous coverage check. The re-grade divergence check appears to
+  cover it; confirm before adding a second mechanism.
+
 ## Out of scope
 
 - Aligning the windows OUTSIDE the settle (action dispatch round trips, anchor polling), the

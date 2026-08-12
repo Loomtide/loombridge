@@ -148,7 +148,8 @@ export interface BaselineCompareResult {
   note?: string;
   /**
    * Set IFF a manifest IS present at `ref` but was refused (unparseable, wrong kind, a
-   * half-stamped portable pair). Never a downgrade to advisory: every declared state
+   * half-stamped portable pair, or a bundle whose files no longer match what it declares:
+   * see `verifyScreensBundle`). Never a downgrade to advisory: every declared state
    * becomes an incomplete, so the run lands in the harness tier instead of reporting
    * "regression not enforced" over a baseline that exists.
    */
@@ -403,7 +404,93 @@ export type BaselineManifestLoad =
   | { status: "absent" }
   | { status: "refused"; reason: string };
 
-/** Read + shape-check a baseline manifest from `refDir`. */
+/**
+ * Verify an approved SCREENS bundle against the files on disk beside its manifest.
+ * Modeled on `verifyTraceBaseline` (`replay/trace-baseline-manifest.ts`), which has done
+ * exactly this for the trace baseline all along; the screens bundle is two files per state
+ * rather than one, so both are walked.
+ *
+ * WHY THIS EXISTS, and why it runs INSIDE the loader rather than beside it.
+ * `manifest.states` is the screens gate's DENOMINATOR: `compareToBaseline` counts every
+ * comparison it owes against it. Shape-checking the manifest and stopping made that
+ * denominator a number the manifest asserts about itself, so counting comparisons moved the
+ * attack instead of removing it: you can no longer skip a check, but you could delete the
+ * state from `states[]` and the gate stopped owing the comparison. Demonstrated end to end
+ * (real approve, real verify) on a bundle whose `start.png` was still present in BOTH
+ * directories: `exit 0`, `status "pass"`, `comparisons {expected: 1, performed: 1}`.
+ *
+ * Living in the loader is the point: every door that reads `manifest.states` reads it
+ * through here, so the denominator cannot be obtained without the check having run.
+ *
+ * TWO HALVES, BOTH REQUIRED, and each catches what the other cannot:
+ *
+ *  - RE-HASH every declared state's `<id>.png` against its stamped `pngSha256`. That field
+ *    was WRITE-ONLY before this: stamped at approve and read nowhere, which is the
+ *    "defined but not wired" shape on an anchor. Without it, re-freezing the baseline to
+ *    match a regressed capture is a silent green.
+ *  - SWEEP the directory and refuse any `<id>.png` / `<id>.ui-rects.json` the manifest does
+ *    NOT declare. This is the half that catches the trimmed manifest, because the trimmed
+ *    state's files are still sitting there. `writeBaselineBundle` prunes stale files on
+ *    every approve, so an undeclared file is never something an honest approve left behind.
+ *
+ * An ABSENT `pngSha256` is a NAMED REFUSAL with a remedy, never a skipped check: the field
+ * has been stamped by every `writeBaselineBundle` since the initial import, so no honest
+ * bundle lacks it, and "absent means skip" is the exact anti-pattern the ownership stamp
+ * and the counting rule both exist to prevent.
+ */
+export async function verifyScreensBundle(refDir: string, manifest: BaselineManifest): Promise<string[]> {
+  const failures: string[] = [];
+  const declared = new Set<string>();
+  for (const state of manifest.states) {
+    declared.add(`${state.id}.png`);
+    declared.add(`${state.id}.ui-rects.json`);
+    if (typeof state.pngSha256 !== "string" || state.pngSha256.length === 0) {
+      failures.push(
+        `approved state '${state.id}' carries no pngSha256, so its frame cannot be bound to the approval ` +
+          "(re-approve with `loombridge minigame baseline approve` to stamp it)",
+      );
+      continue;
+    }
+    let bytes: Buffer;
+    try {
+      bytes = await fs.readFile(pngPath(refDir, state.id));
+    } catch {
+      // NOT a failure here: a missing baseline frame is already the per-state `incomplete`
+      // that `compareToBaseline` reports (harness tier, named per state). Refusing the whole
+      // manifest for it would replace a precise per-state refusal with a blunt one.
+      continue;
+    }
+    if (sha256(bytes) !== state.pngSha256) {
+      failures.push(
+        `approved baseline '${state.id}.png' sha256 mismatch (edited after approve): the frame this run would ` +
+          "grade against is not the frame a human approved",
+      );
+    }
+  }
+
+  let entries: string[] = [];
+  try {
+    entries = await fs.readdir(refDir);
+  } catch (error) {
+    failures.push(`baseline dir ${refDir} is unreadable: ${errorText(error)}`);
+  }
+  for (const entry of entries.filter((e) => e.endsWith(".png") || e.endsWith(".ui-rects.json")).sort()) {
+    if (declared.has(entry)) continue;
+    failures.push(
+      `baseline file '${entry}' is not declared in ${BASELINE_MANIFEST}: the anchor was trimmed, or the ` +
+        "bundle holds a frame nobody approved (re-approve with `loombridge minigame baseline approve`)",
+    );
+  }
+  return failures;
+}
+
+/**
+ * Read, shape-check AND integrity-check a baseline manifest from `refDir`.
+ *
+ * The integrity half (`verifyScreensBundle`) is deliberately not a separate call a caller
+ * could forget: `manifest.states` is a denominator, and a denominator nothing walked is a
+ * number the anchor asserts about itself.
+ */
 export async function loadBaselineManifest(refDir: string): Promise<BaselineManifestLoad> {
   let raw: string;
   try {
@@ -430,11 +517,46 @@ export async function loadBaselineManifest(refDir: string): Promise<BaselineMani
   // shape the ownership stamp exists to prevent.
   const pairError = projectBindingPairError(m);
   if (pairError !== null) return { status: "refused", reason: `${BASELINE_MANIFEST}: ${pairError}` };
+  const integrity = await verifyScreensBundle(refDir, m);
+  if (integrity.length > 0) return { status: "refused", reason: integrity.join("; ") };
   return { status: "ok", manifest: m };
 }
 
 function sha256(bytes: Uint8Array): string {
   return createHash("sha256").update(bytes).digest("hex");
+}
+
+/**
+ * Remove every `<id>.png` / `<id>.ui-rects.json` in `refDir` that `states` does not declare.
+ * Returns the names removed. Best-effort by design: a file that cannot be removed is
+ * reported by `verifyScreensBundle` as undeclared, which refuses rather than passes.
+ */
+async function pruneUndeclaredBundleFiles(
+  refDir: string,
+  states: readonly BaselineManifestState[],
+): Promise<string[]> {
+  const keep = new Set<string>();
+  for (const s of states) {
+    keep.add(`${s.id}.png`);
+    keep.add(`${s.id}.ui-rects.json`);
+  }
+  let entries: string[];
+  try {
+    entries = await fs.readdir(refDir);
+  } catch {
+    return [];
+  }
+  const removed: string[] = [];
+  for (const entry of entries.filter((e) => e.endsWith(".png") || e.endsWith(".ui-rects.json")).sort()) {
+    if (keep.has(entry)) continue;
+    try {
+      await fs.rm(path.join(refDir, entry));
+      removed.push(entry);
+    } catch {
+      /* best-effort: an unremovable file reads as undeclared at load, which refuses */
+    }
+  }
+  return removed;
 }
 
 function isEnoent(error: unknown): boolean {
@@ -512,6 +634,19 @@ export async function writeBaselineBundle(args: {
   if (skipped.length > 0) {
     console.error(
       `[loombridge minigame] baseline: skipped ${skipped.length} uncaptured state(s) (outcome-gated or no capture present): ${skipped.join(", ")}.`,
+    );
+  }
+  // PRUNE what this approval did not promote, exactly as `trace baseline approve` does.
+  //
+  // Without it the undeclared-file sweep in `verifyScreensBundle` would turn an honest
+  // project permanently red: mark a state outcome-gated (or lose its capture) and
+  // re-approve, and the PREVIOUS approval's `<id>.png` + `<id>.ui-rects.json` would sit in
+  // the bundle undeclared forever, refusing every later run. Reproduced before this line
+  // existed: `win.png` survived a re-approve that dropped `win` from `states[]`.
+  const pruned = await pruneUndeclaredBundleFiles(refDir, states);
+  if (pruned.length > 0) {
+    console.error(
+      `[loombridge minigame] baseline: pruned ${pruned.length} file(s) this approval does not declare: ${pruned.join(", ")}.`,
     );
   }
   const manifest: BaselineManifest = {

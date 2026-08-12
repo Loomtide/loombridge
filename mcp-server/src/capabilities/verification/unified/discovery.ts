@@ -932,10 +932,14 @@ async function discoverScreenContractAsset(root: string, workspace: string): Pro
   const load = await loadBaselineManifest(baselineDir);
   if (load.status !== "ok") {
     row.notRunClass = "broken";
-    row.reason = "the approved layout baseline cannot be read";
+    // "cannot be TRUSTED", not "cannot be READ": since `verifyScreensBundle` the loader also
+    // refuses a manifest that parses perfectly and no longer matches the files it declares
+    // (an edited frame, a trimmed `states[]`). Calling that "unreadable" would send an
+    // operator looking for a corrupt file instead of a tampered anchor.
+    row.reason = "the approved layout baseline cannot be trusted";
     row.broken =
       load.status === "refused"
-        ? `${path.join(baselineDir, BASELINE_MANIFEST)} is unreadable or not a screen-contract baseline: ${load.reason}`
+        ? `${path.join(baselineDir, BASELINE_MANIFEST)} is unreadable, is not a screen-contract baseline, or no longer matches the bundle it declares: ${load.reason}`
         : `${path.join(baselineDir, BASELINE_MANIFEST)} disappeared between the presence check and the read`;
     return [row];
   }
