@@ -43,6 +43,7 @@ import {
 } from "./aligned-capture.js";
 import {
   TRACE_BASELINE_MANIFEST,
+  baselineHasApprovedFrames,
   carryForward,
   isTraceBaselineManifestError,
   loadTraceBaselineManifest,
@@ -919,8 +920,17 @@ async function resolveReplaySpeed(
  * A STAMPED BASELINE STILL WINS, IN BOTH DIRECTIONS. A manifest that exists pins a
  * discipline even when the field is absent: absent means wall-clock, which is a real answer
  * and not "no opinion". So every anchor approved before this change keeps running under the
- * clock it was approved under, and the only run whose behavior moves is one with no stamped
- * baseline at all: a first replay, or one whose baseline was never approved.
+ * clock it was approved under, and the only run whose behavior moves is one with NO APPROVED
+ * FRAMES at all: a first replay, or one whose baseline was never approved.
+ *
+ * AN APPROVED FRAME PINS THE DISCIPLINE EVEN WITH NO MANIFEST AT ALL. "No manifest" is two
+ * states wearing one word, and only one of them is "nothing was approved". A baseline dir
+ * holding PNGs and no manifest beside them is a LEGACY anchor, and its frames were taken
+ * under the only discipline that existed when they were frozen: a wall-clock settle. Reading
+ * that absence as "no opinion" and falling through to the aligned default re-clocks a real
+ * anchor and grades the phase skew as drift (observed on exactly this shape: `diffFraction: 1`,
+ * `visualStatus: "drift"`, and no harness fault to say why). See
+ * {@link baselineHasApprovedFrames}.
  *
  * THE COST IS STATED RATHER THAN HIDDEN. An aligned settle needs the bridge's
  * `replay.settle_and_capture` op (bridge >= 0.2.0), so a project pinned to an older bridge
@@ -949,13 +959,21 @@ export async function resolveAlignedCaptureFps(
   const manifest = await loadTraceBaselineManifest(baselineDir);
   const stamped = manifest !== null && !isTraceBaselineManifestError(manifest) ? manifest : null;
   // A manifest that EXISTS pins a discipline even when the field is absent: absent means
-  // wall-clock, which is a real answer and not "no opinion".
-  const stampedFps = stamped === null ? undefined : (stamped.alignedCaptureFps ?? "wall-clock");
+  // wall-clock, which is a real answer and not "no opinion". And so does an APPROVED FRAME
+  // with no manifest beside it: a legacy anchor was frozen under a wall-clock settle, and
+  // there is no third reading of those bytes.
+  const stampedFps =
+    stamped !== null
+      ? (stamped.alignedCaptureFps ?? "wall-clock")
+      : (await baselineHasApprovedFrames(baselineDir))
+        ? "wall-clock"
+        : undefined;
   if (explicit === undefined) {
     // THREE OUTCOMES, and the middle one is what keeps every existing anchor safe:
-    //   a stamped number      -> that clock (unchanged)
-    //   a stamped wall-clock  -> wall-clock (unchanged: the manifest EXISTS and said so)
-    //   no manifest at all    -> aligned at the default (the only case this changed)
+    //   a stamped number             -> that clock (unchanged)
+    //   a stamped wall-clock         -> wall-clock (unchanged: the manifest EXISTS and said so)
+    //   legacy frames, no manifest   -> wall-clock (unchanged: the FRAMES said so)
+    //   nothing approved at all      -> aligned at the default (the only case this changed)
     if (typeof stampedFps === "number") return { fps: stampedFps };
     if (stampedFps === "wall-clock") return {};
     return { fps: DEFAULT_ALIGNED_CAPTURE_FPS };
@@ -991,7 +1009,11 @@ async function replayOneTrace(
   await fs.mkdir(paths.replayReports, { recursive: true });
 
   const traceFile = opts.tracePath ?? path.join(paths.replayTraces, `${id}.trace.json`);
-  const trace = parseTrace(JSON.parse(await fs.readFile(traceFile, "utf8")));
+  // THE BYTES, ONCE, so the sha stamped on the report below is provably the sha of the
+  // demonstration this run actually drove rather than of whatever is at that path later.
+  const traceBytes = await fs.readFile(traceFile);
+  const traceSha256 = sha256(traceBytes);
+  const trace = parseTrace(JSON.parse(traceBytes.toString("utf8")));
   if (trace.id !== id) {
     console.error(
       `[loombridge trace] warning: trace id "${trace.id}" != "${id}"; using "${id}" for output paths.`,
@@ -1035,6 +1057,12 @@ async function replayOneTrace(
     ...(opts.clientFactory ? { clientFactory: opts.clientFactory } : {}),
     ...(aligned.fps !== undefined ? { alignedCaptureFps: aligned.fps } : {}),
   });
+  // WHICH DEMONSTRATION THIS RUN DROVE, as bytes rather than as a name. Stamped HERE, at the
+  // single place the trace file is read, so no caller can produce a report whose subject is
+  // only implied by a filename. `approve` refuses a report whose sha is not the sha of the
+  // trace on disk, which is what stops a re-recording from promoting the previous
+  // demonstration's frames under the new trace's identity.
+  artifact.traceSha256 = traceSha256;
   // The pacing is part of the evidence: a baseline approved from this report inherits it,
   // and applyVisualDiff refuses a pacing mismatch instead of grading phase skew.
   artifact.replaySpeed = speed;
@@ -1364,6 +1392,50 @@ async function runApprove(args: TraceArgs): Promise<number> {
     console.error(
       `[loombridge trace] cannot approve "${id}": its trace is unreadable at ` +
         `${path.relative(args.root, traceFile)} (${message(error)}). An approved baseline must bind to the demonstration it froze.`,
+    );
+    return 2;
+  }
+
+  // THE PROMOTED REPORT MUST BE A RUN OF THE TRACE ON DISK. Without this, `approve` binds an
+  // anchor to a demonstration NO STEP EVER COMPARED IT AGAINST: the sha above is re-derived
+  // from `<id>.trace.json` right now, while the frames come from whatever run happens to be
+  // sitting at `<id>.report.json`, and the two are joined only by sharing an id.
+  //
+  // The path is not exotic, it is the normal way a demonstration gets updated. Re-record
+  // `<id>` (the trace bytes change), replay nothing, run `approve`: reproduced end to end,
+  // the new manifest cited the NEW trace's sha over the PREVIOUS run's frames, exited 0, and
+  // `verifyTraceBaseline` passed on every later verify because the only thing it can check is
+  // that the frames still hash to what the manifest says and that the trace still hashes to
+  // what the manifest says. Both were true. The lie was that they had ever met.
+  //
+  // ABSENT IS A REFUSAL, NOT A SKIP (the gate-predicate rule). A report with no `traceSha256`
+  // predates this binding, or was hand-written; either way nothing binds it to a
+  // demonstration, and `if (sha && sha !== ours)` would let deleting one field buy an
+  // approval. The remedy is one command and it is named.
+  const reportTraceSha256 = parsed.traceSha256;
+  if (typeof reportTraceSha256 !== "string") {
+    console.error(
+      `[loombridge trace] cannot approve "${id}": ${rel} does not record WHICH demonstration it was ` +
+        "produced from (no traceSha256), so nothing binds those frames to the trace this approval would " +
+        "stamp them under. Reports written before that binding existed cannot be promoted.",
+    );
+    console.error(
+      `[loombridge trace]   re-drive the demonstration first: \`loombridge verify --live\` (or ` +
+        `\`loombridge trace replay --id ${id}\`), then approve.`,
+    );
+    return 2;
+  }
+  if (reportTraceSha256 !== traceSha256) {
+    console.error(
+      `[loombridge trace] cannot approve "${id}": ${rel} is a run of a DIFFERENT demonstration ` +
+        `(the run drove trace ${reportTraceSha256.slice(0, 12)}…; ` +
+        `${path.relative(args.root, traceFile)} is now ${traceSha256.slice(0, 12)}…). ` +
+        "Approving would freeze that older run's frames as the anchor for the trace on disk, and every " +
+        "later verify would pass against frames the current demonstration never produced.",
+    );
+    console.error(
+      `[loombridge trace]   re-drive the demonstration you just recorded: \`loombridge verify --live\` ` +
+        `(or \`loombridge trace replay --id ${id}\`), then approve.`,
     );
     return 2;
   }
@@ -2148,7 +2220,42 @@ export async function applyVisualDiff(
   // re-ran, and met the next. Every reason is collected and printed together.
   const baselineFaults: string[] = [];
   if (integrity.unstamped) {
-    // Legacy baseline (or none yet): default terms, no fault.
+    // LEGACY BASELINE (or none yet): default terms. But "no manifest" is two states, and the
+    // one with FRAMES on disk is a real anchor whose comparison terms are known even though
+    // nothing wrote them down: those frames were frozen under a wall-clock settle at the
+    // demonstration's own pacing, because that is all there was. Reading the absence as "no
+    // terms, grade at the defaults" is how a run captured under a pinned tick loop came to be
+    // compared, pixel for pixel, against frames taken under a sleep: observed as
+    // `diffFraction: 1`, `visualStatus: "drift"`, no `visualHarnessFault`, i.e. phase skew
+    // reported as a game defect. That is a FALSE FAILURE, and it is precisely what the
+    // stamped-anchor clock check below exists to refuse.
+    //
+    // The default path never reaches this fault: `resolveAlignedCaptureFps` reads the same
+    // predicate and keeps a legacy anchor on wall-clock. It fires when an EXPLICIT flag (or a
+    // hand-written report) contradicts the frames, which is a refusal and never a skip.
+    if (await baselineHasApprovedFrames(baselineDir)) {
+      const runClock = artifact.alignedCaptureFps;
+      if (runClock !== undefined) {
+        baselineFaults.push(
+          `the approved frames carry no ${TRACE_BASELINE_MANIFEST}, so the only discipline they can be ` +
+            `read as is ${clockDisciplineText(undefined)}, but this run captured under ` +
+            `${clockDisciplineText(runClock)}; frames taken under different capture clocks are ` +
+            "phase-incomparable. Re-run without an explicit capture clock, or approve from this run's " +
+            "report to stamp the anchor with the clock it was really taken under",
+        );
+      }
+      // The PACING half of the same fact, and the same reasoning: an unstamped anchor's frames
+      // were captured at the demonstration's own pacing (1x), so a `--speed` run grades a
+      // different animation phase against them.
+      const runSpeed = artifact.replaySpeed ?? 1;
+      if (runSpeed !== 1) {
+        baselineFaults.push(
+          `the approved frames carry no ${TRACE_BASELINE_MANIFEST}, so the only pacing they can be read ` +
+            `as is 1x, but this run replayed at ${runSpeed}x; re-run at 1x, or approve from this run's ` +
+            `report to re-anchor at ${runSpeed}x`,
+        );
+      }
+    }
   } else if (!integrity.ok) {
     baselineFaults.push(integrity.failures.join("; "));
   } else {

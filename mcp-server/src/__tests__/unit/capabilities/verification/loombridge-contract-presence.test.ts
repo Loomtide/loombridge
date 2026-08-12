@@ -724,7 +724,7 @@ test("M-M7: the payload carries notRun/deselected as ROWS, not only as prose", a
           id: "happy-path",
           why: "non-anchor",
           reason:
-            "recorded, not approved: this `verify --live` run captures its frames; freeze them with `loombridge approve --id happy-path`",
+            "recorded, not approved: no frozen frames to grade against yet; freeze this run's with `loombridge approve --id happy-path`",
         },
       ],
       "the skipped anchor is a ROW with its class, not a sentence in the log",

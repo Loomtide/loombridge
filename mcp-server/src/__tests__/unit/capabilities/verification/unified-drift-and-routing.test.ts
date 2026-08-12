@@ -25,6 +25,7 @@ import { FEEL_SNAPSHOT_MANIFEST } from "../../../../capabilities/feel/snapshot-m
 import { feelPaths } from "../../../../capabilities/feel/feel-workspace.js";
 import { BASELINE_MANIFEST } from "../../../../capabilities/minigame/minigame-baseline.js";
 import { standardReplayLayout } from "../../../../domain/state.js";
+import { traceShaOnDisk } from "../../../_support/replay-fixtures.js";
 import { plantGitRepo } from "../../../_support/git-repo-fixture.js";
 import type { UnifiedVerifyReport } from "../../../../capabilities/verification/unified/report.js";
 
@@ -69,6 +70,8 @@ async function projectWithApprovedTrace(id = "happy-path"): Promise<string> {
     path.join(layout.replayReports, `${id}.report.json`),
     JSON.stringify({
       traceId: id,
+      // The binding `approve` requires: this report is a run of THAT demonstration.
+      traceSha256: await traceShaOnDisk(layout, id),
       status: "pass",
       resetTier: "scene-load",
       segments: [{ id: "s", status: "pass", anchorsReached: [], captures: [{ id: "cap", artifact: actual }] }],

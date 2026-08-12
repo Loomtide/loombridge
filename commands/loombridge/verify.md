@@ -43,13 +43,26 @@ loombridge verify --root . --only screens # ONE section (CI granularity); never 
 - **No assets at all** prints the on-ramp (`loombridge record` → `verify --live` →
   `loombridge approve`, then `verify --live` again) and exits `2`. Recording is a **human**
   step: the play session *is* the approval moment. Do not claim it as an agent action.
-- **There is no separate replay step, and there never was one you needed.** `verify --live`
-  drives each approved trace and writes `<id>.report.json`, which is exactly the file
-  `approve` promotes. `trace replay` is the low-level door for re-driving ONE trace on its
-  own; reach for `verify --live` in the loop. The two verbs a human types daily are
-  `loombridge record` and `loombridge approve` (the same doors as `trace record` /
-  `trace approve`), because a person is needed at exactly two moments: demonstrating and
-  approving.
+- **There is no separate replay step.** `verify --live` drives the traces and writes
+  `<id>.report.json`, which is exactly the file `approve` promotes. `trace replay` is the
+  low-level door for re-driving ONE trace on its own; reach for `verify --live` in the loop.
+  The two verbs a human types daily are `loombridge record` and `loombridge approve` (the same
+  doors as `trace record` / `trace approve`), because a person is needed at exactly two
+  moments: demonstrating and approving.
+- **A trace with nothing to grade against is still DRIVEN by `--live`, for its frames, and is
+  still not measured.** A freshly recorded trace has no anchor, and a re-recorded one has an
+  anchor bound to the *previous* demonstration. Both are rows that cannot contribute a pass
+  and both stay in `NOT MEASURED` with the harness tier; what `--live` adds is that it
+  captures their frames and writes the run report, so `approve` has something of *this*
+  demonstration to freeze. The plan says both halves on one line
+  (`NOT GRADED (…); this --live run still re-drives it and captures its frames`), and a run
+  whose only trace is such a row still exits `2`: capturing frames is never measuring.
+- **`approve` refuses a report that is not a run of the trace on disk.** The report records
+  which demonstration produced it, and `approve` re-derives the same sha from
+  `<id>.trace.json` before it stamps anything. So re-recording a trace and approving without
+  re-driving is refused (exit `2`) instead of freezing the previous demonstration's frames
+  under the new trace's identity. A report with no such stamp at all is refused too: an absent
+  binding is not a binding. Either way the fix is one command, `verify --live`.
 - **Pixel drift can be TOLERATED, only by a human, only up to 2%.** A game that animates
   under its own clock cannot hold a frozen frame to the 0.5% default, so `loombridge trace
   tolerance --id <id> --set <fraction>` stamps a per-trace allowance onto the approved
@@ -81,10 +94,14 @@ loombridge verify --root . --only screens # ONE section (CI granularity); never 
   editor happens to tick, so every run captures a different animation phase and the pixel gate
   reads that skew as drift. An aligned settle is ONE bridge op that advances a fixed frame
   count at a pinned game-time step and captures on the exact frame the settle completes. A
-  replay with **no stamped baseline** now runs aligned at 60 fps without anyone typing a flag;
-  `--aligned-fps <n>` (integer 10 to 120) picks another rate. A **stamped baseline always
+  replay with **nothing approved yet** now runs aligned at 60 fps without anyone typing a flag;
+  `--aligned-fps <n>` (integer 10 to 120) picks another rate. **An approved frame always
   wins**, in both directions, so an anchor approved under wall-clock keeps replaying under
-  wall-clock and no existing anchor changes discipline. Alignment removes the drift instead of
+  wall-clock and no existing anchor changes discipline. That includes a **legacy** baseline
+  whose manifest is missing entirely: approved frames with no manifest beside them were frozen
+  under a wall-clock settle (there was nothing else), so they keep it, and a run that
+  contradicts them with an explicit `--aligned-fps` is a **harness fault** rather than a graded
+  comparison across two disciplines. Alignment removes the drift instead of
   consenting to it, so it comes before a tolerance or a mask. The clock is **part of the
   anchor**: `approve` stamps the run's clock into the baseline, later replays inherit it with
   no flag, and a run under a *different* clock (including an unaligned one against an aligned

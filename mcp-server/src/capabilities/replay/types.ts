@@ -426,6 +426,23 @@ export interface ConsoleResult {
 /** The report a replay run emits for one trace. */
 export interface ReplayReport {
   traceId: string;
+  /**
+   * sha256 of the TRACE FILE BYTES this run was driven from, stamped by the one function
+   * that reads them (`replayOneTrace`).
+   *
+   * THE REPORT IS EVIDENCE ABOUT A DEMONSTRATION, and until this field existed it named the
+   * demonstration only by id. An id is a file NAME, and a re-recording replaces the bytes
+   * behind it: `approve` would then promote a report produced from the PREVIOUS
+   * demonstration while stamping the CURRENT trace's sha onto its frames, minting an anchor
+   * that `verifyTraceBaseline` accepts forever after (reproduced: the new anchor cited the
+   * new trace and held the old run's frames, exit 0, clean on every later verify).
+   *
+   * OPTIONAL IN THE TYPE, REFUSED AT THE GATE. Reports written before this field existed
+   * parse (nothing else reads it), and `approve` REFUSES an absent value rather than
+   * skipping the binding: a check a missing field can switch off is not a check. The remedy
+   * is one command, `verify --live` or `trace replay`, which writes a bound report.
+   */
+  traceSha256?: string;
   status: ReplayStatus;
   /** The reset strategy used, or null if replay never reset (blocked early). */
   resetTier: ResetTier | null;

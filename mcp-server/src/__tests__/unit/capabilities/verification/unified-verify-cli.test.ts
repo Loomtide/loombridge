@@ -52,6 +52,7 @@ import {
   type FeelSnapshotManifest,
 } from "../../../../capabilities/feel/snapshot-manifest.js";
 import { fileExists, loombridgePaths, readState, standardReplayLayout } from "../../../../domain/state.js";
+import { traceShaOnDisk } from "../../../_support/replay-fixtures.js";
 import { REPO_ROOT } from "../../../_support/paths.js";
 
 async function tmpDir(prefix: string): Promise<string> {
@@ -156,6 +157,8 @@ async function plantApprovedTrace(root: string, id: string): Promise<void> {
     path.join(layout.replayReports, `${id}.report.json`),
     JSON.stringify({
       traceId: id,
+      // The binding `approve` requires: this report is a run of THAT demonstration.
+      traceSha256: await traceShaOnDisk(layout, id),
       status: "pass",
       resetTier: "scene-load",
       segments: [{ id: "s", status: "pass", anchorsReached: [], captures: [{ id: "cap", artifact: actualPng }] }],

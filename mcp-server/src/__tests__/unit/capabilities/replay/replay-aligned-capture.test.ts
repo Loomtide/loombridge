@@ -45,6 +45,7 @@ import {
   applyVisualDiff,
   printSummary,
   replayExitCode,
+  resolveAlignedCaptureFps,
   run as runTrace,
   scaleTraceSettles,
 } from "../../../../capabilities/replay/trace.js";
@@ -525,22 +526,22 @@ test("approve RE-DERIVES the capture clock from the report, so re-anchoring work
     await fs.mkdir(path.dirname(actual), { recursive: true });
     await fs.writeFile(actual, png);
     await fs.mkdir(paths.replayTraces, { recursive: true });
-    await fs.writeFile(
-      path.join(paths.replayTraces, "demo.trace.json"),
-      JSON.stringify({
-        schemaVersion: "0.1",
-        id: "demo",
-        start: { scene: "Assets/Scenes/Game.unity", reset: "scene-load" },
-        input: { backend: "ui-events" },
-        segments: [{ id: "s", actions: [] }],
-        outcome: { expected: "success" },
-      }),
-    );
+    const traceBody = JSON.stringify({
+      schemaVersion: "0.1",
+      id: "demo",
+      start: { scene: "Assets/Scenes/Game.unity", reset: "scene-load" },
+      input: { backend: "ui-events" },
+      segments: [{ id: "s", actions: [] }],
+      outcome: { expected: "success" },
+    });
+    await fs.writeFile(path.join(paths.replayTraces, "demo.trace.json"), traceBody);
     const writeReport = async (alignedCaptureFps?: number): Promise<void> => {
       await fs.mkdir(paths.replayReports, { recursive: true });
+      // The binding `approve` requires: this report is a run of THAT demonstration.
+      const bound = { traceSha256: sha256(Buffer.from(traceBody)) };
       await fs.writeFile(
         path.join(paths.replayReports, "demo.report.json"),
-        `${JSON.stringify(artifactWith(actual, png, alignedCaptureFps === undefined ? {} : { alignedCaptureFps }), null, 2)}\n`,
+        `${JSON.stringify(artifactWith(actual, png, alignedCaptureFps === undefined ? bound : { ...bound, alignedCaptureFps }), null, 2)}\n`,
       );
     };
     const manifest = async (): Promise<TraceBaselineManifest> => {
@@ -893,6 +894,135 @@ test("COMPOSITION: a baseline stamped WALL-CLOCK still replays wall-clock (exist
   }
 });
 
+test("COMPOSITION: a LEGACY baseline (frames, no manifest) keeps wall-clock, and is never graded under another clock", async () => {
+  // THE NINTH STATE. "No stamped baseline" reads as one thing and is two: a trace nothing has
+  // ever approved (no anchor, no phase to preserve, free to take the new aligned default),
+  // and a LEGACY ANCHOR: approved frames whose manifest predates stamping or was lost. The
+  // compatibility promise is "no existing anchor changes discipline", and the second one is
+  // an existing anchor.
+  //
+  // Reproduced against the PR head before the fix, on exactly this shape: the run took the
+  // aligned default at 60, `applyVisualDiff` short-circuited the clock comparison for an
+  // unstamped baseline, and the frames were graded pixel-for-pixel across two disciplines:
+  //   resolveAlignedCaptureFps → {"fps":60}
+  //   capture: { visualStatus: 'drift', diffFraction: 1 }
+  //   visualHarnessFault: undefined | exitTier: 1
+  // Phase skew reported as a GAME DEFECT, which is the exact false failure the clock check
+  // exists to prevent.
+  const root = await tmpRoot();
+  try {
+    const paths = standardReplayLayout(root);
+    const png = tinyPng(10);
+    await writeTrace(paths, 5);
+    const baselineDir = path.join(paths.replayBaselines, "demo");
+    await fs.mkdir(baselineDir, { recursive: true });
+    await fs.writeFile(path.join(baselineDir, "cap.png"), png);
+    // Deliberately NO manifest: that is what makes this the legacy shape.
+
+    // (a) THE DEFAULT KEEPS WALL-CLOCK. The frames say which discipline they were frozen
+    // under, even though nothing wrote it down: the only one that existed then.
+    assert.deepEqual(await resolveAlignedCaptureFps(paths, "demo", undefined), {});
+    const { factory, calls } = scriptedClient(driveHandlers(png));
+    const first = await captured(() =>
+      runTrace(["replay", "--id", "demo", "--root", root, "--no-html"], { clientFactory: factory }),
+    );
+    assert.equal(first.value, 0, first.out);
+    assert.equal(
+      calls.some((c) => c.command === "replay.settle_and_capture"),
+      false,
+      "a legacy anchor must never be silently re-clocked by the new default",
+    );
+    const graded = JSON.parse(
+      await fs.readFile(path.join(paths.replayReports, "demo.report.json"), "utf-8"),
+    ) as ReplayRunArtifact;
+    assert.equal(graded.alignedCaptureFps, undefined);
+    assert.notEqual(graded.visualHarnessFault, true, first.out);
+    assert.equal(graded.segments[0]!.captures[0]!.visualStatus, "match", "the same clock, so the gate really ran");
+
+    // (b) AND AN EXPLICIT CLOCK IS REFUSED, NOT GRADED. The default above never reaches this
+    // branch, so it is a refusal on the one path that can still contradict the frames.
+    const second = await captured(() =>
+      runTrace(
+        ["replay", "--id", "demo", "--root", root, "--no-html", "--aligned-fps", "60", "--strict-visual"],
+        { clientFactory: scriptedClient(driveHandlers(png)).factory },
+      ),
+    );
+    assert.equal(second.value, 2, `a clock the anchor never approved is the HARNESS tier: ${second.out}`);
+    const refused = JSON.parse(
+      await fs.readFile(path.join(paths.replayReports, "demo.report.json"), "utf-8"),
+    ) as ReplayRunArtifact;
+    assert.equal(refused.visualHarnessFault, true);
+    assert.match(refused.visualHarnessFaultReason ?? "", /phase-incomparable/);
+    assert.equal(
+      refused.segments[0]!.captures[0]!.visualStatus,
+      "not-compared",
+      "never `drift`: a clock change is not a game defect",
+    );
+
+    // (c) THE PACING HALF OF THE SAME FACT. An unstamped anchor's frames were captured at the
+    // demonstration's own pacing, so a `--speed` run sits at a different animation phase for
+    // exactly the same reason a different clock does, and is refused the same way.
+    const paced = await captured(() =>
+      runTrace(
+        ["replay", "--id", "demo", "--root", root, "--no-html", "--speed", "4", "--strict-visual"],
+        { clientFactory: scriptedClient(driveHandlers(png)).factory },
+      ),
+    );
+    assert.equal(paced.value, 2, paced.out);
+    const pacedReport = JSON.parse(
+      await fs.readFile(path.join(paths.replayReports, "demo.report.json"), "utf-8"),
+    ) as ReplayRunArtifact;
+    assert.equal(pacedReport.visualHarnessFault, true);
+    assert.match(pacedReport.visualHarnessFaultReason ?? "", /the only pacing they can be read as is 1x/);
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+/*
+ * LITMUS for the legacy-anchor clock, both halves, performed on the REAL source, rebuilt and
+ * re-run each time, then restored. They fail INDEPENDENTLY, which is the point: the resolver
+ * keeps the common path honest and the grader refuses the one path that can still contradict
+ * the frames.
+ *
+ * BREAK A: let the resolver fall through to the aligned default again.
+ * `capabilities/replay/trace.ts`, `resolveAlignedCaptureFps`:
+ *     -      : (await baselineHasApprovedFrames(baselineDir))
+ *     -        ? "wall-clock"
+ *     -        : undefined;
+ *     +      : undefined;
+ *   OBSERVED VERBATIM:
+ *     ✖ COMPOSITION: a LEGACY baseline (frames, no manifest) keeps wall-clock, and is never graded under another clock
+ *       AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+ *       + actual - expected
+ *
+ *       + {
+ *       +   fps: 60
+ *       + }
+ *       - {}
+ *
+ * BREAK B: keep the resolver, remove the grader's refusal.
+ * `capabilities/replay/trace.ts`, `applyVisualDiff`, the `integrity.unstamped` branch:
+ *     -    if (await baselineHasApprovedFrames(baselineDir)) { … }
+ *     +    // LITMUS: the grader half removed; the resolver default still keeps wall-clock.
+ *   OBSERVED VERBATIM:
+ *     ✖ COMPOSITION: a LEGACY baseline (frames, no manifest) keeps wall-clock, and is never graded under another clock
+ *       AssertionError [ERR_ASSERTION]: a clock the anchor never approved is the HARNESS tier:
+ *       [loombridge trace] capture clock differs from the baseline (approved wall-clock (unaligned),
+ *       running aligned 60 fps): the pixel gate is NOT graded this run; approve from this report to re-anchor.
+ *       [loombridge trace] capture-aligned replay at 60 fps: each settle runs inside the bridge's pinned
+ *       tick loop and the frame is taken on the frame the settle completes.
+ *       [loombridge trace] physics steps 5 times every 6 frame(s) at 60 fps (fixedDeltaTime 0.02);
+ *       feel-sensitive traces may differ from the recording
+ *       [loombridge trace] demo: PASS
+ *       [loombridge trace] report → .loombridge/run/replays/reports/demo.report.json (run finished …)
+ *
+ *
+ *       0 !== 2
+ *   Note what that run printed: the resolver ANNOUNCED the mismatch and the grade-time reader
+ *   went ahead and passed it anyway. A warning nothing enforces is the shape this closes.
+ */
+
 test("COMPOSITION: --aligned-fps on the command line reaches the op too", async () => {
   const root = await tmpRoot();
   try {
@@ -962,8 +1092,10 @@ async function approvable(
   const actual = path.join(paths.replayReports, "demo", "actual", "cap.png");
   await fs.mkdir(path.dirname(actual), { recursive: true });
   await fs.writeFile(actual, png);
-  await writeTrace(paths, 100);
-  const artifact = artifactWith(actual, png, reportOver);
+  const traceBody = await writeTrace(paths, 100);
+  // The binding `approve` requires: this report is a run of THAT demonstration. A caller may
+  // still override it deliberately (that is what the mismatch tests do).
+  const artifact = artifactWith(actual, png, { traceSha256: sha256(Buffer.from(traceBody)), ...reportOver });
   Object.assign(artifact.segments[0]!.captures[0]!, captureOver);
   await fs.mkdir(paths.replayReports, { recursive: true });
   await fs.writeFile(

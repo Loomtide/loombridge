@@ -30,6 +30,7 @@ import path from "node:path";
 import { loombridgePaths } from "../../domain/state.js";
 import { projectWorkspace, sanitizeWorkspaceId } from "../../domain/workspace-paths.js";
 import { feelPaths } from "../feel/feel-workspace.js";
+import { SNAPSHOT_CONTRACT_FILE, SNAPSHOT_MEASUREMENTS_FILE } from "../feel/snapshot-manifest.js";
 import { designStatus } from "../verification/design.js";
 
 /** One other approvable artifact, visible on disk right now. */
@@ -42,14 +43,36 @@ export interface ApprovableAlternative {
   where: string;
 }
 
-/** True when `dir` exists and is a directory holding at least one entry. */
-async function nonEmptyDir(dir: string): Promise<boolean> {
-  try {
-    const entries = await fs.readdir(dir);
-    return entries.length > 0;
-  } catch {
-    return false;
+/**
+ * What the detectors managed to do, so the refusal can state a check it really performed.
+ *
+ * `checked` and `unchecked` are DISJOINT and together name every detector, so "we looked and
+ * found nothing" and "we could not look" can never print as the same sentence. The old
+ * refusal said `(checked: the Design Target hero shot, a staged feel-snapshot candidate)`
+ * from a hard-coded string, while both detectors swallowed their errors: an unreadable design
+ * directory produced a claim to have checked it.
+ */
+export interface ApprovableAlternativesResult {
+  found: ApprovableAlternative[];
+  /** Human names of the detectors that completed (whether or not they found anything). */
+  checked: string[];
+  /** Human names of the detectors that could NOT complete, each with its reason. */
+  unchecked: { what: string; why: string }[];
+}
+
+const DESIGN_TARGET_DETECTOR = "the Design Target hero shot";
+const FEEL_CANDIDATE_DETECTOR = "a staged feel-snapshot candidate";
+
+/** True when every named file exists under `dir`. */
+async function hasAll(dir: string, files: readonly string[]): Promise<boolean> {
+  for (const file of files) {
+    try {
+      await fs.access(path.join(dir, file));
+    } catch {
+      return false;
+    }
   }
+  return true;
 }
 
 /**
@@ -57,15 +80,40 @@ async function nonEmptyDir(dir: string): Promise<boolean> {
  *
  * Never throws: this runs inside a refusal path, and a detector that blew up would replace a
  * useful "here is what else you could mean" with a stack trace about the thing the operator
- * did NOT ask for.
+ * did NOT ask for. A detector that failed is REPORTED as unchecked rather than silently
+ * counted as "looked, found nothing".
+ *
+ * DETECTION REQUIRES THE ARTIFACT, NOT A DIRECTORY. The feel probe used to accept any
+ * non-empty directory, so a lone `.DS_Store` (or a candidate dir a previous capture created
+ * and then failed to fill) made the refusal advertise `loombridge feel snapshot approve` for
+ * a candidate that does not exist: the operator runs the command this text handed them and
+ * gets a second refusal. The files it looks for are the two `feel snapshot approve` itself
+ * refuses without, named by the owning capability's own constants.
  *
  * `minigame baseline approve` is deliberately absent. It takes `--contract` and `--captures`
  * pointing at a workspace this verb was never told about, so there is nothing on disk to
  * detect from a project root; the caller names it as prose instead of pretending to have
  * looked.
  */
-export async function approvableAlternatives(root: string): Promise<ApprovableAlternative[]> {
+export async function approvableAlternatives(
+  root: string,
+  opts: {
+    /**
+     * The resolved workspace DIRECTORY to look in, overriding the one derived from the
+     * project folder name.
+     *
+     * Injectable for the same reason `discoverVerificationAssets` takes `workspacesRoot`:
+     * without it the only reachable workspace is the one under the real `$HOME`, so the
+     * detector below would either be untested or "tested" against a directory the shipped
+     * code never reads. Production omits it and derives, which is the path the tests then
+     * exercise separately through the derivation itself.
+     */
+    workspace?: string;
+  } = {},
+): Promise<ApprovableAlternativesResult> {
   const found: ApprovableAlternative[] = [];
+  const checked: string[] = [];
+  const unchecked: { what: string; why: string }[] = [];
   const paths = loombridgePaths(root);
 
   // The Design Target hero shot. Offered when a target EXISTS but is not a ready one: a
@@ -83,30 +131,48 @@ export async function approvableAlternatives(root: string): Promise<ApprovableAl
         where: path.relative(root, paths.design) || paths.design,
       });
     }
-  } catch {
-    // A design directory we cannot read is not an alternative we can honestly offer.
+    checked.push(DESIGN_TARGET_DETECTOR);
+  } catch (error) {
+    // A design directory we cannot read is not an alternative we can honestly offer, AND it
+    // is not a check we may claim to have made.
+    unchecked.push({ what: DESIGN_TARGET_DETECTOR, why: message(error) });
   }
 
   // A staged tuning-snapshot candidate. It lives in the per-project WORKSPACE, outside the
   // repo, and the id is derived exactly the way `feel snapshot` derives it with no --workspace
   // typed, so the path printed here is the one that verb would use.
   try {
-    const wsId = sanitizeWorkspaceId(path.basename(path.resolve(root)));
-    if (wsId) {
-      const candidateDir = feelPaths(projectWorkspace(wsId)).snapshotCandidateDir;
-      if (await nonEmptyDir(candidateDir)) {
+    const derivedFrom = path.basename(path.resolve(root));
+    const wsId = sanitizeWorkspaceId(derivedFrom);
+    const workspace = opts.workspace ?? (wsId === undefined ? undefined : projectWorkspace(wsId));
+    if (workspace === undefined) {
+      // No derivable workspace id means there is no directory to look in, which is a gap in
+      // the LOOK rather than an answer about what is on disk.
+      unchecked.push({
+        what: FEEL_CANDIDATE_DETECTOR,
+        why: `no workspace id derives from the project folder name '${derivedFrom}'`,
+      });
+    } else {
+      const candidateDir = feelPaths(workspace).snapshotCandidateDir;
+      if (await hasAll(candidateDir, [SNAPSHOT_MEASUREMENTS_FILE, SNAPSHOT_CONTRACT_FILE])) {
         found.push({
           command: "loombridge feel snapshot approve",
           what: "a staged tuning-snapshot candidate (the measured-behavior lockfile)",
           where: candidateDir,
         });
       }
+      checked.push(FEEL_CANDIDATE_DETECTOR);
     }
-  } catch {
-    // Same rule: an unreadable workspace is not an offer.
+  } catch (error) {
+    // Same rule: an unreadable workspace is not an offer, and not a check either.
+    unchecked.push({ what: FEEL_CANDIDATE_DETECTOR, why: message(error) });
   }
 
-  return found;
+  return { found, checked, unchecked };
+}
+
+function message(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 /**
@@ -120,9 +186,10 @@ export function approveRefusalLines(args: {
   tag: string;
   /** Where reports were looked for, as the operator would type it. */
   reportsDir: string;
-  alternatives: ApprovableAlternative[];
+  alternatives: ApprovableAlternativesResult;
 }): string[] {
-  const { tag, reportsDir, alternatives } = args;
+  const { tag, reportsDir } = args;
+  const { found, checked, unchecked } = args.alternatives;
   const lines = [
     `${tag} nothing to approve: no replay run in ${reportsDir}/.`,
     `${tag}   bare \`approve\` freezes the REPLAY BASELINE (the frames a run captured). Produce one:`,
@@ -131,20 +198,28 @@ export function approveRefusalLines(args: {
     `${tag}     loombridge approve         freezes what that run captured`,
     `${tag}   or name a run yourself with --id <id>.`,
   ];
-  if (alternatives.length > 0) {
+  if (found.length > 0) {
     lines.push(
       `${tag}   OTHER approvable artifacts are present here, and \`approve\` never resolves to them.`,
     );
     lines.push(`${tag}   Approve one by name:`);
-    for (const alt of alternatives) {
+    for (const alt of found) {
       lines.push(`${tag}     ${alt.command}`);
       lines.push(`${tag}       ${alt.what} (${alt.where})`);
     }
-  } else {
+  } else if (checked.length > 0) {
+    // THE CLAIM NAMES THE CHECKS THAT REALLY RAN. It used to name both detectors from a
+    // hard-coded string while both swallowed their errors, so a detector that threw was
+    // reported as one that looked and found nothing.
     lines.push(
-      `${tag}   No other approvable artifact is visible here either (checked: the Design Target ` +
-        "hero shot, a staged feel-snapshot candidate).",
+      `${tag}   No other approvable artifact is visible here either (checked: ${checked.join(", ")}).`,
     );
+  }
+  // A DETECTOR THAT COULD NOT LOOK SAYS SO, whether or not the others found something. An
+  // unreported gap here reads as "there is nothing else", which is the one thing this list
+  // must never imply about a place it never managed to open.
+  for (const gap of unchecked) {
+    lines.push(`${tag}   NOT checked: ${gap.what} (${gap.why}).`);
   }
   lines.push(
     `${tag}   A mini-game baseline is approved by \`loombridge minigame baseline approve --contract ` +

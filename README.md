@@ -116,13 +116,17 @@ loombridge approve                                    # A HUMAN: freeze what tha
 loombridge verify --live                              # from now on: one command, exit by worst tier
 ```
 
-`verify --live` already replays the trace and writes the run report that `approve` promotes, so
-there is no separate replay step. `loombridge trace replay` still exists as the low-level door
-when you want the replay on its own, along with `trace replay-all`, `trace tolerance`,
-`trace mask` and `trace report`. (`record` and `approve` are the same doors as `trace record`
-and `trace approve`; both spellings work.)
+`verify --live` replays the trace and writes the run report that `approve` promotes, so there is
+no separate replay step. Step 2 drives your recording even though it has nothing to grade yet:
+it captures the frames and still reports the trace as **not measured**, because capturing is not
+measuring. Re-record a trace later and the same two commands re-anchor it; `approve` refuses a
+run of any other demonstration, so an updated recording can never be frozen against the previous
+one's frames. `loombridge trace replay` still exists as the low-level door when you want the
+replay on its own, along with `trace replay-all`, `trace tolerance`, `trace mask` and
+`trace report`. (`record` and `approve` are the same doors as `trace record` and
+`trace approve`; both spellings work.)
 
-Replays drive real input through the game (focus-independent, no field pokes) and diff every capture against your approved baseline perceptually. Capture settles are aligned to the bridge's pinned tick loop by default, so a frame lands at the same game time every run; a baseline approved under a different clock keeps its own. Animated games get honest levers, each human-consented and printed with the hole it opens: bounded pixel tolerances, region masks with a structural reproduced-drift detector, replay pacing, and capture-aligned settles inside a pinned tick loop. A verify that measured nothing refuses (exit 2): it never passes by default.
+Replays drive real input through the game (focus-independent, no field pokes) and diff every capture against your approved baseline perceptually. Capture settles are aligned to the bridge's pinned tick loop by default, so a frame lands at the same game time every run; frames a human already approved keep whatever clock they were approved under, and a comparison across two clocks refuses rather than reporting the phase skew as drift. Animated games get honest levers, each human-consented and printed with the hole it opens: bounded pixel tolerances, region masks with a structural reproduced-drift detector, replay pacing, and capture-aligned settles inside a pinned tick loop. A verify that measured nothing refuses (exit 2): it never passes by default.
 
 ## Doneness: the certificate that cannot be talked into green
 

@@ -37,6 +37,7 @@ import {
 } from "../../../../capabilities/feel/snapshot-manifest.js";
 import { BASELINE_MANIFEST } from "../../../../capabilities/minigame/minigame-baseline.js";
 import { loombridgePaths, standardReplayLayout, updateState } from "../../../../domain/state.js";
+import { traceShaOnDisk } from "../../../_support/replay-fixtures.js";
 import { writeSlicePlan } from "../../../../capabilities/verification/slices.js";
 import { REPO_ROOT } from "../../../_support/paths.js";
 import { plantGitRepo } from "../../../_support/git-repo-fixture.js";
@@ -99,6 +100,8 @@ async function plantApprovedTrace(root: string, id: string): Promise<void> {
     path.join(layout.replayReports, `${id}.report.json`),
     JSON.stringify({
       traceId: id,
+      // The binding `approve` requires: this report is a run of THAT demonstration.
+      traceSha256: await traceShaOnDisk(layout, id),
       status: "pass",
       resetTier: "scene-load",
       segments: [{ id: "s", status: "pass", anchorsReached: [], captures: [{ id: "cap", artifact: actualPng }] }],
