@@ -186,7 +186,22 @@ function appendCameraChecks(
         },
   );
 
-  // World position — a static camera transform is deterministic.
+  // World position — a static camera transform is deterministic. Guard the spec
+  // side too: a malformed 2D block without worldPosition must degrade, not crash
+  // (the pre-fix 3d-shooter template mis-routed here and threw on this access).
+  const specPos = spec.worldPosition;
+  if (!specPos || typeof specPos.x !== "number" || typeof specPos.y !== "number" || typeof specPos.z !== "number") {
+    checks.push({
+      id: "camera.position",
+      expected: "framing.camera.worldPosition {x,y,z}",
+      actual: "(contract pins no numeric worldPosition)",
+      status: "warn",
+      detail:
+        "framing.camera is 2D-shaped but has no numeric worldPosition, so the framing transform cannot be verified. " +
+        "Pin worldPosition {x,y,z} in the contract (or use a perspective-shaped camera block for a 3D rig).",
+    });
+    return;
+  }
   const pos = camera.position;
   if (!pos || typeof pos.x !== "number" || typeof pos.y !== "number" || typeof pos.z !== "number") {
     checks.push({
@@ -358,6 +373,77 @@ function refuseExtent(id: string, expected: string, actual: string, detail: stri
  * Refuses (hard fail) when any bound evidence field is missing while the band is
  * declared, and when the geometry is unbounded (the frame contains the horizon).
  */
+/** FOV tolerance in degrees. The authored Camera.fieldOfView is exact. */
+const FOV_TOLERANCE_DEG = 0.5;
+
+/**
+ * Direct perspective-camera checks for a contract that pins `fieldOfViewDeg` at
+ * the top level (no ground-extent band): projection must be perspective and the
+ * captured vertical FOV must match the pin. Missing capture fields degrade to
+ * WARN ("re-capture with the raw writer"), mismatches are hard FAILs.
+ */
+function appendPerspectiveCameraChecks(
+  checks: GateCheck[],
+  camera: CameraCapture | undefined,
+  fieldOfViewDeg: number,
+): void {
+  if (!camera) {
+    checks.push({
+      id: "camera.capture",
+      expected: "captured camera block (projection + fieldOfView)",
+      actual: "(no camera block in screen-rects.json)",
+      status: "warn",
+      detail:
+        "framing.camera pins a perspective rig but screen-rects.json has no `camera` block. " +
+        "Re-capture with the raw writer (`loombridge capture --slice <id>`) so the projection/FOV are verified, not assumed.",
+    });
+    return;
+  }
+
+  checks.push(
+    camera.orthographic === false
+      ? {
+          id: "camera.projection",
+          expected: "perspective",
+          actual: "perspective",
+          status: "pass",
+          detail: "Camera is perspective (correct for the pinned 3D rig).",
+        }
+      : {
+          id: "camera.projection",
+          expected: "perspective",
+          actual: camera.orthographic === true ? "orthographic" : "(unknown)",
+          status: "fail",
+          detail: "Camera must be perspective for the pinned 3D rig; an orthographic camera flattens the composition.",
+        },
+  );
+
+  const fov = camera.fieldOfView;
+  if (typeof fov !== "number") {
+    checks.push({
+      id: "camera.fieldOfView",
+      expected: `${fieldOfViewDeg} deg (vertical)`,
+      actual: "(no fieldOfView captured)",
+      status: "warn",
+      detail:
+        "screen-rects.json camera has no `fieldOfView` (likely a hand-authored / pre-writer capture, or the writer's " +
+        "--camera path did not resolve the Camera). Re-capture with `loombridge capture --slice <id> --camera <path>` so the FOV is verified.",
+    });
+    return;
+  }
+  const d = Math.abs(fov - fieldOfViewDeg);
+  const onTarget = d <= FOV_TOLERANCE_DEG;
+  checks.push({
+    id: "camera.fieldOfView",
+    expected: `${fieldOfViewDeg} deg ± ${FOV_TOLERANCE_DEG}`,
+    actual: `${fov} deg`,
+    status: onTarget ? "pass" : "fail",
+    detail: onTarget
+      ? "Captured vertical FOV matches the pinned perspective rig."
+      : `Captured vertical FOV ${fov} deg is off the pinned ${fieldOfViewDeg} deg (Δ=${d.toFixed(2)}); the frame composition will not match the contract.`,
+  });
+}
+
 function appendPerspectiveExtentChecks(
   checks: GateCheck[],
   rects: ScreenRectsResult,
@@ -368,12 +454,37 @@ function appendPerspectiveExtentChecks(
   const camera = rects.camera;
   const ID = "camera.visibleGroundWidth";
 
-  // No band declared → the extent gate is NOT armed. This is a WARN, never a
-  // pass: an omitted band silently disarming the extent check is exactly the
-  // hand-crafted-contract bypass the moat bans (contract validation now REQUIRES
-  // the band on a perspective-shaped framing section; this warn covers contracts
-  // that predate that rule or bypassed validation).
+  // Direct perspective pin (top-level fieldOfViewDeg): enforce projection + FOV
+  // against the captured camera. This is the 3d-shooter pack shape (a
+  // first-person/third-person rig with no ground-extent claim).
+  if (typeof spec.fieldOfViewDeg === "number") {
+    appendPerspectiveCameraChecks(checks, camera, spec.fieldOfViewDeg);
+  }
+
+  // No band declared → the extent gate is NOT armed.
   if (!band) {
+    if (spec.groundExtent === "unbounded") {
+      // EXPLICIT opt-out, and only explicit. A `fieldOfViewDeg` pin alone must NOT silence
+      // this: the validator's band requirement keys off pitchDownDeg/perspectiveFallback, so
+      // a top-down contract that swapped its shape for a bare FOV pin would otherwise pass
+      // this check with no band and no complaint, which is the exact ~54m over-wide frame the
+      // band exists to catch. Opt-out with noise; never disarmable by omission.
+      checks.push({
+        id: ID,
+        expected: "no ground-extent claim (framing.camera.groundExtent = \"unbounded\")",
+        actual: "(band not declared, opt-out declared)",
+        status: "pass",
+        detail:
+          "The contract explicitly declares an unbounded ground extent (horizon-facing rig), so the extent check " +
+          "does not apply; the camera.projection/camera.fieldOfView checks enforce this frame instead.",
+      });
+      return;
+    }
+    // Band-less perspective WITHOUT a direct pin is a WARN, never a pass: an
+    // omitted band silently disarming the extent check is exactly the
+    // hand-crafted-contract bypass the moat bans (contract validation now REQUIRES
+    // the band on a pitch/fallback-shaped framing section; this warn covers
+    // contracts that predate that rule or bypassed validation).
     checks.push({
       id: ID,
       expected: "framing.camera.visibleGroundWidthM {min,max} band (world metres)",
@@ -689,22 +800,30 @@ export function evaluateFraming(
       detail: "No player object found in screen rects; cannot check anchor.",
     });
   } else if (typeof player.centerXFraction !== "number") {
+    // A MISSING rect is a capture gap, and a capture gap is never a pass, whatever the camera
+    // mode. Ordering matters: putting the static-camera branch first turned "the capture
+    // produced no rect for the player" into a silent green for every static-camera game.
+    // A genuinely renderless rig (a first-person camera IS the player) lands here too and
+    // warns; that is honest noise, and the fix for it is an explicit contract declaration,
+    // not a mode that swallows the gap.
     checks.push({
       id: "anchor.player",
       expected: `centerXFraction ${anchor.centerXFraction} ± ${anchor.tolerance}`,
       actual: "(no centerXFraction)",
       status: "warn",
-      detail: `Player "${player.name}" has no centerXFraction; cannot check anchor.`,
+      detail:
+        `Player "${player.name}" has no centerXFraction; cannot check anchor. If this rig is ` +
+        "renderless by design (first-person), the capture has nothing to measure and the anchor is not gradable.",
     });
   } else if (isStaticCamera) {
-    // Static one-screen camera: the per-frame 40% anchor does not apply
-    // (it presumes a following camera). Report INFORMATIONAL pass, never a warn.
+    // Static camera with a MEASURABLE rect: the per-frame anchor presumes a following camera,
+    // so the check is INFORMATIONAL, never a warn.
     checks.push({
       id: "anchor.player",
       expected: `centerXFraction ${anchor.centerXFraction} ± ${anchor.tolerance} (N/A: static camera)`,
       actual: player.centerXFraction.toFixed(3),
       status: "pass",
-      detail: `Static one-screen camera (framing.cameraMode="static"): player-anchor check is informational. Player sits at ${player.centerXFraction.toFixed(3)}; the ${anchor.centerXFraction} 'lead-the-look' anchor only applies to a following camera, so no anchor deviation is flagged.`,
+      detail: `Static camera (framing.cameraMode="static"): player-anchor check is informational. Player sits at ${player.centerXFraction.toFixed(3)}; the ${anchor.centerXFraction} 'lead-the-look' anchor only applies to a following camera, so no anchor deviation is flagged.`,
     });
   } else {
     const delta = Math.abs(player.centerXFraction - anchor.centerXFraction);

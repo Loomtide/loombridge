@@ -396,3 +396,101 @@ test("validator: a 2D pixel-perfect camera block raises no framing.camera issues
   });
   assert.deepEqual(issues, []);
 });
+
+// --- Direct perspective pin: the 3d-shooter pack shape --------------------------------------
+//
+// The pack's own template is `{projection: "perspective", fieldOfViewDeg: 60}` with no band and
+// no pitchDownDeg. It used to route into the 2D orthographic branch and THROW on the absent
+// worldPosition, so the gate crashed on the pack it ships.
+
+const FOV_PIN: PerspectiveFramingSection = { projection: "perspective", fieldOfViewDeg: 60 };
+const FOV_PIN_UNBOUNDED: PerspectiveFramingSection = { ...FOV_PIN, groundExtent: "unbounded" };
+
+test("REGRESSION: a perspective FOV-pin contract does not crash the gate", () => {
+  const report = evaluateFraming(rects({ orthographic: false, fieldOfView: 60 }), acceptanceWith(FOV_PIN));
+  assert.ok(report.checks.length > 0, "the gate must produce checks, not throw");
+  assert.equal(checkById(report, "camera.projection").status, "pass");
+  assert.equal(checkById(report, "camera.fieldOfView").status, "pass");
+});
+
+test("the FOV pin is ENFORCED: a mismatched capture fails, an orthographic rig fails", () => {
+  const offFov = evaluateFraming(rects({ orthographic: false, fieldOfView: 75 }), acceptanceWith(FOV_PIN));
+  assert.equal(checkById(offFov, "camera.fieldOfView").status, "fail", "75 deg against a 60 deg pin must fail");
+
+  const ortho = evaluateFraming(rects({ orthographic: true, fieldOfView: 60 }), acceptanceWith(FOV_PIN));
+  assert.equal(checkById(ortho, "camera.projection").status, "fail", "an orthographic rig flattens a pinned 3D frame");
+});
+
+test("refuse-on-absent: an unknown projection or missing FOV is never a silent pass", () => {
+  const noProjection = evaluateFraming(rects({ fieldOfView: 60 } as never), acceptanceWith(FOV_PIN));
+  assert.equal(checkById(noProjection, "camera.projection").status, "fail", "absent `orthographic` must refuse");
+
+  const noFov = evaluateFraming(rects({ orthographic: false } as never), acceptanceWith(FOV_PIN));
+  assert.notEqual(checkById(noFov, "camera.fieldOfView").status, "pass", "a missing captured FOV may never pass");
+});
+
+// --- The extent gate may not be disarmed by omission -----------------------------------------
+//
+// THE HOLE THIS CLOSES. The first cut treated a bare `fieldOfViewDeg` as "this rig makes no
+// ground-extent claim" and returned PASS. But the validator's band requirement keys off
+// pitchDownDeg/perspectiveFallback, NOT fieldOfViewDeg, so a top-down contract that swapped its
+// shape for a bare FOV pin lost the band requirement AND got a clean pass, on exactly the ~54m
+// over-wide frame the band was added to catch.
+
+/** The dogfood failure: camera 40m up, straight down, player a speck. FOV matches the pin. */
+const OVER_WIDE = stamped({ orthographic: false, fieldOfView: 60, worldPosition: { x: 0, y: 40, z: 0 }, worldPitchDownDeg: 90 });
+
+test("LITMUS: a bare FOV pin does NOT silence the ground-extent check", () => {
+  const report = evaluateFraming(rects(OVER_WIDE), acceptanceWith(FOV_PIN));
+  const extent = checkById(report, "camera.visibleGroundWidth");
+  assert.notEqual(extent.status, "pass", "omitting the band must never buy a pass: opt-out with noise, never by omission");
+  assert.equal(extent.status, "warn");
+});
+
+test("only the EXPLICIT opt-out passes, and it says so", () => {
+  const report = evaluateFraming(rects(OVER_WIDE), acceptanceWith(FOV_PIN_UNBOUNDED));
+  const extent = checkById(report, "camera.visibleGroundWidth");
+  assert.equal(extent.status, "pass");
+  assert.match(extent.expected, /groundExtent/, "the pass must name the declaration that earned it");
+});
+
+test("LITMUS: a declared band still ARMS the extent check against the same capture", () => {
+  // Guards the opt-out from the other side: if the band path were broken, the two tests above
+  // would pass while the gate graded nothing.
+  const report = evaluateFraming(rects(OVER_WIDE), acceptanceWith(BAND));
+  assert.equal(checkById(report, "camera.visibleGroundWidth").status, "fail", "a ~54m frame against a 24-32m band must fail");
+});
+
+test("validator: groundExtent is refused alongside a band, and refused on a typo", () => {
+  const both = validateAcceptanceContract(acceptanceWith({ ...BAND, groundExtent: "unbounded" }));
+  assert.ok(
+    both.issues.some((i) => String(i.path).includes("groundExtent")),
+    "declaring both the band and the opt-out is a contradiction and must refuse",
+  );
+  const typo = validateAcceptanceContract(acceptanceWith({ ...FOV_PIN, groundExtent: "unbound" as never }));
+  assert.ok(
+    typo.issues.some((i) => String(i.path).includes("groundExtent")),
+    "a typo'd value must refuse, never read as an opt-out",
+  );
+});
+
+// --- Static camera must not swallow a capture gap ---------------------------------------------
+
+test("LITMUS: a MISSING player rect warns even on a static camera", () => {
+  // The reorder that made the static branch first turned "the capture produced no rect" into a
+  // silent green for every static-camera game. A capture gap is never a pass.
+  const noRect: ScreenRectsResult = {
+    camera: { orthographic: false, fieldOfView: 60 } as never,
+    viewport: { width: 1920, height: 1080, aspect: 16 / 9 },
+    objects: [{ name: "player", isPartiallyClipped: false } as never],
+  };
+  assert.equal(evaluateFraming(noRect, acceptanceWith(FOV_PIN)).checks.find((c) => c.id === "anchor.player")?.status, "warn");
+});
+
+test("a MEASURABLE rect on a static camera stays informational", () => {
+  // The other side: the static-camera exemption is real, it just may not cover a missing rect.
+  const report = evaluateFraming(rects({ orthographic: false, fieldOfView: 60 }), acceptanceWith(FOV_PIN));
+  const anchor = checkById(report, "anchor.player");
+  assert.equal(anchor.status, "pass");
+  assert.match(anchor.expected, /N\/A: static camera/);
+});
