@@ -18,8 +18,8 @@ plan first**, then runs them into one report at `.loombridge/run/reports/verify.
 the per-asset reports.
 
 ```bash
-loombridge verify --root .              # offline assets only
-loombridge verify --root . --live       # also replay traces + grade feel drift
+loombridge verify --root .              # EVERYTHING, and it DRIVES the editor (Play Mode)
+loombridge verify --root . --offline    # stored evidence only; no editor needed (CI)
 loombridge verify --root . --only screens # ONE section (CI granularity); never a certificate
 ```
 
@@ -33,36 +33,45 @@ loombridge verify --root . --only screens # ONE section (CI granularity); never 
   safe-area / tap-target / required-object checks passed: they live in the screen-contract
   family, and their absence is now stated rather than implied. It is **informational only** and
   changes no status, tier, or exit code: naming a gap is the opposite of covering it.
-- **Offline by default.** Trace replay and feel-snapshot capture need a running editor, so
-  they are listed as `not run: needs --live` and are **never folded into a pass**.
+- **LIVE BY DEFAULT.** Trace replay and feel-snapshot capture need a running editor, and a
+  bare run drives them: `loombridge verify` enters Play Mode. The plan above is the mitigation
+  and prints first, marking every row it is about to drive `will run (LIVE: drives the
+  editor)`. With **no editor reachable** the run REFUSES *before anything is written* and names
+  `loombridge verify --offline` (exit `2`, the harness tier), instead of surfacing a raw
+  connection error part-way through.
+- **`--offline` grades the stored evidence only**, never connecting to Unity. Live-only assets
+  are listed as `not run: needs a live editor, and --offline was passed` and are **never folded
+  into a pass**. This is the correct invocation for a headless CI runner.
+- **`--live` still parses and is a NO-OP.** It is kept so every doc, skill and script that
+  already types it keeps working; it asks for what a bare run already does.
 - **A row that cannot execute is named, never skipped.** An unapproved trace, an unstamped
   legacy baseline, a draft screen contract, a screen contract with **no approved layout
   baseline** (a contract graded against captures of itself is not a human anchor: run
   `loombridge minigame baseline approve`), a baseline approved for a *different* project: each
   is a visible row that cannot contribute a pass.
-- **No assets at all** prints the on-ramp (`loombridge record` → `verify --live` →
-  `loombridge approve`, then `verify --live` again) and exits `2`. Recording is a **human**
+- **No assets at all** prints the on-ramp (`loombridge record` → `loombridge verify` →
+  `loombridge approve`, then `loombridge verify` again) and exits `2`. Recording is a **human**
   step: the play session *is* the approval moment. Do not claim it as an agent action.
-- **There is no separate replay step.** `verify --live` drives the traces and writes
+- **There is no separate replay step.** `loombridge verify` drives the traces and writes
   `<id>.report.json`, which is exactly the file `approve` promotes. `trace replay` is the
-  low-level door for re-driving ONE trace on its own; reach for `verify --live` in the loop.
+  low-level door for re-driving ONE trace on its own; reach for `loombridge verify` in the loop.
   The two verbs a human types daily are `loombridge record` and `loombridge approve` (the same
   doors as `trace record` / `trace approve`), because a person is needed at exactly two
   moments: demonstrating and approving.
-- **A trace with nothing to grade against is still DRIVEN by `--live`, for its frames, and is
+- **A trace with nothing to grade against is still DRIVEN, for its frames, and is
   still not measured.** A freshly recorded trace has no anchor, and a re-recorded one has an
   anchor bound to the *previous* demonstration. Both are rows that cannot contribute a pass
-  and both stay in `NOT MEASURED` with the harness tier; what `--live` adds is that it
+  and both stay in `NOT MEASURED` with the harness tier; what a live run adds is that it
   captures their frames and writes the run report, so `approve` has something of *this*
   demonstration to freeze. The plan says both halves on one line
-  (`NOT GRADED (…); this --live run still re-drives it and captures its frames`), and a run
+  (`NOT GRADED (…); this LIVE run still re-drives it and captures its frames`), and a run
   whose only trace is such a row still exits `2`: capturing frames is never measuring.
 - **`approve` refuses a report that is not a run of the trace on disk.** The report records
   which demonstration produced it, and `approve` re-derives the same sha from
   `<id>.trace.json` before it stamps anything. So re-recording a trace and approving without
   re-driving is refused (exit `2`) instead of freezing the previous demonstration's frames
   under the new trace's identity. A report with no such stamp at all is refused too: an absent
-  binding is not a binding. Either way the fix is one command, `verify --live`.
+  binding is not a binding. Either way the fix is one command, `loombridge verify`.
 - **Pixel drift can be TOLERATED, only by a human, only up to 2%.** A game that animates
   under its own clock cannot hold a frozen frame to the 0.5% default, so `loombridge trace
   tolerance --id <id> --set <fraction>` stamps a per-trace allowance onto the approved
@@ -171,7 +180,7 @@ loombridge verify --root . --only screens # ONE section (CI granularity); never 
     tests-only CI step use `loombridge tests grade --results <xml>`, or put an anchored section
     in the selection (`--only screens,tests`).
 - **`doneness` reads the full report when it exists.** A unified run that exited non-zero, OR
-  whose status is anything but `pass` (a `--live` gap, an unanchored section, a scoping), adds
+  whose status is anything but `pass` (an `--offline` gap, an unanchored section, a scoping), adds
   a refusal to `loombridge doneness`. Only a FULL green certifies: an exit-0 `partial` is a run
   that measured less than this project can prove. An absent report changes nothing.
 - **`--snapshot` and `--minigame` are DEPRECATED ALIASES.** Behavior is byte-identical and
@@ -180,7 +189,7 @@ loombridge verify --root . --only screens # ONE section (CI granularity); never 
   `--quiet-next` (the guided flows pass it), for both aliases. `--profile` is NOT deprecated:
   it is a permanent diagnostic that never gates.
 - **Exit codes:** `0` a full pass, or a partial that compared **at least one anchored green
-  section** and whose only gaps were assets skipped for lack of `--live` or extra unanchored
+  section** and whose only gaps were assets skipped under `--offline` or extra unanchored
   sections · `1` a game defect (gate fail, pixel-drift regression, baseline regression) · `2` a harness
   fault (including a baseline manifest that cannot be trusted at grade time, or one carrying
   an over-cap drift tolerance), a broken asset, nothing graded, **or an all-unanchored partial** (every executed section was
@@ -189,15 +198,15 @@ loombridge verify --root . --only screens # ONE section (CI granularity); never 
   and a `2` is never a game verdict (a found defect stays at `1` however much else went
   unmeasured).
 
-Seven flags stay on the unified run and combine only with each other: `--root`, `--strict`,
-`--live`, `--report`, `--only`, `--id`, `--workspace`. Every other flag below is a mode or
+Eight flags stay on the unified run and combine only with each other: `--root`, `--strict`,
+`--live`, `--offline`, `--report`, `--only`, `--id`, `--workspace`. Every other flag below is a mode or
 engine flag, and passing any one of them selects that legacy mode instead, unchanged.
 
 ## The Unity EditMode test gate (producer / consumer)
 
 ```bash
-loombridge tests run --root .        # PRODUCER: launches Unity headless, stamps the results
-loombridge verify --root .           # CONSUMER: grades the stored bytes offline
+loombridge tests run --root .           # PRODUCER: launches Unity headless, stamps the results
+loombridge verify --offline --root .    # CONSUMER: grades the stored bytes, no editor needed
 ```
 
 `tests run` writes three files into a **committed** directory (this is what lets a CI

@@ -120,14 +120,18 @@ the game repo), so CI restores the committed bundle to a directory outside the c
 ANCHORS=verification/screens                       # wherever you committed the bundle
 cp -R "$ANCHORS" "$RUNNER_TEMP/loombridge-workspace"
 
-loombridge verify --strict \
+loombridge verify --offline --strict \
   --root "$GITHUB_WORKSPACE" \
   --workspace "$RUNNER_TEMP/loombridge-workspace"
 ```
 
 - Bare `verify` is the **front door**: it discovers every verification asset the project has, prints the plan,
-  runs the offline ones, and writes one roll-up. Add `--only screens` to narrow it. A scoped run is reported
+  runs them, and writes one roll-up. Add `--only screens` to narrow it. A scoped run is reported
   as `partial` and is never a certificate, which is the honest label for a subset.
+- **`--offline` is required on a CI runner.** `verify` drives a running Unity editor by DEFAULT, and a headless
+  runner has none: without `--offline` the run refuses (exit `2`) as soon as a live row appears in the plan,
+  naming `--offline`. With it, live-only assets are listed as `needs live` rows and are never folded into a
+  pass, so a green here is a statement about the **stored** evidence only.
 - **`--strict`** is recommended in CI: it treats soft warnings as hard failures (all-green to ship).
 - It is **read-only** with respect to your game. It writes only under `.loombridge/run/reports/`.
 - When project-local anchors land ([`Docs/Design/ArtifactStorage.md`](../Design/ArtifactStorage.md), stage S2)
@@ -173,7 +177,7 @@ Bash pattern (don't let `set -e` swallow the code):
 
 ```bash
 set +e
-loombridge verify --strict --root "$GITHUB_WORKSPACE" --workspace "$RUNNER_TEMP/loombridge-workspace"
+loombridge verify --offline --strict --root "$GITHUB_WORKSPACE" --workspace "$RUNNER_TEMP/loombridge-workspace"
 CODE=$?
 set -e
 case "$CODE" in

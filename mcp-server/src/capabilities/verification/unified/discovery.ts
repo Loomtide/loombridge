@@ -98,12 +98,16 @@ export const ASSET_KIND_CATALOG = [
   {
     kind: "contract",
     covers: "the acceptance contract's Tier-1 gates over captured evidence in .loombridge/verify/",
-    nextAction: "loombridge plan (scaffolds ACCEPTANCE.json)",
+    // `--genre` IS PART OF THE COMMAND, not an optional extra: `plan` REFUSES to guess the
+    // genre, so bare `loombridge plan` exits 2 in exactly this state (no contract, and so
+    // usually no STATE.genre to fall back on). Printing it bare is the defect
+    // `plan-next-step-surfaces.test.ts` was written for, one surface further out.
+    nextAction: "loombridge plan --genre <genre> (scaffolds ACCEPTANCE.json)",
   },
   {
     kind: "trace",
     covers: "a recorded demonstration re-driven and compared pixel-for-pixel to its approved frames",
-    nextAction: "loombridge record, then `loombridge verify --live`, then `loombridge approve`",
+    nextAction: "loombridge record, then `loombridge verify`, then `loombridge approve`",
   },
   {
     kind: "feel-snapshot",
@@ -114,7 +118,14 @@ export const ASSET_KIND_CATALOG = [
     kind: "screen-contract",
     covers:
       "declared screens and their layout: safe area, tap-target size, required objects in frame, text clipping",
-    nextAction: "loombridge minigame init --id <kebab>, then `capture`, then `minigame baseline approve`",
+    // EVERY STEP IS A WHOLE COMMAND. This line used to read "loombridge minigame init --id
+    // <kebab>, then `capture`, then `minigame baseline approve`", and neither of the last
+    // two could be pasted: bare `capture` is not a verb (`minigame capture` is), and
+    // `baseline approve` refuses without --contract and --captures. `minigame run` is the
+    // one command that drives setup -> record -> capture -> finalize -> verify and stops at
+    // the human's approval, which is what this family actually needs created.
+    nextAction:
+      "loombridge minigame run --id <kebab>, then `loombridge minigame baseline approve --contract <path> --captures <dir>`",
   },
   {
     kind: "test-results",
@@ -289,7 +300,7 @@ export interface DiscoveredAsset {
    * still never becomes a section. What it adds is the one thing the taught loop needs and
    * did not have. Right after `loombridge record` there is no anchor, so nothing grades; the
    * loop's next step is `loombridge approve`, and approve promotes `<id>.report.json`, which
-   * only a replay writes. With the row simply dropped, `verify --live` wrote no report, and
+   * only a replay writes. With the row simply dropped, `verify` wrote no report, and
    * the operator was told to approve a run that did not exist (a fresh project dead-ends,
    * and a RE-RECORDED id silently promoted the previous demonstration's report).
    *
@@ -508,7 +519,7 @@ export async function discoverTraceAssets(root: string): Promise<DiscoveredAsset
       row.notRunClass = "non-anchor";
       // THE SENTENCE STATES WHAT IS NOT MEASURED, and the CAPTURE half is the plan's job to
       // say (`disposition`), not this row's. The reason used to read "will not run: … this
-      // `verify --live` run captures its frames", a sentence that contradicts itself inside
+      // `verify` run captures its frames", a sentence that contradicts itself inside
       // one line and was false besides: nothing captured anything, because the row was
       // dropped before the flow section. `captureOnly` below is what makes the capture real,
       // and the plan prints it against the row that actually gets driven.

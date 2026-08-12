@@ -1,7 +1,7 @@
 /**
  * WHAT VERIFY DID NOT CHECK, and why (the absent-family report).
  *
- * THE REPRODUCTION, observed live. A human ran `loombridge verify --live` on a real
+ * THE REPRODUCTION, observed live. A human ran `loombridge verify` on a real
  * project and got a verdict covering exactly one asset, a replay trace. They asked, quite
  * reasonably, "earlier we would see safe area issues etc. Which are not there in the report
  * now." Verify was behaving correctly: it grades the assets that exist, and that project has
@@ -44,6 +44,7 @@ import { run as runTrace } from "../../../../capabilities/replay/trace.js";
 import { DEFAULT_DRIFT_FRACTION } from "../../../../capabilities/replay/visual-diff.js";
 import { fileExists, loombridgePaths, standardReplayLayout } from "../../../../domain/state.js";
 import { traceShaOnDisk } from "../../../_support/replay-fixtures.js";
+import { REACHABLE_EDITOR } from "../../../_support/live-editor.js";
 
 async function tmpDir(prefix: string): Promise<string> {
   return fs.mkdtemp(path.join(os.tmpdir(), prefix));
@@ -165,7 +166,7 @@ test("the REPRODUCTION: a trace-only project NAMES the families it has no asset 
         strict: false,
         live: true,
         workspace,
-        deps: { async runFlowTrace() { return cleanFlow(); } },
+        deps: { ...REACHABLE_EDITOR, async runFlowTrace() { return cleanFlow(); } },
       }),
     );
     const out = lines.join("\n");
@@ -179,7 +180,7 @@ test("the REPRODUCTION: a trace-only project NAMES the families it has no asset 
       `the screen-contract family must be named, with what it would have covered:\n${out}`,
     );
     // …and the NEXT ACTION, so "why is this missing" is answerable without reading docs.
-    assert.match(out, /create one: loombridge minigame init --id <kebab>/);
+    assert.match(out, /create one: loombridge minigame run --id <kebab>/);
 
     // Every OTHER known family is named too, derived from the closed inventory rather than
     // re-listed here: a seventh kind must land in this assertion without anyone editing it.
@@ -224,7 +225,7 @@ test("a workspace-scoped family NAMES the directory it was looked for in", async
         strict: false,
         live: true,
         workspace,
-        deps: { async runFlowTrace() { return cleanFlow(); } },
+        deps: { ...REACHABLE_EDITOR, async runFlowTrace() { return cleanFlow(); } },
       }),
     );
     const out = lines.join("\n");
@@ -352,7 +353,7 @@ test("THE MOAT: one passing asset + five absent families keeps today's status an
         strict: false,
         live: true,
         workspace,
-        deps: { async runFlowTrace() { return cleanFlow(); } },
+        deps: { ...REACHABLE_EDITOR, async runFlowTrace() { return cleanFlow(); } },
       }),
     );
     const report = await readUnified(root);
@@ -445,7 +446,7 @@ test("the JSON report carries the SAME gaps stdout printed", async () => {
         strict: false,
         live: true,
         workspace,
-        deps: { async runFlowTrace() { return cleanFlow(); } },
+        deps: { ...REACHABLE_EDITOR, async runFlowTrace() { return cleanFlow(); } },
       }),
     );
     const report = await readUnified(root);

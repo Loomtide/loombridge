@@ -254,8 +254,9 @@ export const LOOMBRIDGE_VERIFY_TOOL = {
     "one `loombridge verify` runs. It DISCOVERS this project's verification assets (acceptance contract, approved " +
     "trace baselines, feel snapshot, screen contract, stamped Unity EditMode results), prints the plan, and grades " +
     "the OFFLINE ones into `.loombridge/run/reports/verify.json`. It never launches an editor, so live-only assets are " +
-    "listed as `needs --live` rows and are NEVER folded into a pass (run `loombridge verify --live` yourself for " +
-    "those). A project with NO assets REFUSES and points at `loombridge plan` (a hand-created " +
+    "listed as `needs live` rows and are NEVER folded into a pass (run `loombridge verify` yourself for " +
+    "those: the CLI drives the editor by default). A project with NO assets REFUSES and points at " +
+    "`loombridge plan --genre <genre>` (a hand-created " +
     "`.loombridge/run/captures/` is NOT a verification); a broken or unapproved anchor refuses in its own harness tier, " +
     "never as a fake pass. A green here is NOT `done`: `status` is `partial` whenever coverage was incomplete or a " +
     "section compared nothing a human froze (see `unanchoredSections`), and only `loombridge doneness` certifies. " +
@@ -406,7 +407,7 @@ const TERMINAL_STATUS_LINE = /\bstatus=.*\bexit=/;
  *
  * ORDER MATTERS, and it was wrong (M-M5). The old scan looked for a refusal first and then for
  * `/\bstatus=|\bOK —|PASS\b/i`, which collided with the unified door's very first line: the plan
- * header reads `…(offline only; pass --live for live assets)`, and `PASS` matched it
+ * header reads `…(offline only (--offline); live assets are listed …)`, and `PASS` matched it
  * case-insensitively. A red run therefore headlined with the PLAN rather than the verdict, so
  * the one field an agent reads first said nothing about what the run found.
  *
@@ -540,7 +541,7 @@ export interface LoombridgeVerifyToolPayload {
  *
  *  - OFFLINE, ALWAYS. `live: false` is not a default here, it is the contract: an MCP tool call
  *    must never launch a trace replay or a feel capture against whatever editor happens to be
- *    listening. Live assets are listed as `needs --live` rows and never folded into a pass.
+ *    listening. Live assets are listed as `needs live` rows and never folded into a pass.
  *  - DEFAULT PATHS, UNSCOPED. No `--only`, no `--report`: the tool writes the same
  *    verify.json the bare CLI writes, so `doneness` reads one document however it was
  *    produced. F3 is what makes that safe: an offline partial is not a certificate.

@@ -696,7 +696,7 @@ export function applyBackgroundFlag(
   if (decl.mode === "auto") {
     if (!candidates || !candidates.camera || candidates.recommended.length === 0) {
       const why = !candidates
-        ? "no background-candidates.json was found in the captures dir — run `minigame capture` first"
+        ? "no background-candidates.json was found in the captures dir — run `loombridge minigame capture` first"
         : !candidates.camera
           ? "discovery found no gameplay camera"
           : "discovery recommended no coverage layers";
@@ -1133,7 +1133,7 @@ export async function runFinalize(argv: string[], root: string = process.cwd()):
       console.error(
         `[loombridge minigame] finalize: if a screen is gated by gameplay OUTCOME (a win behind correct answers / RNG) ` +
           `a read-only verifier can't drive, mark it instead: --outcome-gated ${gateableStates.join(",")} ` +
-          `(or re-run \`minigame setup --gated-outcome\`).`,
+          `(or re-run \`loombridge minigame setup --gated-outcome\`).`,
       );
     }
     return 2;
@@ -1247,7 +1247,7 @@ export function buildFinalizeSummary(
       lines.push(`   ${ICON.pass} camera: ${background.camera}`);
       lines.push(`   ${ICON.pass} layers: ${background.layers.join(", ")}`);
       if (!background.wroteData) {
-        lines.push(`   ${ICON.warn} re-run \`minigame capture\` to produce background.json before verify.`);
+        lines.push(`   ${ICON.warn} re-run \`loombridge minigame capture\` to produce background.json before verify.`);
       }
     }
   }
@@ -1283,7 +1283,7 @@ function printUsage(): void {
       "  --background-camera <locator>  Bind the background camera explicitly (with --background-layers).",
       "  --background-layers <l1,l2,...>  Bind the background layers explicitly (with --background-camera).",
       "                      Geometry is frozen only when every locator matches a discovered sprite;",
-      "                      otherwise the gate is bound but `minigame capture` must re-run first.",
+      "                      otherwise the gate is bound but `loombridge minigame capture` must re-run first.",
       "",
       "Exit: 0 finalized · 2 usage / captures missing / role not inferable · 1 fs/runtime error.",
     ].join("\n"),

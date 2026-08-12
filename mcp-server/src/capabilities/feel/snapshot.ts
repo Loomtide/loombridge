@@ -318,7 +318,7 @@ async function runSnapshotApprove(cli: SnapshotCliArgs): Promise<number> {
   try {
     contractJson = JSON.parse(await fs.readFile(contractPath, "utf-8"));
   } catch {
-    console.error(`${TAG} candidate is missing its frozen capture contract; re-run \`feel snapshot capture\`.`);
+    console.error(`${TAG} candidate is missing its frozen capture contract; re-run \`loombridge feel snapshot capture\`.`);
     return 2;
   }
 
@@ -417,7 +417,7 @@ async function runSnapshotStatus(cli: SnapshotCliArgs): Promise<number> {
   }
   if (!integrity.manifest) {
     console.error(`${TAG} no approved snapshot at ${currentDir}.`);
-    console.error(`${TAG} create one: \`feel snapshot capture\` then \`feel snapshot approve\`.`);
+    console.error(`${TAG} create one: \`loombridge feel snapshot capture\` then \`loombridge feel snapshot approve\`.`);
     return 0;
   }
   if (!integrity.ok) {

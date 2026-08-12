@@ -440,7 +440,7 @@ export interface ReplayReport {
    * OPTIONAL IN THE TYPE, REFUSED AT THE GATE. Reports written before this field existed
    * parse (nothing else reads it), and `approve` REFUSES an absent value rather than
    * skipping the binding: a check a missing field can switch off is not a check. The remedy
-   * is one command, `verify --live` or `trace replay`, which writes a bound report.
+   * is one command, `verify` or `trace replay`, which writes a bound report.
    */
   traceSha256?: string;
   status: ReplayStatus;

@@ -967,7 +967,7 @@ test("buildFinalizeSummary: appends the 🎨 background block (camera + layers +
   assert.match(enabled, /🎨 background/);
   assert.match(enabled, /camera: G:\/Main Camera/);
   assert.match(enabled, /layers: G:\/Sky, G:\/Hills/);
-  assert.doesNotMatch(enabled, /re-run `minigame capture`/);
+  assert.doesNotMatch(enabled, /re-run `loombridge minigame capture`/);
 
   // Enabled but geometry NOT frozen → re-capture warning present.
   const needsRecap = buildFinalizeSummary(resolved, "/tmp/out.json", "/tmp", {
@@ -975,7 +975,7 @@ test("buildFinalizeSummary: appends the 🎨 background block (camera + layers +
     layers: ["G:/Sky"],
     wroteData: false,
   }).join("\n");
-  assert.match(needsRecap, /⚠️ re-run `minigame capture` to produce background\.json before verify\./);
+  assert.match(needsRecap, /⚠️ re-run `loombridge minigame capture` to produce background\.json before verify\./);
 
   // Disabled.
   const disabled = buildFinalizeSummary(resolved, "/tmp/out.json", "/tmp", { disabled: true }).join("\n");

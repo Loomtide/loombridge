@@ -250,7 +250,7 @@ test("TWO REAL RUNS: the second run characterizes the drift and never asks for a
     const one = await replay(root, () => DRIFT_A);
     const reportOne = await readReport(root);
     assert.equal(reportOne.maskSuggestion?.kind, "first-run", one.out);
-    assert.match(one.out, /re-run replay once more to characterize/);
+    assert.match(one.out, /re-run the replay once more to characterize/);
 
     // RUN 2 drifts IDENTICALLY, and the only thing carrying run one's evidence into it is
     // the report run one wrote. This is the assertion the shipped tests never made: they
@@ -272,7 +272,7 @@ test("TWO REAL RUNS: the second run characterizes the drift and never asks for a
     // …and the advice the operator was already following is NOT repeated.
     assert.doesNotMatch(
       two.out,
-      /re-run replay once more/,
+      /re-run the replay once more/,
       "the operator has already made the run the tool asked for; asking again is the loop",
     );
     assert.match(two.out, /the drift is IDENTICAL across two runs/);
@@ -310,7 +310,7 @@ test("A GENUINE first run says `first-run`, and the line NAMES the finding it re
       /no previous run recorded drift for this trace/,
       "an instruction with no stated basis is what an operator cannot check against their own history",
     );
-    assert.match(one.out, /re-run replay once more to characterize the drift before masking/);
+    assert.match(one.out, /re-run the replay once more to characterize the drift before masking/);
   } finally {
     await fs.rm(root, { recursive: true, force: true });
   }
@@ -348,7 +348,7 @@ test("TWO REAL RUNS: drift that lands somewhere else is `moved`, not another re-
       previousCaptures: ["a"],
       currentCaptures: ["b"],
     });
-    assert.doesNotMatch(two.out, /re-run replay once more/);
+    assert.doesNotMatch(two.out, /re-run the replay once more/);
     assert.match(two.out, /the previous run WAS compared, and none of its drift recurs here/);
   } finally {
     await fs.rm(root, { recursive: true, force: true });

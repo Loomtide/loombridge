@@ -795,7 +795,7 @@ export function sfxGateRefusals(
  *    verdict has never been a pass anywhere else in this codebase.
  *
  * S2/F3: ONLY A FULL GREEN IS ACCEPTED. `exit === 0` is not sufficient, because `partial`
- * exits 0 in three ordinary situations: anchors skipped for lack of `--live`, executed
+ * exits 0 in three ordinary situations: anchors skipped under `--offline`, executed
  * sections that compared nothing a human froze, and (S2a) a `--only` run. Each of those is
  * a run that did NOT ask the question this certificate answers, and accepting them is what
  * made the whole overwrite family work: run the full door, get a refusal, then run a
@@ -913,7 +913,7 @@ export async function unifiedVerifyRefusals(paths: LoombridgePaths): Promise<str
     reasons.push(
       `unified verify is \`${report.status}\`, not \`pass\` (exit 0): ${unifiedPartialCause(report)}. ` +
         `A partial measured less than this project can prove, so it is not a certificate; re-run ` +
-        `\`loombridge verify\` (add --live if the gaps need an editor) and read ${reportPath}`,
+        `\`loombridge verify\` (it drives the editor by default, which is what the gaps need) and read ${reportPath}`,
     );
   }
   reasons.push(...unifiedConsistencyRefusals(report, reportPath));
@@ -1121,7 +1121,7 @@ function compareStamps(a: DocumentStamp, b: DocumentStamp): number | null {
  * WHAT was partial, named from the report's own fields (F3).
  *
  * Read from the machine-readable rows, never from prose: the refusal has to tell an operator
- * which of the three exit-0 partials fired, because the fix differs (`--live`, approve an
+ * which of the three exit-0 partials fired, because the fix differs (drop `--offline`, approve an
  * anchor, or re-run without `--only`).
  */
 function unifiedPartialCause(report: { notRun?: unknown; unanchoredSections?: unknown; only?: unknown }): string {
@@ -1130,7 +1130,7 @@ function unifiedPartialCause(report: { notRun?: unknown; unanchoredSections?: un
   const notRun = Array.isArray(report.notRun) ? (report.notRun as { why?: unknown; kind?: unknown; id?: unknown }[]) : [];
   const skipped = notRun.filter((n) => n.why === "live-only-skipped");
   if (skipped.length > 0) {
-    causes.push(`${skipped.length} anchor(s) skipped for lack of --live (${skipped.map((n) => `${String(n.kind)} '${String(n.id)}'`).join(", ")})`);
+    causes.push(`${skipped.length} anchor(s) skipped under --offline; with Unity open, run: loombridge verify (${skipped.map((n) => `${String(n.kind)} '${String(n.id)}'`).join(", ")})`);
   }
   const otherNotRun = notRun.filter((n) => n.why !== "live-only-skipped");
   if (otherNotRun.length > 0) {

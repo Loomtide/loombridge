@@ -1258,14 +1258,19 @@ export function maskSuggestionLines(suggestion: MaskSuggestion, traceId: string)
       // history: if they have re-run and this still prints, the report they are reading is
       // not the run they made.
       return [
+        // "re-run replay once more" named NO command, so the one actionable sentence in the
+        // suggestion could not be pasted. Both doors are named because this text prints from
+        // both: `verify` re-drives every trace, `trace replay` re-drives this one.
         "no previous run recorded drift for this trace, so there is nothing to compare this drift " +
-          "against yet; re-run replay once more to characterize the drift before masking.",
+          "against yet; re-run the replay once more to characterize the drift before masking: " +
+          `loombridge verify (or \`loombridge trace replay --id ${traceId}\` for this trace alone).`,
       ];
     case "uncomparable":
       return [
         `a previous run DID record drift on ${captureList(suggestion.captures)}, and its drift fingerprint ` +
           "could not be read, so no comparison was possible. This run has written a readable one: " +
-          "re-run replay once more and the next run can characterize the drift.",
+          "re-run the replay once more and the next run can characterize the drift: " +
+          `loombridge verify (or \`loombridge trace replay --id ${traceId}\` for this trace alone).`,
       ];
     case "identical":
       return [

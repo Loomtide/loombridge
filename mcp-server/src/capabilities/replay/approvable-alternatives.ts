@@ -194,7 +194,7 @@ export function approveRefusalLines(args: {
     `${tag} nothing to approve: no replay run in ${reportsDir}/.`,
     `${tag}   bare \`approve\` freezes the REPLAY BASELINE (the frames a run captured). Produce one:`,
     `${tag}     loombridge record          a human demonstrates the flow`,
-    `${tag}     loombridge verify --live   drives it and captures the frames`,
+    `${tag}     loombridge verify          drives it and captures the frames`,
     `${tag}     loombridge approve         freezes what that run captured`,
     `${tag}   or name a run yourself with --id <id>.`,
   ];

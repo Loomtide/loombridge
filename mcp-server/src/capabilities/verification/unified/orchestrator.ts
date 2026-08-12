@@ -2,7 +2,7 @@
  * The unified `verify` ORCHESTRATOR: the bare front door (RFC
  * `Docs/Design/UnifiedVerify.md`, S1).
  *
- * `loombridge verify` with nothing but `--root`/`--strict`/`--live`/`--report`/`--id`/
+ * `loombridge verify` with nothing but `--root`/`--strict`/`--live`/`--offline`/`--report`/`--id`/
  * `--workspace` lands here. It answers the only question a user actually has, "does this
  * build still do what a human approved?", by discovering the project's verification
  * assets and delegating each to the engine that already owns it. It implements NO gate
@@ -13,17 +13,24 @@
  *
  * 1. **The plan prints FIRST.** Discovery is pure IO fact-gathering, and nothing is
  *    written to the project until the operator has seen the list of what will run and
- *    what will not. A plan printed after the run is a receipt, not a plan.
+ *    what will not. A plan printed after the run is a receipt, not a plan. Since
+ *    LiveByDefault this is also the CONSENT surface: a bare run drives the editor into
+ *    Play Mode, and the plan is where the rows about to be driven are named, before it.
  * 2. **A row that did not execute never folds into pass.** Broken, non-anchor, draft,
  *    and live-only-skipped rows all land in `notRun`, and `resolveUnifiedOutcome` is the
- *    single place that decides what that costs. Only the operator's own `--live`
- *    omission may still exit 0. A `--live` run additionally re-drives an UNANCHORED trace
- *    for its FRAMES (`captureUngradedTrace`), which is what makes `record` -> `verify --live`
+ *    single place that decides what that costs. Only the operator's own `--offline`
+ *    may still exit 0. A LIVE run additionally re-drives an UNANCHORED trace
+ *    for its FRAMES (`captureUngradedTrace`), which is what makes `record` -> `verify`
  *    -> `approve` a real loop; that changes nothing about this rule, because a capture is not
  *    a measurement and the row keeps its class and its tier.
- * 3. **Offline by default, `--live` opt-in** (D2). The dominant runtime of this door is
- *    CI, and live-by-default would make the least specific command the one most likely
- *    to hit the post-reload stall family.
+ * 3. **LIVE BY DEFAULT, `--offline` opt-out** (LiveByDefault, superseding D2). D2 made the
+ *    door offline-first for CI, but the cost landed on the common path: bare `verify` on a
+ *    normal project printed "every discovered asset needs a running editor" and exited 2,
+ *    so the answer to the product's central question always took two invocations. CI is
+ *    still served, explicitly, by `--offline`, which is the honest spelling for a headless
+ *    runner anyway. The exposure this creates (a bare run drives Play Mode) is paid for by
+ *    rule 1 and by the preflight: with no editor reachable the run REFUSES before writing
+ *    anything, naming `--offline`, rather than surfacing a transport error mid-run.
  * 4. **A section that throws is a HARNESS FAULT for that section, not a fatal run.** The
  *    other sections still execute, because "the feel capture could not connect" tells an
  *    operator nothing about whether the screens regressed.
@@ -105,6 +112,13 @@ import {
 const TAG = "[loombridge verify]";
 
 /**
+ * Why a live-only row did not run. ONE constant, because the plan line and the `notRun`
+ * row must not be able to disagree about it, and because the word changed meaning under
+ * LiveByDefault: it is no longer "you forgot a flag", it is "you asked for offline".
+ */
+const OFFLINE_SKIP_REASON = "needs a live editor, and --offline was passed";
+
+/**
  * The four section engines, injectable.
  *
  * This is a TEST SEAM, and a deliberately narrow one: the defaults below are the real
@@ -172,6 +186,21 @@ export interface UnifiedSectionDeps {
     } & DriftFacts
   >;
   runFeel(args: { root: string; workspace: string; strict: boolean }): Promise<number>;
+  /**
+   * LIVE PREFLIGHT (LiveByDefault): is a Unity editor for THIS project reachable?
+   *
+   * Live is now the default, so the least specific command in the product is also the one
+   * most likely to be typed with no editor running. Without this the first thing an
+   * operator would see is whatever the transport threw, several sections into a run that
+   * had already written reports. It returns a `detail` rather than throwing, because the
+   * refusal is the orchestrator's to phrase: an unreachable editor is a HARNESS fault
+   * (tier 2), never a verdict about the game.
+   *
+   * Pinned to the SAME `projectPathCanonical` the flow section replays against, so a
+   * different project's editor answering on the shared ports is a refusal here rather
+   * than a replay driven into someone else's game.
+   */
+  probeEditor(opts: { projectPathCanonical?: string }): Promise<{ reachable: boolean; detail: string }>;
 }
 
 /** The real engines. Imported lazily so the bare path costs nothing it does not use. */
@@ -207,6 +236,33 @@ async function realDeps(): Promise<UnifiedSectionDeps> {
       const { runVerifySnapshot } = await import("../../feel/snapshot-verify.js");
       return runVerifySnapshot(args);
     },
+    async probeEditor(opts) {
+      const { UnityClient, isRouteMismatchError } = await import("../../../bridge/unity-client.js");
+      const client = new UnityClient(
+        opts.projectPathCanonical ? { targetIdentity: { projectPathCanonical: opts.projectPathCanonical } } : {},
+      );
+      try {
+        await client.connect();
+        return { reachable: true, detail: "handshake ok" };
+      } catch (error) {
+        // A ROUTE MISMATCH IS ITS OWN ANSWER, and the one an operator most needs: a bridge
+        // IS running, it just belongs to a different project. "No editor was reachable"
+        // would send them to open an editor that is already open.
+        if (isRouteMismatchError(error)) {
+          return { reachable: false, detail: "a Unity bridge is running, but it is a DIFFERENT project" };
+        }
+        return {
+          reachable: false,
+          detail: error instanceof Error ? error.message.split("\n")[0]! : String(error),
+        };
+      } finally {
+        try {
+          await client.disconnect();
+        } catch {
+          /* best-effort: the probe must never be the thing that fails the run */
+        }
+      }
+    },
   };
 }
 
@@ -214,7 +270,10 @@ export interface UnifiedVerifyOpts {
   root: string;
   /** Mirrors `--strict` into every section that has an all-green mode. */
   strict: boolean;
-  /** `--live`: execute the assets that need a running editor. */
+  /**
+   * Execute the assets that need a running editor. DEFAULT TRUE; `--offline` clears it
+   * (LiveByDefault). `--live` still parses and is a no-op.
+   */
   live: boolean;
   /** `--report <path>`: override the unified report location. */
   reportPath?: string;
@@ -345,8 +404,38 @@ export async function runUnifiedVerify(opts: UnifiedVerifyOpts): Promise<number>
     else if (only && !only.includes(SECTION_FOR_KIND[asset.kind])) {
       deselected.push({ kind: asset.kind, id: asset.id, section: SECTION_FOR_KIND[asset.kind] });
     } else if (asset.runnable === "live" && !opts.live) {
-      notRun.push({ kind: asset.kind, id: asset.id, reason: "needs --live", why: "live-only-skipped" });
+      notRun.push({ kind: asset.kind, id: asset.id, reason: OFFLINE_SKIP_REASON, why: "live-only-skipped" });
     } else runnable.push(asset);
+  }
+
+  // PIN THE EDITOR (F-pin) once, here, so the preflight below and the replay below it agree
+  // on WHICH editor this run is about. `endpoint-discovery-latest.json` is a single shared
+  // pointer every running editor overwrites on its heartbeat, so an UNPINNED replay drives
+  // whichever project published most recently. Observed live: identical `trace replay`
+  // invocations alternating PASS/BLOCKED as two editors flapped. Resolving it is pure (it
+  // reads the root and returns a path), so hoisting it above the trace branch costs nothing.
+  const projectPathCanonical = resolveCliProjectPin({ root });
+
+  // THE LIVE PREFLIGHT (LiveByDefault), after the plan and before the first write.
+  //
+  // Live is the default now, so "no editor is running" is an ordinary mistake rather than an
+  // exotic one, and it must not surface as a raw transport error thrown out of the third
+  // section of a run that has already written two reports. It is checked only when a row
+  // would actually be DRIVEN: an offline-only project (or `--offline`) never needs an editor,
+  // and refusing there would break every headless run that works today.
+  //
+  // REFUSE, do not degrade to offline. Silently grading stored evidence because the editor
+  // was missing is the shape of a false green: the operator asked "does this build still do
+  // what a human approved?" and would have been answered by a subset of the anchors without
+  // being told which. Exit 2 is the harness tier, never a verdict about the game.
+  const wouldDriveEditor =
+    opts.live && (runnable.some((a) => a.runnable === "live") || assets.some((a) => a.kind === "trace" && willCaptureOnly(a, opts.live, only)));
+  if (wouldDriveEditor) {
+    const probe = await deps.probeEditor({ projectPathCanonical });
+    if (!probe.reachable) {
+      for (const line of unreachableEditorLines(root, probe.detail, projectPathCanonical)) console.error(line);
+      return 2;
+    }
   }
 
   const record = (name: UnifiedSectionName, section: UnifiedVerifySection): void => {
@@ -371,13 +460,9 @@ export async function runUnifiedVerify(opts: UnifiedVerifyOpts): Promise<number>
   // `<id>.report.json` and only a replay writes one. See `DiscoveredAsset.captureOnly`.
   const captureOnlyTraces = assets.filter((a) => a.kind === "trace" && willCaptureOnly(a, opts.live, only));
   if (traceAssets.length > 0 || captureOnlyTraces.length > 0) {
-    // PIN THE EDITOR (F-pin). `endpoint-discovery-latest.json` is a single shared
-    // pointer every running editor overwrites on its heartbeat, so an UNPINNED replay
-    // drives whichever project published most recently. Observed live: identical
-    // `trace replay` invocations alternating PASS/BLOCKED as two editors flapped. The
-    // trace verb resolves the pin the same way; the unified door must not be the one
+    // `projectPathCanonical` is the pin resolved above, the same one the preflight probed.
+    // The trace verb resolves the pin the same way; the unified door must not be the one
     // path that replays a demonstration against someone else's game.
-    const projectPathCanonical = resolveCliProjectPin({ root });
     if (traceAssets.length > 0) {
       record("flow", await runSection("flow", () => flowSection(deps, root, traceAssets, projectPathCanonical)));
     }
@@ -669,7 +754,7 @@ async function flowSection(
       const { status, exitTier, suggestTolerance, maskSuggestion, htmlPath, ...drift } =
         await deps.runFlowTrace(layout, asset.id, { strictVisual: true, projectPathCanonical });
       // R1's suggestion loop, at the unified door and in the SAME words as the trace verb:
-      // an operator who only ever runs `verify --live` must get the same actionable exit
+      // an operator who only ever runs `verify` must get the same actionable exit
       // from a pixel-only failure, naming `trace tolerance` (never `trace approve`).
       if (suggestTolerance) {
         // The mask half FIRST, in the same order and the same words the trace verb uses:
@@ -746,7 +831,8 @@ async function flowSection(
  *  - `captureOnly` on the row: discovery decided there is nothing here to grade. Never
  *    inferred from `runnable === "no"` alone, which also covers rows of other kinds and
  *    future classes with no capture step at all;
- *  - `--live`: a replay drives a running editor. Without it the row is simply not run, which
+ *  - LIVE (the default): a replay drives a running editor. Under `--offline` the row is simply
+ *    not run, which
  *    is what it has always been;
  *  - the SELECTION. `--only tests` on a project with an unapproved trace must not start
  *    driving that trace: the row's tier is never scoped away (F2, it stays in `notRun`), but
@@ -772,7 +858,7 @@ function willCaptureOnly(
  * measuring a game. `resolveUnifiedOutcome` never learns this happened.
  *
  * What it changes is that the loop the on-ramp prints is now TRUE. `record` writes a trace,
- * this writes the run report, `approve` promotes it, and the next `verify --live` grades it.
+ * this writes the run report, `approve` promotes it, and the next `verify` grades it.
  * Before, step 2 wrote nothing for exactly the two states a human is in right after
  * recording: a fresh project dead-ended (`approve` refused and reprinted the same loop), and
  * a RE-RECORDED id was worse than a dead end, because `approve` fell back to the most recent
@@ -1078,7 +1164,12 @@ export function planLines(
 ): string[] {
   const scope = only ? `; scoped to --only ${only.join(",")}` : "";
   const lines = [
-    `${TAG} plan for ${root} (${live ? "offline + live" : "offline only; pass --live for live assets"}${scope}):`,
+    // THE HEADLINE SAYS THE EDITOR WILL BE DRIVEN, because since LiveByDefault it will be,
+    // and this line is the mitigation: it prints before anything runs, and every row it is
+    // about to drive is marked `will run (LIVE: drives the editor)` below.
+    `${TAG} plan for ${root} (${live
+      ? "offline + LIVE; the rows marked LIVE below DRIVE the running editor (Play Mode). Pass --offline for stored evidence only"
+      : "offline only (--offline); live assets are listed and never folded into a pass"}${scope}):`,
   ];
   for (const asset of assets) {
     lines.push(`${TAG}   ${asset.kind} '${asset.id}': ${disposition(asset, live, only)}; ${provenance(asset)}`);
@@ -1116,18 +1207,21 @@ function disposition(asset: DiscoveredAsset, live: boolean, only: readonly Unifi
   // A CAPTURE-ONLY ROW SAYS BOTH HALVES, because both are true and each alone is a lie. It
   // is NOT GRADED (there is no frozen anchor, or the one on disk cannot be trusted), and this
   // live run DOES re-drive it and leave a run report behind for `approve`. The old single
-  // clause, "will not run: this `verify --live` run captures its frames", contradicted itself
+  // clause, "will not run: this `verify` run captures its frames", contradicted itself
   // in one sentence and described a capture that never happened.
   if (asset.runnable === "no" && willCaptureOnly(asset, live, only)) {
     const why = asset.broken ? `BROKEN: ${asset.broken}` : (asset.reason ?? "no frozen anchor");
-    return `NOT GRADED (${why}); this --live run still re-drives it and captures its frames for \`loombridge approve\``;
+    return `NOT GRADED (${why}); this LIVE run still re-drives it and captures its frames for \`loombridge approve\``;
   }
   if (asset.broken) return `BROKEN, will not run: ${asset.broken}`;
   if (asset.runnable === "no") return `will not run: ${asset.reason ?? "not runnable"}`;
   if (only && !only.includes(SECTION_FOR_KIND[asset.kind])) {
     return `deselected (--only ${only.join(",")}): not run, and not counted`;
   }
-  if (asset.runnable === "live") return live ? "will run (live)" : "not run: needs --live";
+  // "LIVE: drives the editor" rather than "(live)": since LiveByDefault the operator did
+  // not opt in to this row, so the plan is the ONLY place they are told it is about to
+  // enter Play Mode, and it has to say so in words rather than in a category name.
+  if (asset.runnable === "live") return live ? "will run (LIVE: drives the editor)" : `not run: ${OFFLINE_SKIP_REASON}`;
   return "will run (offline)";
 }
 
@@ -1174,6 +1268,34 @@ function anchorTerms(asset: DiscoveredAsset): string | null {
 }
 
 /**
+ * THE UNREACHABLE-EDITOR REFUSAL (LiveByDefault).
+ *
+ * Exported so the guard and the CLI test can assert the exact shape rather than a substring
+ * of whatever the transport happened to throw. Three facts, in the order an operator needs
+ * them: what could not happen, what the transport said, and the two ways forward. `--offline`
+ * is named as a COMPLETE command, not as a flag in prose, because a next step that has to be
+ * assembled by hand is the class of defect this change exists to remove.
+ *
+ * Tier 2, and nothing was written: the plan has printed, discovery only read, and no section
+ * has run. An unreachable editor is a harness fault and never a verdict about the game.
+ */
+export function unreachableEditorLines(
+  root: string,
+  detail: string,
+  projectPathCanonical?: string,
+): string[] {
+  return [
+    `${TAG} REFUSED: no Unity editor was reachable, so the LIVE rows in the plan above could not be driven.`,
+    `${TAG} bridge said: ${detail}`,
+    `${TAG} nothing was written and nothing ran (exit 2). An unreachable editor is a harness fault, never a game verdict.`,
+    `${TAG} to grade the STORED EVIDENCE without an editor (this is also the right CI invocation):`,
+    `${TAG}   loombridge verify --offline --root ${root}`,
+    `${TAG} to run the live rows, open ${projectPathCanonical ?? root} in Unity, wait for the bridge to compile, then:`,
+    `${TAG}   loombridge verify --root ${root}`,
+  ];
+}
+
+/**
  * The on-ramp for a project with nothing to check. The actors are named honestly: the
  * recording session is a HUMAN playing the game, and that play session IS the approval
  * moment. An agent reading this must not be told to perform a step it structurally
@@ -1185,14 +1307,17 @@ export function onRampLines(root: string, opts: { acceptanceAbsent: boolean } = 
     `${TAG} a run that checked nothing is not a pass (exit 2). No report was written.`,
     `${TAG} the cheapest universal anchor is a recorded demonstration, so ask your human to play the game once:`,
     // THREE STEPS, NOT FOUR, and the two that need a person are the two named as verbs. The
-    // on-ramp used to spell `trace record` -> `trace replay` -> `trace approve` -> `verify
-    // --live`, which taught a separate `trace replay` step that `verify --live` already
-    // performs: it re-drives the trace and writes the very `<id>.report.json` that approve
-    // promotes. Naming it anyway made the loop read as one command longer than it is.
+    // on-ramp used to spell `trace record` -> `trace replay` -> `trace approve` -> `verify`,
+    // which taught a separate `trace replay` step that `verify` already performs: it
+    // re-drives the trace and writes the very `<id>.report.json` that approve promotes.
+    // Naming it anyway made the loop read as one command longer than it is.
+    //
+    // Step 2 is a bare `loombridge verify` since LiveByDefault: it drives the editor by
+    // default, so spelling `--live` here would teach a flag that no longer does anything.
     `${TAG}   1. loombridge record                               (a HUMAN plays it; this session IS the approval)`,
-    `${TAG}   2. loombridge verify --live                        (re-drives the demonstration and captures frames)`,
+    `${TAG}   2. loombridge verify                               (re-drives the demonstration and captures frames)`,
     `${TAG}   3. loombridge approve                              (freeze those frames as the baseline)`,
-    `${TAG} then run: loombridge verify --live                   (now graded against the frozen frames)`,
+    `${TAG} then run: loombridge verify                          (now graded against the frozen frames)`,
   ];
   // F7, THE OTHER DOOR. The on-ramp above is door two (an existing game: approve an anchor,
   // then re-measure it forever). An agent that reaches this text while BUILDING a new game
@@ -1201,8 +1326,13 @@ export function onRampLines(root: string, opts: { acceptanceAbsent: boolean } = 
   // being read as "record a demonstration of the game you have not built yet".
   if (opts.acceptanceAbsent) {
     lines.push(
-      `${TAG} building a NEW game? loombridge plan is the other door: it scaffolds .loombridge/ and`,
-      `${TAG}   authors the acceptance contract this verb grades (there is no ACCEPTANCE.json here).`,
+      // `--genre` IS PART OF THE COMMAND. `plan` REFUSES to guess the genre, and this branch
+      // fires precisely when there is no ACCEPTANCE.json, which is the state with no
+      // STATE.genre to fall back on: bare `loombridge plan` exits 2 here. Pointing at a
+      // command that cannot run is the defect `plan-next-step-surfaces.test.ts` exists for.
+      `${TAG} building a NEW game? loombridge plan --genre <genre> is the other door: it scaffolds`,
+      `${TAG}   .loombridge/ and authors the acceptance contract this verb grades`,
+      `${TAG}   (there is no ACCEPTANCE.json here). \`loombridge plan --help\` names the genres with a pack.`,
     );
   }
   return lines;
@@ -1296,14 +1426,18 @@ export function summaryLines(report: UnifiedVerifyReport, live: boolean): string
       );
     }
     if (liveOnly.length > 0 && !live) {
+      // Since LiveByDefault this can only be reached under `--offline`, so the answer is to
+      // DROP a flag rather than add one. The command is spelled in full: an operator who
+      // has to work out what "re-run without --offline" expands to is exactly the round
+      // trip this line exists to save.
       lines.push(
-        `${TAG} every discovered asset needs a running editor. Re-run with: loombridge verify --live`,
+        `${TAG} every discovered asset needs a running editor, and --offline was passed. With Unity open, run: loombridge verify`,
       );
     }
   }
   if (report.status === "partial") {
     // Three very different partials share one word, so the line has to separate them: an
-    // operator's deliberate `--live` omission still exits 0; an anchor the run could not
+    // operator's deliberate `--offline` still exits 0; an anchor the run could not
     // measure (broken, unapproved, draft) keeps the harness tier even though every executed
     // check was green; and G1's case, where everything ran and passed but a section compared
     // nothing a human ever froze, exits 0 and is still not a pass.
@@ -1311,7 +1445,7 @@ export function summaryLines(report: UnifiedVerifyReport, live: boolean): string
       lines.push(
         report.exit === 0
           ? `${TAG} PARTIAL: everything that ran passed, but the anchors above were not measured `
-            + "(skipped for lack of --live). This is not a full pass."
+            + "(skipped under --offline), so this is not a full pass. With Unity open, run: loombridge verify"
           : `${TAG} PARTIAL: everything that ran passed, but the anchors above could not be measured `
             + `at all, which is the harness tier (exit ${report.exit}). This is not a pass.`,
       );

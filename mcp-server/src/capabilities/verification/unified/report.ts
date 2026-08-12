@@ -164,7 +164,7 @@ export type UnifiedVerifyStatus = "pass" | "partial" | "fail" | "harness-fault" 
  * whether the run may still exit 0.
  *
  * Discovery's own three classes (`non-anchor`, `draft`, `broken`) plus the one the
- * ORCHESTRATOR adds: `live-only-skipped`, the asset needs `--live` and the operator
+ * ORCHESTRATOR adds: `live-only-skipped`, the asset needs a live editor and the operator
  * did not pass it. That one alone is an explicit operator choice, so it alone may
  * still exit 0; every other class is an anchor the run could not measure.
  */
@@ -318,7 +318,7 @@ export interface UnifiedVerifyReport {
    * this one can self-certify.
    */
   runId: string | null;
-  /** Whether live-only assets were executed (`--live`). */
+  /** Whether live-only assets were executed (the default; `--offline` clears it). */
   live: boolean;
   /** Every discovered asset, printed BEFORE anything ran. */
   plan: DiscoveredAsset[];
@@ -378,7 +378,7 @@ export function worstExitTier(codes: readonly number[]): number {
 
 /** Map a not-run reason to the tier it contributes (A6). */
 function notRunTier(why: NotRunReason): number {
-  // A deliberate `--live` omission is the ONLY non-execution an operator chose; every
+  // A deliberate `--offline` is the ONLY non-execution an operator chose; every
   // other one is an anchor the run could not measure, which is the harness tier.
   return why === "live-only-skipped" ? 0 : 2;
 }
@@ -428,7 +428,7 @@ function notRunTier(why: NotRunReason): number {
  * not vanish: they are still every row of `notRun`, and the summary line names each
  * one, which is where coverage honesty belongs.
  *
- * `partial` never rounds up to `pass`: only the operator's own `--live` omission is
+ * `partial` never rounds up to `pass`: only the operator's own `--offline` is
  * allowed to keep the exit at 0.
  *
  * SCOPED RUNS CANNOT SAY `pass` (F2). When `scoped` is true the ceiling is `partial`, whatever

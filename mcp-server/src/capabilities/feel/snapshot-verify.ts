@@ -98,7 +98,7 @@ function nextActionFor(report: Pick<SnapshotDriftReport, "status" | "metrics" | 
     const parts: string[] = [];
     if (drifted.length > 0) {
       parts.push(
-        `${drifted.join(", ")} moved since ${report.snapshot.approvedAt}: if intentional, re-approve (\`loombridge feel snapshot capture\` then \`approve\`); else inspect physics/timestep/collider changes since then`,
+        `${drifted.join(", ")} moved since ${report.snapshot.approvedAt}: if intentional, re-approve (\`loombridge feel snapshot capture\` then \`loombridge feel snapshot approve\`); else inspect physics/timestep/collider changes since then`,
       );
     }
     if (rejected.length > 0) {
@@ -111,7 +111,7 @@ function nextActionFor(report: Pick<SnapshotDriftReport, "status" | "metrics" | 
     return `Re-capture so ${missing.join(", ")} measure again (a gap is a harness/setup problem, never a pass).`;
   }
   if (report.contractBinding === "unverified") {
-    return "Clean, but the contract binding is unverified: re-run without --measurements (live capture) for a fully bound verdict.";
+    return "Clean, but the contract binding is unverified: for a fully bound verdict re-run with live capture (drop --measurements): loombridge verify --snapshot";
   }
   return "Feel is locked. Nothing to change.";
 }

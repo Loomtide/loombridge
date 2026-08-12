@@ -514,7 +514,7 @@ async function resolveReplayTargetId(
         `${path.relative(args.root, paths.replayTraces)}/: there is nothing to replay.`,
     );
     console.error(
-      "[loombridge trace]   record one first: `loombridge record` (then `loombridge verify --live` drives it, " +
+      "[loombridge trace]   record one first: `loombridge record` (then `loombridge verify` drives it, " +
         "or bare `loombridge trace replay` replays it alone), or point at an existing trace with " +
         "--id <id> / --trace <path>.",
     );
@@ -727,7 +727,7 @@ async function runRecord(args: TraceArgs, opts: TraceRunOpts = {}): Promise<numb
     await printNextStep(args.root);
   } else {
     // POINT AT THE LOOP, NOT AT THE MACHINERY. This used to name `trace replay` alone, which
-    // is the low-level door: it re-drives this one trace and stops. `verify --live` drives the
+    // is the low-level door: it re-drives this one trace and stops. `verify` drives the
     // same replay, writes the same `<id>.report.json`, and grades everything else the project
     // has, so it is what the next step actually is. `trace replay` stays named, second, as the
     // narrower tool it is.
@@ -736,7 +736,7 @@ async function runRecord(args: TraceArgs, opts: TraceRunOpts = {}): Promise<numb
     // printing `trace replay --id ` with nothing after it. Bare `trace replay` replays the
     // most recent trace, which is this one, so both halves of the hint are runnable.
     console.error(
-      "[loombridge trace] next: `loombridge verify --live` (drives this demonstration and captures " +
+      "[loombridge trace] next: `loombridge verify` (drives this demonstration and captures " +
         "the frames), then `loombridge approve` to freeze them.",
     );
     console.error(
@@ -1079,7 +1079,7 @@ async function replayOneTrace(
   // THE PAIR ON DISK ALWAYS DESCRIBES ONE RUN, and the rule lives HERE, at the single
   // place `<id>.report.json` is written, rather than in each caller.
   //
-  // The defect this closes, observed on a real project: `verify --live` re-drove a trace,
+  // The defect this closes, observed on a real project: `verify` re-drove a trace,
   // graded it red and rewrote the JSON, but rendered no HTML, so the `.report.html` beside
   // it was still the GREEN page an earlier `trace replay` had left. Nothing on that page
   // said it was stale, and it is the artifact a human actually opens: the reader sees green
@@ -1420,7 +1420,7 @@ async function runApprove(args: TraceArgs): Promise<number> {
         "stamp them under. Reports written before that binding existed cannot be promoted.",
     );
     console.error(
-      `[loombridge trace]   re-drive the demonstration first: \`loombridge verify --live\` (or ` +
+      `[loombridge trace]   re-drive the demonstration first: \`loombridge verify\` (or ` +
         `\`loombridge trace replay --id ${id}\`), then approve.`,
     );
     return 2;
@@ -1434,7 +1434,7 @@ async function runApprove(args: TraceArgs): Promise<number> {
         "later verify would pass against frames the current demonstration never produced.",
     );
     console.error(
-      `[loombridge trace]   re-drive the demonstration you just recorded: \`loombridge verify --live\` ` +
+      `[loombridge trace]   re-drive the demonstration you just recorded: \`loombridge verify\` ` +
         `(or \`loombridge trace replay --id ${id}\`), then approve.`,
     );
     return 2;
@@ -2100,7 +2100,7 @@ async function pruneUndeclaredBaselines(dir: string, pngs: TraceBaselinePng[]): 
  * unified report links the JSON": true, and beside the point: the two doors write into
  * the SAME `reports/` directory, so a verify that rewrote only the JSON left whatever page
  * an earlier `trace replay` had rendered sitting next to it, describing a different run.
- * Observed on a real project: a red `verify --live` next to a green page from 4 minutes
+ * Observed on a real project: a red `verify` next to a green page from 4 minutes
  * earlier. The JSON is what the roll-up binds; the HTML is what a human opens, and both
  * have to be this run's.
  *
@@ -3315,12 +3315,12 @@ function printUsage(): void {
       "same exits. The daily loop is:",
       "",
       "  loombridge record          a human demonstrates",
-      "  loombridge verify --live   drives the flow, captures the frames, grades what has an anchor",
+      "  loombridge verify          drives the flow, captures the frames, grades what has an anchor",
       "  loombridge approve         a human freezes what that run captured",
-      "  loombridge verify --live   now graded against the frozen frames",
+      "  loombridge verify          now graded against the frozen frames",
       "",
       "`trace replay` is the LOW-LEVEL door: it re-drives ONE trace and nothing else. You do not",
-      "need it in the loop above, because `verify --live` already replays and writes the very",
+      "need it in the loop above, because `verify` already replays and writes the very",
       "<id>.report.json that `approve` promotes. Reach for `verify`; reach for `trace replay`",
       "when you want the replay on its own.",
       "",
@@ -3350,7 +3350,7 @@ function printUsage(): void {
       "              RUN, i.e. the newest <id>.report.json (ties broken by name), announced",
       "              with the number of captures it is about to freeze. It searches REPORTS,",
       "              not traces: the referent is the run you just replayed, and a trace that",
-      "              was never replayed has nothing to promote. `verify --live` writes that",
+      "              was never replayed has nothing to promote. `verify` writes that",
       "              same report, so it is the usual producer. With no run to promote at all,",
       "              approve REFUSES and names the other approvable artifacts it can see.",
       "  tolerance   Stamp the human-approved pixel drift tolerance onto the EXISTING",

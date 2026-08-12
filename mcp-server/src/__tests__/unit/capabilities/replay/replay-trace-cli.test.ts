@@ -955,7 +955,7 @@ test("trace approve: bare with NO reports REFUSES (exit 2), names the loop that 
       assert.equal(exit, 2, `${label}: ${err}`);
       assert.match(err, /nothing to approve/, label);
       assert.match(err, /loombridge record/, `${label}: the refusal names the act that starts the loop`);
-      assert.match(err, /loombridge verify --live/, `${label}: …and the one that produces the run`);
+      assert.match(err, /loombridge verify/, `${label}: …and the one that produces the run`);
       await assert.rejects(fs.access(baselinesDir(root)), `${label}: nothing was frozen`);
     }
   } finally {

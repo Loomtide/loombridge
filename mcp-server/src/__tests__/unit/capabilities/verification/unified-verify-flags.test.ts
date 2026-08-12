@@ -104,7 +104,7 @@ function unclassified(source: string): string[] {
 }
 
 /**
- * THE SEVEN BARE-RUN FLAGS, pinned as a literal.
+ * THE EIGHT BARE-RUN FLAGS, pinned as a literal.
  *
  * Deliberately NOT derived from `ORCHESTRATOR_FLAGS`: the router-driven test below uses
  * this as its expectation, so a hijacked router (or a widened set) fails rather than
@@ -112,10 +112,15 @@ function unclassified(source: string): string[] {
  * on this line.
  *
  * S2a added `--only` (the seventh), which is why every count below moved by one on purpose.
+ * LiveByDefault added `--offline` (the eighth): live is now the default and `--offline` is
+ * the opt-out, so it has to route to the orchestrator exactly like `--live` does. `--live`
+ * STAYS on this list and stays accepted: it is a no-op kept so every shipped doc, skill and
+ * script that already types it keeps working.
  */
 const BARE_RUN_FLAGS: ReadonlySet<string> = new Set([
   "--id",
   "--live",
+  "--offline",
   "--only",
   "--report",
   "--root",
@@ -206,7 +211,7 @@ test("THE ROUTER routes every accepted flag to its classified side (not just the
   // Non-vacuity: the walk really covered the whole parser plus the orchestrator-only
   // flags, and it really exercised both outcomes.
   assert.ok(flags.length > 30, `the walk saw only ${flags.length} flags; it is not reading the parser`);
-  assert.equal(flags.filter((f) => BARE_RUN_FLAGS.has(f)).length, 7, "all seven bare-run flags were driven");
+  assert.equal(flags.filter((f) => BARE_RUN_FLAGS.has(f)).length, 8, "all eight bare-run flags were driven");
   assert.ok(
     flags.some((f) => !BARE_RUN_FLAGS.has(f) && classifyOrchestratorArgs([f]) === null),
     "the walk must include flags that really do route legacy",
@@ -221,18 +226,45 @@ test("THE ROUTER routes every accepted flag to its classified side (not just the
   assert.equal(classifyOrchestratorArgs(["--root", "/p", "--live", "--slice", "s1"]), null);
 });
 
-test("the orchestrator allowlist is exactly the seven bare-run flags, and the router reads THIS set", () => {
+test("the orchestrator allowlist is exactly the eight bare-run flags, and the router reads THIS set", () => {
   // Pinned as a value, not a count: growing this set is a routing decision, and it must
   // show up as a diff on this line rather than as a number quietly ticking up.
   assert.deepEqual([...ORCHESTRATOR_FLAGS].sort(), [...BARE_RUN_FLAGS].sort());
   assert.deepEqual(
     [...BARE_RUN_FLAGS].sort(),
-    ["--id", "--live", "--only", "--report", "--root", "--strict", "--workspace"],
+    ["--id", "--live", "--offline", "--only", "--report", "--root", "--strict", "--workspace"],
   );
   assert.deepEqual([...ORCHESTRATOR_VALUE_FLAGS].sort(), [...BARE_RUN_VALUE_FLAGS].sort());
-  // `--live`, `--report` and `--only` are orchestrator-only: `parseArgs` never handles them
-  // (the router's own branch is the only place they appear in the argv loop).
-  for (const flag of ["--live", "--report", "--only"]) assert.ok(ORCHESTRATOR_FLAGS.has(flag));
+  // `--live`, `--offline`, `--report` and `--only` are orchestrator-only: `parseArgs` never
+  // handles them (the router's own branch is the only place they appear in the argv loop).
+  for (const flag of ["--live", "--offline", "--report", "--only"]) assert.ok(ORCHESTRATOR_FLAGS.has(flag));
+});
+
+/**
+ * LIVE IS THE DEFAULT (LiveByDefault), decided by the REAL router.
+ *
+ * `live` is the field the orchestrator branches on, so asserting it here is asserting the
+ * behaviour rather than the spelling: no fixture, no editor, no output matching. The three
+ * facts that make the change safe for everything already shipped are each pinned:
+ * bare is live, `--offline` is the ONLY thing that clears it, and `--live` still parses.
+ */
+test("bare `verify` is LIVE; `--offline` is the opt-out; `--live` still parses as a no-op", () => {
+  assert.equal(classifyOrchestratorArgs([])?.live, true, "bare `verify` must be live by default");
+  assert.equal(classifyOrchestratorArgs(["--root", "/p"])?.live, true, "an unrelated flag must not change the default");
+  assert.equal(classifyOrchestratorArgs(["--offline"])?.live, false, "--offline must clear live");
+  assert.equal(classifyOrchestratorArgs(["--offline", "--strict"])?.live, false, "--offline must survive other flags");
+
+  // THE COMPATIBILITY HALF. `--live` is typed by shipped docs, skills and CI scripts; it
+  // must keep parsing (not fall through to the legacy unknown-flag exit 2) and must keep
+  // meaning live. Asserted as `notEqual(null)` FIRST, because a router that stopped
+  // adopting the argv would make the `live` assertion pass vacuously on `undefined`.
+  assert.notEqual(classifyOrchestratorArgs(["--live"]), null, "--live must still route to the orchestrator");
+  assert.equal(classifyOrchestratorArgs(["--live"])?.live, true);
+  assert.notEqual(classifyOrchestratorArgs(["--live", "--root", "/p"]), null);
+
+  // LAST ONE WINS, both directions, so neither spelling silently outranks the other.
+  assert.equal(classifyOrchestratorArgs(["--live", "--offline"])?.live, false);
+  assert.equal(classifyOrchestratorArgs(["--offline", "--live"])?.live, true);
 });
 
 test("--only is a VALUE flag on the router, and a mode flag anywhere takes the whole argv legacy", () => {

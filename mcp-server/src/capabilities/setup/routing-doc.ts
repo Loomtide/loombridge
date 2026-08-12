@@ -24,7 +24,7 @@ export const ROUTING_DOC_RELPATH = "LOOMBRIDGE.md";
  * changes so that `install-bridge` re-runs update an out-of-date file in place and
  * `doctor` can flag a stale one.
  */
-export const ROUTING_DOC_VERSION = 5;
+export const ROUTING_DOC_VERSION = 6;
 
 /**
  * The single copy-paste line a user can add to their CLAUDE.md / AGENTS.md. We never
@@ -90,7 +90,7 @@ surface instead of hand-rolling raw editor pokes.
 |---|---|---|
 | Checking mobile perf / about to ship | the \`loombridge_mobile_audit\` MCP tool (or \`loombridge mobile-audit\` CLI) — advisory tri / texture / audio / shadow audit over the \`unity_editor_audit_mobile_assets\` bridge op | eyeballing editor CPU/GPU ms — editor perf ≠ device perf |
 | Deciding whether the game is *done* | the \`loombridge_verify\` then \`loombridge_doneness\` MCP tools (or \`loombridge verify\` / \`loombridge doneness\` CLI) against the \`.loombridge/\` contract — deterministic, contract-first | declaring "looks good" off a screenshot |
-| Anchoring an existing game so it can be re-checked forever | the four-line loop: \`loombridge record\` (a HUMAN plays it) → \`loombridge verify --live\` (drives it, captures frames) → \`loombridge approve\` (a HUMAN freezes them) → \`loombridge verify --live\` (now graded). Only steps 1 and 3 need a person, and \`record\` / \`approve\` are the same doors as \`loombridge trace record\` / \`trace approve\` | inserting a \`loombridge trace replay\` step — \`verify --live\` already replays and writes the very report \`approve\` promotes |
+| Anchoring an existing game so it can be re-checked forever | the four-line loop: \`loombridge record\` (a HUMAN plays it) → \`loombridge verify\` (drives it, captures frames) → \`loombridge approve\` (a HUMAN freezes them) → \`loombridge verify\` (now graded). Only steps 1 and 3 need a person, and \`record\` / \`approve\` are the same doors as \`loombridge trace record\` / \`trace approve\` | inserting a \`loombridge trace replay\` step — \`verify\` already replays and writes the very report \`approve\` promotes |
 | Running this project's Unity EditMode tests | \`loombridge tests run\`, which resolves the editor, runs batchmode headless, and STAMPS the results into \`.loombridge/tests/\` so \`loombridge verify\` grades them offline | running the editor's Test Runner by hand and reporting the result yourself |
 | A compile / domain-reload seems stuck or broken | \`unity_editor_get_project_diagnostics\` — compile errors across ALL assemblies (incl. test asmdefs), not just the last recompile | assuming the socket died |
 | Running an op that recompiles (package add/remove, script edit) | chain \`unity_editor_wait_for\` with \`{ compiling: false }\` before the next op | a fixed \`sleep\` |

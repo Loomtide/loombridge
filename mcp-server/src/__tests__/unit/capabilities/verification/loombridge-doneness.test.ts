@@ -1371,17 +1371,17 @@ test("F3: an exit-0 PARTIAL is not a certificate either, and the refusal names w
     await writeUnifiedReport(root, { status: "pass", exit: 0, notRun: [], unanchoredSections: [] });
     assert.equal(await runDoneness({ root }), 0, "the setup must certify, or this proves nothing");
 
-    // 1. Anchors skipped for lack of --live: exit 0, and NOT a certificate.
+    // 1. Anchors skipped under --offline: exit 0, and NOT a certificate.
     await writeUnifiedReport(root, {
       status: "partial",
       exit: 0,
       unanchoredSections: [],
-      notRun: [{ kind: "trace", id: "happy-path", reason: "needs --live", why: "live-only-skipped" }],
+      notRun: [{ kind: "trace", id: "happy-path", reason: "needs a live editor, and --offline was passed", why: "live-only-skipped" }],
     });
     const live = await captureDonenessOutput(root);
     assert.equal(live.code, 1, "an offline run after a live drift must not certify");
     assert.match(live.text, /unified verify is `partial`, not `pass`/);
-    assert.match(live.text, /skipped for lack of --live/);
+    assert.match(live.text, /skipped under --offline/);
     assert.match(live.text, /trace 'happy-path'/, "the refusal names WHICH anchor went unmeasured");
 
     // 2. An executed section that compared no frozen human approval: exit 0, still not done.
