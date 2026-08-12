@@ -359,3 +359,21 @@ test("LITMUS: the absent-kind DEFAULT survives off the generated path (compat is
   });
   assert.equal(ref.kind, DEFAULT_DESIGN_TARGET_KIND);
 });
+
+// --- SNP-T02: a subcommand can be asked how it works -----------------------------------------
+//
+// `loombridge target set --help` exited 2 with `unknown argument "--help"`, so the only way to
+// learn a subcommand's flags was to trigger a usage error or read the source. Asking for help is
+// never a usage error.
+
+test("REGRESSION: --help on a target SUBCOMMAND prints usage and exits 0", async () => {
+  for (const argv of [["set", "--help"], ["status", "--help"], ["approve", "-h"]]) {
+    assert.equal(await designCli(argv), 0, `\`target ${argv.join(" ")}\` must exit 0`);
+  }
+});
+
+test("LITMUS: a genuine unknown argument is still a usage error", async () => {
+  // Without this, "accept every unknown flag" would pass the regression above.
+  assert.equal(await designCli(["set", "--bogus"]), 2);
+  assert.equal(await designCli(["set", "--image"]), 1, "a real failure still fails");
+});

@@ -26,8 +26,8 @@ inputs differ.
      `--catalog <url>`. `LOOMBRIDGE_ASSET_CATALOG_URL` is the no-flag default for `--catalog`:
      with no `--registry` / `--catalog` / `--catalog-api` passed, the verbs read it, and with it
      unset they refuse by name. **The endpoint is configuration,
-     never a baked-in default, and this repo does not name a deployment.** The current base
-     URL is published alongside the asset store. The web store at `assetstore.loomtide.ai`
+     never a baked-in default, and this repo does not name a deployment.** The base URL is
+     not published at a fixed path, so obtain it from whoever operates the catalog and set it once via `LOOMBRIDGE_ASSET_CATALOG_URL`. The web store at `assetstore.loomtide.ai`
      is a human surface and serves `/api/...`, **not** `/v1/...`, so it is **not** the
      `--catalog-api` base: do not pass it there.
 

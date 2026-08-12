@@ -13,9 +13,10 @@ slice announced. It did not fail. What it cost to get there is the finding.
 | Epic | Findings | Status | Commits |
 |---|---|---|---|
 | Genre-correct generated roles | SNP-T01 | **Fixed** | PR #83 `a8366e1` |
-| Catalog endpoint discoverability | SNP-P01 | **Open** | |
-| Consumer-side discoverability | SNP-P02, SNP-T02, SNP-T03 | **Open** | |
-| Registry onboarding | SNP-O01 | **Open** | |
+| Catalog endpoint discoverability | SNP-P01 | **Fixed** | this branch |
+| Consumer-side discoverability | SNP-P02, SNP-T02 | **Fixed** | this branch |
+| Vitest trap | SNP-T03 | **Open** | |
+| Registry onboarding | SNP-O01 | **Fixed** | this branch |
 | Sniper sub-genre feel | SNP-G01 | **Candidate** (needs a 2nd run) | |
 
 ## Methodology
@@ -68,21 +69,21 @@ layer out: a declared path with no guard, invisible to a green suite.
 | ID | Finding | Provenance / Conf. | Sev | Evidence | Fix | Status |
 |---|---|---|---|---|---|---|
 | SNP-T01 | `generated-plan`/`generated-apply` validated annotation roles against the static platformer list, so hybrid mode was broken for **every** non-platformer genre | `[observed-this-session]` `[direct]` | High | `Unknown generated asset annotation role 'reticle'.; Unknown generated asset annotation role 'impact-vfx'.` → `generated-plan slots=0 issues=4`, EXIT=1 | Resolve roles from `resolveAssetGenreProfile(manifest.genre)` | **Fixed** PR #83 |
-| SNP-T02 | `loombridge target set --help` exits 2 with `unknown argument "--help"`. A subcommand cannot be asked how it works | `[observed-this-session]` `[direct]` (re-confirmed at HEAD) | Med | transcript line 29; reproduced at `4dba346` | Accept `--help` on every subcommand, or route it to the parent usage block | Open |
+| SNP-T02 | `loombridge target set --help` exits 2 with `unknown argument "--help"`. A subcommand cannot be asked how it works | `[observed-this-session]` `[direct]` (re-confirmed at HEAD) | Med | transcript line 29; reproduced at `4dba346` | `--help` accepted on every subcommand; an unknown ACTION still exits 2 | **Fixed** |
 | SNP-T03 | Agent trying to validate its own Loombridge fix ran `npx vitest` and got `No test suite found`. The repo has **zero** vitest and uses `node --test` | `[observed-this-session]` `[direct]` | Low | transcript line 301; `grep -c vitest package.json` → 0 | Name the test command where a consumer-side agent will look | Open |
 
 ## P: product / flow gaps
 
 | ID | Finding | Provenance / Conf. | Sev | Evidence | Fix | Status |
 |---|---|---|---|---|---|---|
-| SNP-P01 | **Headline.** Catalog base URL is promised as "published alongside the asset store"; the store publishes nothing and the URL had to be scraped from JS bundles | `[observed-this-session]` `[direct]` | High | 16 curl calls; store 404s on every doc path; agent's own closing note | Publish it at a stable path the docs can name, or stop promising and name the env var only | Open |
-| SNP-P02 | **32 of 78 bash calls (41%) read Loombridge's own `src/`/`dist/`** from inside the consumer project, to work out the asset flow (`catalog-source.js`, `assets.js`, `manifest-selection`, `asset-genre-profile`, `generated-assets`, `asset-manifest.d.ts`) | `[observed-this-session]` `[direct]` | High | line 143→288 cluster | Whatever the agent had to read source to learn belongs in `--help`, the skill, or the plan prose | Open |
+| SNP-P01 | **Headline.** Catalog base URL is promised as "published alongside the asset store"; the store publishes nothing and the URL had to be scraped from JS bundles | `[observed-this-session]` `[direct]` | High | 16 curl calls; store 404s on every doc path; agent's own closing note | All SEVEN docs now say the URL is not published at a fixed path; a flatten-aware guard bans the claim returning | **Fixed** |
+| SNP-P02 | **32 of 78 bash calls (41%) read Loombridge's own `src/`/`dist/`** from inside the consumer project, to work out the asset flow (`catalog-source.js`, `assets.js`, `manifest-selection`, `asset-genre-profile`, `generated-assets`, `asset-manifest.d.ts`) | `[observed-this-session]` `[direct]` | High | line 143→288 cluster | `loombridge assets roles` prints the genre's roles; wired into plan.md and the asset-layer skill | **Fixed** |
 
 ## O: onboarding / distribution
 
 | ID | Finding | Provenance / Conf. | Sev | Evidence | Fix | Status |
 |---|---|---|---|---|---|---|
-| SNP-O01 | "No local asset registry is installed on this machine" was a decision point put to the user mid-plan, not a resolved setup step | `[observed-this-session]` `[direct]` | Med | AskUserQuestion at line 111 | Detect at `setup`/`doctor` time, not mid-plan | Open |
+| SNP-O01 | "No local asset registry is installed on this machine" was a decision point put to the user mid-plan, not a resolved setup step | `[observed-this-session]` `[direct]` | Med | AskUserQuestion at line 111 | `doctor` reports machine-level and project-imported packs as INFO | **Fixed** |
 
 ## G: genre knowledge (CANDIDATE, do not promote)
 

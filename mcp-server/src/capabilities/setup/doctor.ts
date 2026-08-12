@@ -14,12 +14,15 @@
  * `--ci` emits the report as JSON (same exit code) for pipelines.
  */
 
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
+import { homedir } from "node:os";
+import { LOOMBRIDGE_HOME_DIRNAME } from "../../domain/workspace-paths.js";
 import process from "node:process";
 
 import { REQUIRED_PROTOCOL_VERSION } from "../../bridge/preflight/prerequisite-checks.js";
 import { resolveBuildStamp } from "../../shared/build-stamp.js";
+import { loombridgePaths } from "../../domain/state.js";
 import {
   InstallMetadata,
   METADATA_RELPATH,
@@ -205,6 +208,58 @@ function checkProjectWiring(
     return;
   }
   checks.push({ id: "project.valid", label: "Unity project", status: "pass", detail: project });
+
+  // SNP-O01: on a real 3d-shooter run, "no local asset registry is installed on this machine"
+  // surfaced as a QUESTION mid-plan, after the contract was already seeded. It is knowable before
+  // planning starts, so it belongs here.
+  //
+  // TWO DIRECTORIES, because they answer different questions and the first draft of this row read
+  // only the second and reported "none" while the machine had packs:
+  //   ~/.loombridge/asset-layer/registry/  the MACHINE-level packs `loombridge-install-locally.sh`
+  //                                        installs. `.skills/asset-layer` calls this THE default
+  //                                        asset path (offline, no account, no configuration).
+  //   <project>/.loombridge/registry/      per-project packs, written only by
+  //                                        `registry-apply --from-selection` importing from a
+  //                                        hosted catalog.
+  //
+  // INFO, never warn: zero packs is fully supported (hosted catalog, or all-generated), so warning
+  // would imply a missing dependency that is not missing.
+  /** Machine-level pack dir, relative to `~/<LOOMBRIDGE_HOME_DIRNAME>`. Installed by loombridge-install-locally.sh. */
+  const ASSET_LAYER_REGISTRY_RELDIR = path.join("asset-layer", "registry");
+  const packsIn = (dir: string): string[] => {
+    try {
+      return existsSync(dir)
+        ? readdirSync(dir, { withFileTypes: true })
+            .filter((e) => e.isFile() && e.name.endsWith(".json"))
+            .map((e) => e.name)
+            .sort()
+        : [];
+    } catch {
+      return [];
+    }
+  };
+  // Derive, never spell: write-paths W1 allows exactly two declarations of the bare dirname and W5
+  // inventories every segment under it. `LOOMBRIDGE_HOME_DIRNAME` is the sanctioned one for the
+  // machine-level tree, already used by cli-install-method.
+  const machineDir = path.join(homedir(), LOOMBRIDGE_HOME_DIRNAME, ASSET_LAYER_REGISTRY_RELDIR);
+  const machinePacks = packsIn(machineDir);
+  const projectPacks = packsIn(loombridgePaths(project).registry);
+  const parts: string[] = [];
+  parts.push(machinePacks.length > 0
+    ? `machine: ${machinePacks.length} pack(s) in ~/.loombridge/asset-layer/registry/ (${machinePacks.join(", ")})`
+    : "machine: none in ~/.loombridge/asset-layer/registry/");
+  parts.push(projectPacks.length > 0
+    ? `project: ${projectPacks.length} pack(s) imported into .loombridge/registry/ (${projectPacks.join(", ")})`
+    : "project: none imported");
+  if (machinePacks.length === 0 && projectPacks.length === 0) {
+    parts.push("fine: use a hosted catalog (--catalog-api / LOOMBRIDGE_ASSET_CATALOG_URL) or generate from the hero shot");
+  }
+  checks.push({
+    id: "assets.registry",
+    label: "Local asset registry",
+    status: "info",
+    detail: parts.join("; "),
+  });
 
   const meta = readInstallMetadata(project);
   // `install-agent` (run before `install-bridge`) writes a record with ONLY the agentSurface

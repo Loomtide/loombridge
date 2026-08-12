@@ -6,7 +6,7 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 
 import { run as runAssets } from "../../../../capabilities/assets/assets.js";
-import { readAssetManifest, type AssetManifest, type RequiredAssetRole } from "../../../../capabilities/assets/asset-manifest.js";
+import { createDraftAssetManifest, readAssetManifest, type AssetManifest, type RequiredAssetRole } from "../../../../capabilities/assets/asset-manifest.js";
 import { setDesignTarget } from "../../../../capabilities/verification/design.js";
 import { runPlan } from "../../../../capabilities/verification/plan.js";
 import { loombridgePaths } from "../../../../domain/state.js";
@@ -903,4 +903,115 @@ test("loombridge assets resolves path flags against --root even when --root is l
 
   const plan = JSON.parse(await fs.readFile(path.join(root, outputRel), "utf-8")) as { slots: unknown[] };
   assert.equal(plan.slots.length, manifest.assets.length);
+});
+
+// --- SNP-P02: a genre's roles are discoverable from the CLI ------------------------------------
+//
+// A real 3d-shooter plan run spent 32 of 78 shell calls reading Loombridge's own src/ and dist/
+// from inside the consumer project. `asset-genre-profile.ts` was one of the files it opened, to
+// learn which roles 3d-shooter needs and which are generated in hybrid mode. Deterministic, cheap
+// information that was reachable only by reading the tool's source.
+
+test("assets roles prints a genre's required roles and their hybrid source", async () => {
+  const lines: string[] = [];
+  const spy = console.log;
+  console.log = (...a: unknown[]) => { lines.push(a.map(String).join(" ")); };
+  try {
+    assert.equal(await runAssets(["roles", "--genre", "3d-shooter"]), 0);
+  } finally {
+    console.log = spy;
+  }
+  const out = lines.join("\n");
+  // The two facts the session had to read source for.
+  assert.match(out, /reticle\s+generated/, "reticle is generated-in-hybrid for 3d-shooter");
+  assert.match(out, /impact-vfx\s+generated/);
+  assert.match(out, /player-model\s+registry/, "registry-sourced roles are distinguished");
+  assert.match(out, /genre: 3d-shooter/);
+});
+
+test("assets roles REFUSES an unknown genre and names the known ones", async () => {
+  // Refusals stay on STDERR even though the payload moved to stdout: an agent piping the payload
+  // must not silently capture an error message as if it were data.
+  const { code, err } = await captureStderr(() => runAssets(["roles", "--genre", "not-a-genre"]));
+  assert.equal(code, 2);
+  assert.match(err, /unknown genre "not-a-genre"/);
+  assert.match(err, /3d-shooter/, "the refusal must list what IS available");
+});
+
+test("LITMUS: roles are per GENRE, not one hardcoded list", async () => {
+  // The bug this whole finding sits next to (SNP-T01) was one static list serving every genre.
+  // A `roles` verb that printed the same thing for every genre would be the same defect wearing a
+  // different hat, and would pass the assertions above if they only ever checked 3d-shooter.
+  const capture = async (genre: string) => {
+    const lines: string[] = [];
+    const spy = console.log;
+    console.log = (...a: unknown[]) => { lines.push(a.map(String).join(" ")); };
+    try { await runAssets(["roles", "--genre", genre]); } finally { console.log = spy; }
+    return lines.join("\n");
+  };
+  const shooter = await capture("3d-shooter");
+  const platformer = await capture("platformer-2d");
+  assert.notEqual(shooter, platformer, "two genres must not print identical role tables");
+  assert.doesNotMatch(platformer, /reticle/, "reticle is not a platformer role");
+});
+
+test("roles resolves the genre from the project manifest when --genre is absent", async () => {
+  // H4: previously untested. A mutation replacing the manifest/refuse logic with a hardcoded
+  // platformer default passed the whole suite, which is SNP-T01's exact defect wearing a new hat.
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "loombridge-roles-"));
+  await fs.mkdir(path.join(root, ".loombridge"), { recursive: true });
+  const manifest = createDraftAssetManifest({
+    mode: "generated", genre: "3d-shooter",
+    heroShot: { path: "h.png", sha256: "c".repeat(64) },
+  });
+  await fs.writeFile(loombridgePaths(root).assetManifest, JSON.stringify(manifest, null, 2), "utf-8");
+
+  const out: string[] = [];
+  const spy = console.log;
+  console.log = (...a: unknown[]) => { out.push(a.map(String).join(" ")); };
+  try {
+    assert.equal(await runAssets(["roles", "--root", root]), 0);
+  } finally {
+    console.log = spy;
+  }
+  assert.match(out.join("\n"), /genre: 3d-shooter/, "the manifest's genre must win, not the default");
+  assert.match(out.join("\n"), /reticle/);
+});
+
+test("roles treats an ABSENT manifest genre as the platformer default, not a refusal", async () => {
+  // H5: a platformer draft omits the `genre` key entirely (it IS the default), so refusing here
+  // broke the most common project. Every other consumer resolves undefined to platformer.
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "loombridge-roles-"));
+  await fs.mkdir(path.join(root, ".loombridge"), { recursive: true });
+  const manifest = createDraftAssetManifest({
+    mode: "generated", heroShot: { path: "h.png", sha256: "c".repeat(64) },
+  });
+  assert.equal("genre" in manifest, false, "fixture must reproduce the absent-genre shape");
+  await fs.writeFile(loombridgePaths(root).assetManifest, JSON.stringify(manifest, null, 2), "utf-8");
+
+  const out: string[] = [];
+  const spy = console.log;
+  console.log = (...a: unknown[]) => { out.push(a.map(String).join(" ")); };
+  try {
+    assert.equal(await runAssets(["roles", "--root", root]), 0, "must not refuse a default-genre project");
+  } finally {
+    console.log = spy;
+  }
+  assert.match(out.join("\n"), /genre: platformer-2d/);
+});
+
+test("LITMUS: roles REFUSES when there is no manifest and no --genre", async () => {
+  // The refusal is the point of the design: never silently default. Without this, reinstating the
+  // platformer fallback passes the suite.
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "loombridge-roles-"));
+  const errs: string[] = [];
+  const spy = console.error;
+  console.error = (...a: unknown[]) => { errs.push(a.map(String).join(" ")); };
+  try {
+    assert.equal(await runAssets(["roles", "--root", root]), 2);
+  } finally {
+    console.error = spy;
+  }
+  assert.match(errs.join("\n"), /no genre/);
+  assert.match(errs.join("\n"), /platformer-2d/, "the refusal must list the known genres");
 });
