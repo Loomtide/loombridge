@@ -99,7 +99,7 @@ export const ASSET_KIND_CATALOG = [
   {
     kind: "trace",
     covers: "a recorded demonstration re-driven and compared pixel-for-pixel to its approved frames",
-    nextAction: "loombridge trace record --id <name>, then `trace replay`, then `trace approve`",
+    nextAction: "loombridge record, then `loombridge verify --live`, then `loombridge approve`",
   },
   {
     kind: "feel-snapshot",
@@ -485,8 +485,8 @@ export async function discoverTraceAssets(root: string): Promise<DiscoveredAsset
       const hasFrames = await dirHasPng(baselineDir);
       row.notRunClass = "non-anchor";
       row.reason = hasFrames
-        ? `unstamped baseline (no ${TRACE_BASELINE_MANIFEST}): re-approve with \`loombridge trace approve --id ${id}\` to stamp what approved it`
-        : `recorded, not approved: run \`loombridge trace replay --id ${id}\` then \`loombridge trace approve --id ${id}\``;
+        ? `unstamped baseline (no ${TRACE_BASELINE_MANIFEST}): re-approve with \`loombridge approve --id ${id}\` to stamp what approved it`
+        : `recorded, not approved: this \`verify --live\` run captures its frames; freeze them with \`loombridge approve --id ${id}\``;
       rows.push(row);
       continue;
     }

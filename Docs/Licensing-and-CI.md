@@ -13,9 +13,10 @@ Everything Loombridge does locally runs under the license your open editor alrea
   on one machine. Unity permits this; the only contention is per-project, and the CLI
   refuses to spawn against a project whose editor is already open
   (`Temp/UnityLockfile`).
-- Live verification (`verify --live`, `trace replay`, `trace record`,
+- Live verification (`verify --live`, `record`, `trace replay`,
   `feel snapshot capture`) attaches to your already-running, already-licensed editor
-  over the local bridge. No second seat, no extra activation.
+  over the local bridge. No second seat, no extra activation. (`approve` needs no editor
+  at all: it promotes frames a previous run already captured.)
 
 If you are a solo developer or a small team on Unity Personal, there is no licensing
 problem anywhere in the local loop.

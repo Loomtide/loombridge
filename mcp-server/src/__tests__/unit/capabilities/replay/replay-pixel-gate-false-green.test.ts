@@ -197,10 +197,16 @@ test("THE REPRODUCTION: a replay whose anchor refuses to grade is never a green 
     // The operator's real sequence: a run under one capture clock, approved, then a run
     // under another. The refusal itself is correct and loud on stderr; what shipped wrong
     // is everything it left behind on disk.
+    //
+    // THE TWO CLOCKS ARE NOW 60 AND 30, not wall-clock and 60. The unanchored first replay
+    // takes the default, and the default became capture-aligned 60; typing `--aligned-fps 60`
+    // at the second replay would AGREE with the anchor and grade cleanly, which would leave
+    // this reproduction asserting nothing. The mismatch, not the particular pair, is the
+    // subject.
     assert.equal((await captured(() => runTrace(["replay", "--id", "demo", "--root", root], { clientFactory: factory }))).value, 0);
     assert.equal((await captured(() => runTrace(["approve", "--id", "demo", "--root", root]))).value, 0);
     const { value: exit, out } = await captured(() =>
-      runTrace(["replay", "--id", "demo", "--root", root, "--aligned-fps", "60"], { clientFactory: factory }),
+      runTrace(["replay", "--id", "demo", "--root", root, "--aligned-fps", "30"], { clientFactory: factory }),
     );
 
     assert.equal(exit, 2, "the tier was already right; the evidence was not");

@@ -623,7 +623,12 @@ test("the help states what alignment covers AND what it does not", async () => {
   // COMPOSITION test above ("a baseline stamped with a capture clock makes the real driver
   // send the aligned op"), which stamps 30 fps into a manifest, types no flag, and asserts the
   // op really went out at 30. This assertion pins the sentence those two have to agree on.
-  assert.match(out, /Default: the baseline's stamped capture clock, else wall-clock\./);
+  assert.match(out, /Default: the baseline's stamped capture clock, else aligned 60 fps\./);
+  // AX4: the help ALSO makes the compatibility promise the fallback change rests on, and the
+  // two COMPOSITION tests below are what walk it: a stamped wall-clock anchor keeps its clock,
+  // and only an unanchored run moves. A promise in help text with nothing walking it is a
+  // promise the tool can quietly stop keeping.
+  assert.match(out, /A stamped baseline always wins, in both directions/);
 });
 
 test("the residual sentence names the two unaligned windows and refuses to call drift proof", () => {
@@ -765,7 +770,51 @@ test("COMPOSITION: a baseline stamped with a capture clock makes the real driver
   }
 });
 
-test("COMPOSITION: with no stamped clock the same door takes the WALL-CLOCK path, byte for byte", async () => {
+/*
+ * ═══ AX4: THE FALLBACK IS ALIGNED, AND A STAMPED ANCHOR STILL WINS ═══════════════════════
+ *
+ * These two tests are a PAIR and only mean something together. The first says the default
+ * moved; the second says it moved for exactly one case. Deleting either leaves a claim
+ * nothing walks:
+ *
+ *   - without the first, the default could silently revert to wall-clock;
+ *   - without the second, the default could be applied UNCONDITIONALLY, re-clocking every
+ *     anchor a human already approved under wall-clock and turning each of their next
+ *     replays into a phase-incomparable harness fault. That is the failure mode with a
+ *     blast radius, so it is the one asserted against the real door rather than the unit.
+ *
+ * LITMUS, both directions, applied to `resolveAlignedCaptureFps` in `trace.ts`, rebuilt and
+ * re-run each time, then restored.
+ *
+ * BREAK A — put the fallback back to wall-clock:
+ *     -    if (stampedFps === "wall-clock") return {};
+ *     -    return { fps: DEFAULT_ALIGNED_CAPTURE_FPS };
+ *     +    return {};
+ *   OBSERVED VERBATIM:
+ *     ✖ COMPOSITION: with NO baseline at all the door now takes the ALIGNED path at 60
+ *       AssertionError [ERR_ASSERTION]: the aligned op was never sent (calls: editor.stop,
+ *       editor.wait_for, scene.open_scene, editor.play, editor.wait_for,
+ *       editor.set_run_in_background, editor.screenshot, editor.console_logs, editor.stop,
+ *       editor.wait_for)
+ *         expected: true, operator: '=='
+ *
+ * BREAK B — apply the new default UNCONDITIONALLY, ignoring a stamped wall-clock:
+ *     -    if (stampedFps === "wall-clock") return {};
+ *        (leaving `return { fps: DEFAULT_ALIGNED_CAPTURE_FPS };` for both absences)
+ *   OBSERVED VERBATIM:
+ *     ✖ COMPOSITION: a baseline stamped WALL-CLOCK still replays wall-clock (existing anchors
+ *       are untouched)
+ *       AssertionError [ERR_ASSERTION]: [loombridge trace] capture-aligned replay at 60 fps:
+ *       each settle runs inside the bridge's pinned tick loop and the frame is taken on the
+ *       frame the settle completes.
+ *
+ *       2 !== 0
+ *         expected: 0, operator: 'strictEqual'
+ *   Exit 2, not a wrong verdict: the re-clocked run is refused as phase-incomparable. That is
+ *   the honest tier and still the wrong ANSWER, because the operator changed nothing.
+ */
+
+test("COMPOSITION: with NO baseline at all the door now takes the ALIGNED path at 60", async () => {
   const root = await tmpRoot();
   try {
     const paths = standardReplayLayout(root);
@@ -778,16 +827,67 @@ test("COMPOSITION: with no stamped clock the same door takes the WALL-CLOCK path
     );
     assert.equal(exit, 0, out);
 
+    const settle = calls.find((c) => c.command === "replay.settle_and_capture");
+    assert.ok(settle, `the aligned op was never sent (calls: ${calls.map((c) => c.command).join(", ")})`);
+    assert.equal(settle!.params.captureFps, DEFAULT_ALIGNED_CAPTURE_FPS, "the default clock, with no flag typed");
+    assert.equal(
+      calls.some((c) => c.command === "editor.screenshot"),
+      false,
+      "the default is aligned now, so nothing falls back to the wall-clock screenshot",
+    );
+    const report = JSON.parse(
+      await fs.readFile(path.join(paths.replayReports, "demo.report.json"), "utf-8"),
+    ) as ReplayRunArtifact;
+    assert.equal(report.alignedCaptureFps, DEFAULT_ALIGNED_CAPTURE_FPS, "the run stamps the clock it really used");
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test("COMPOSITION: a baseline stamped WALL-CLOCK still replays wall-clock (existing anchors are untouched)", async () => {
+  const root = await tmpRoot();
+  try {
+    const paths = standardReplayLayout(root);
+    const png = tinyPng(10);
+    const traceBody = await writeTrace(paths, 5);
+
+    // An anchor exactly as it exists on every project approved before the fallback changed:
+    // a real manifest with NO `alignedCaptureFps`. A manifest that EXISTS pins a discipline
+    // even when the field is absent — absent means wall-clock, which is a real answer and
+    // not "no opinion" — and that distinction is the whole compatibility guarantee.
+    const baselineDir = path.join(paths.replayBaselines, "demo");
+    await fs.mkdir(baselineDir, { recursive: true });
+    await fs.writeFile(path.join(baselineDir, "cap.png"), png);
+    await writeTraceBaselineManifest(baselineDir, {
+      kind: "trace-baseline",
+      schemaVersion: "1",
+      traceId: "demo",
+      traceSha256: sha256(Buffer.from(traceBody)),
+      approvedAt: "2026-07-29T00:00:00.000Z",
+      sourceReportSha256: "0".repeat(64),
+      pngs: [{ captureId: "cap", sha256: sha256(png) }],
+    });
+
+    const { factory, calls } = scriptedClient(driveHandlers(png));
+    const { value: exit, out } = await captured(() =>
+      runTrace(["replay", "--id", "demo", "--root", root, "--no-html"], { clientFactory: factory }),
+    );
+    assert.equal(exit, 0, out);
+
     assert.equal(
       calls.some((c) => c.command === "replay.settle_and_capture"),
       false,
-      "an unaligned replay must never reach the aligned op",
+      "a wall-clock anchor must never be silently re-clocked by the new default",
     );
-    assert.ok(calls.some((c) => c.command === "editor.screenshot"), "the legacy capture path stays the default");
+    assert.ok(calls.some((c) => c.command === "editor.screenshot"), "the legacy capture path is what it asked for");
     const report = JSON.parse(
       await fs.readFile(path.join(paths.replayReports, "demo.report.json"), "utf-8"),
     ) as ReplayRunArtifact;
     assert.equal(report.alignedCaptureFps, undefined, "absence is the wall-clock discipline, and stays absent");
+    // …and because both sides agree, the pixel gate really RAN. A silently re-clocked run
+    // would have been refused as phase-incomparable, which is the observable damage.
+    assert.notEqual(report.visualHarnessFault, true, out);
+    assert.equal(report.segments[0]!.captures[0]!.visualStatus, "match");
   } finally {
     await fs.rm(root, { recursive: true, force: true });
   }

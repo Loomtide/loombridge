@@ -423,13 +423,19 @@ test("an EMPTY project prints the on-ramp, writes nothing at all, and exits 2", 
 
     const text = lines.join("\n");
     // The real three-command sequence, in order, and the tail that says what to do after.
-    assert.match(text, /loombridge trace record --id <name>/);
-    assert.match(text, /loombridge trace replay --id <name>/);
-    assert.match(text, /loombridge trace approve --id <name>/);
+    //
+    // THREE COMMANDS, AND THE MIDDLE ONE IS `verify --live`. The on-ramp used to teach a
+    // separate `trace replay` step, which `verify --live` already performs: it re-drives the
+    // trace and writes the very `<id>.report.json` that `approve` promotes. Naming it made
+    // the loop read one command longer than it is, and pointed a new user at the low-level
+    // door before the one they actually want.
+    assert.match(text, /loombridge record\b/);
     assert.match(text, /loombridge verify --live/);
+    assert.match(text, /loombridge approve\b/);
+    assert.doesNotMatch(text, /trace replay/, "the on-ramp must not teach the low-level door as a step");
     assert.ok(
-      text.indexOf("trace record") < text.indexOf("trace replay")
-        && text.indexOf("trace replay") < text.indexOf("trace approve"),
+      text.indexOf("loombridge record") < text.indexOf("loombridge verify --live")
+        && text.indexOf("loombridge verify --live") < text.indexOf("loombridge approve"),
       `the on-ramp must be in pipeline order:\n${text}`,
     );
     // The actors: a HUMAN records; an agent must not be told to do what it cannot.

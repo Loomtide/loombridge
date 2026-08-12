@@ -31,6 +31,7 @@ import {
   type ReplayRunArtifact,
 } from "./index.js";
 import { observeRecordLive } from "./observe-record-live.js";
+import { approvableAlternatives, approveRefusalLines } from "./approvable-alternatives.js";
 import {
   ALIGNED_RESIDUAL_SENTENCE,
   DEFAULT_ALIGNED_CAPTURE_FPS,
@@ -512,8 +513,9 @@ async function resolveReplayTargetId(
         `${path.relative(args.root, paths.replayTraces)}/: there is nothing to replay.`,
     );
     console.error(
-      "[loombridge trace]   record one first: `loombridge trace record` (then bare `loombridge trace " +
-        "replay` replays it), or point at an existing trace with --id <id> / --trace <path>.",
+      "[loombridge trace]   record one first: `loombridge record` (then `loombridge verify --live` drives it, " +
+        "or bare `loombridge trace replay` replays it alone), or point at an existing trace with " +
+        "--id <id> / --trace <path>.",
     );
     return null;
   }
@@ -723,11 +725,21 @@ async function runRecord(args: TraceArgs, opts: TraceRunOpts = {}): Promise<numb
   if (args.flat) {
     await printNextStep(args.root);
   } else {
+    // POINT AT THE LOOP, NOT AT THE MACHINERY. This used to name `trace replay` alone, which
+    // is the low-level door: it re-drives this one trace and stops. `verify --live` drives the
+    // same replay, writes the same `<id>.report.json`, and grades everything else the project
+    // has, so it is what the next step actually is. `trace replay` stays named, second, as the
+    // narrower tool it is.
+    //
     // `traceId`, never `args.id`: with no --id typed the latter is EMPTY, and this line was
-    // printing `trace replay --id ` with nothing after it. Bare `trace replay` now replays
-    // the most recent trace, which is this one, so both halves of the hint are runnable.
+    // printing `trace replay --id ` with nothing after it. Bare `trace replay` replays the
+    // most recent trace, which is this one, so both halves of the hint are runnable.
     console.error(
-      `[loombridge trace] replay it: loombridge trace replay (or --id ${traceId} to name it).`,
+      "[loombridge trace] next: `loombridge verify --live` (drives this demonstration and captures " +
+        "the frames), then `loombridge approve` to freeze them.",
+    );
+    console.error(
+      `[loombridge trace]   just the replay, nothing else: \`loombridge trace replay\` (or --id ${traceId} to name it).`,
     );
   }
   return 0;
@@ -891,11 +903,33 @@ async function resolveReplaySpeed(
 }
 
 /**
- * The CLOCK DISCIPLINE a replay must run under, resolved exactly the way the pacing is: the
- * EXPLICIT flag when given, else the discipline the baseline was approved under, else the
- * legacy wall-clock settle. Frames captured under different disciplines sit at different
- * animation phases, so a baseline stamped `alignedCaptureFps: 60` asks for its replays to be
- * aligned at 60 and gets them without the operator having to remember.
+ * The CLOCK DISCIPLINE a replay must run under: the EXPLICIT flag when given, else the
+ * discipline the baseline was approved under, else capture-aligned at
+ * {@link DEFAULT_ALIGNED_CAPTURE_FPS}. Frames captured under different disciplines sit at
+ * different animation phases, so a baseline stamped `alignedCaptureFps: 60` asks for its
+ * replays to be aligned at 60 and gets them without the operator having to remember.
+ *
+ * THE FINAL FALLBACK IS ALIGNED, and only the FALLBACK changed. `--aligned` exists because
+ * wall-clock came first, not because wall-clock is a discipline anyone would choose: an
+ * aligned settle runs inside the bridge's pinned tick loop, so the frame lands at the same
+ * GAME TIME every run instead of wherever a sleep left it, and the phase skew a wall-clock
+ * settle produces is read by the pixel gate as drift. A run with no anchor has no phase to
+ * preserve, so there is nothing for wall-clock to be compatible WITH.
+ *
+ * A STAMPED BASELINE STILL WINS, IN BOTH DIRECTIONS. A manifest that exists pins a
+ * discipline even when the field is absent: absent means wall-clock, which is a real answer
+ * and not "no opinion". So every anchor approved before this change keeps running under the
+ * clock it was approved under, and the only run whose behavior moves is one with no stamped
+ * baseline at all: a first replay, or one whose baseline was never approved.
+ *
+ * THE COST IS STATED RATHER THAN HIDDEN. An aligned settle needs the bridge's
+ * `replay.settle_and_capture` op (bridge >= 0.2.0), so a project pinned to an older bridge
+ * now takes a HARNESS FAULT (exit 2, no frame, named in the report) on its first unanchored
+ * replay where it used to take the wall-clock path. That is the correct tier for "the
+ * harness could not do what was asked" and it is loud, not a false green; the fix is
+ * `loombridge update` (which `doctor` already points at). There is deliberately no
+ * `--wall-clock` opt-out: adding an escape flag in the same change that removes the need to
+ * think about the clock would put the choice straight back on the operator.
  *
  * An explicit value that CONTRADICTS the stamp still RUNS (the replay is how a report under
  * the new discipline comes to exist, and refusing here would make re-anchoring impossible
@@ -918,7 +952,13 @@ export async function resolveAlignedCaptureFps(
   // wall-clock, which is a real answer and not "no opinion".
   const stampedFps = stamped === null ? undefined : (stamped.alignedCaptureFps ?? "wall-clock");
   if (explicit === undefined) {
-    return typeof stampedFps === "number" ? { fps: stampedFps } : {};
+    // THREE OUTCOMES, and the middle one is what keeps every existing anchor safe:
+    //   a stamped number      -> that clock (unchanged)
+    //   a stamped wall-clock  -> wall-clock (unchanged: the manifest EXISTS and said so)
+    //   no manifest at all    -> aligned at the default (the only case this changed)
+    if (typeof stampedFps === "number") return { fps: stampedFps };
+    if (stampedFps === "wall-clock") return {};
+    return { fps: DEFAULT_ALIGNED_CAPTURE_FPS };
   }
   if (stampedFps !== undefined && stampedFps !== explicit) {
     // Announced here, re-derived at grade time from the manifest and the artifact. The
@@ -1250,14 +1290,19 @@ async function resolveApproveTargetId(
     // REFUSE HERE, not in the loader. Falling through with an empty id would read
     // `reports/.report.json` and report "no such file", which names a path nobody typed and
     // says nothing about what to do next.
-    console.error(
-      `[loombridge trace] no --id given and no replay reports in ` +
-        `${path.relative(args.root, paths.replayReports)}/: there is nothing to approve.`,
-    );
-    console.error(
-      "[loombridge trace]   replay one first: `loombridge trace replay` (then bare `loombridge trace " +
-        "approve` freezes that run), or name a run with --id <id>.",
-    );
+    //
+    // AND NAME THE OTHER APPROVABLE THINGS. `approve` is a top-level verb now, and this is
+    // the one moment its resolution is ambiguous: the operator meant to approve SOMETHING,
+    // and there are four approve surfaces in this product. Guessing between them would be
+    // the worst available answer, so the refusal turns the ambiguity into a visible choice
+    // (see `approvable-alternatives.ts`). Never a prompt: this runs in CI too.
+    for (const line of approveRefusalLines({
+      tag: "[loombridge trace]",
+      reportsDir: path.relative(args.root, paths.replayReports),
+      alternatives: await approvableAlternatives(args.root),
+    })) {
+      console.error(line);
+    }
     return null;
   }
   console.error(`[loombridge trace] no --id given, approving the most recent run "${recent}".`);
@@ -3157,6 +3202,21 @@ function printUsage(): void {
     [
       "Usage: loombridge trace <record|replay|replay-all|approve|tolerance|mask|report> [--id <id>] [options]",
       "",
+      "The two subcommands a human actually types are also TOP-LEVEL verbs, because they are",
+      "the only two steps in this loop that need a person: `loombridge record` and",
+      "`loombridge approve` are the same doors as `trace record` / `trace approve`, same flags,",
+      "same exits. The daily loop is:",
+      "",
+      "  loombridge record          a human demonstrates",
+      "  loombridge verify --live   drives the flow, captures the frames, grades what has an anchor",
+      "  loombridge approve         a human freezes what that run captured",
+      "  loombridge verify --live   now graded against the frozen frames",
+      "",
+      "`trace replay` is the LOW-LEVEL door: it re-drives ONE trace and nothing else. You do not",
+      "need it in the loop above, because `verify --live` already replays and writes the very",
+      "<id>.report.json that `approve` promotes. Reach for `verify`; reach for `trace replay`",
+      "when you want the replay on its own.",
+      "",
       "  record      Record a human demonstration into a replayable trace: reset to --scene",
       "              (or the editor's CURRENT scene), observe your clicks/drags until you",
       "              press Enter (or --duration <sec>), and write",
@@ -3183,7 +3243,9 @@ function printUsage(): void {
       "              RUN, i.e. the newest <id>.report.json (ties broken by name), announced",
       "              with the number of captures it is about to freeze. It searches REPORTS,",
       "              not traces: the referent is the run you just replayed, and a trace that",
-      "              was never replayed has nothing to promote.",
+      "              was never replayed has nothing to promote. `verify --live` writes that",
+      "              same report, so it is the usual producer. With no run to promote at all,",
+      "              approve REFUSES and names the other approvable artifacts it can see.",
       "  tolerance   Stamp the human-approved pixel drift tolerance onto the EXISTING",
       "              approved baseline (--set <fraction>). Touches no frame and no sha: it",
       "              changes the terms of the comparison, not the thing being compared.",
@@ -3221,7 +3283,11 @@ function printUsage(): void {
       "                    frame the settle completes, so the capture lands at the same GAME",
       "                    TIME every run instead of wherever a wall-clock sleep left it.",
       `  --aligned-fps <n> replay only: the same, at n fps (${MIN_ALIGNED_CAPTURE_FPS} to ${MAX_ALIGNED_CAPTURE_FPS}, integer).`,
-      "                    Default: the baseline's stamped capture clock, else wall-clock.",
+      `                    Default: the baseline's stamped capture clock, else aligned ${DEFAULT_ALIGNED_CAPTURE_FPS} fps.`,
+      "                    A stamped baseline always wins, in both directions: one approved",
+      "                    under wall-clock keeps replaying under wall-clock, so no existing",
+      "                    anchor changes discipline. Only a run with NO stamped baseline is",
+      "                    aligned by default, and it has no phase to preserve anyway.",
       "                    A run whose clock differs from the baseline's REFUSES the pixel",
       "                    comparison (phase skew is not drift). Alignment covers the SETTLE",
       "                    only: action round trips, anchor polling, unseeded randomness and",

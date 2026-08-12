@@ -406,7 +406,7 @@ test("a recorded-but-UNAPPROVED trace is a visible non-anchor row that never exe
     assert.equal(row.runnable, "no");
     assert.equal(row.notRunClass, "non-anchor");
     assert.equal(row.broken, undefined, "unapproved is a provenance gap, not tampering");
-    assert.ok(row.reason?.includes("trace approve"), row.reason);
+    assert.ok(row.reason?.includes("loombridge approve"), row.reason);
     assert.equal(row.approvedAt, undefined);
     assert.equal(resolveUnifiedOutcome({ executed: [{ section: "contract", exit: 0, anchored: true }], notRun: [notRunFor(row)] }).exit, 2);
   } finally {

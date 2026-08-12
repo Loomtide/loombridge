@@ -40,9 +40,16 @@ loombridge verify --root . --only screens # ONE section (CI granularity); never 
   baseline** (a contract graded against captures of itself is not a human anchor: run
   `loombridge minigame baseline approve`), a baseline approved for a *different* project: each
   is a visible row that cannot contribute a pass.
-- **No assets at all** prints the on-ramp (`trace record` → `trace replay` →
-  `trace approve`, then `verify --live`) and exits `2`. Recording is a **human** step: the play
-  session *is* the approval moment. Do not claim it as an agent action.
+- **No assets at all** prints the on-ramp (`loombridge record` → `verify --live` →
+  `loombridge approve`, then `verify --live` again) and exits `2`. Recording is a **human**
+  step: the play session *is* the approval moment. Do not claim it as an agent action.
+- **There is no separate replay step, and there never was one you needed.** `verify --live`
+  drives each approved trace and writes `<id>.report.json`, which is exactly the file
+  `approve` promotes. `trace replay` is the low-level door for re-driving ONE trace on its
+  own; reach for `verify --live` in the loop. The two verbs a human types daily are
+  `loombridge record` and `loombridge approve` (the same doors as `trace record` /
+  `trace approve`), because a person is needed at exactly two moments: demonstrating and
+  approving.
 - **Pixel drift can be TOLERATED, only by a human, only up to 2%.** A game that animates
   under its own clock cannot hold a frozen frame to the 0.5% default, so `loombridge trace
   tolerance --id <id> --set <fraction>` stamps a per-trace allowance onto the approved
@@ -69,13 +76,16 @@ loombridge verify --root . --only screens # ONE section (CI granularity); never 
   and tolerance are disclosed together on the plan's `anchor terms:` line, which states the
   **sum** (*together, up to N% of the frame can change while the gate stays green*), and a
   green trace graded with masks reads `id=pass (8% masked)` in the summary detail.
-- **Phase skew is ALIGNED, not tolerated: `trace replay --aligned`.** A wall-clock settle
-  (sleep here, screenshot there) lets the game free-run for however many frames the editor
-  happens to tick, so every run captures a different animation phase and the pixel gate reads
-  that skew as drift. `--aligned` (or `--aligned-fps <n>`, integer 10 to 120, default 60)
-  replaces the pair with ONE bridge op that advances a fixed frame count at a pinned game-time
-  step and captures on the exact frame the settle completes. Reach for it BEFORE a tolerance
-  or a mask: it removes the drift instead of consenting to it. The clock is **part of the
+- **Phase skew is ALIGNED, not tolerated, and alignment is now the DEFAULT.** A wall-clock
+  settle (sleep here, screenshot there) lets the game free-run for however many frames the
+  editor happens to tick, so every run captures a different animation phase and the pixel gate
+  reads that skew as drift. An aligned settle is ONE bridge op that advances a fixed frame
+  count at a pinned game-time step and captures on the exact frame the settle completes. A
+  replay with **no stamped baseline** now runs aligned at 60 fps without anyone typing a flag;
+  `--aligned-fps <n>` (integer 10 to 120) picks another rate. A **stamped baseline always
+  wins**, in both directions, so an anchor approved under wall-clock keeps replaying under
+  wall-clock and no existing anchor changes discipline. Alignment removes the drift instead of
+  consenting to it, so it comes before a tolerance or a mask. The clock is **part of the
   anchor**: `approve` stamps the run's clock into the baseline, later replays inherit it with
   no flag, and a run under a *different* clock (including an unaligned one against an aligned
   anchor, since absence is a value and not a gap) **refuses** the pixel comparison as a harness
@@ -449,7 +459,7 @@ loombridge minigame check --scene Assets/Scenes/MyGame.unity --id my-game
 - `minigame scan --scene <Assets/...unity>` proposes a DRAFT contract from the scene's visible controls /
   text / backgrounds. It is a proposal the developer reviews — derived data feeds the contract, never the
   verdict.
-- A demonstration (`loombridge trace record`) establishes the flow / state ordering.
+- A demonstration (`loombridge record`) establishes the flow / state ordering.
 - `minigame sync --scene <…>` re-scans on later scene changes and proposes structural migrations; it is
   dry-run by default and writes only with `--apply` (and `--add`/`--remove`). It refuses a removal that would
   empty a state's bindings.

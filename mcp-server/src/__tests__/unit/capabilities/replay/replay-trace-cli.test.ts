@@ -684,7 +684,7 @@ test("trace replay: bare with NO traces REFUSES (exit 2), names `trace record`, 
       });
       assert.equal(exit, 2, `${label}: ${err}`);
       assert.match(err, /there is nothing to replay/, label);
-      assert.match(err, /loombridge trace record/, `${label}: the refusal names the recording verb`);
+      assert.match(err, /loombridge record/, `${label}: the refusal names the recording verb`);
       assert.deepEqual(bridge.calls, [], `${label}: refuses before any bridge call`);
     }
   } finally {
@@ -917,7 +917,7 @@ test("trace approve: IDENTICAL mtimes tie-break by name, the same way on every c
   }
 });
 
-test("trace approve: bare with NO reports REFUSES (exit 2), names `trace replay`, freezes nothing", async () => {
+test("trace approve: bare with NO reports REFUSES (exit 2), names the loop that produces one, freezes nothing", async () => {
   // LITMUS: delete the `if (recent === null) { … return null; }` refusal from
   // `resolveApproveTargetId` (`if (recent === null) return "";` instead) and this fails: the
   // empty id falls through to the loader, which names a path nobody typed and exits in the
@@ -940,8 +940,9 @@ test("trace approve: bare with NO reports REFUSES (exit 2), names `trace replay`
     for (const [label, root] of [["missing reports dir", missing], ["empty reports dir", empty]] as const) {
       const { exit, err } = await capturedRun(["approve", "--root", root], {});
       assert.equal(exit, 2, `${label}: ${err}`);
-      assert.match(err, /there is nothing to approve/, label);
-      assert.match(err, /loombridge trace replay/, `${label}: the refusal names the replay verb`);
+      assert.match(err, /nothing to approve/, label);
+      assert.match(err, /loombridge record/, `${label}: the refusal names the act that starts the loop`);
+      assert.match(err, /loombridge verify --live/, `${label}: …and the one that produces the run`);
       await assert.rejects(fs.access(baselinesDir(root)), `${label}: nothing was frozen`);
     }
   } finally {

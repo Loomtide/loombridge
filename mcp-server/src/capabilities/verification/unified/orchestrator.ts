@@ -1074,10 +1074,15 @@ export function onRampLines(root: string, opts: { acceptanceAbsent: boolean } = 
     `${TAG} REFUSED: no verification assets found under ${root}, so nothing was checked.`,
     `${TAG} a run that checked nothing is not a pass (exit 2). No report was written.`,
     `${TAG} the cheapest universal anchor is a recorded demonstration, so ask your human to play the game once:`,
-    `${TAG}   1. loombridge trace record --id <name>             (a HUMAN plays it; this session IS the approval)`,
-    `${TAG}   2. loombridge trace replay --id <name>             (re-drive the demonstration and capture frames)`,
-    `${TAG}   3. loombridge trace approve --id <name>            (freeze those frames as the baseline)`,
-    `${TAG} then run: loombridge verify --live`,
+    // THREE STEPS, NOT FOUR, and the two that need a person are the two named as verbs. The
+    // on-ramp used to spell `trace record` -> `trace replay` -> `trace approve` -> `verify
+    // --live`, which taught a separate `trace replay` step that `verify --live` already
+    // performs: it re-drives the trace and writes the very `<id>.report.json` that approve
+    // promotes. Naming it anyway made the loop read as one command longer than it is.
+    `${TAG}   1. loombridge record                               (a HUMAN plays it; this session IS the approval)`,
+    `${TAG}   2. loombridge verify --live                        (re-drives the demonstration and captures frames)`,
+    `${TAG}   3. loombridge approve                              (freeze those frames as the baseline)`,
+    `${TAG} then run: loombridge verify --live                   (now graded against the frozen frames)`,
   ];
   // F7, THE OTHER DOOR. The on-ramp above is door two (an existing game: approve an anchor,
   // then re-measure it forever). An agent that reaches this text while BUILDING a new game

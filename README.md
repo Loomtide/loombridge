@@ -83,7 +83,7 @@ An AI agent can already build a Unity game. What it cannot do is tell you honest
 | Workflow | You start with | Commands | You get |
 |---|---|---|---|
 | **Build** a new game | An idea (or a design doc) | `plan` → `build` → agent constructs → `verify --slice` → `plan --go` | A game built slice by slice against a contract the agent cannot redefine |
-| **Verify** an existing game | A playable game | `trace record` → `trace approve` → `verify` | Play once, approve once; deterministic pixel + flow + feel gates forever after |
+| **Verify** an existing game | A playable game | `record` → `verify --live` → `approve` | Play once, approve once; deterministic pixel + flow + feel gates forever after |
 | **Certify** it is done | Green gates | `doneness` | A certificate bound to the run, the evidence, and the frozen design target: or a refusal naming exactly why not |
 
 ## Build: the supervised loop
@@ -104,17 +104,25 @@ loombridge plan --go                                  # human checkpoint: approv
 
 ## Verify: record once, replay deterministically
 
-<!-- GIF placeholder: a human plays ~15s (`trace record`), then `trace
-     replay` drives the game by itself and the report shows green flow + pixel rows. -->
+<!-- GIF placeholder: a human plays ~15s (`record`), then `verify --live`
+     drives the game by itself and the report shows green flow + pixel rows. -->
+
+Two of these four lines need a person. That is the whole loop:
 
 ```bash
-loombridge trace record --id happy-path               # you play; Loombridge watches
-loombridge trace replay                               # it replays your latest recording deterministically
-loombridge trace approve                              # you approve that run's baseline once
-loombridge verify                                     # from now on: one command, exit by worst tier
+loombridge record                                     # A HUMAN: you play; Loombridge watches
+loombridge verify --live                              # drives your demonstration, captures the frames
+loombridge approve                                    # A HUMAN: freeze what that run captured
+loombridge verify --live                              # from now on: one command, exit by worst tier
 ```
 
-Replays drive real input through the game (focus-independent, no field pokes) and diff every capture against your approved baseline perceptually. Animated games get honest levers, each human-consented and printed with the hole it opens: bounded pixel tolerances, region masks with a structural reproduced-drift detector, replay pacing, and capture-aligned settles inside a pinned tick loop. A verify that measured nothing refuses (exit 2): it never passes by default.
+`verify --live` already replays the trace and writes the run report that `approve` promotes, so
+there is no separate replay step. `loombridge trace replay` still exists as the low-level door
+when you want the replay on its own, along with `trace replay-all`, `trace tolerance`,
+`trace mask` and `trace report`. (`record` and `approve` are the same doors as `trace record`
+and `trace approve`; both spellings work.)
+
+Replays drive real input through the game (focus-independent, no field pokes) and diff every capture against your approved baseline perceptually. Capture settles are aligned to the bridge's pinned tick loop by default, so a frame lands at the same game time every run; a baseline approved under a different clock keeps its own. Animated games get honest levers, each human-consented and printed with the hole it opens: bounded pixel tolerances, region masks with a structural reproduced-drift detector, replay pacing, and capture-aligned settles inside a pinned tick loop. A verify that measured nothing refuses (exit 2): it never passes by default.
 
 ## Doneness: the certificate that cannot be talked into green
 

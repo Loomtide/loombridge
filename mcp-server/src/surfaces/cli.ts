@@ -67,6 +67,13 @@ function printUsage(): void {
       "  mcp             Start the Loombridge MCP stdio server (the Unity bridge)",
       "",
       "Verify (anchors a human approves once; deterministic gates forever after):",
+      "  record     A HUMAN DEMONSTRATES. Reset to a scene, watch your clicks/drags until you",
+      "               press Enter, and write the replayable trace. The first of the only two",
+      "               steps in this loop that need a person. (`trace record` is the same door.)",
+      "  approve    A HUMAN FREEZES what the last run captured, as the approved baseline. The",
+      "               second and last step that needs a person. With no run to promote it",
+      "               REFUSES and names the other approvable artifacts it can see, rather than",
+      "               guessing between them. (`trace approve` is the same door.)",
       "  verify     Bare `verify` discovers this project's verification assets, PRINTS THE",
       "               PLAN first, runs the offline ones (`--live` adds trace replay + feel",
       "               drift), and writes .loombridge/run/reports/verify.json. Exit 0 pass or",
@@ -75,9 +82,12 @@ function printUsage(): void {
       "               Modes (see `verify --help`): --snapshot grades feel drift against the",
       "               approved snapshot; --minigame grades a screen-contract capture pack",
       "               (exit 0/1/2); --profile is DIAGNOSTIC feel grading, never gating.",
-      "  trace      Record once, replay deterministically: `trace record` captures",
-      "               a human demonstration; `trace replay --id <id>` re-drives it against",
-      "               the editor and pixel-diffs frames vs the approved baseline.",
+      "  trace      The replay machinery, namespaced: `trace replay` / `trace replay-all` (the",
+      "               LOW-LEVEL door that re-drives one trace), `trace tolerance`, `trace mask`,",
+      "               `trace report`. The daily loop needs none of them: `verify --live` already",
+      "               drives the replay and captures the frames, so reach for `verify` and use",
+      "               `trace replay` when you want the replay alone. `trace record` and",
+      "               `trace approve` still work; `record` and `approve` above are the same doors.",
       "  feel       Tuning snapshot: `feel snapshot <capture|approve|status>` freezes the game's",
       "               MEASURED behavior once a human approves it; `verify --snapshot` then grades",
       "               kinematic drift against it (a lockfile for game feel).",
@@ -215,6 +225,36 @@ export async function loombridgeCli(argv: string[]): Promise<number> {
     case "trace": {
       const { run } = await import("../capabilities/replay/trace.js");
       return run(rest);
+    }
+    case "record": {
+      // THE FIRST OF THE TWO HUMAN ACTS, promoted to the top level. There are exactly two
+      // moments in the ratchet loop where a person is required: a human DEMONSTRATES, and a
+      // human APPROVES. Everything between them is machinery, and machinery belongs behind a
+      // namespace. `trace record` was named after the artifact it writes rather than the act
+      // it performs, which is why the loop read as five commands about traces instead of two
+      // about people.
+      //
+      // SAME HANDLER, NOT A COPY: this forwards the identical argv `trace record` receives,
+      // so every flag, refusal and exit code is the one door's, and `trace record` keeps
+      // working unchanged for every script and habit that already types it. There is no
+      // deprecation notice on `trace record` on purpose: it is not deprecated, it is the
+      // namespaced spelling of the same act.
+      const { run } = await import("../capabilities/replay/trace.js");
+      return run(["record", ...rest]);
+    }
+    case "approve": {
+      // THE SECOND HUMAN ACT. Bare `approve` resolves to the REPLAY BASELINE, which is
+      // overwhelmingly the common approval; the other three approve surfaces
+      // (`minigame baseline approve`, `feel snapshot approve`, `target approve`) stay
+      // namespaced and are never guessed at.
+      //
+      // WHEN THERE IS NOTHING TO PROMOTE IT REFUSES AND NAMES THEM (see
+      // `capabilities/replay/approvable-alternatives.ts`). That is the whole price of the
+      // promotion, paid at the one moment the ambiguity could bite, and paid as a visible
+      // choice rather than a guess: an approval nobody consented to is the artifact this
+      // product exists to refuse.
+      const { run } = await import("../capabilities/replay/trace.js");
+      return run(["approve", ...rest]);
     }
     case "feel": {
       // `feel snapshot <capture|approve|status>`: the tuning-snapshot lifecycle
