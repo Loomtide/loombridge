@@ -1,7 +1,7 @@
 /**
  * THE HTML PAGE BESIDE A REPLAY REPORT ALWAYS DESCRIBES THE RUN THAT WROTE THE JSON.
  *
- * Observed on a live consumer project. `loombridge verify --live` re-drove a trace, graded
+ * Observed on a live consumer project. `loombridge verify` re-drove a trace, graded
  * 14 captures, found 2 over tolerance, exited 1, and wrote that failing verdict to
  * `.loombridge/run/replays/reports/kids-adventure.report.json` (13:42). It rendered no HTML, so
  * `kids-adventure.report.html` was still the page a standalone `trace replay` had rendered
@@ -199,7 +199,7 @@ test("THE REPRODUCTION: a failing verify REPLACES the page a passing `trace repl
     // make both of these assertions true forever.
     assert.match(passingHtml, /vstatus vstatus-match/, "the page a human would open shows the green run");
 
-    // 13:42, `verify --live` re-drives the SAME trace against a game that now renders a
+    // 13:42, `verify` re-drives the SAME trace against a game that now renders a
     // different frame. This is the exact seam the unified door uses (`runFlowTrace`).
     const drifted = tinyPng(250);
     const second = await captured(() =>

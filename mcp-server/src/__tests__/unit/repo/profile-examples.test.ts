@@ -64,12 +64,12 @@ function exampleFiles(): string[] {
 }
 
 /** Every verb the CLI dispatch actually handles, parsed from the switch so it can't drift. */
-function cliVerbs(source: string): Set<string> {
+export function cliVerbs(source: string): Set<string> {
   return new Set([...source.matchAll(/case\s+"([a-z][a-z0-9-]*)":/g)].map((m) => m[1]!));
 }
 
 /** The bare tokens the dispatcher answers before any verb (`--version`, `-h`, …). */
-function topLevelTokens(source: string): Set<string> {
+export function topLevelTokens(source: string): Set<string> {
   return new Set([...source.matchAll(/sub === "([^"]+)"/g)].map((m) => m[1]!));
 }
 
@@ -80,7 +80,7 @@ function topLevelTokens(source: string): Set<string> {
  * makes a fallthrough (`case "target": case "design":`) resolve to the module both
  * labels really run rather than looking flagless and being silently skipped.
  */
-function verbModules(source: string): Map<string, string> {
+export function verbModules(source: string): Map<string, string> {
   const out = new Map<string, string>();
   // The switch's OWN `default:`, matched at its indentation. A bare `indexOf("default:")`
   // finds the word inside the usage banner ("Skipping is the default: do nothing"), which

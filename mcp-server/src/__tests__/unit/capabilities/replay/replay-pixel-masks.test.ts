@@ -794,7 +794,7 @@ test("MX3: an inflated stamped denominator is a BROKEN row in unified discovery,
     assert.equal(row.maskedFraction, undefined, "a broken row never quotes a fraction it could not measure");
     // THE WORD `BROKEN` LEADS IN BOTH PLANS. With no `--live` there is nothing to drive, so
     // the row simply will not run. With `--live` it is still re-driven for FRAMES ONLY (the
-    // capture-only path that makes `record` -> `verify --live` -> `approve` re-anchorable),
+    // capture-only path that makes `record` -> `verify` -> `approve` re-anchorable),
     // and the plan says NOT GRADED in the same clause, so neither reading can be mistaken
     // for a row that graded anything.
     assert.match(planLines(root, assets, notes, false).join("\n"), /BROKEN, will not run/);
@@ -1166,9 +1166,12 @@ test("TWO-RUN LITMUS: an IDENTICAL drift twice prints the regression warning, ne
     // `maskSuggestionLines` and the two-run door test in
     // `replay-drift-characterization.test.ts` for why an unfalsifiable "run it again" is
     // the sentence that cost a live investigation.
+    // The instruction is a RUNNABLE COMMAND, not prose: "re-run replay once more" named no
+    // verb, so the one actionable sentence in the suggestion could not be pasted.
     assert.deepEqual(maskSuggestionLines(first.artifact.maskSuggestion!, "demo"), [
       "no previous run recorded drift for this trace, so there is nothing to compare this drift " +
-        "against yet; re-run replay once more to characterize the drift before masking.",
+        "against yet; re-run the replay once more to characterize the drift before masking: " +
+        "loombridge verify (or `loombridge trace replay --id demo` for this trace alone).",
     ]);
     await fs.writeFile(
       path.join(standardReplayLayout(root).replayReports, "demo.report.json"),
@@ -1283,7 +1286,7 @@ test("THE CIRCLE: a second run whose drift landed elsewhere is NOT told to re-ru
     const out = await summaryOf(root, second.artifact);
     assert.doesNotMatch(
       out,
-      /re-run replay once more/,
+      /re-run the replay once more/,
       "the operator has already done the characterization run; asking again is the loop they were stuck in",
     );
     // …and what IS said names both sides of the comparison that actually happened.
@@ -1303,7 +1306,7 @@ test("a GENUINE first run still asks for the characterization run (the advice is
     await fs.writeFile(actualPngPath(root, "demo"), pngWithRects([{ x: 10, y: 10, w: 10, h: 10 }]));
     const first = await grade(root);
     assert.deepEqual(first.artifact.maskSuggestion, { kind: "first-run" });
-    assert.match(await summaryOf(root, first.artifact), /re-run replay once more to characterize/);
+    assert.match(await summaryOf(root, first.artifact), /re-run the replay once more to characterize/);
   } finally {
     await fs.rm(root, { recursive: true, force: true });
   }
@@ -1374,7 +1377,7 @@ test("a TOO-LOOSE refusal is PRINTED, in the human's terms, with no re-run advic
     assert.match(out, /under the 60% tightness bar, so they are mostly unchanged frame/);
     assert.doesNotMatch(out, /"too-loose"/, "the reason is explained, not echoed as a token");
     // …and the characterization run is not asked for: one already happened.
-    assert.doesNotMatch(out, /re-run replay once more/);
+    assert.doesNotMatch(out, /re-run the replay once more/);
 
     // REQUIREMENT 4: the verdict LEADS. A tolerance is the blunter instrument, and an
     // operator who reads "widen it" first never reaches the reason no mask exists.
@@ -1876,7 +1879,7 @@ test("the unified PLAN prints the anchor terms on their own line, from the typed
       /anchor terms: 1 mask\(s\) hide 4% of every frame outright; the rest grades at 1%, anything covering up to ~10%/,
     );
     // Q7: the terms are their own line, not an extension of the run-on above them.
-    assert.match(plan, /trace 'demo': will run \(live\); approved [^\n]*\n[^\n]*anchor terms:/);
+    assert.match(plan, /trace 'demo': will run \(LIVE: drives the editor\); approved [^\n]*\n[^\n]*anchor terms:/);
   } finally {
     await fs.rm(root, { recursive: true, force: true });
     await fs.rm(workspace, { recursive: true, force: true });

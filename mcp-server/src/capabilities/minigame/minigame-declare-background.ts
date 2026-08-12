@@ -260,7 +260,7 @@ export async function runDeclareBackground(argv: string[], root: string = proces
   // otherwise wipe this). The contract write above gives the immediate effect for the current `verify`.
   await mergeIntoOverrides(path.dirname(contractPath), { safeAreaBackground: outcome.finalBackground });
 
-  console.log(`${ICON.pass} wrote ${outcome.added.length} background ${outcome.added.length === 1 ? "entry" : "entries"} to ${tildify(contractPath)} (persisted to overrides.json — survives a full \`minigame check\` re-run).`);
+  console.log(`${ICON.pass} wrote ${outcome.added.length} background ${outcome.added.length === 1 ? "entry" : "entries"} to ${tildify(contractPath)} (persisted to overrides.json — survives a full \`loombridge minigame check\` re-run).`);
   // Print the EXACT verify command (copy-pasteable), same shape the capture/finalize footers use — the
   // declared decoration won't be flagged. The captures/report live next to the contract by convention.
   const ws = path.dirname(contractPath);

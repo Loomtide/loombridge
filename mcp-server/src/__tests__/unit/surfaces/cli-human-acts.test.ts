@@ -163,7 +163,7 @@ test("bare `approve` with NO replay run REFUSES (exit 2) and names the loop that
     assert.match(err, /nothing to approve/);
     // The loop, in order, as the two human acts plus the machinery between them.
     assert.match(err, /loombridge record/);
-    assert.match(err, /loombridge verify --live/);
+    assert.match(err, /loombridge verify/);
     assert.match(err, /loombridge approve/);
     // With nothing else on disk it says so, rather than staying silent about having looked.
     assert.match(err, /No other approvable artifact is visible here/);

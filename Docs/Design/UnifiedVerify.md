@@ -696,7 +696,23 @@ be silent about what it did not.
 2. Where does the unified report live: `.loombridge/run/reports/verify.json` alongside the
    per-asset reports, or replacing them? Leaning alongside (per-asset reports are consumed by
    existing tooling).
-3. **RESOLVED (S1): `--live` opt-in.** Bare `verify` runs the offline assets and lists the
+3. **SUPERSEDED (LiveByDefault): the `--live` opt-in was reversed.** Live is now the DEFAULT
+   and `--offline` is the opt-out; `--live` is still accepted and is a no-op, so everything
+   already typing it keeps working. What the S1 reasoning below did not weigh is what the
+   opt-in cost on the COMMON path: on a normal project bare `verify` printed "every discovered
+   asset needs a running editor" and exited 2, so the answer to this product's central question
+   always took two invocations, and an operator who forgot the flag got a `partial` that read
+   like a run. CI is still served, and served more honestly, by spelling `--offline`: a
+   headless runner genuinely cannot drive an editor, and saying so is better than relying on a
+   default. The post-reload-stall concern is answered directly rather than by avoidance: a live
+   run PROBES for a reachable editor after the plan prints and before the first write, and
+   REFUSES (tier 2) with `loombridge verify --offline` named as the way to grade stored
+   evidence. The plan-prints-first rule now carries a second job, consent: it names every row
+   about to be driven into Play Mode, before anything is driven. The coverage-honesty half
+   below is unchanged, with `--offline` in place of the omitted `--live`.
+
+   The S1 reasoning, kept verbatim as the record of what was traded away:
+   Bare `verify` runs the offline assets and lists the
    live-only ones as `not run: needs --live`; `--live` executes them. The reasoning that
    decided it, unchanged: the ratchet door's dominant runtime is CI, and live-by-default would
    make the least specific, most-typed command the one most likely to hit the post-reload stall

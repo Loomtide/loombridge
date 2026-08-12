@@ -646,7 +646,7 @@ export async function runPlan(args: PlanArgs): Promise<number> {
         `[loombridge plan] genre "${genre}" has no registered pack, and this project was planned from ` +
           `a genre contract (${rel(paths.genrePromotion)}): nothing is re-seeded, and it verifies as ` +
           "`partially-graded` with the contract's own gaps enumerated on the verdict. To change the " +
-          "contract, edit it and re-run `plan --brief <dir> --force` (or `--genre-contract <file> --force`).",
+          "contract, edit it and re-run `loombridge plan --brief <dir> --force` (or `--genre-contract <file> --force`).",
       );
     } else {
       const seeds = args.force || !(await fileExists(paths.acceptance));

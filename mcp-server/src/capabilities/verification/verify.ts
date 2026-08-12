@@ -794,6 +794,7 @@ export const ORCHESTRATOR_FLAGS: ReadonlySet<string> = new Set([
   "--root",
   "--strict",
   "--live",
+  "--offline",
   "--report",
   "--only",
   "--id",
@@ -810,11 +811,18 @@ export const ORCHESTRATOR_VALUE_FLAGS: ReadonlySet<string> = new Set([
 ]);
 
 /** The orchestrator-only flags: `parseArgs` (the legacy engine) does not know them. */
-const ORCHESTRATOR_ONLY_FLAGS: ReadonlySet<string> = new Set(["--live", "--report", "--only"]);
+const ORCHESTRATOR_ONLY_FLAGS: ReadonlySet<string> = new Set(["--live", "--offline", "--report", "--only"]);
 
 interface OrchestratorArgs {
   root: string;
   strict: boolean;
+  /**
+   * Whether the run may drive a running editor. DEFAULT TRUE (LiveByDefault).
+   *
+   * `--offline` is the only thing that clears it. `--live` is still accepted and is now a
+   * NO-OP: every doc, skill and script that already types it keeps working, and typing it
+   * asks for exactly what the bare run already does.
+   */
   live: boolean;
   reportPath?: string;
   /**
@@ -841,14 +849,24 @@ interface OrchestratorArgs {
  * hijacked this function with an inline set of its own.
  */
 export function classifyOrchestratorArgs(args: string[]): OrchestratorArgs | null {
-  const parsed: OrchestratorArgs = { root: process.cwd(), strict: false, live: false };
+  // LIVE IS THE DEFAULT (LiveByDefault). The bare question an operator asks is "does this
+  // build still do what a human approved?", and on a normal project most of the answer
+  // needs the editor. Bare `verify` used to print "every discovered asset needs a running
+  // editor. Re-run with: loombridge verify --live" and exit 2, which made the common path a
+  // wasted round trip. `--offline` is the explicit opt-out (and the correct CI spelling).
+  const parsed: OrchestratorArgs = { root: process.cwd(), strict: false, live: true };
   let rawReport: string | undefined;
   for (let i = 0; i < args.length; i += 1) {
     const arg = args[i]!;
     if (!ORCHESTRATOR_FLAGS.has(arg)) return null;
     if (!ORCHESTRATOR_VALUE_FLAGS.has(arg)) {
       if (arg === "--strict") parsed.strict = true;
+      // `--live` is a NO-OP kept for compatibility; `--offline` is the one that decides.
+      // LAST ONE WINS is deliberate: `--live --offline` and `--offline --live` both mean
+      // whatever the operator typed last, rather than one spelling silently outranking the
+      // other regardless of order.
       else if (arg === "--live") parsed.live = true;
+      else if (arg === "--offline") parsed.live = false;
       continue;
     }
     const value = args[i + 1];
@@ -1358,9 +1376,12 @@ function printUsage(): void {
       "feel snapshot, screen contract), PRINTS THE PLAN FIRST (one row per asset, with",
       "when and by what it was approved), then runs them into one report at",
       ".loombridge/run/reports/verify.json. Nothing is written before the plan prints.",
-      "Offline assets run by default; assets that need a running editor are listed as",
-      "'needs --live' and never folded into a pass. A project with no assets prints the",
-      "record/replay/approve on-ramp and exits 2.",
+      "LIVE IS THE DEFAULT: a bare run also drives the assets that need a running Unity",
+      "editor (trace replay, feel snapshot), so it enters Play Mode. The plan prints first",
+      "and names every row it is about to drive. Pass --offline to grade stored evidence",
+      "only, which is what a headless CI runner wants; offline runs list the live assets as",
+      "'needs live' and never fold them into a pass. A project with no assets prints the",
+      "record/verify/approve on-ramp and exits 2.",
       "It also grades a stamped Unity EditMode run from .loombridge/tests/ when",
       "`loombridge tests run` produced one: offline, never launching an editor, and never",
       "as a full pass (a suite has no human approval, so it is permanently unanchored).",
@@ -1374,12 +1395,12 @@ function printUsage(): void {
       "plan. A verdict minted without evidence shas is refused: re-verify that slice. All of it",
       "is offline; a refused roll-up is exit 2 (harness tier), never a game verdict.",
       "",
-      "  loombridge verify                     # offline assets, plan first",
-      "  loombridge verify --live              # also replay traces + grade feel drift",
+      "  loombridge verify                     # everything, plan first (drives the editor)",
+      "  loombridge verify --offline           # stored evidence only; no editor needed (CI)",
       "  loombridge verify --only screens      # one section, for CI granularity",
       "",
-      "Seven flags stay on the unified run and combine only with each other: --root,",
-      "--strict, --live, --report, --only, --id, --workspace. EVERY OTHER flag below is a",
+      "Eight flags stay on the unified run and combine only with each other: --root,",
+      "--strict, --live, --offline, --report, --only, --id, --workspace. EVERY OTHER flag below is a",
       "mode or engine flag, and passing any one of them selects that legacy mode instead,",
       "unchanged (--inputs, --acceptance, --output, --vlm, --slice, --stage, --profile,",
       "--snapshot, --minigame and their companions).",
@@ -1390,8 +1411,12 @@ function printUsage(): void {
       "deprecated: it is a permanent DIAGNOSTIC and never gates.",
       "",
       "Bare-run options (combinable only with each other):",
-      "  --live                Also run the assets that need a running Unity editor",
-      "                        (trace replay with pixel-drift gating, feel snapshot).",
+      "  --offline             Grade STORED EVIDENCE ONLY: never connect to Unity, never",
+      "                        enter Play Mode. Assets that need an editor are listed as",
+      "                        'needs live' and never folded into a pass. This is the",
+      "                        correct flag for a headless CI runner.",
+      "  --live                NO-OP, accepted for compatibility. Live is the default; this",
+      "                        flag asks for what a bare run already does.",
       "  --report <path>       Unified report path, resolved relative to --root (default:",
       "                        .loombridge/run/reports/verify.json, or",
       "                        .loombridge/run/reports/verify-scoped.json under --only). Refused",
@@ -1539,9 +1564,11 @@ function printUsage(): void {
       "  -h, --help            Show this help",
       "",
       "Exit (bare run): 0 pass, or a partial whose ONLY unmeasured assets were skipped",
-      "      for lack of --live; 1 a game defect (gate fail, drift, baseline regression);",
+      "      under --offline; 1 a game defect (gate fail, drift, baseline regression);",
       "      2 a harness fault, a broken asset, or nothing graded. A 2 is never a game",
-      "      verdict, and a run that checked nothing is never a pass.",
+      "      verdict, and a run that checked nothing is never a pass. A live run that",
+      "      cannot reach a Unity editor refuses (2) before anything runs and names",
+      "      --offline.",
       "Exit: 1 on Tier-1 fail (or warn under --strict), else 0.",
       "      A contract run that graded NOTHING (no gate consumed a capture) exits 2.",
       "      In --profile mode: 1 on fail (or 'incomplete' under --strict), else 0.",

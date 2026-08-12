@@ -123,14 +123,20 @@ jobs:
       # --- the release check ---
       #
       # BARE `verify` is the front door. It discovers every verification asset this project
-      # has, prints the plan, runs the offline ones, and writes one roll-up. Add `--only
+      # has, prints the plan, runs them, and writes one roll-up. Add `--only
       # screens` to narrow it; a scoped run is reported as `partial` and is never a
       # certificate, which is the honest label for a subset.
+      #
+      # `--offline` IS REQUIRED ON A CI RUNNER, and is the honest spelling of what this job
+      # can do: `verify` drives a running Unity editor by DEFAULT, and there is none here.
+      # Without it the run refuses (exit 2) the moment a live row appears in the plan.
+      # Live-only assets are listed as `needs live` rows and are never folded into a pass,
+      # so the green below stays a statement about the STORED evidence only.
       - name: Verify against the approved anchors (--strict)
         id: verify
         run: |
           set +e
-          loombridge verify --strict \
+          loombridge verify --offline --strict \
             --root "$GITHUB_WORKSPACE" \
             --workspace "$RUNNER_TEMP/loombridge-workspace"
           CODE=$?
@@ -195,7 +201,7 @@ jobs:
       - name: Verify the fresh captures against the approved anchors (--strict)
         run: |
           set +e
-          loombridge verify --strict \
+          loombridge verify --offline --strict \
             --root "$GITHUB_WORKSPACE" \
             --workspace "$RUNNER_TEMP/loombridge-workspace"
           CODE=$?

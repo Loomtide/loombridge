@@ -62,7 +62,7 @@ function unanchoredSection(section: "contract" | "screens" | "flow" | "feel" | "
   return { section, exit, anchored: false } as const;
 }
 
-const LIVE_SKIPPED = { kind: "trace", id: "kq", reason: "needs --live", why: "live-only-skipped" } as const;
+const LIVE_SKIPPED = { kind: "trace", id: "kq", reason: "needs a live editor, and --offline was passed", why: "live-only-skipped" } as const;
 const NON_ANCHOR = { kind: "trace", id: "kq2", reason: "recorded, not approved", why: "non-anchor" } as const;
 const DRAFT = { kind: "screen-contract", id: "sc", reason: "contract draft", why: "draft" } as const;
 const BROKEN = { kind: "feel-snapshot", id: "current", reason: "tampered", why: "broken" } as const;

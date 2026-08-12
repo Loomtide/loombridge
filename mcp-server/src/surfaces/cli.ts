@@ -84,7 +84,7 @@ function printUsage(): void {
       "               (exit 0/1/2); --profile is DIAGNOSTIC feel grading, never gating.",
       "  trace      The replay machinery, namespaced: `trace replay` / `trace replay-all` (the",
       "               LOW-LEVEL door that re-drives one trace), `trace tolerance`, `trace mask`,",
-      "               `trace report`. The daily loop needs none of them: `verify --live` already",
+      "               `trace report`. The daily loop needs none of them: `verify` already",
       "               drives the replay and captures the frames, so reach for `verify` and use",
       "               `trace replay` when you want the replay alone. `trace record` and",
       "               `trace approve` still work; `record` and `approve` above are the same doors.",

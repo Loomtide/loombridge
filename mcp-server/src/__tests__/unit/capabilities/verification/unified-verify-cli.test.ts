@@ -22,7 +22,7 @@ import { deflateSync } from "node:zlib";
 import test from "node:test";
 
 import { runPlan } from "../../../../capabilities/verification/plan.js";
-import { run as runVerifyCli, runVerify } from "../../../../capabilities/verification/verify.js";
+import { classifyOrchestratorArgs, run as runVerifyCli, runVerify } from "../../../../capabilities/verification/verify.js";
 import { runUnifiedVerify } from "../../../../capabilities/verification/unified/orchestrator.js";
 import {
   UNIFIED_SCOPED_REPORT,
@@ -54,6 +54,7 @@ import {
 import { fileExists, loombridgePaths, readState, standardReplayLayout } from "../../../../domain/state.js";
 import { traceShaOnDisk } from "../../../_support/replay-fixtures.js";
 import { REPO_ROOT } from "../../../_support/paths.js";
+import { REACHABLE_EDITOR, unreachableEditor } from "../../../_support/live-editor.js";
 
 async function tmpDir(prefix: string): Promise<string> {
   return fs.mkdtemp(path.join(os.tmpdir(), prefix));
@@ -427,18 +428,25 @@ test("an EMPTY project prints the on-ramp, writes nothing at all, and exits 2", 
     const text = lines.join("\n");
     // The real three-command sequence, in order, and the tail that says what to do after.
     //
-    // THREE COMMANDS, AND THE MIDDLE ONE IS `verify --live`. The on-ramp used to teach a
-    // separate `trace replay` step, which `verify --live` already performs: it re-drives the
+    // THREE COMMANDS, AND THE MIDDLE ONE IS A BARE `verify`. The on-ramp used to teach a
+    // separate `trace replay` step, which `verify` already performs: it re-drives the
     // trace and writes the very `<id>.report.json` that `approve` promotes. Naming it made
     // the loop read one command longer than it is, and pointed a new user at the low-level
     // door before the one they actually want.
     assert.match(text, /loombridge record\b/);
-    assert.match(text, /loombridge verify --live/);
+    // Bare, with NO flag: since LiveByDefault `verify` drives the editor on its own, so an
+    // on-ramp that still spelled `--live` would teach a flag that does nothing.
+    assert.match(text, /loombridge verify {2,}\(re-drives the demonstration/);
+    assert.doesNotMatch(text, /loombridge verify --live/, "the on-ramp must not teach the no-op flag");
     assert.match(text, /loombridge approve\b/);
     assert.doesNotMatch(text, /trace replay/, "the on-ramp must not teach the low-level door as a step");
     assert.ok(
-      text.indexOf("loombridge record") < text.indexOf("loombridge verify --live")
-        && text.indexOf("loombridge verify --live") < text.indexOf("loombridge approve"),
+      // Read off the NUMBERED steps: since LiveByDefault the middle step is a bare
+      // `loombridge verify`, and that substring also occurs in the `[loombridge verify]`
+      // tag on every line, so an unnumbered indexOf would find the plan header at index 1
+      // and "prove" the order for any output at all.
+      text.indexOf("1. loombridge record") < text.indexOf("2. loombridge verify")
+        && text.indexOf("2. loombridge verify") < text.indexOf("3. loombridge approve"),
       `the on-ramp must be in pipeline order:\n${text}`,
     );
     // The actors: a HUMAN records; an agent must not be told to do what it cannot.
@@ -651,18 +659,222 @@ test("a layout baseline approved for ANOTHER project is BROKEN: tier 2, and it n
   }
 });
 
+// ── LiveByDefault: the default flip, and the unreachable-editor refusal ──────
+
+/**
+ * Drive the REAL router and the REAL orchestrator from an argv, with ONLY the editor doubled.
+ *
+ * `runVerifyCli` cannot be used for these: it resolves production deps, so the probe would
+ * try to open a socket and the flow section would try to drive an editor. Composing
+ * `classifyOrchestratorArgs` with `runUnifiedVerify` keeps every decision under test real
+ * (which flag means what, whether the probe runs at all, what the refusal says) and doubles
+ * only the two things a unit test cannot have. A test that asserted on `live` alone would
+ * pass for an orchestrator that read the field and ignored it.
+ */
+async function argvRun(
+  argv: string[],
+  deps: Parameters<typeof runUnifiedVerify>[0]["deps"],
+): Promise<{ result: number; lines: string[] }> {
+  const parsed = classifyOrchestratorArgs(argv);
+  assert.notEqual(parsed, null, `the router must adopt ${JSON.stringify(argv)}`);
+  return captured(() => runUnifiedVerify({ ...parsed!, deps }));
+}
+
+/**
+ * THE FLIP, asserted on what actually happened rather than on a flag's value: the live seam
+ * either received the trace id or it did not. Bare `verify` used to print "every discovered
+ * asset needs a running editor" and exit 2 on this exact fixture, which is the wasted round
+ * trip this change removes.
+ *
+ * LITMUS, PERFORMED on the real router. `classifyOrchestratorArgs` was reverted to
+ * `live: false` (its pre-change value), the suite was rebuilt, and this test failed FIRST,
+ * before any string assertion. Observed VERBATIM:
+ *
+ *   ✖ LiveByDefault: bare `verify` DRIVES the trace, `--offline` does not, `--live` is a no-op
+ *     AssertionError [ERR_ASSERTION]: bare `verify` must drive the live row
+ *     + actual - expected
+ *     + []
+ *     - [
+ *     -   'happy-path'
+ *     - ]
+ *
+ * …together with, in `unified-verify-flags.test.ts`:
+ *
+ *   ✖ bare `verify` is LIVE; `--offline` is the opt-out; `--live` still parses as a no-op
+ *     AssertionError [ERR_ASSERTION]: bare `verify` must be live by default
+ *     false !== true
+ *
+ * Restoring `live: true` returned both files to `ℹ pass 50 / ℹ fail 0`.
+ */
+test("LiveByDefault: bare `verify` DRIVES the trace, `--offline` does not, `--live` is a no-op", async () => {
+  const root = await plannedProject("live-default-", { graded: true });
+  const workspace = await tmpDir("live-default-ws-");
+  try {
+    await plantApprovedTrace(root, "happy-path");
+    const base = ["--root", root, "--workspace", workspace];
+
+    const bareSeen: string[] = [];
+    const bare = await argvRun(base, {
+      ...REACHABLE_EDITOR,
+      async runFlowTrace(_l, id) {
+        bareSeen.push(id);
+        return cleanFlow();
+      },
+    });
+    assert.deepEqual(bareSeen, ["happy-path"], "bare `verify` must drive the live row");
+    assert.match(bare.lines.join("\n"), /will run \(LIVE: drives the editor\)/);
+    assert.equal((await readUnified(root)).live, true, "the report must record that this was a live run");
+
+    const offlineSeen: string[] = [];
+    const offline = await argvRun([...base, "--offline"], {
+      ...REACHABLE_EDITOR,
+      async runFlowTrace(_l, id) {
+        offlineSeen.push(id);
+        return cleanFlow();
+      },
+    });
+    assert.deepEqual(offlineSeen, [], "--offline must never reach the live seam");
+    assert.match(offline.lines.join("\n"), /not run: needs a live editor, and --offline was passed/);
+    const offlineReport = await readUnified(root);
+    assert.equal(offlineReport.live, false);
+    assert.equal(offlineReport.notRun[0]!.why, "live-only-skipped");
+
+    // COMPATIBILITY: `--live` is typed by shipped docs, skills and scripts. It must still
+    // parse and must still mean live, i.e. behave exactly like the bare run above.
+    const liveSeen: string[] = [];
+    await argvRun([...base, "--live"], {
+      ...REACHABLE_EDITOR,
+      async runFlowTrace(_l, id) {
+        liveSeen.push(id);
+        return cleanFlow();
+      },
+    });
+    assert.deepEqual(liveSeen, ["happy-path"], "--live must remain a no-op, not a mode");
+    assert.equal((await readUnified(root)).live, true);
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+    await fs.rm(workspace, { recursive: true, force: true });
+  }
+});
+
+/**
+ * THE COST OF THE FLIP, paid where it lands. Three things are asserted together, because any
+ * one alone would let the other two regress: the refusal is LEGIBLE, it is FIRST (no section
+ * ran, no report exists), and it names a COMPLETE command.
+ *
+ * LITMUS, PERFORMED on the real orchestrator. The preflight was disabled in
+ * `orchestrator.ts` (`if (false && wouldDriveEditor)`), the suite was rebuilt, and this test
+ * failed. What it printed instead is exactly the defect the preflight exists to prevent:
+ * the CONTRACT SECTION HAD ALREADY RUN and both `build-verdict.json` and `verify.json` were
+ * written before the failure appeared, and the failure appeared as the flow section's own
+ * harness fault rather than as an answer about the editor. Observed VERBATIM (excerpt):
+ *
+ *   ✖ LiveByDefault: with NO editor reachable the run REFUSES first, names --offline, and writes nothing
+ *     AssertionError [ERR_ASSERTION]: The input did not match the regular expression
+ *     /REFUSED: no Unity editor was reachable/. Input:
+ *
+ *     '[loombridge verify] plan for … (offline + LIVE; …):\n' +
+ *       "[loombridge verify]   trace 'happy-path': will run (LIVE: drives the editor); approved …\n" +
+ *       '[loombridge verify] verdict=…/.loombridge/run/reports/build-verdict.json exit=0\n' +
+ *       '[loombridge verify] flow: trace "happy-path" could not be replayed (harness fault, not a game defect): …\n' +
+ *       '[loombridge verify] flow: harness-fault (no report produced this run, exit 2) [happy-path=harness-fault]\n' +
+ *       '[loombridge verify] status=harness-fault exit=2 report=.loombridge/run/reports/verify.json'
+ *
+ * Restoring the preflight returned this file to `ℹ pass 42 / ℹ fail 0`.
+ */
+test("LiveByDefault: with NO editor reachable the run REFUSES first, names --offline, and writes nothing", async () => {
+  const root = await plannedProject("live-unreachable-", { graded: true });
+  const workspace = await tmpDir("live-unreachable-ws-");
+  try {
+    await plantApprovedTrace(root, "happy-path");
+
+    const { result, lines } = await argvRun(["--root", root, "--workspace", workspace], {
+      ...unreachableEditor("connect ECONNREFUSED 127.0.0.1:8790"),
+      async runFlowTrace() {
+        assert.fail("the flow section must not be reached when no editor answered the preflight");
+      },
+    });
+
+    const text = lines.join("\n");
+    assert.equal(result, 2, "an unreachable editor is the harness tier, never a game verdict");
+    assert.match(text, /REFUSED: no Unity editor was reachable/);
+    assert.match(text, /loombridge verify --offline --root /, "the way out must be a whole command");
+    assert.match(text, /connect ECONNREFUSED/, "the transport's own words are still shown, as detail");
+    assert.match(text, /nothing was written and nothing ran/);
+    // NOT a raw connection error: the refusal, not the transport line, has to be first.
+    assert.ok(
+      text.indexOf("REFUSED: no Unity editor was reachable") < text.indexOf("connect ECONNREFUSED"),
+      `the legible refusal must lead, not the transport error:\n${text}`,
+    );
+
+    // THE PLAN STILL PRINTED FIRST, and before the refusal: the operator has to be able to
+    // see which rows were about to be driven, even on the run that refused.
+    assert.ok(
+      text.indexOf("plan for") < text.indexOf("REFUSED: no Unity editor was reachable"),
+      `the plan must print before the refusal:\n${text}`,
+    );
+
+    // NOTHING RAN AND NOTHING WAS WRITTEN. The contract row is offline and green in this
+    // fixture, so a run that had reached the sections would have left both of these behind.
+    const paths = loombridgePaths(root);
+    assert.equal(await fileExists(unifiedVerifyReportPath(paths.reports)), false, "no unified report");
+    assert.equal(await fileExists(paths.verdict), false, "the contract section must not have run");
+
+    // LITMUS: the SAME fixture with a reachable editor runs, so the refusal above is caused
+    // by the probe and not by anything else in this project.
+    const seen: string[] = [];
+    const { result: ok } = await argvRun(["--root", root, "--workspace", workspace], {
+      ...REACHABLE_EDITOR,
+      async runFlowTrace(_l, id) {
+        seen.push(id);
+        return cleanFlow();
+      },
+    });
+    assert.deepEqual(seen, ["happy-path"], "with an editor, the same argv drives the trace");
+    assert.equal(ok, 0);
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+    await fs.rm(workspace, { recursive: true, force: true });
+  }
+});
+
+test("LiveByDefault: a project with NO live rows never probes, so an offline-only run still works with no editor", async () => {
+  // THE OTHER HALF OF THE PREFLIGHT'S SCOPE, and the regression it must not cause. A
+  // project whose only asset is graded offline needs no editor, and refusing there would
+  // break every headless run that works today. `probeEditor` FAILS THE TEST if called.
+  const root = await plannedProject("live-nolive-", { graded: true });
+  const workspace = await tmpDir("live-nolive-ws-");
+  try {
+    const { lines } = await argvRun(["--root", root, "--workspace", workspace], {
+      async probeEditor() {
+        assert.fail("a run with no live row must not probe for an editor");
+      },
+    });
+    // The run reached its sections and produced a verdict. (Its TIER is FXH's business, not
+    // this test's: a lone unanchored contract exits 2 whatever the editor is doing, and
+    // asserting 0 here would be asserting someone else's rule.)
+    assert.doesNotMatch(lines.join("\n"), /no Unity editor was reachable/);
+    assert.equal((await readUnified(root)).sections.contract?.exit, 0, "the offline contract still graded");
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+    await fs.rm(workspace, { recursive: true, force: true });
+  }
+});
+
 // ── live-only assets, offline run ────────────────────────────────────────────
 
-test("an approved trace alone is NOTHING-CHECKED offline, and the hint names `verify --live`", async () => {
+test("an approved trace alone is NOTHING-CHECKED under --offline, and the hint names bare `verify`", async () => {
   const root = await tmpDir("unified-cli-traceonly-");
   const workspace = await tmpDir("unified-cli-ws-");
   try {
     await plantApprovedTrace(root, "happy-path");
 
-    const { result, lines } = await captured(() => runVerifyCli(["--root", root, "--workspace", workspace]));
+    // `--offline` IS THE SUBJECT of this test since LiveByDefault: the live-only skip only
+    // exists when the operator asked for offline. Bare `verify` would drive the trace.
+    const { result, lines } = await captured(() => runVerifyCli(["--root", root, "--workspace", workspace, "--offline"]));
     const text = lines.join("\n");
     assert.equal(result, 2, "zero executed is never exit 0");
-    assert.match(text, /trace 'happy-path': not run: needs --live/);
+    assert.match(text, /trace 'happy-path': not run: needs a live editor, and --offline was passed/);
     // L13: the provenance is printed AS RECORDED. The frame shas were re-derived from disk,
     // so the frozen bytes are audited; the source report is copied off the manifest and is
     // not re-checked, and the wording must not let a reader take it as a verified claim.
@@ -671,7 +883,7 @@ test("an approved trace alone is NOTHING-CHECKED offline, and the hint names `ve
       /approved 2\d{3}-.*\(recorded from replay report [0-9a-f]{12}\)/,
       "the plan names when it was approved and, as recorded, from what",
     );
-    assert.match(text, /Re-run with: loombridge verify --live/);
+    assert.match(text, /every discovered asset needs a running editor, and --offline was passed\. With Unity open, run: loombridge verify/);
 
     const report = await readUnified(root);
     assert.equal(report.status, "nothing-checked");
@@ -685,18 +897,21 @@ test("an approved trace alone is NOTHING-CHECKED offline, and the hint names `ve
 });
 
 test("PARTIAL: a live-only skip still NAMES the unmeasured anchor, and needs an anchored green to exit 0", async () => {
-  // DELIBERATE FLIP (FXH). The `--live` allowance is unchanged: the operator's own omission is
-  // still the one non-execution that may keep the exit at 0. What changed is that it can only
+  // DELIBERATE FLIP (FXH). The offline allowance is unchanged: the operator's own `--offline`
+  // is still the one non-execution that may keep the exit at 0. What changed is that it can only
   // do so for a run that measured SOMETHING a human approved. This fixture's single executed
   // section is an unanchored contract, so the run now exits 2, and the second half of this
-  // test plants an anchored green section to prove the `--live` allowance itself still works.
+  // test plants an anchored green section to prove the allowance itself still works.
   const root = await plannedProject("unified-cli-partial-", { graded: true });
   const workspace = await tmpDir("unified-cli-ws-");
   try {
     await plantApprovedTrace(root, "happy-path");
 
-    const { result, lines } = await captured(() => runVerifyCli(["--root", root, "--workspace", workspace]));
-    assert.equal(result, 2, "zero anchored executed sections: the --live allowance has nothing to attach to");
+    // `--offline` is what CREATES the live-only skip this test is about (LiveByDefault).
+    const { result, lines } = await captured(() =>
+      runVerifyCli(["--root", root, "--workspace", workspace, "--offline"]),
+    );
+    assert.equal(result, 2, "zero anchored executed sections: the offline allowance has nothing to attach to");
     const text = lines.join("\n");
     assert.match(text, /NOT MEASURED \(never folded into pass\): trace 'happy-path'/);
     assert.match(text, /PARTIAL/);
@@ -717,7 +932,7 @@ test("PARTIAL: a live-only skip still NAMES the unmeasured anchor, and needs an 
           { section: "screens", exit: 0, anchored: true },
           { section: "contract", exit: 0, anchored: false },
         ],
-        notRun: [{ kind: "trace", id: "happy-path", reason: "needs --live", why: "live-only-skipped" }],
+        notRun: [{ kind: "trace", id: "happy-path", reason: "needs a live editor, and --offline was passed", why: "live-only-skipped" }],
       }),
       { status: "partial", exit: 0 },
     );
@@ -768,7 +983,7 @@ test("--live: one trace that THROWS is that trace's harness fault; the others st
         strict: false,
         live: true,
         workspace,
-        deps: {
+        deps: { ...REACHABLE_EDITOR,
           async runFlowTrace(_layout, id, opts) {
             assert.equal(opts.strictVisual, true, "the unified flow section always gates pixel drift (A5)");
             seen.push(id);
@@ -810,7 +1025,7 @@ test("a section that throws is caught as ITS harness fault; the later sections s
         strict: false,
         live: true,
         workspace,
-        deps: {
+        deps: { ...REACHABLE_EDITOR,
           async runContract() {
             throw new Error("contract engine exploded");
           },
@@ -852,7 +1067,7 @@ test("--live: the feel section carries the engine's own tier, pass and integrity
           strict: false,
           live: true,
           workspace,
-          deps: {
+          deps: { ...REACHABLE_EDITOR,
             async runFeel(args) {
               seen.push(args);
               // The real engine writes its drift report here; the double does the same so
@@ -932,7 +1147,7 @@ test("--live: the flow summary NAMES the HTML page, in `trace replay`'s own spel
         strict: false,
         live: true,
         workspace,
-        deps: {
+        deps: { ...REACHABLE_EDITOR,
           async runFlowTrace(_layout, id) {
             return id === "b-drifted"
               ? driftedFlow({ status: "visual-drift", htmlPath: driftedHtml })
@@ -988,7 +1203,7 @@ test("--live: a trace at tier 1 (pixel DRIFT) is a game defect: the run exits 1,
         strict: false,
         live: true,
         workspace,
-        deps: {
+        deps: { ...REACHABLE_EDITOR,
           async runFlowTrace(_layout, id) {
             // A3 seam: the drifted trace carries the numbers the section now prints.
             return id === "b-drifted" ? driftedFlow({ status: "visual-drift" }) : cleanFlow();
@@ -1016,7 +1231,7 @@ test("--live: a trace at tier 1 (pixel DRIFT) is a game defect: the run exits 1,
 
 test("--live: a pixel-only failure prints the SAME suggestion here as at the trace verb, naming `trace tolerance`", async () => {
   // R1's suggestion loop, at the OTHER door. An operator who only ever runs
-  // `verify --live` must get the same actionable exit from a drift-only failure, and it
+  // `verify` must get the same actionable exit from a drift-only failure, and it
   // must name `trace tolerance`: an approve-shaped suggestion would have them promote the
   // drifted frames, destroying the anchor they were trying to keep.
   const root = await unityLikeProject("unified-cli-suggest-");
@@ -1029,7 +1244,7 @@ test("--live: a pixel-only failure prints the SAME suggestion here as at the tra
         strict: false,
         live: true,
         workspace,
-        deps: {
+        deps: { ...REACHABLE_EDITOR,
           async runFlowTrace() {
             return driftedFlow({ driftCaptures: 39 });
           },
@@ -1066,7 +1281,7 @@ test("--live: a pixel-only failure prints the SAME suggestion here as at the tra
 test("MX8: --live prints the MASK verdict too, in the trace verb's exact words", async () => {
   // V1. Every mask sentence was pinned by calling `maskSuggestionLines` directly, so the
   // unified door's own print block was a five-line `if` that no test entered: deleting it
-  // left the suite green and left an operator who only ever runs `verify --live` with a
+  // left the suite green and left an operator who only ever runs `verify` with a
   // drift-only failure and no mask verdict at all. Both branches (a rect offered, and the
   // deterministic-change refusal that is the safety property) are driven here.
   const root = await unityLikeProject("unified-cli-masksuggest-");
@@ -1080,7 +1295,7 @@ test("MX8: --live prints the MASK verdict too, in the trace verb's exact words",
         strict: false,
         live: true,
         workspace,
-        deps: {
+        deps: { ...REACHABLE_EDITOR,
           async runFlowTrace() {
             return {
               ...driftedFlow({ driftCaptures: 2 }),
@@ -1108,7 +1323,7 @@ test("MX8: --live prints the MASK verdict too, in the trace verb's exact words",
         strict: false,
         live: true,
         workspace,
-        deps: {
+        deps: { ...REACHABLE_EDITOR,
           async runFlowTrace() {
             return {
               ...driftedFlow({ driftCaptures: 2 }),
@@ -1134,7 +1349,7 @@ test("MX8: --live prints the MASK verdict too, in the trace verb's exact words",
  * trace door's, and derives these verdicts from real pixels; here they are handed to the
  * seam, because the engine needs a live editor).
  *
- * The operator this was found on hit the drift through `verify --live`, so the ORDER has to
+ * The operator this was found on hit the drift through `verify`, so the ORDER has to
  * hold here specifically: they read "re-approve the tolerance with …" first, and the reason
  * no honest mask existed was below it.
  *
@@ -1167,7 +1382,7 @@ test("the mask verdict LEADS the tolerance advice at the verify door too", async
           strict: false,
           live: true,
           workspace,
-          deps: {
+          deps: { ...REACHABLE_EDITOR,
             async runFlowTrace() {
               return { ...driftedFlow({ driftCaptures: 2 }), maskSuggestion };
             },
@@ -1190,7 +1405,7 @@ test("the mask verdict LEADS the tolerance advice at the verify door too", async
     // …and the circle: a comparison happened, so no second characterization run is asked for.
     const moved = await run({ kind: "moved", previousCaptures: ["a"], currentCaptures: ["b"] });
     assert.match(moved, /flow: the previous run WAS compared, and none of its drift recurs here/);
-    assert.doesNotMatch(moved, /re-run replay once more/);
+    assert.doesNotMatch(moved, /re-run the replay once more/);
     assert.ok(moved.indexOf("previous run WAS compared") < moved.indexOf("re-approve the tolerance"), moved);
   } finally {
     await fs.rm(root, { recursive: true, force: true });
@@ -1213,7 +1428,7 @@ test("MX10: a GREEN trace graded with masks says so in the per-asset detail", as
         strict: false,
         live: true,
         workspace,
-        deps: {
+        deps: { ...REACHABLE_EDITOR,
           async runFlowTrace() {
             return { ...cleanFlow(), maskedFraction: 0.08 };
           },
@@ -1229,7 +1444,7 @@ test("MX10: a GREEN trace graded with masks says so in the per-asset detail", as
         strict: false,
         live: true,
         workspace,
-        deps: {
+        deps: { ...REACHABLE_EDITOR,
           async runFlowTrace() {
             return cleanFlow();
           },
@@ -1258,7 +1473,7 @@ test("--live: NO suggestion is printed when the trace is a harness fault, only w
         strict: false,
         live: true,
         workspace,
-        deps: {
+        deps: { ...REACHABLE_EDITOR,
           async runFlowTrace() {
             return {
               status: "pass",
@@ -1298,7 +1513,7 @@ test("--live: the flow section PINS the editor it replays against", async () => 
         strict: false,
         live: true,
         workspace,
-        deps: {
+        deps: { ...REACHABLE_EDITOR,
           async runFlowTrace(_layout, _id, o) {
             opts.push(o);
             // A3 seam: unchanged pinning question, new (drift-aware) return shape.

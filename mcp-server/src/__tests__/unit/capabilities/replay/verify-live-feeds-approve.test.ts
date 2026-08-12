@@ -4,9 +4,9 @@
  * The documented loop is four lines, two of which need a person:
  *
  *   loombridge record          a human demonstrates
- *   loombridge verify --live   drives the flow and captures the frames
+ *   loombridge verify   drives the flow and captures the frames
  *   loombridge approve         a human freezes what that run captured
- *   loombridge verify --live   now graded
+ *   loombridge verify   now graded
  *
  * WHY THIS STARTS AT THE UNIFIED DOOR AND NOT AT `replayTraceForVerify`. The earlier version
  * of this file drove that seam directly and admitted in its own header that it did not walk
@@ -19,10 +19,10 @@
  *
  * Reproduced against the PR head before the fix, both halves:
  *
- *  - FRESH PROJECT: `verify --live` printed "will not run: recorded, not approved: this
- *    `verify --live` run captures its frames" (a sentence that contradicts itself), wrote no
+ *  - FRESH PROJECT: `verify` printed "will not run: recorded, not approved: this
+ *    `verify` run captures its frames" (a sentence that contradicts itself), wrote no
  *    report, and `approve` then refused and reprinted the same loop. A circular dead end.
- *  - RE-RECORDED ID: `verify --live` wrote nothing, and `approve` fell back to the most
+ *  - RE-RECORDED ID: `verify` wrote nothing, and `approve` fell back to the most
  *    recent report on disk, which was the PREVIOUS demonstration's, and minted an anchor
  *    stamping the CURRENT trace's sha onto the OLD frames. Exit 0, and `verifyTraceBaseline`
  *    passed forever after.
@@ -57,6 +57,7 @@ import {
 import { unifiedVerifyReportPath } from "../../../../capabilities/verification/unified/report.js";
 import { loombridgePaths, standardReplayLayout } from "../../../../domain/state.js";
 import type { BridgeResponse } from "../../../../shared/types.js";
+import { REACHABLE_EDITOR } from "../../../_support/live-editor.js";
 
 /** A 1x1 PNG, built rather than fixtured so the test carries no binary. */
 function tinyPng(): Buffer {
@@ -125,6 +126,9 @@ function scriptedClient(png: Buffer): () => {
  */
 function liveFlowDeps(png: Buffer, seen: string[]): Partial<UnifiedSectionDeps> {
   return {
+    // The scripted client stands in for the editor the LIVE preflight probes for, so the
+    // probe has to answer the same way, or the run refuses before it reaches this seam.
+    ...REACHABLE_EDITOR,
     async runFlowTrace(layout, id, opts) {
       seen.push(id);
       const { artifact, exitTier, drift, htmlPath, maskSuggestion } = await replayTraceForVerify(layout, id, {
@@ -184,14 +188,14 @@ async function readUnified(root: string): Promise<{
   return JSON.parse(raw) as never;
 }
 
-test("the LOOP walks end to end through the orchestrator: record → verify --live → approve → graded verify --live", async () => {
+test("the LOOP walks end to end through the orchestrator: record → verify → approve → graded verify", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "loombridge-loop-fresh-"));
   try {
     const layout = standardReplayLayout(root);
     const png = tinyPng();
     await record(root, ["cap"]);
 
-    // ── STEP 2: `verify --live` on a project whose only asset is a fresh recording.
+    // ── STEP 2: `verify` on a project whose only asset is a fresh recording.
     const seen: string[] = [];
     const step2 = await captured(() =>
       runUnifiedVerify({ root, strict: false, live: true, deps: liveFlowDeps(png, seen) }),
@@ -325,7 +329,7 @@ test("approve REFUSES a report that does not say which demonstration it came fro
  *     -  const captureOnlyTraces = assets.filter((a) => a.kind === "trace" && willCaptureOnly(a, opts.live, only));
  *     +  const captureOnlyTraces: DiscoveredAsset[] = [];
  *   OBSERVED VERBATIM (all three fail; the drop is upstream of every one of them):
- *     ✖ the LOOP walks end to end through the orchestrator: record → verify --live → approve → graded verify --live
+ *     ✖ the LOOP walks end to end through the orchestrator: record → verify → approve → graded verify
  *       AssertionError [ERR_ASSERTION]: the unified door must actually drive the recorded trace
  *       + actual - expected
  *

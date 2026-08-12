@@ -477,11 +477,13 @@ test("runLoombridgeVerifyTool REFUSES (exit 2) with a verbatim headline when the
     assert.match(payload.headline, /REFUSED/);
     const text = payload.output.join("\n");
     // F7: the door-one pointer, printed because there is no acceptance contract on disk.
-    assert.match(text, /loombridge plan is the other door/);
+    // WITH `--genre`: bare `loombridge plan` REFUSES in exactly this state (no contract, so no
+    // STATE.genre to fall back on), so the door-one pointer has to carry the argument.
+    assert.match(text, /loombridge plan --genre <genre> is the other door/);
     assert.match(text, /no ACCEPTANCE\.json/);
     // …and the door-two on-ramp is still the primary answer for an EXISTING game. It names
-    // the two HUMAN acts as top-level verbs now (`record`, `approve`), with `verify --live`
-    // between them; `trace replay` is no longer a step, because `verify --live` performs it.
+    // the two HUMAN acts as top-level verbs now (`record`, `approve`), with `verify`
+    // between them; `trace replay` is no longer a step, because `verify` performs it.
     assert.match(text, /loombridge record/);
     // A refused run writes NO verdict and NO unified report (never a fake pass).
     assert.equal(payload.verdictExists, false);
@@ -505,7 +507,11 @@ test("runLoombridgeVerifyTool surfaces the CLI output byte-for-byte (no summariz
   try {
     await fakeCaptures(rootA);
     await fakeCaptures(rootB);
-    const direct = await captureVerb(() => runVerifyCli(["--root", rootA]));
+    // `--offline` ON THE CLI SIDE: `loombridge_verify` passes `live: false` as its CONTRACT
+    // (an MCP tool call must never take the editor into Play Mode), and since LiveByDefault
+    // the bare CLI door is live. The parity claim is about SUMMARIZATION, so both sides have
+    // to be the same door.
+    const direct = await captureVerb(() => runVerifyCli(["--root", rootA, "--offline"]));
     const wrapped = await runLoombridgeVerifyTool(rootB);
     // Normalize the differences that are PATHS rather than message text: the temp root, and
     // the WORKSPACE derived from it. The absent-family lines name the workspace directory
