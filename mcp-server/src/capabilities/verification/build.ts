@@ -32,7 +32,7 @@ import { resolveAllSliceAssetBindings } from "../assets/asset-bindings.js";
 import { assertValidAcceptanceContract } from "./validator.js";
 import { readDeclaredArtMode } from "./doneness.js";
 import type { CapturePackSection } from "./types.js";
-import { gateInputFiles } from "./run-gates.js";
+import { sliceCaptureManifestEntries } from "./run-gates.js";
 import {
   getSliceVerdictPath,
   markDependentStale,
@@ -190,16 +190,16 @@ export function mintSliceRunId(sliceId: string): string {
   return `run-${safe}-${ts}-${rnd}`;
 }
 
-/** Derive capture manifest entries relative to `.loombridge/verify/` for a slice. */
+/**
+ * Derive capture manifest entries relative to `.loombridge/verify/` for a slice.
+ *
+ * The body lives in `run-gates.ts` beside `gateInputFiles` because `doneness` RE-DERIVES
+ * the same set to check that a slice's minted proof still covers what its gates owe. Two
+ * copies of this rule would be two answers to one question, and the doneness one is the
+ * one an adversary edits SLICES.json to get around.
+ */
 export function deriveSliceCaptureManifest(slice: SliceEntry): string[] {
-  const safe = assertSafeSliceId(slice.id);
-  const out = gateInputFiles(slice.acceptance.gates).map((file) => `${safe}/${file}`);
-  for (const entry of out) {
-    if (!isSafeCapturePath(entry)) {
-      throw new Error(`slice captureManifest would mint an unsafe capture path: "${entry}".`);
-    }
-  }
-  return out;
+  return sliceCaptureManifestEntries(assertSafeSliceId(slice.id), slice.acceptance.gates);
 }
 
 export interface BuildArgs {

@@ -28,7 +28,7 @@ import {
 } from "../../../../capabilities/verification/unified/report.js";
 import { deriveGenreCoverage } from "../../../../capabilities/genre/genre-coverage.js";
 import { knownGenreIds } from "../../../../capabilities/genre/genre-registry.js";
-import { runBuild } from "../../../../capabilities/verification/build.js";
+import { deriveSliceCaptureManifest, runBuild } from "../../../../capabilities/verification/build.js";
 import { validateAssetManifest } from "../../../../capabilities/assets/asset-manifest.js";
 import { designPaths, designStatus, setDesignTarget } from "../../../../capabilities/verification/design.js";
 import { runPlan } from "../../../../capabilities/verification/plan.js";
@@ -40,6 +40,7 @@ import {
   readState,
   updateState,
   writeState,
+  type LoombridgePaths,
   type LoombridgeState,
 } from "../../../../domain/state.js";
 import {
@@ -2115,4 +2116,255 @@ test("asset gate (RCL-D02) — primitiveFinal passes ONLY under art:deferred; in
   const resUnmarked = validateAssetManifest(unmarked, { artDeferred: true });
   assert.equal(resUnmarked.valid, false, "an unmarked role with no resolved asset must fail the manifest gate");
   assert.ok(resUnmarked.issues.some((x) => x.code === "MISSING_RESOLVED_PATH"), resUnmarked.issues.map((x) => x.code).join(","));
+});
+
+// ── refuse-on-absent across gates (the SKIP-ON-ABSENT class) ────────────────
+
+/**
+ * A slice-planned fixture that CERTIFIES, so each attack below is one deletion away from
+ * green and nothing else is doing the refusing.
+ *
+ * `captureManifest` is minted through the SHIPPED `deriveSliceCaptureManifest` rather than a
+ * literal, for the same reason doneness re-derives it: a hand-written manifest that
+ * under-declares what a slice's gates owe is a fixture testing the wrong refusal.
+ */
+async function certifyingSliceProject(opts: { approveDesignTarget?: boolean } = {}): Promise<{
+  root: string;
+  paths: LoombridgePaths;
+  slice: SliceEntry;
+}> {
+  const root = await tmpRoot();
+  const paths = loombridgePaths(root);
+  const slice: SliceEntry = { ...doneSlice(), state: "approved" };
+  slice.proof = {
+    ...slice.proof!,
+    captureManifest: deriveSliceCaptureManifest(slice),
+    approvedAt: "2026-05-28T02:00:00.000Z",
+  };
+  await writeSliceProofFiles(root, slice);
+  await writeSlicePlan(paths, planOf([slice]));
+  if (opts.approveDesignTarget) await approveFakeDesignTarget(root);
+  await writeState(paths, {
+    genre: "platformer-2d",
+    engine: "unity",
+    phase: "planned",
+    lastVerdict: null,
+    updatedAt: "2026-05-28T00:00:00.000Z",
+    ...(opts.approveDesignTarget ? { designTarget: "approved" as const } : {}),
+  });
+  return { root, paths, slice };
+}
+
+/**
+ * B: THE SLICE PATH HAD NO DISK-TRUTH DESIGN-TARGET GUARD, AND THE POLARITY WAS BACKWARDS.
+ *
+ * `checkSliceRollupHeroShotFidelity` and `checkSliceRollupAssetSourceFidelity` both opened with
+ * `if (design.status !== "approved") return []`, and `designStatus` resolves a DELETED
+ * `design-target.json` to `status: "missing"`. `diskTruthDesignTargetRefusals`, which handles
+ * exactly this on the whole-game path, was never called from the slice path.
+ *
+ * The polarity is the tell: a CORRUPT target refused (`readMeta` rethrows anything that is not
+ * ENOENT) while a DELETED one certified. Deleting is strictly easier than corrupting, so the
+ * cheaper attack was the one that worked.
+ *
+ * BEFORE, one fixture, changing nothing but that one file, with STATE still recording
+ * `designTarget: approved` throughout:
+ *
+ *   [B control: target PRESENT] exit: 1
+ *     - hero-shot-fidelity: REFUSE
+ *         - design target is `approved` but the verdict carries no independent hero-shot review …
+ *   [B corrupt] exit: 1 | fatal: Expected property name or '}' in JSON at position 2 (line 1 column 3)
+ *   [B ATTACK: target DELETED] exit: 0
+ *     - hero-shot-fidelity: PASS
+ *     - asset-source-fidelity: PASS
+ *   [loombridge doneness] OK — 1/1 slices approved + deterministic proofs fresh + hero-shot faithful + asset-source faithful.
+ *
+ * LITMUS, run 2026-08-13. `sliceDiskTruthDesignTargetRefusals` neutered to `return []`, rebuilt,
+ * re-run:
+ *
+ *   ✖ MOAT (B): a DELETED design target on the SLICE path refuses exactly as a corrupt one does (4.872708ms)
+ *     AssertionError [ERR_ASSERTION]: deleting the design target must not be cheaper than corrupting it
+ *
+ *     0 !== 1
+ *
+ *   ℹ pass 79
+ *   ℹ fail 2   (B and C were neutered in the same pass)
+ *
+ * `0 !== 1` is the certificate the deletion bought. Restored: 81 pass, 0 fail.
+ */
+test("MOAT (B): a DELETED design target on the SLICE path refuses exactly as a corrupt one does", async () => {
+  const { root, paths } = await certifyingSliceProject({ approveDesignTarget: true });
+  try {
+    const metaPath = designPaths(paths).meta;
+
+    // CONTROL: the target is present, so the roll-up asks for the fidelity review it owes.
+    const present = await captureDonenessOutput(root);
+    assert.equal(present.code, 1, "an approved target with no review must refuse");
+    assert.match(present.text, /hero-shot-fidelity: REFUSE/);
+
+    // CORRUPT, refused today. Asserted so it stays the baseline the deleted case is measured
+    // against (`runDoneness` throws here; the CLI's own `run()` catches it and exits 1).
+    await fs.writeFile(metaPath, "{ not json", "utf-8");
+    const corrupt = await runDoneness({ root }).then(
+      (code) => code,
+      () => 1,
+    );
+    assert.notEqual(corrupt, 0, "a corrupt design target must never certify");
+
+    // THE ATTACK: delete the file. Nothing else changes: STATE still says approved and the
+    // frozen hero-shot png is still sitting in `.loombridge/design/`.
+    await fs.rm(metaPath);
+    const deleted = await captureDonenessOutput(root);
+    assert.equal(deleted.code, 1, "deleting the design target must not be cheaper than corrupting it");
+    assert.match(deleted.text, /hero-shot-fidelity: REFUSE/);
+    assert.match(deleted.text, /the on-disk Design Target is `missing`/);
+    assert.match(deleted.text, /STATE records `designTarget: approved`/);
+    assert.match(deleted.text, /hero-shot artifacts are still in/);
+
+    // AND WITH STATE SCRUBBED TOO. This is the question "what does the new refusal now depend
+    // on": if it depended on STATE alone, one more hand-edit would silence it. The orphaned
+    // hero-shot artifacts are an independently-written second signal.
+    const state = (await readState(paths))!;
+    const withoutStamp = { ...state };
+    delete (withoutStamp as { designTarget?: unknown }).designTarget;
+    await writeState(paths, withoutStamp);
+    const scrubbed = await captureDonenessOutput(root);
+    assert.equal(scrubbed.code, 1, "scrubbing STATE as well must not buy the certificate back");
+    assert.match(scrubbed.text, /hero-shot artifacts are still in/);
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test("B false-failure check: a project that never had a Design Target still certifies, and a DRAFT one is not a deleted one", async () => {
+  // The refusal fires on EVIDENCE that a target was approved, never on the absence of one. If
+  // it ever fires on absence, every gray-box and `--allow-ungrounded-prototype` project is
+  // permanently red.
+  const { root, paths } = await certifyingSliceProject();
+  try {
+    assert.equal(await runDoneness({ root }), 0, "no Design Target anywhere is not a refusal");
+
+    // A DRAFT target: the meta EXISTS, so `design.status` is `draft`, not `missing`. Nothing
+    // was taken apart, so the orphaned-artifacts signal must stay quiet.
+    const image = path.join(root, "draft-hero.png");
+    await fs.writeFile(image, "draft-pixels", "utf-8");
+    await setDesignTarget({ root, imagePath: image, mode: "generated", kind: "rendered-unity-frame", approve: false });
+    assert.equal((await designStatus(paths)).status, "draft");
+    const draft = await captureDonenessOutput(root);
+    assert.equal(draft.code, 0, "a DRAFT design target is not a deleted one");
+    assert.doesNotMatch(draft.text, /the on-disk Design Target is/);
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+/**
+ * C: OMITTING A FIELD CERTIFIED WHERE DECLARING IT REFUSED.
+ *
+ * `isSliceDone` read `proof.captureManifest ?? []`, so a slice whose captures were DECLARED and
+ * absent refused, while the SAME slice with the field omitted certified. `assertValidSlicePlan`
+ * accepts the omission (the field is optional, and the closed-key check only rejects UNKNOWN
+ * keys), so nothing else noticed.
+ *
+ * BEFORE, one fixture, three variants of the same slice:
+ *
+ *   [C declared-but-missing] exit: 1 | - missing slice captureManifest entries: s1/verify-manifest.json
+ *   [C omitted]              exit: 0 | - s1: PASS … OK — 1/1 slices approved …
+ *   [C emptied []]           exit: 0 | - s1: PASS … OK — 1/1 slices approved …
+ *
+ * The `[]` variant is why refusing only the ABSENT field would have MOVED the hole rather than
+ * closed it: emptying the array is one character more work. So the expected set is RE-DERIVED
+ * from the slice's own declared gates through the same `sliceCaptureManifestEntries` that
+ * `build` mints from (the PR #88 rule: every `expected` must be recomputable from artifacts on
+ * disk, by the same code path that reads it).
+ *
+ * LITMUS, run 2026-08-13. Both new blocks in `isSliceDone` removed and
+ * `manifest: proof.captureManifest ?? []` restored, rebuilt, re-run:
+ *
+ *   ✖ MOAT (C): an omitted or emptied captureManifest must not certify where a declared one refuses (4.2765ms)
+ *     AssertionError [ERR_ASSERTION]: omitting the field must not be cheaper than declaring it
+ *
+ *     0 !== 1
+ *
+ *   ℹ pass 79
+ *   ℹ fail 2   (B and C were neutered in the same pass)
+ *
+ * Restored: 81 pass, 0 fail.
+ */
+test("MOAT (C): an omitted or emptied captureManifest must not certify where a declared one refuses", async () => {
+  const { root, paths, slice } = await certifyingSliceProject();
+  try {
+    assert.equal(await runDoneness({ root }), 0, "the setup must certify before anything is removed");
+    const declared = slice.proof!.captureManifest!;
+    assert.ok(declared.length > 0, "the fixture slice must actually owe captures");
+
+    // DECLARED AND MISSING, refused today, and the baseline the two attacks are measured
+    // against.
+    for (const entry of declared) await fs.rm(path.join(paths.verifyInputs, entry));
+    const missing = await captureDonenessOutput(root);
+    assert.equal(missing.code, 1);
+    assert.match(missing.text, /missing slice captureManifest entries/);
+
+    // ATTACK 1: omit the field entirely. The capture files stay deleted.
+    const omitted: SliceEntry = { ...slice, proof: { ...slice.proof! } };
+    delete (omitted.proof as { captureManifest?: string[] }).captureManifest;
+    await writeSlicePlan(paths, planOf([omitted]));
+    const omittedRun = await captureDonenessOutput(root);
+    assert.equal(omittedRun.code, 1, "omitting the field must not be cheaper than declaring it");
+    assert.match(omittedRun.text, /slice\.proof\.captureManifest is ABSENT/);
+    assert.match(omittedRun.text, /does not declare the capture\(s\) this slice's own gates require/);
+
+    // ATTACK 2: declare an EMPTY manifest, which is what refusing only the absent field would
+    // have left open.
+    await writeSlicePlan(paths, planOf([{ ...slice, proof: { ...slice.proof!, captureManifest: [] } }]));
+    const emptied = await captureDonenessOutput(root);
+    assert.equal(emptied.code, 1, "an emptied manifest is a shrunken anchor, not a smaller obligation");
+    assert.match(emptied.text, /does not declare the capture\(s\) this slice's own gates require/);
+
+    // AND THE CONTROL BACK: restore the captures under the honest manifest and it certifies.
+    await writeSlicePlan(paths, planOf([slice]));
+    for (const entry of declared) {
+      const abs = path.join(paths.verifyInputs, entry);
+      await fs.mkdir(path.dirname(abs), { recursive: true });
+      await fs.writeFile(abs, "{}", "utf-8");
+    }
+    assert.equal(await runDoneness({ root }), 0, "the honest project must go green again");
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test("C false-failure check: a slice whose gates genuinely have no captures still certifies with []", async () => {
+  // `build` prints "(none — slice gates have no captured-op file)" for exactly this case and
+  // stamps `captureManifest: []`. If the re-derivation ever read that as an under-declaration,
+  // every SFX-only or asset-only slice would be permanently red. Both sides call the SAME
+  // function, so they agree by construction; this test is what proves the agreement is real
+  // rather than assumed.
+  const root = await tmpRoot();
+  try {
+    const paths = loombridgePaths(root);
+    const slice: SliceEntry = {
+      ...doneSlice(),
+      state: "approved",
+      acceptance: { gates: ["asset-source-fidelity"] },
+    };
+    assert.deepEqual(
+      deriveSliceCaptureManifest(slice),
+      [],
+      "the fixture is only meaningful if this slice's gates genuinely mint nothing",
+    );
+    slice.proof = { ...slice.proof!, captureManifest: [], approvedAt: "2026-05-28T02:00:00.000Z" };
+    await writeSliceProofFiles(root, slice);
+    await writeSlicePlan(paths, planOf([slice]));
+    await writeState(paths, {
+      genre: "platformer-2d",
+      engine: "unity",
+      phase: "planned",
+      lastVerdict: null,
+      updatedAt: "2026-05-28T00:00:00.000Z",
+    });
+    assert.equal(await runDoneness({ root }), 0, "an honestly capture-free slice must still certify");
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
 });

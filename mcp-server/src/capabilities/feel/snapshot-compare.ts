@@ -122,7 +122,15 @@ export function compareSnapshot(
     }
 
     const delta = currentValue - entry.value;
-    const drifted = Math.abs(delta) > tolerance.applied + 1e-9;
+    // FAIL-CLOSED, and written as the NEGATION of "within tolerance" on purpose. For every
+    // finite tolerance this is identical to `|delta| > applied + 1e-9`. It differs for
+    // exactly one input: a non-finite `applied`, where every comparison against NaN is
+    // false, so the old form reported `ok` at any drift. A tolerance that is not a finite
+    // non-negative number is refused upstream at BOTH doors it can enter through
+    // (`readTolerances` at approve, `verifySnapshotIntegrity` at read), so this line should
+    // be unreachable; it is written this way so that if a third door ever opens the answer
+    // is DRIFT rather than a silent, permanent green.
+    const drifted = !(Math.abs(delta) <= tolerance.applied + 1e-9);
     metrics.push({
       id,
       baseline: entry.value,

@@ -167,13 +167,38 @@ export function evaluateAssetSourceFidelity(input: AssetSourceFidelityInput | un
           ? `Registry asset '${asset.id}' is bound to '${asset.registrySelection.registryAssetId}'.`
           : `Registry asset '${asset.id}' is missing registrySelection provenance.`,
       });
-      if (observed?.registryAssetId && asset.registrySelection?.registryAssetId !== observed.registryAssetId) {
+      // REFUSE-NOT-SKIP on the bound field. This was the literal house anti-pattern:
+      // `if (observed?.registryAssetId && manifest !== observed.registryAssetId)`, where a
+      // FALSY `registryAssetId` skipped the binding entirely. Demonstrated on the real
+      // `runGates` path with one registry-bound manifest and three observation records:
+      //
+      //   honest observation                  -> gate pass, no failures
+      //   observed.registryAssetId = other id -> gate FAIL, asset-source.registry-drift.<id>
+      //   the SAME record, field OMITTED      -> gate pass, no failures
+      //
+      // Omitting the field certified where declaring it refused, and nothing else covers it:
+      // `asset-source.observed.<id>` compares only `source` and `paths`.
+      //
+      // The row is emitted whenever an observation EXISTS, pass or fail, so the comparison is
+      // COUNTED rather than conditionally present (the PR #88 rule). It is NOT emitted when
+      // there is no observation for this asset: `verify` stages the BARE
+      // `.loombridge/ASSET_MANIFEST.json` into the inputs dir itself, that copy carries no
+      // observations at all by construction, and failing it would manufacture a tier-1 game
+      // defect out of a harness gap. That path is already handled honestly by the
+      // staged-document marker, which keeps it out of `gradedGates`.
+      if (observed) {
+        const bound = asset.registrySelection?.registryAssetId;
+        const matches = !!observed.registryAssetId && bound === observed.registryAssetId;
         checks.push({
           id: `asset-source.registry-drift.${asset.id}`,
-          expected: asset.registrySelection?.registryAssetId ?? "(manifest missing)",
-          actual: observed.registryAssetId,
-          status: "fail",
-          detail: `Observed registry asset id does not match the approved manifest binding.`,
+          expected: bound ?? "(manifest missing)",
+          actual: observed.registryAssetId ?? "(absent)",
+          status: matches ? "pass" : "fail",
+          detail: matches
+            ? `Observed registry asset id matches the approved manifest binding.`
+            : observed.registryAssetId
+              ? `Observed registry asset id does not match the approved manifest binding.`
+              : `Observed asset use for '${asset.id}' states no registryAssetId, so it cannot be bound to the approved registry selection. Refusing rather than skipping the comparison.`,
         });
       }
     } else if (asset.source === "generated") {
@@ -186,13 +211,20 @@ export function evaluateAssetSourceFidelity(input: AssetSourceFidelityInput | un
           ? `Generated asset '${asset.id}' is bound to generated set '${asset.generatedExport.generatedSetId}'.`
           : `Generated asset '${asset.id}' is missing generatedExport provenance.`,
       });
-      if (observed?.generatedSetId && asset.generatedExport?.generatedSetId !== observed.generatedSetId) {
+      // Same refuse-not-skip rule as the registry branch above, for the same reason.
+      if (observed) {
+        const bound = asset.generatedExport?.generatedSetId;
+        const matches = !!observed.generatedSetId && bound === observed.generatedSetId;
         checks.push({
           id: `asset-source.generated-drift.${asset.id}`,
-          expected: asset.generatedExport?.generatedSetId ?? "(manifest missing)",
-          actual: observed.generatedSetId,
-          status: "fail",
-          detail: `Observed generated set id does not match the approved manifest binding.`,
+          expected: bound ?? "(manifest missing)",
+          actual: observed.generatedSetId ?? "(absent)",
+          status: matches ? "pass" : "fail",
+          detail: matches
+            ? `Observed generated set id matches the approved manifest binding.`
+            : observed.generatedSetId
+              ? `Observed generated set id does not match the approved manifest binding.`
+              : `Observed asset use for '${asset.id}' states no generatedSetId, so it cannot be bound to the approved generated export. Refusing rather than skipping the comparison.`,
         });
       }
     } else if (!ASSET_SOURCE_TYPES.has(asset.source)) {

@@ -269,6 +269,188 @@ test("F2 false-failure check: a metric that was never measured is in neither set
   assert.equal(report.summary.total, 2);
 });
 
+/*
+ * A1: A NON-NUMERIC TOLERANCE MAKES EVERY METRIC MATCH FOREVER.
+ *
+ * `resolveTolerance` computes `applied = max(abs, relPct * |baseline|)`. `Math.max` returns
+ * NaN if any argument is NaN, and every comparison against NaN is false, so
+ * `|delta| > applied` was false for EVERY delta. The metric printed `ok` and the run exited 0.
+ *
+ * Two routes reached it, and neither needs an adversary:
+ *
+ *   ROUTE 1 (operator typo at approve):
+ *     `--tolerances '{"perMetric":{"runSpeed":{"relPct":"5%"}}}'`
+ *     `snapshot.ts` validated the perMetric KEYS against the candidate metrics and never
+ *     looked at the values, so the string froze into `manifest.json` verbatim.
+ *
+ *   ROUTE 2 (one deleted key in the frozen manifest):
+ *     remove `tolerancePolicy.defaultRelPct`. `loadSnapshotManifest` only checked
+ *     `isRecord(parsed.tolerancePolicy)`, and the manifest carries no self-hash, so
+ *     `verifySnapshotIntegrity` had nothing to catch it with.
+ *
+ * BEFORE, both routes, real approve + real `verify --snapshot` (offline `--measurements`):
+ *
+ *   [route1] approve exit: 0
+ *   [route1] verify exit: 0 status: clean total: 3
+ *   [route1] runSpeed row: {"id":"runSpeed","baseline":2.816090515407144,"current":99999,
+ *            "delta":99996.1839094846,"tolerance":{"abs":0.05,"relPct":"5%","applied":null},
+ *            "status":"match","confidence":"reported",
+ *            "detail":"runSpeed: 2.816090515407144 -> 99999 (delta +99996.1839, tolerance NaN) ok."}
+ *   [route2] approve exit: 0
+ *   [route2] verify exit: 0 status: clean total: 3 integrity.ok: true
+ *
+ * (`applied: null` is JSON's rendering of NaN.)
+ *
+ * AFTER: route 1 is refused at the APPROVE door (exit 2, nothing freezes) and route 2 at the
+ * READ door (`verifySnapshotIntegrity`, exit 2, `total: 0`).
+ *
+ * LITMUS, run 2026-08-13, in two passes because the fix is two layers deep.
+ *
+ * PASS 1, `tolerancePolicyRefusals` neutered to `return []` (the refusals), rebuilt, re-run:
+ *
+ *   ✖ MOAT (A1): a non-numeric tolerance must never reach exit 0: route 1, the approve door (4.131208ms)
+ *     AssertionError [ERR_ASSERTION]: a tolerance that is not a number must never FREEZE
+ *     0 !== 2
+ *   ✖ MOAT (A1): a non-numeric tolerance must never reach exit 0: route 2, the manifest read door (8.564125ms)
+ *     AssertionError [ERR_ASSERTION]: a manifest whose tolerance policy cannot grade anything must not grade everything green
+ *     1 !== 2
+ *   ℹ pass 10
+ *   ℹ fail 2
+ *
+ * Route 2's `1 !== 2` rather than `0 !== 2` is the SECOND layer showing itself: with the
+ * refusal gone, `compareSnapshot`'s fail-closed `!(|delta| <= applied + 1e-9)` still called
+ * the NaN-tolerance metric a DRIFT, so the run landed on exit 1 instead of a false green.
+ *
+ * PASS 2, the fail-closed comparator ALSO reverted to `|delta| > applied + 1e-9`, which is
+ * the code exactly as it shipped before this PR:
+ *
+ *   ✖ MOAT (A1): a non-numeric tolerance must never reach exit 0: route 1, the approve door (3.71ms)
+ *     AssertionError [ERR_ASSERTION]: a tolerance that is not a number must never FREEZE
+ *     0 !== 2
+ *   ✖ MOAT (A1): a non-numeric tolerance must never reach exit 0: route 2, the manifest read door (8.19625ms)
+ *     AssertionError [ERR_ASSERTION]: a manifest whose tolerance policy cannot grade anything must not grade everything green
+ *     0 !== 2
+ *   ℹ pass 10
+ *   ℹ fail 2
+ *
+ * `0 !== 2` is a +99996 drift reaching exit 0. Both layers restored: 12 pass, 0 fail.
+ */
+test("MOAT (A1): a non-numeric tolerance must never reach exit 0: route 1, the approve door", async () => {
+  const { root, ws } = await scaffold();
+  const candidate = feelPaths(ws).snapshotCandidateDir;
+  await fs.mkdir(candidate, { recursive: true });
+  await fs.copyFile(path.join(LIVE_DIR, "feel.json"), path.join(candidate, SNAPSHOT_MEASUREMENTS_FILE));
+  await fs.writeFile(path.join(candidate, SNAPSHOT_CONTRACT_FILE), JSON.stringify(CONTRACT_FIXTURE, null, 2), "utf-8");
+
+  // THE TYPO. A percent sign where a fraction belongs.
+  const tolerances = path.join(path.dirname(ws), "tolerances.json");
+  await fs.writeFile(tolerances, JSON.stringify({ perMetric: { runSpeed: { relPct: "5%" } } }), "utf-8");
+  assert.equal(
+    await runFeelCli(["snapshot", "approve", "--root", root, "--workspace", ws, "--tolerances", tolerances]),
+    2,
+    "a tolerance that is not a number must never FREEZE",
+  );
+  // Nothing was frozen, so there is nothing to grade against, and the run cannot exit 0 here either.
+  const mPath = await writeMeasurements(path.dirname(ws), { runSpeed: 99999 });
+  assert.equal(await runVerifyCli(["--snapshot", "--root", root, "--workspace", ws, "--measurements", mPath]), 2);
+
+  // AND THE SAME REFUSAL FOR THE OTHER TOLERANCE KEYS, so the fix is not one special case.
+  for (const bad of [
+    { defaultRelPct: "5%" },
+    { defaultAbsFloorByDerivation: { trajectory: "x" } },
+    { perMetric: { runSpeed: { abs: Number.NaN } } },
+    { perMetric: { runSpeed: { relPct: -0.1 } } },
+    { perMetric: { runSpeed: { relPCT: 0.5 } } }, // a typo'd KEY silently vanished into the default
+  ]) {
+    await fs.writeFile(tolerances, JSON.stringify(bad), "utf-8");
+    assert.equal(
+      await runFeelCli(["snapshot", "approve", "--root", root, "--workspace", ws, "--tolerances", tolerances]),
+      2,
+      `approve must refuse ${JSON.stringify(bad)}`,
+    );
+  }
+});
+
+test("MOAT (A1): a non-numeric tolerance must never reach exit 0: route 2, the manifest read door", async () => {
+  const { root, ws } = await scaffold();
+  const baseline = await approvedSnapshot(root, ws);
+  const manifestPath = path.join(feelPaths(ws).snapshotCurrentDir, FEEL_SNAPSHOT_MANIFEST);
+
+  // CONTROL: the drift the attack exists to hide is caught while the policy is intact.
+  const driftedPath = await writeMeasurements(path.dirname(ws), { ...baseline, runSpeed: 99999 });
+  assert.equal(await runVerifyCli(["--snapshot", "--root", root, "--workspace", ws, "--measurements", driftedPath]), 1);
+
+  // THE ATTACK: delete ONE key. The frozen measurements are untouched, so their sha256 still
+  // matches and nothing else in the bundle looks edited.
+  const doc = JSON.parse(await fs.readFile(manifestPath, "utf-8"));
+  delete doc.tolerancePolicy.defaultRelPct;
+  await fs.writeFile(manifestPath, JSON.stringify(doc, null, 2), "utf-8");
+
+  assert.equal(
+    await runVerifyCli(["--snapshot", "--root", root, "--workspace", ws, "--measurements", driftedPath]),
+    2,
+    "a manifest whose tolerance policy cannot grade anything must not grade everything green",
+  );
+  const report = JSON.parse(await fs.readFile(feelPaths(ws).driftReport, "utf-8"));
+  assert.equal(report.integrity.ok, false);
+  assert.ok(
+    report.integrity.failures.some((f: string) => f.includes("tolerancePolicy.defaultRelPct")),
+    `the refusal must name the key: ${JSON.stringify(report.integrity.failures)}`,
+  );
+  assert.equal(report.summary.total, 0, "a refused snapshot grades nothing, so it certifies nothing");
+
+  // The same for a poisoned VALUE rather than a deleted key, which is the shape route 1 would
+  // have frozen before approve started refusing it.
+  doc.tolerancePolicy.defaultRelPct = "5%";
+  await fs.writeFile(manifestPath, JSON.stringify(doc, null, 2), "utf-8");
+  assert.equal(await runVerifyCli(["--snapshot", "--root", root, "--workspace", ws, "--measurements", driftedPath]), 2);
+});
+
+test("A1 false-failure check: ordinary snapshots, ZERO tolerances, and --allow-partial all still grade", async () => {
+  // The tolerance-policy refusal runs on every manifest read, so if it is even slightly wrong
+  // every project with a frozen feel snapshot goes permanently red. Three shapes that MUST stay
+  // green:
+  //
+  //  1. a snapshot approved with NO `--tolerances` at all (the overwhelmingly common case, and
+  //     the only shape that existed before per-metric overrides);
+  //  2. a deliberately EXACT metric: `abs: 0` / `relPct: 0` is a legitimate zero-width band, so
+  //     the predicate is `>= 0`, not `> 0`;
+  //  3. a legitimately partial snapshot (`--allow-partial`), whose policy is untouched by the
+  //     coverage gap.
+  const { root, ws } = await scaffold();
+  const baseline = await approvedSnapshot(root, ws);
+  const clean = await writeMeasurements(path.dirname(ws), baseline);
+  assert.equal(
+    await runVerifyCli(["--snapshot", "--root", root, "--workspace", ws, "--measurements", clean]),
+    0,
+    "a default-tolerance snapshot must still grade clean",
+  );
+
+  const zero = await scaffold();
+  const zeroCandidate = feelPaths(zero.ws).snapshotCandidateDir;
+  await fs.mkdir(zeroCandidate, { recursive: true });
+  await fs.copyFile(path.join(LIVE_DIR, "feel.json"), path.join(zeroCandidate, SNAPSHOT_MEASUREMENTS_FILE));
+  await fs.writeFile(path.join(zeroCandidate, SNAPSHOT_CONTRACT_FILE), JSON.stringify(CONTRACT_FIXTURE, null, 2), "utf-8");
+  const zeroTolerances = path.join(path.dirname(zero.ws), "zero-tolerances.json");
+  await fs.writeFile(zeroTolerances, JSON.stringify({ perMetric: { runSpeed: { abs: 0, relPct: 0 } } }), "utf-8");
+  assert.equal(
+    await runFeelCli(["snapshot", "approve", "--root", zero.root, "--workspace", zero.ws, "--tolerances", zeroTolerances]),
+    0,
+    "a zero-width tolerance band is a legitimate (strict) choice, not a broken policy",
+  );
+  const zeroBaseline = JSON.parse(await fs.readFile(path.join(LIVE_DIR, "feel.json"), "utf-8"));
+  const zeroClean = await writeMeasurements(path.dirname(zero.ws), {
+    runSpeed: zeroBaseline.runSpeed,
+    jumpApex: zeroBaseline.jumpApex,
+    timeToApex: zeroBaseline.timeToApex,
+  });
+  assert.equal(
+    await runVerifyCli(["--snapshot", "--root", zero.root, "--workspace", zero.ws, "--measurements", zeroClean]),
+    0,
+    "an exactly-matching capture under a zero tolerance must still be clean",
+  );
+});
+
 // ── contract binding (live path, refused before any capture) ─────────────────
 
 test("verify --snapshot: an explicit --capture-contract that mismatches the frozen one refuses (exit 2)", async () => {

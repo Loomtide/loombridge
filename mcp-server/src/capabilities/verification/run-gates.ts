@@ -80,6 +80,7 @@ import {
   type VerifyManifestResult,
 } from "./gates/index.js";
 import type { BuildVerdict, CheckStatus, GateCheck } from "./gates/types.js";
+import { isSafeCapturePath } from "../../domain/capture-paths.js";
 import { assertValidAcceptanceContract } from "./validator.js";
 import type { AcceptanceContract, SfxVerificationSection } from "./types.js";
 import { validateCueMapSchema, type CueMapSchema } from "../sfx/cue-map.js";
@@ -344,6 +345,32 @@ export function gateInputFiles(gateIds: Iterable<string>): string[] {
   const out: string[] = [];
   for (const spec of GATE_SPECS) {
     if (requested.has(spec.gate) && !out.includes(spec.file)) out.push(spec.file);
+  }
+  return out;
+}
+
+/**
+ * The `captureManifest` entries a slice's OWN declared gates require, relative to
+ * `.loombridge/verify/`. Lives here, next to `gateInputFiles`, so ONE function derives
+ * this set for everybody: `build` mints a slice's proof from it, and `doneness` RE-DERIVES
+ * it from the same slice on disk to check that the minted manifest still covers what the
+ * slice's gates owe.
+ *
+ * That second caller is the point. `doneness` used to read `proof.captureManifest ?? []`,
+ * so a manifest the plan simply did not declare had nothing to be missing: a slice whose
+ * captures were DECLARED and absent refused, while the SAME slice with the field omitted
+ * (or emptied to `[]`) certified. A denominator nothing walks is a number the plan asserts
+ * about itself; this is the walk.
+ *
+ * Takes `(sliceId, gates)` rather than a `SliceEntry` so `slices.ts` can keep importing
+ * this module without a cycle.
+ */
+export function sliceCaptureManifestEntries(sliceId: string, gates: Iterable<string>): string[] {
+  const out = gateInputFiles(gates).map((file) => `${sliceId}/${file}`);
+  for (const entry of out) {
+    if (!isSafeCapturePath(entry)) {
+      throw new Error(`slice captureManifest would mint an unsafe capture path: "${entry}".`);
+    }
   }
   return out;
 }

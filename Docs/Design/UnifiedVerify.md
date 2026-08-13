@@ -759,6 +759,76 @@ the same code path that reads it.
   yields `expected: 0` and a vacuous coverage check. The re-grade divergence check appears to
   cover it; confirm before adding a second mechanism.
 
+### And the wave before that one: SKIPPING ON ABSENT
+
+The counting wave above closed "the gate ran on a subset". This wave closes the older and
+plainer class beside it: **an absent or malformed input made a check SKIP rather than refuse.**
+Four were demonstrated end to end and all four are closed here. The house rule they all violate
+is stated in `CLAUDE.md`: a gate predicate must REFUSE when a bound field is absent.
+
+- **A. A non-numeric tolerance made every feel metric match forever.**
+  `resolveTolerance` computes `max(abs, relPct * |baseline|)`; `Math.max` returns NaN if any
+  argument is NaN, and every comparison against NaN is false, so `|delta| > applied` was false
+  for every delta. Two ORDINARY routes reached it: an operator typo at approve
+  (`--tolerances '{"perMetric":{"runSpeed":{"relPct":"5%"}}}'`, whose KEYS were validated and
+  whose VALUES were not), and deleting the single key `tolerancePolicy.defaultRelPct` from a
+  frozen `manifest.json` (which nothing covered, because the manifest carries no self-hash).
+  Both produced `runSpeed: 2.816 -> 99999 (delta +99996.1839, tolerance NaN) ok`, `clean`,
+  exit 0. Now refused at BOTH doors a tolerance can enter through, by one predicate: at approve
+  in `readTolerances`, and at read in `verifySnapshotIntegrity`, beside the reverse walk, so one
+  place owns manifest trust. `compareSnapshot`'s drift test is additionally written fail-closed
+  (`!(|delta| <= applied + 1e-9)`), identical for every finite tolerance, DRIFT for a NaN one.
+- **B. The slice path had no disk-truth Design Target guard, and the polarity was backwards.**
+  Both slice-path fidelity checks opened with `if (design.status !== "approved") return []`, and
+  a DELETED `design-target.json` resolves to `status: "missing"`. So a CORRUPT target refused
+  (`readMeta` rethrows anything that is not ENOENT) while a DELETED one certified: same fixture,
+  target present `exit 1 / hero-shot-fidelity: REFUSE`, target deleted
+  `exit 0 / hero-shot-fidelity: PASS / OK — … + hero-shot faithful`, with STATE still recording
+  `designTarget: approved`. Deleting is strictly easier than corrupting, so the cheaper attack
+  was the one that worked. `sliceDiskTruthDesignTargetRefusals` now refuses on the UNION of three
+  independently-written signals (STATE's sticky record, the whole-game verdict's own claim, and
+  hero-shot artifacts left in `.loombridge/design/` with no approval record beside them), so no
+  single deletion silences it, and the same union feeds `runtimeClaimsApprovedDesignTarget` so
+  scrubbing STATE cannot flip the project to `art:deferred` to skip the roll-up entirely.
+- **C. Omitting `captureManifest` certified where declaring it refused.** `isSliceDone` read
+  `proof.captureManifest ?? []`, and `assertValidSlicePlan` accepts the omission (optional field;
+  the closed-key check only rejects UNKNOWN keys). Declared-and-absent exited 1
+  (`missing slice captureManifest entries: s1/verify-manifest.json`); the field removed exited 0.
+  Refusing only the ABSENT field would have moved the hole one character (`captureManifest: []`
+  certified too), so the expected set is RE-DERIVED from the slice's own declared gates through
+  the same `sliceCaptureManifestEntries` that `build` mints from. That is the counting wave's
+  rule applied here: the denominator is recomputable from disk by the code path that reads it.
+- **D. An observation that omitted the bound id skipped the drift check.** The literal
+  anti-pattern, `if (observed?.registryAssetId && manifest !== observed.registryAssetId)`, on both
+  the registry and generated branches. Demonstrated on the real `runGates` path: an honest
+  observation passes, a wrong `registryAssetId` FAILS the gate, and the same record with the field
+  deleted PASSES. The drift row is now emitted whenever an observation exists, pass or fail, so
+  the comparison is counted rather than conditionally present.
+
+**What each new refusal now depends on** is the question this wave had to answer for itself,
+because the previous one moved the false green instead of removing it. A (both routes) depends
+only on arithmetic over the frozen manifest's own bytes. C depends on the slice's declared gates,
+which an attacker CAN shrink, but only by deleting the gates the slice claims to have passed,
+which the roll-up's coverage checks already read. B depends on a union of three artifacts rather
+than one. D depends on the observed record still being agent-authored, so it makes lying
+EXPLICIT rather than free: an absent field is now a refusal, and a matching-but-false id is a
+stated claim the capture path can later bind.
+
+#### Known-open after this wave
+
+- **A declared `captureManifest` can still be shrunk by shrinking the slice's gate list.** The
+  re-derivation binds the manifest to `slice.acceptance.gates`, so editing both together stays
+  self-consistent. What that costs the attacker is the gate coverage the roll-up separately
+  grades; closing it fully means binding the gate list to the contract, which is F3's territory.
+- **`checkSliceRollupAssetSourceFidelity` still returns `[]` on a non-approved target.** It is no
+  longer reachable as a false green (the hero-shot refusal fires first on the same facts), so it
+  is left with one answer per question rather than two.
+- **"No observation at all" is still a PASS on the asset-source gate.** Deliberate: `verify`
+  stages the bare `ASSET_MANIFEST.json` into the inputs dir itself, so failing it would
+  manufacture a tier-1 game defect out of a harness gap on every ordinary project. The
+  staged-document marker already keeps that copy out of `gradedGates`, which is the honest answer
+  to "did this run measure the game".
+
 ## Out of scope
 
 - Aligning the windows OUTSIDE the settle (action dispatch round trips, anchor polling), the

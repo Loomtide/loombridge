@@ -148,6 +148,89 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 /**
+ * A tolerance is a NUMBER the gate does arithmetic with, so a value that is not a
+ * finite non-negative number is not a loose gate: it is NO gate.
+ *
+ * `resolveTolerance` computes `max(abs, relPct * |baseline|)`, and `Math.max`
+ * returns NaN if any argument is NaN. Every comparison against NaN is false, so
+ * `|delta| > applied` is false for every delta, and the metric reports `ok` forever.
+ * Demonstrated end to end (real approve, real `verify --snapshot`) by two ORDINARY
+ * routes, neither of which needs an adversary:
+ *
+ *   1. an operator typo at approve time:
+ *      `--tolerances '{"perMetric":{"runSpeed":{"relPct":"5%"}}}'`
+ *      (`snapshot.ts` validated the perMetric KEYS and never the values);
+ *   2. deleting the single key `defaultRelPct` from a frozen `manifest.json`
+ *      (`loadSnapshotManifest` only checked `isRecord(tolerancePolicy)`, and the
+ *      manifest carries no self-hash, so nothing else noticed).
+ *
+ * Both produced `runSpeed: 2.816 -> 99999 (delta +99996.1839, tolerance NaN) ok.`,
+ * `status: "clean"`, exit 0.
+ *
+ * This is the READ-side refusal: it lives beside the reverse walk so ONE place owns
+ * what a frozen manifest has to be before anything grades against it. `approve` runs
+ * the same predicate over `--tolerances` so a bad policy never freezes in the first
+ * place, and `compareSnapshot` is separately fail-closed so no future caller can
+ * reintroduce the silent-match behaviour.
+ *
+ * Deliberately scoped to the NUMBERS. Unknown keys inside a `perMetric` entry are an
+ * intent bug (the override silently vanishes into the default) and are refused at
+ * APPROVE time, where the operator can fix the file they just wrote; refusing them at
+ * read time would make an already-frozen manifest unreadable for something that does
+ * not break the arithmetic.
+ */
+export function tolerancePolicyRefusals(policy: unknown, where: string): string[] {
+  const failures: string[] = [];
+  if (!isRecord(policy)) return [`${where} is missing or is not an object`];
+
+  const checkNumber = (value: unknown, at: string): void => {
+    if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
+      failures.push(
+        `${at} must be a finite number >= 0 (got ${JSON.stringify(value) ?? "undefined"}): a non-numeric ` +
+          "tolerance makes every comparison NaN, and every comparison against NaN is false, so the metric " +
+          "would report `ok` at any drift (re-approve with `loombridge feel snapshot approve --tolerances`)",
+      );
+    }
+  };
+
+  checkNumber(policy.defaultRelPct, `${where}.defaultRelPct`);
+
+  if (!isRecord(policy.defaultAbsFloorByDerivation)) {
+    failures.push(`${where}.defaultAbsFloorByDerivation must be an object of derivation -> absolute floor`);
+  } else {
+    for (const [derivation, floor] of Object.entries(policy.defaultAbsFloorByDerivation)) {
+      checkNumber(floor, `${where}.defaultAbsFloorByDerivation.${derivation}`);
+    }
+  }
+
+  if (policy.perMetric !== undefined) {
+    if (!isRecord(policy.perMetric)) {
+      failures.push(`${where}.perMetric must be an object of metric id -> { relPct?, abs? }`);
+    } else {
+      for (const [id, override] of Object.entries(policy.perMetric)) {
+        if (!isRecord(override)) {
+          failures.push(`${where}.perMetric.${id} must be an object of { relPct?, abs? }`);
+          continue;
+        }
+        for (const field of ["relPct", "abs"] as const) {
+          if (override[field] !== undefined) checkNumber(override[field], `${where}.perMetric.${id}.${field}`);
+        }
+      }
+    }
+  }
+
+  return failures;
+}
+
+/**
+ * The per-metric override keys `--tolerances` accepts. Refused at APPROVE time only
+ * (see `tolerancePolicyRefusals`): a typo like `relPCT` parses, contributes nothing,
+ * and freezes a lockfile whose overrides the operator believes are in force. Same
+ * refuse-on-unknown discipline the top-level `--tolerances` keys already carry.
+ */
+export const TOLERANCE_OVERRIDE_KEYS = new Set(["relPct", "abs"]);
+
+/**
  * Shape-check + load a manifest from a snapshot dir. Returns null for an absent
  * OR malformed manifest (the caller reports which via fs.access if it needs to
  * distinguish); integrity beyond shape lives in `verifySnapshotIntegrity`.
@@ -335,6 +418,13 @@ export async function verifySnapshotIntegrity(dir: string): Promise<SnapshotInte
         }
       : { ok: false, failures: [`no readable feel-snapshot manifest at ${file}`] };
   }
+
+  // THE TOLERANCE POLICY IS PART OF THE ANCHOR, not decoration beside it. A frozen
+  // manifest whose tolerances are not finite non-negative numbers cannot grade drift at
+  // all (see `tolerancePolicyRefusals`), so it is refused here rather than silently
+  // matching every metric. Beside the reverse walk on purpose: one place owns what a
+  // frozen manifest has to be.
+  failures.push(...tolerancePolicyRefusals(manifest.tolerancePolicy, "tolerancePolicy"));
 
   let measurementsBytes: Buffer | null = null;
   try {

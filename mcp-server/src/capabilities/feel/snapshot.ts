@@ -33,8 +33,10 @@ import {
   DEFAULT_SNAPSHOT_TOLERANCES,
   SNAPSHOT_CONTRACT_FILE,
   SNAPSHOT_MEASUREMENTS_FILE,
+  TOLERANCE_OVERRIDE_KEYS,
   derivationsFromContract,
   rederiveView,
+  tolerancePolicyRefusals,
   verifySnapshotIntegrity,
   writeSnapshotBundle,
   type FeelSnapshotManifest,
@@ -275,6 +277,17 @@ async function readTolerances(
     defaultAbsFloorByDerivation?: unknown;
     perMetric?: Record<string, { relPct?: number; abs?: number }>;
   };
+  // A tolerance that is not a finite number > 0 must never reach the policy. Silently
+  // falling back to the default here was the SECOND half of the same bug the value check
+  // below closes: `{"defaultRelPct":"5%"}` froze the default while the operator believed
+  // their number was in force, and `{"defaultAbsFloorByDerivation":{"trajectory":"x"}}`
+  // was spread straight through into the frozen manifest, where it made every comparison
+  // NaN. Both are refusals now, named at the key that carries them.
+  if (doc.defaultRelPct !== undefined && !(typeof doc.defaultRelPct === "number" && Number.isFinite(doc.defaultRelPct) && doc.defaultRelPct > 0)) {
+    return {
+      error: `--tolerances defaultRelPct must be a finite number > 0 (got ${JSON.stringify(doc.defaultRelPct)}).`,
+    };
+  }
   const policy: FeelSnapshotTolerancePolicy = {
     defaultRelPct:
       typeof doc.defaultRelPct === "number" && doc.defaultRelPct > 0
@@ -295,9 +308,31 @@ async function readTolerances(
       if (!knownMetricIds.has(id)) {
         return { error: `--tolerances overrides unknown metric '${id}' (not in the candidate measurements)` };
       }
+      // Refuse-on-unknown INSIDE the entry too. `{"perMetric":{"runSpeed":{"relPCT":0.5}}}`
+      // previously parsed, contributed nothing, and froze a lockfile whose override the
+      // operator believed was in force: the same failure the top-level key check exists to
+      // prevent, one level down.
+      const override = doc.perMetric[id] as Record<string, unknown>;
+      if (typeof override !== "object" || override === null || Array.isArray(override)) {
+        return { error: `--tolerances perMetric.${id} must be an object of { relPct?, abs? }` };
+      }
+      const unknownOverrideKeys = Object.keys(override).filter((k) => !TOLERANCE_OVERRIDE_KEYS.has(k));
+      if (unknownOverrideKeys.length > 0) {
+        return {
+          error:
+            `--tolerances perMetric.${id} has unrecognized key(s): ${unknownOverrideKeys.join(", ")}. ` +
+            'Expected { relPct?, abs? }, e.g. {"perMetric":{"jumpApex":{"abs":0.1}}}.',
+        };
+      }
     }
     policy.perMetric = doc.perMetric;
   }
+  // THE VALUE CHECK, over the assembled policy rather than the raw document, so approve
+  // refuses exactly what `verifySnapshotIntegrity` would refuse at read time. Without it a
+  // typo'd tolerance freezes into the manifest and every later comparison silently matches
+  // (demonstrated: `runSpeed: 2.816 -> 99999 (delta +99996.1839, tolerance NaN) ok`, exit 0).
+  const valueRefusals = tolerancePolicyRefusals(policy, "--tolerances");
+  if (valueRefusals.length > 0) return { error: valueRefusals.join("; ") };
   return policy;
 }
 

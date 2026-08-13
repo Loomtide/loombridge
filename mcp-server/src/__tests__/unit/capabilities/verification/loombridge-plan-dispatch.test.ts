@@ -6,7 +6,7 @@ import path from "node:path";
 import test from "node:test";
 
 import { runPlan } from "../../../../capabilities/verification/plan.js";
-import { runBuild } from "../../../../capabilities/verification/build.js";
+import { deriveSliceCaptureManifest, runBuild } from "../../../../capabilities/verification/build.js";
 import { runReopen } from "../../../../capabilities/verification/reopen.js";
 import { designStatus, setDesignTarget } from "../../../../capabilities/verification/design.js";
 import {
@@ -331,6 +331,18 @@ test("await-approval mode — echoes the approval seam, flips no state", async (
   }
 });
 
+/**
+ * Mint a slice proof the way `loombridge build` does, and lay down the capture files it
+ * declares.
+ *
+ * `captureManifest` comes from the SHIPPED `deriveSliceCaptureManifest` rather than a
+ * hand-written literal. An earlier cut hard-coded `[`${id}/verify-manifest.json`]` for
+ * every slice, which is a manifest no real build ever mints: the `framing` slice's own
+ * gates also require `framing/screen-rects.json` and `framing/console.json`. Doneness now
+ * re-derives that set from the slice's gates and refuses a proof that declares less than
+ * its gates owe, so a fixture that under-declares is testing a refusal it did not mean to
+ * test.
+ */
 async function makeSliceDone(root: string, plan: SlicePlan, id: string): Promise<void> {
   const paths = loombridgePaths(root);
   const slice = plan.slices.find((s) => s.id === id)!;
@@ -339,12 +351,15 @@ async function makeSliceDone(root: string, plan: SlicePlan, id: string): Promise
     runId: `run-${id}`,
     startedAt: "2026-05-28T00:00:00.000Z",
     verdictPath: `.loombridge/run/reports/slices/${id}.verdict.json`,
-    captureManifest: [`${id}/verify-manifest.json`],
+    captureManifest: deriveSliceCaptureManifest(slice),
     checkpointId: id,
     approvedAt: null,
   };
-  await fs.mkdir(path.join(paths.verifyInputs, id), { recursive: true });
-  await fs.writeFile(path.join(paths.verifyInputs, id, "verify-manifest.json"), "{}", "utf-8");
+  for (const entry of slice.proof.captureManifest ?? []) {
+    const abs = path.join(paths.verifyInputs, entry);
+    await fs.mkdir(path.dirname(abs), { recursive: true });
+    await fs.writeFile(abs, "{}", "utf-8");
+  }
   const proof = slice.proof;
   assert.ok(proof?.verdictPath);
   const verdictPath = path.join(root, proof.verdictPath);
@@ -397,10 +412,23 @@ test("await-approval mode — final --go clears currentBuild after all slices ap
         runId: `run-${slice.id}`,
         startedAt: "2026-05-28T00:00:00.000Z",
         verdictPath: `.loombridge/run/reports/slices/${slice.id}.verdict.json`,
-        captureManifest: [],
+        // The shipped derivation, not `[]`: doneness re-derives what each slice's gates owe.
+        captureManifest: deriveSliceCaptureManifest(slice),
         checkpointId: slice.id,
         approvedAt: "2026-05-28T02:00:00.000Z",
       };
+      for (const entry of slice.proof.captureManifest ?? []) {
+        const abs = path.join(paths.verifyInputs, entry);
+        await fs.mkdir(path.dirname(abs), { recursive: true });
+        await fs.writeFile(abs, "{}", "utf-8");
+      }
+      const verdictPath = path.join(root, slice.proof.verdictPath!);
+      await fs.mkdir(path.dirname(verdictPath), { recursive: true });
+      await fs.writeFile(
+        verdictPath,
+        JSON.stringify({ status: "pass", runId: slice.proof.runId, producedAt: "2026-05-28T01:00:00.000Z" }),
+        "utf-8",
+      );
     }
     const last = plan.slices.at(-1)!;
     await makeSliceDone(root, plan, last.id);
