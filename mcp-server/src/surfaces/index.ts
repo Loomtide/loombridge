@@ -80,6 +80,7 @@ import { resolveBuildStamp } from "../shared/build-stamp.js";
 import { resolveTraceDirectory } from "../bridge/trace-directory.js";
 import { validateOpArguments } from "../shared/arg-validation.js";
 import { loombridgePaths } from "../domain/state.js";
+import { isMainModule as isMainModuleUrl } from "../shared/main-module.js";
 
 // ─────────────────────────────────────────────
 // Response Formatting (exported for testing)
@@ -1524,7 +1525,7 @@ function attachUnityClientEvents(
 }
 
 // Only run main if this is the entry point (not imported for testing)
-const isMainModule = process.argv[1]?.endsWith("index.js") || process.argv[1]?.endsWith("index.ts");
+const isMainModule = isMainModuleUrl(import.meta.url);
 if (isMainModule) {
   main().catch((err) => {
     console.error("[loombridge] Fatal error:", err);

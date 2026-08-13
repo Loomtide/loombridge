@@ -18,6 +18,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
+import { isMainModule as isMainModuleUrl } from "../../shared/main-module.js";
 
 // ─────────────────────────────────────────────
 // Result shapes
@@ -555,7 +556,7 @@ async function run(): Promise<number> {
   return 0;
 }
 
-const isMainModule = process.argv[1]?.endsWith("audio-qc.js") || process.argv[1]?.endsWith("audio-qc.ts");
+const isMainModule = isMainModuleUrl(import.meta.url);
 if (isMainModule) {
   run().then((code) => {
     process.exitCode = code;

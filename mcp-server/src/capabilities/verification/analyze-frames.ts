@@ -13,6 +13,7 @@ import path from "node:path";
 import { inflateSync } from "node:zlib";
 
 import type { VisualArtifactsInput } from "./gates/visual-artifacts.js";
+import { isMainModule as isMainModuleUrl } from "../../shared/main-module.js";
 
 interface RgbaImage {
   width: number;
@@ -550,8 +551,7 @@ async function main(): Promise<void> {
   console.log(`[analyze-frames] wrote ${args.outputPath} (${findingCount} visual finding${findingCount === 1 ? "" : "s"})`);
 }
 
-const invokedAsCli =
-  process.argv[1]?.endsWith("analyze-frames.js") || process.argv[1]?.endsWith("analyze-frames.ts");
+const invokedAsCli =   isMainModuleUrl(import.meta.url);
 
 if (invokedAsCli) {
   main().catch((error: unknown) => {

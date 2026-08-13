@@ -22,6 +22,7 @@ import {
   createUnityClientForCli,
   type UnityRoutingMetadata,
 } from "../../bridge/unity-client-resolver.js";
+import { isMainModule as isMainModuleUrl } from "../../shared/main-module.js";
 
 export type TuningTrialStatus = "pass" | "warn" | "fail";
 
@@ -713,8 +714,7 @@ async function main(): Promise<number> {
   }
 }
 
-const isMainModule =
-  process.argv[1]?.endsWith("tuning-runner.js") || process.argv[1]?.endsWith("tuning-runner.ts");
+const isMainModule = isMainModuleUrl(import.meta.url);
 if (isMainModule) {
   main().then((code) => {
     process.exitCode = code;
