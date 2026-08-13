@@ -3,6 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
+import { pathToFileURL } from "node:url";
 import test from "node:test";
 
 import { REPO_ROOT } from "../../_support/paths.js";
@@ -35,8 +36,20 @@ import { isMainModule } from "../../../shared/main-module.js";
  * user's PATH does.
  */
 
-/** Bins whose entrypoint is a long-running server, so `--help` would block rather than return. */
-const SERVER_BINS = new Set(["loombridge-mcp"]);
+/**
+ * NO EXCLUSIONS. The first cut carried `SERVER_BINS = ["loombridge-mcp"]` on the premise that a
+ * stdio server would block on `--help`. It does not, with THIS harness: stdin is `ignore`, so the
+ * server sees EOF and shuts down (measured: 174 ms, exit 0, 187 bytes).
+ *
+ * The exclusion was not merely unnecessary, it hid the most valuable bin. Reverting
+ * `surfaces/index.js` to the old suffix check leaves `loombridge-mcp` completely inert with the
+ * WHOLE suite green, and that is the bin `install-mcp.ts` writes into every consumer `.mcp.json`
+ * (`command: "loombridge-mcp"`). So the real count was seven of nine dead, not six of eight.
+ *
+ * A name-based exclusion list is the wrong shape here: it is exactly how a broken bin hides. If a
+ * bin ever genuinely cannot answer `--help`, give it a per-bin invocation recipe below rather than
+ * removing it from the walk.
+ */
 
 function declaredBins(): Record<string, string> {
   const pkg = JSON.parse(
@@ -66,22 +79,30 @@ function invokeThroughBinSymlink(binName: string, target: string): { status: num
 }
 
 test("every declared bin produces OUTPUT when invoked through its bin symlink", () => {
-  const bins = Object.entries(declaredBins()).filter(([name]) => !SERVER_BINS.has(name));
+  const bins = Object.entries(declaredBins());
   assert.ok(bins.length >= 5, `expected several bins to check, saw ${bins.length}`);
 
-  const inert: string[] = [];
+  const broken: string[] = [];
+  let walked = 0;
   for (const [name, target] of bins) {
     if (!fs.existsSync(path.join(REPO_ROOT, "mcp-server", target))) continue; // package-entrypoints owns that
-    const { bytes } = invokeThroughBinSymlink(name, target);
-    if (bytes === 0) inert.push(`${name} -> ${target}`);
+    walked += 1;
+    const { status, bytes } = invokeThroughBinSymlink(name, target);
+    // BOTH conditions. The first cut checked only `bytes`, which proves a bin SPEAKS, not that it
+    // WORKS: a command that crashes loudly on every invocation passed, and `analyze-frames` was
+    // already exiting 1 on `--help` while counted healthy.
+    if (bytes === 0) broken.push(`${name} -> ${target} (silent: 0 bytes)`);
+    else if (status !== 0) broken.push(`${name} -> ${target} (exit ${status} on --help)`);
   }
+  // Count what was WALKED, not what was declared: an unbuilt dist would otherwise pass vacuously.
+  assert.ok(walked >= 5, `expected to walk several built bins, walked ${walked}`);
 
   assert.deepEqual(
-    inert,
+    broken,
     [],
-    "these commands exit silently and do nothing when run by their bin name, which is how a user " +
-      "and an agent invoke them. The usual cause is a main-module check keyed on the FILENAME " +
-      `instead of shared/main-module.ts:\n  ${inert.join("\n  ")}`,
+    "run by their bin name, which is how a user and an agent invoke them, these commands either " +
+      "say nothing or fail. Silence is usually a main-module check keyed on the FILENAME instead " +
+      `of shared/main-module.ts; a non-zero exit means --help is unsupported:\n  ${broken.join("\n  ")}`,
   );
 });
 
@@ -115,5 +136,34 @@ test("LITMUS: isMainModule is true through a symlink, and false for a non-entryp
   }
 
   // ...and it must not claim to be main when it is merely imported.
-  assert.equal(isMainModule("file:///definitely/not/the/entrypoint.js"), false);
+  //
+  // The path must EXIST. The first cut used a made-up path, so `realpathSync` threw and the
+  // assertion passed from the CATCH rather than from path inequality: gutting the comparison to
+  // `return true` left both tests in this file green.
+  const realButNotEntrypoint = path.join(REPO_ROOT, "mcp-server", "dist", "shared", "main-module.js");
+  assert.equal(fs.existsSync(realButNotEntrypoint), true, "the fixture path must exist to exercise the comparison");
+  assert.equal(isMainModule(pathToFileURL(realButNotEntrypoint).href), false);
+});
+
+test("every declared bin target carries a shebang, so PATH execution works", () => {
+  // The test above spawns `node <link>`, which is how NODE invokes a bin, not how a SHELL does.
+  // A target without `#!/usr/bin/env node` passes that test and dies on PATH with a shell syntax
+  // error, because the shell executes the symlink directly. Demonstrated: a shebang-less script
+  // returns 22 bytes through `node <link>` and "syntax error near unexpected token" through PATH.
+  //
+  // Every current target does carry one, and nothing asserted it. Same "declared path nothing
+  // walks" shape, one level below the previous one.
+  const missing: string[] = [];
+  for (const [name, target] of Object.entries(declaredBins())) {
+    const abs = path.join(REPO_ROOT, "mcp-server", target);
+    if (!fs.existsSync(abs)) continue;
+    const firstLine = fs.readFileSync(abs, "utf-8").split("\n", 1)[0] ?? "";
+    if (!firstLine.startsWith("#!")) missing.push(`${name} -> ${target} (first line: ${JSON.stringify(firstLine.slice(0, 40))})`);
+  }
+  assert.deepEqual(
+    missing,
+    [],
+    "a bin target without a shebang is executable by `node <path>` but NOT by a shell on PATH, " +
+      `which is how a user and an agent run it:\n  ${missing.join("\n  ")}`,
+  );
 });
