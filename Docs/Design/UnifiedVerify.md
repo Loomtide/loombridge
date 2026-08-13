@@ -487,6 +487,29 @@ wall-clock phase desync of an ambient animation layer), and 17% at 2x pacing. Th
 tolerance cap deliberately cannot absorb unbounded growth, so the region has to leave the
 comparison or the gate stays permanently red.
 
+- **A RESIZED GAME VIEW IS A HARNESS FAULT, NOT DRIFT.** `frameWidth`/`frameHeight` began as
+  the masks' denominator and were stamped only when masks existed, which reads backwards:
+  masks NEED the size, every baseline HAS one. So an unmasked anchor recorded no resolution,
+  and resizing the Game view between `approve` and `replay` surfaced as `diffFraction: 1`,
+  `visualStatus: "drift"` at the GAME tier (exit 1 under the unified door's `strictVisual`,
+  exit 0 on the bare `trace replay`), with nothing anywhere naming the window. Observed live
+  on a consumer project. `comparePerceptual` had ALWAYS returned `dimensionsMatch: false` for
+  this; nothing on the replay path read it, so the one fact separating "the game changed"
+  from "the window changed" was discarded a line after it was derived. Three changes: every
+  `approve` stamps the decoded resolution; `trace record` writes the live Game view size onto
+  the trace as `viewport` (provenance, so a mismatch can be NAMED before the replay spends a
+  capture per gesture); and `applyVisualDiff` reads `dimensionsMatch` and tiers it as a
+  HARNESS fault naming both resolutions. It was never a false green (a cross-resolution
+  comparison cannot be laundered into a pass); it was the wrong tier and an unactionable
+  message. The refusal is deliberate and there is no opt-out: two frames of different sizes
+  share no pixels, so there is no honest verdict between refusing and lying. The way forward
+  for a free-aspect project is the newly stamped number: RESTORE the Game view to the
+  approved size (the anchor is untouched, no new consent is minted, the next run is green),
+  with re-approving named second because it mints an anchor from frames nothing compared. The
+  capture-level `harnessFault` is deliberately NOT set, so `approve` stays available: it is
+  the escape hatch the refusal itself points at. An anchor with no stamped size and a trace
+  with no `viewport` keep working unchanged, because the grade-time check measures DECODED
+  frames and needs no field to be present.
 - **The mask is part of the ANCHOR.** `baseline-manifest.json` gained `maskRects`
   (`{ captureId?, x, y, w, h, reason }`) plus the `frameWidth`/`frameHeight` the rects were
   measured against, stamped by a new verb, `trace mask`, that mirrors `trace tolerance`
@@ -525,12 +548,14 @@ comparison or the gate stays permanently red.
   GRADE time is the same shape: a manifest-level `baselineFault` on the pacing precedent,
   captures left ungraded, never a per-capture `unreadable`.
 - **The stamped denominator is checked against a real frame.** `verifyTraceBaseline` decodes
-  ONE declared PNG and cross-checks `frameWidth`/`frameHeight` whenever masks are stamped, so
+  ONE declared PNG and cross-checks `frameWidth`/`frameHeight` whenever they are stamped, so
   every PRE-RUN surface (the plan's `anchor terms:` line, `mask --list`, discovery's typed
   `maskedFraction`) quotes a fraction measured against a denominator something verified.
   Without it the dimensions were self-asserted until grade time, and inflating them by hand
   printed a 40% mask as 4%. `mask --list` runs the verifier first and REFUSES to quote the
-  terms of an anchor that fails it.
+  terms of an anchor that fails it. The check was originally gated on masks being present,
+  because masks were the only reason a size was stamped; it now fires on any stamped size,
+  because that size is quoted to operators as the resolution to restore the Game view to.
 - **A mask is never suggested from ONE run, and reproduction is STRUCTURAL.** Each drifted
   capture records `driftDiffSha` (sha256 of the drift bitmap), `driftBounds` and `driftGrid`
   (a 16x16 grid of drifted-pixel counts). Sha equality alone was the wrong bar: flipping ONE

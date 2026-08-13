@@ -107,6 +107,8 @@ export function parseTrace(input: unknown): ReplayTrace {
     }
   }
 
+  const viewport = parseViewport(root.viewport);
+
   return {
     schemaVersion: "0.1",
     id,
@@ -114,10 +116,43 @@ export function parseTrace(input: unknown): ReplayTrace {
     intent: optionalString(root.intent, "intent"),
     start: { scene, reset },
     input: { backend },
+    // PARSED, SO IT SURVIVES. This function REBUILDS the trace field by field, so anything
+    // it does not name is dropped: a `viewport` written by the recorder and not listed here
+    // would exist on disk, vanish the moment replay read the file, and read to the next
+    // author as a wired field. It is the same class of defect as a declared path nothing
+    // walks.
+    ...(viewport !== undefined ? { viewport } : {}),
     segments,
     assertions,
     outcome: { expected: outcome.expected },
   };
+}
+
+/**
+ * The recorded Game view size, or `undefined` when the trace never wrote one down.
+ *
+ * ABSENT IS THE BACK-COMPATIBLE ANSWER, PRESENT-BUT-MALFORMED IS A REFUSAL. Every trace
+ * recorded before this field existed has no `viewport`, and refusing those would brick every
+ * anchor on disk for a field that grades nothing. But a viewport that IS present and cannot
+ * be read is a hand-edited or half-written value, and the two silent options are both wrong:
+ * dropping it would erase a fact the file states, and coercing `"1920"` would let a shape
+ * nobody validated go on to name resolutions in operator-facing prose. Refuse and say which
+ * field.
+ */
+function parseViewport(value: unknown): { width: number; height: number } | undefined {
+  if (value === undefined) return undefined;
+  const obj = asObject(value, "viewport");
+  const dims: Record<string, number> = {};
+  for (const field of ["width", "height"] as const) {
+    const raw = obj[field];
+    if (typeof raw !== "number" || !Number.isInteger(raw) || raw <= 0) {
+      throw new TraceParseError(
+        `viewport.${field} must be a positive integer (got ${JSON.stringify(raw) ?? typeof raw})`,
+      );
+    }
+    dims[field] = raw;
+  }
+  return { width: dims.width!, height: dims.height! };
 }
 
 function parseReset(value: unknown): ReplayTrace["start"]["reset"] {

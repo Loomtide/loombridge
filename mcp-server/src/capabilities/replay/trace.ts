@@ -996,6 +996,47 @@ export async function resolveAlignedCaptureFps(
   return { fps: explicit };
 }
 
+/**
+ * Say, BEFORE the editor is driven, that this demonstration was recorded at one resolution
+ * and its anchor was approved at another.
+ *
+ * WHAT IT BUYS, exactly. A replay drives the game and takes a frame per gesture, and the
+ * pixel gate cannot discover a size mismatch until it decodes the first pair. This note
+ * costs one manifest read and lands before any of that, so an operator who re-recorded at a
+ * new window size learns it up front instead of after thirteen captures. It is the
+ * `resolveReplaySpeed`/`resolveAlignedCaptureFps` precedent: announce here, re-derive the
+ * fact at grade time, and never return it as a field a second reader would have to trust.
+ *
+ * WHAT IT DOES NOT BUY, stated so nobody mistakes it for the gate. It compares the trace's
+ * RECORD-TIME size against the anchor's APPROVE-TIME size, and it therefore cannot see the
+ * commonest resize of all: dragging the Game view's edge without re-recording, which leaves
+ * both of those numbers untouched and only changes the pixels that come back. That case is
+ * caught where it has to be, in `applyVisualDiff`, off the decoded frames. This is a NOTE,
+ * never a refusal, and it changes no verdict.
+ *
+ * ABSENCE ON EITHER SIDE IS SILENCE, not a fault. A trace recorded before `viewport`
+ * existed, an anchor approved before the resolution was stamped, or a broken manifest all
+ * mean "nobody wrote this down", which is a missing note and not a mismatch.
+ */
+async function announceViewportMismatch(
+  paths: ReplayLayout,
+  id: string,
+  recorded: { width: number; height: number } | undefined,
+): Promise<void> {
+  if (recorded === undefined) return;
+  const manifest = await loadTraceBaselineManifest(path.join(paths.replayBaselines, id));
+  if (manifest === null || isTraceBaselineManifestError(manifest)) return;
+  const { frameWidth, frameHeight } = manifest;
+  if (frameWidth === undefined || frameHeight === undefined) return;
+  if (frameWidth === recorded.width && frameHeight === recorded.height) return;
+  console.error(
+    `[loombridge trace] this demonstration was recorded at ${recorded.width}x${recorded.height} but its approved ` +
+      `frames are ${frameWidth}x${frameHeight}. If the Game view is still at the recorded size, the pixel gate ` +
+      "will refuse this run as a harness fault (frames of different sizes share no pixels); set the Game view " +
+      `to ${frameWidth}x${frameHeight} first, or approve from this run's report to re-anchor at the new size.`,
+  );
+}
+
 async function replayOneTrace(
   paths: ReplayLayout,
   id: string,
@@ -1053,6 +1094,8 @@ async function replayOneTrace(
         "pinned tick loop and the frame is taken on the frame the settle completes.",
     );
   }
+
+  await announceViewportMismatch(paths, id, trace.viewport);
 
   const captureDir = path.join(paths.replayReports, id, "actual");
   const artifact = await runLiveReplay(trace, {
@@ -1598,13 +1641,27 @@ async function runApprove(args: TraceArgs): Promise<number> {
   // while keeping them re-interprets a human decision against a frame they never saw.
   // Refuse instead, and name the verb that owns the decision.
   const carried = carryForward(previous);
+  // THE RESOLUTION THESE FRAMES WERE APPROVED AT, DECODED FROM THE FRAMES THEMSELVES, ON
+  // EVERY APPROVAL AND NOT ONLY A MASKED ONE.
+  //
+  // The stamp used to hang off the mask branch, which reads backwards once it is said out
+  // loud: masks NEED the dimensions (to position their rects), but every baseline HAS a
+  // resolution, and an anchor that cannot say which one it was frozen at cannot tell an
+  // operator what to restore. Observed on a real consumer project: an unmasked anchor
+  // stamped no size, the Game view was resized between `approve` and `replay`, and the run
+  // reported 100% pixel drift at the GAME tier with nothing anywhere naming the window.
+  //
+  // Decoded, never asserted. `captureFrameDims` reads the PNG headers of the very frames
+  // this approval is about to copy, so the stamped number is a measurement of the anchor's
+  // own bytes rather than a claim it makes about itself, and `verifyTraceBaseline`
+  // re-derives it from disk on every later read.
+  const dims = await captureFrameDims(parsed, paths);
   // The masked fraction this approve is re-affirming, appended to the ledger below so the
   // history has one entry PER APPROVAL EVENT (MX2). A history that only mask stamps wrote
   // reads as "nothing happened to the masks between stamp #1 and stamp #7", when in fact
   // five re-freezes each re-consented to the same blindness against new frames.
   let approvedMaskedFraction: number | undefined;
   if ((carried.maskRects?.length ?? 0) > 0) {
-    const dims = await captureFrameDims(parsed, paths);
     if ("error" in dims) {
       console.error(
         `[loombridge trace] cannot approve "${id}" while masks are stamped: ${dims.error}. ` +
@@ -1656,6 +1713,28 @@ async function runApprove(args: TraceArgs): Promise<number> {
       dims.height,
       previous === null ? DEFAULT_DRIFT_FRACTION : resolveDriftTolerance(previous),
     ).maskedFraction;
+  } else if ("error" in dims) {
+    // THE FRAMES COULD NOT BE MEASURED AND NO MASK DEPENDS ON THE NUMBER, so this approval
+    // stamps NO size rather than refusing: an unmasked approve has never needed the
+    // dimensions to be readable, and starting to refuse here would turn an honest project
+    // red for a field that grades nothing on its own.
+    //
+    // BUT IT MUST NOT INHERIT ONE EITHER. `carryForward` may have brought the PREVIOUS
+    // approval's size along, and these are different frames of an unmeasured size: keeping
+    // it would stamp a number about bytes nobody read, which `verifyTraceBaseline` would
+    // then correctly refuse as a denominator that does not exist. An absent stamp is the
+    // honest state, and the grade-time comparison of the decoded frames is unaffected.
+    delete carried.frameWidth;
+    delete carried.frameHeight;
+    console.error(
+      `[loombridge trace] note: this approval records no capture resolution (${dims.error}). ` +
+        "The pixel gate still compares the real frames; only the up-front resolution note and the " +
+        "\"restore the Game view to WxH\" remedy are unavailable for this anchor.",
+    );
+  } else {
+    // The unmasked stamp. Same measurement, same bytes, no mask decision riding on it.
+    carried.frameWidth = dims.width;
+    carried.frameHeight = dims.height;
   }
 
   await fs.mkdir(baselineDir, { recursive: true });
@@ -1722,6 +1801,17 @@ async function runApprove(args: TraceArgs): Promise<number> {
   console.error(
     `[loombridge trace] stamped ${path.relative(args.root, traceBaselineManifestPath(baselineDir))}: approvedAt ${manifest.approvedAt}, bound to trace ${traceSha256.slice(0, 12)}…`,
   );
+  // THE RESOLUTION IS A TERM OF EVERY LATER COMPARISON, so it is announced like the
+  // tolerance and the capture clock are. This is the number an operator needs when a later
+  // replay refuses: it is what the Game view has to be restored to, and before it was
+  // stamped the only available remedy was to re-approve.
+  if (manifest.frameWidth !== undefined && manifest.frameHeight !== undefined) {
+    console.error(
+      `[loombridge trace] capture resolution ${manifest.frameWidth}x${manifest.frameHeight}: every later replay ` +
+        "of this trace must capture at that size, or the pixel gate refuses as a harness fault rather than " +
+        "reporting a resized window as drift.",
+    );
+  }
   // A tolerance carried through a re-freeze is stated out loud, with its consent
   // sentence: an allowance a human approved once must not become invisible later.
   if (manifest.driftTolerance !== undefined) {
@@ -2342,6 +2432,9 @@ export async function applyVisualDiff(
   // so. Booleans were enough to tier the run and never enough to explain it.
   const unreadableCaptures: string[] = [];
   const faultedCaptures: string[] = [];
+  // THE CAPTURES WHOSE FRAME IS NOT THE SIZE OF THE FRAME THEY WOULD BE GRADED AGAINST,
+  // with both resolutions, so the reason on the report names the fact rather than the count.
+  const resizedCaptures: { id: string; actual: string; baseline: string }[] = [];
   // WHICH approved anchors this run actually graded. The old `anyCompared` boolean could
   // not tell "one of three" from "three of three", so a run that quietly stopped comparing
   // most of the baseline looked exactly like a full one.
@@ -2424,6 +2517,45 @@ export async function applyVisualDiff(
           maskRects,
           captureId: capture.id,
         });
+        // A RESOLUTION CHANGE IS A HARNESS FAULT, NEVER DRIFT (the misdiagnosis this
+        // branch exists to end).
+        //
+        // `comparePerceptual` has always DETECTED this: two images of different sizes have
+        // no common pixel space, so it returns `dimensionsMatch: false` with
+        // `diffFraction: 1, status: "drift"`. Nothing on this path ever read the flag. Only
+        // the minigame path did (`minigame-baseline.ts`), so on the replay door an operator
+        // who dragged the Game view's edge between `approve` and `replay` was told, at the
+        // GAME tier, that every pixel of their game had changed. Observed live on a
+        // consumer project. It is not a hole (it is loud, and it can never be a false
+        // green); it is the wrong TIER and an unactionable message, which is its own kind
+        // of expensive.
+        //
+        // THE STATUS IS `not-compared`, AND `capture.harnessFault` IS DELIBERATELY NOT SET,
+        // exactly as the pacing and capture-clock refusals do it. Setting the capture-level
+        // fault would make `approve` refuse this very report (BX1), and re-approving at the
+        // new resolution is the DESIGNED way forward for a project that legitimately
+        // changed size. This repo has already walked into that trap twice with the pacing
+        // escape hatch; the run is still a run-level harness fault, so it still exits 2 and
+        // is still never a pass.
+        //
+        // MEASURED FROM THE DECODED PIXELS, not from the stamped `frameWidth`/`frameHeight`.
+        // That is what makes it work for an anchor approved before anything was stamped, and
+        // what makes it unfakeable: there is no field to omit.
+        if (!diff.dimensionsMatch) {
+          capture.baseline = baselinePath;
+          capture.visualStatus = "not-compared";
+          resizedCaptures.push({
+            id: capture.id,
+            actual: `${actual.width}x${actual.height}`,
+            baseline: `${baseline.width}x${baseline.height}`,
+          });
+          console.error(
+            `[loombridge trace] capture "${capture.id}" was taken at ${actual.width}x${actual.height} but its ` +
+              `approved baseline is ${baseline.width}x${baseline.height} (harness fault, not drift): frames of ` +
+              "different sizes share no pixels, so there is nothing to compare and no drift to report.",
+          );
+          continue;
+        }
         capture.baseline = baselinePath;
         capture.diffFraction = diff.diffFraction;
         capture.visualStatus = diff.status;
@@ -2492,6 +2624,12 @@ export async function applyVisualDiff(
   // could not have named the term that refused even if it had wanted to.
   const harnessReasons = [
     ...(baselineFault !== null ? [baselineFault] : []),
+    // THE RESIZE, NAMED WITH BOTH RESOLUTIONS AND A REMEDY, on the report and not only on
+    // the stderr of the process that wrote it. This is the sentence the rendered page and
+    // the summary quote back, and it is the whole reason the resolution is now stamped:
+    // before, there was no number to tell an operator what to restore, so the only way
+    // forward was to re-approve.
+    ...(resizedCaptures.length > 0 ? [resizedCaptureReason(resizedCaptures, id)] : []),
     ...(faultedCaptures.length > 0
       ? [`the capture step failed for ${faultedCaptures.join(", ")} (no frame to grade)`]
       : []),
@@ -2510,6 +2648,25 @@ export async function applyVisualDiff(
   if (harnessReasons.length > 0) {
     artifact.visualHarnessFault = true;
     artifact.visualHarnessFaultReason = harnessReasons.join("; ");
+  }
+  // THE REMEDY, SAID OUT LOUD AND SAID ONCE for the whole run. The per-capture lines above
+  // state the fact thirteen times over; this states what to do about it, and it leads with
+  // RESTORING the Game view rather than with re-approving. That order is the point: an
+  // operator staring at a red gate reaches for the command that makes it green, and
+  // re-approving mints a new anchor from frames nothing compared. Restoring the window
+  // costs nothing and keeps the anchor a human already consented to.
+  if (resizedCaptures.length > 0) {
+    const approved = resizedCaptures[0]!.baseline;
+    console.error(
+      `[loombridge trace] the Game view is not the size this anchor was approved at (harness fault, not a game ` +
+        `defect): ${resizedCaptures.length} capture(s) were taken at ${resizedCaptures[0]!.actual}, the approved ` +
+        `frames are ${approved}. Nothing was graded, so this run holds no opinion about the pixels.`,
+    );
+    console.error(
+      `[loombridge trace]   set the Unity Game view back to ${approved} and re-run \`loombridge trace replay ` +
+        `--id ${id}\`. If the new size is the one you want, \`loombridge trace approve --id ${id}\` re-anchors ` +
+        "at it, which freezes these frames WITHOUT any comparison against the old ones.",
+    );
   }
   // SAID OUT LOUD, AND SAID SEPARATELY from the anchor faults above, which have already
   // printed their own line. A shortfall with no other fault is the silent case: every
@@ -2546,6 +2703,39 @@ export async function applyVisualDiff(
     );
     if (suggestion) artifact.maskSuggestion = suggestion;
   }
+}
+
+/**
+ * The on-disk sentence for a run whose captures are not the size of the frames they would
+ * be graded against.
+ *
+ * BOTH RESOLUTIONS ARE IN IT, ALWAYS. The number that matters to the operator is the
+ * APPROVED one (it is what they restore the Game view to), and a reason reading "a
+ * resolution mismatch" would send them back to the terminal scrollback of the process that
+ * wrote the report, which is exactly the gap `visualHarnessFaultReason` exists to close.
+ *
+ * MIXED SIZES WITHIN ONE RUN ARE ENUMERATED rather than summarised by the first pair. It
+ * should not be reachable (the editor's Game view does not change mid-replay), but a
+ * sentence that quietly describes thirteen captures by the first one would be wrong in
+ * precisely the case a reader most needs the detail.
+ */
+function resizedCaptureReason(
+  resized: readonly { id: string; actual: string; baseline: string }[],
+  id: string,
+): string {
+  const sizes = new Set(resized.map((r) => `${r.actual} vs ${r.baseline}`));
+  const detail =
+    sizes.size === 1
+      ? `${resized.length} capture(s) were taken at ${resized[0]!.actual} but the approved frames are ` +
+        `${resized[0]!.baseline}`
+      : `the captures and their approved frames disagree on size (${resized
+          .map((r) => `${r.id}: ${r.actual} vs ${r.baseline}`)
+          .join("; ")})`;
+  return (
+    `the Game view resolution changed: ${detail}. Frames of different sizes share no pixels, so nothing was ` +
+    `compared and this is a harness fault, not drift. Restore the Game view to ${resized[0]!.baseline} and ` +
+    `re-run, or \`loombridge trace approve --id ${id}\` to re-anchor at the new size`
+  );
 }
 
 /**
@@ -3456,9 +3646,11 @@ function printUsage(): void {
       "",
       "Exit: 0 pass · 1 game defect: fail/error (or drift with --strict-visual)",
       "      2 harness fault: blocked (undrivable), an unreadable capture/baseline PNG,",
-      "        a baseline manifest that cannot be trusted at grade time (including one",
-      "        carrying an over-cap drift tolerance), an unreachable editor, or a usage",
-      "        error. A harness fault is never reported as a game defect.",
+      "        a Game view resized since approve (frames of different sizes share no",
+      "        pixels, so a resize is never drift), a baseline manifest that cannot be",
+      "        trusted at grade time (including one carrying an over-cap drift tolerance),",
+      "        an unreachable editor, or a usage error. A harness fault is never reported",
+      "        as a game defect.",
       "      tolerance/mask: 0 stamped, or (for the read-only `mask --list`) printed: it",
       "        stamps nothing and still exits 0 · 1 no approved baseline to stamp (approve",
       "        frames first) · 2 the baseline manifest exists but cannot be trusted, the",

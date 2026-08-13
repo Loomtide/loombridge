@@ -128,11 +128,22 @@ export interface TraceBaselineManifest {
    */
   maskRects?: MaskRect[];
   /**
-   * The frame size the masks were measured against, decoded from the approved PNGs at
-   * stamp time. REQUIRED whenever `maskRects` is non-empty (Q1): without it the read side
-   * has no denominator for the cap, and a mask nobody can measure is a mask nobody
-   * approved. Kept in the manifest rather than re-decoded per read so the cap is checked
-   * against the dimensions a human consented to, not against whatever is on disk now.
+   * THE RESOLUTION THIS ANCHOR WAS APPROVED AT, decoded from the approved PNGs at stamp
+   * time. Stamped by EVERY approval, not only a masked one.
+   *
+   * It began as the masks' denominator and is still REQUIRED whenever `maskRects` is
+   * non-empty (Q1): without it the read side has no denominator for the cap, and a mask
+   * nobody can measure is a mask nobody approved. But hanging the stamp off the masks read
+   * backwards. Masks NEED the dimensions; every baseline HAS them. An unmasked anchor that
+   * recorded no size could not tell an operator what to restore, so resizing the Game view
+   * between `approve` and `replay` came out as 100% pixel drift at the GAME tier, with
+   * nothing anywhere naming the resize (observed on a live consumer project).
+   *
+   * ABSENT MEANS "APPROVED BEFORE ANYONE WROTE IT DOWN", which is a missing note and not a
+   * mismatch. Every anchor stamped before this change carries no size and keeps grading
+   * exactly as it did: the grade-time check measures the DECODED capture against the
+   * DECODED baseline, so it needs nothing from this field to catch a real resize. What the
+   * field buys is naming the mismatch up front and naming the remedy afterwards.
    */
   frameWidth?: number;
   frameHeight?: number;
@@ -174,8 +185,12 @@ export const MANIFEST_KEY_DECISIONS = {
   previousApprovedAt: "ledger",
   previousDriftTolerance: "ledger",
   maskRects: "carried",
-  frameWidth: "carried",
-  frameHeight: "carried",
+  // Carried by `tolerance`/`mask` (neither touches a PNG, so the frames keep the size they
+  // were measured at), RE-DERIVED by `approve` from the frames it is freezing. Inheriting
+  // the previous approval's size across a re-freeze would label new bytes with an old
+  // measurement, which is the pacing precedent exactly.
+  frameWidth: "carried-rederived-by-approve",
+  frameHeight: "carried-rederived-by-approve",
   previousMaskRects: "ledger",
   maskedFractionHistory: "ledger",
 } as const satisfies Record<string, "rewritten" | "carried" | "carried-rederived-by-approve" | "ledger">;
@@ -626,27 +641,44 @@ export async function verifyTraceBaseline(
     }
   }
 
-  // THE STAMPED DENOMINATOR IS CHECKED AGAINST A REAL FRAME (MX3). Everything downstream
-  // divides by these two numbers, and until here they were the manifest's own word.
-  if ((loaded.maskRects?.length ?? 0) > 0) {
+  // Masks with nothing to measure them against, checked separately from the size below
+  // because it is a different fault: the manifest declares rects and declares no frame.
+  if ((loaded.maskRects?.length ?? 0) > 0 && loaded.pngs[0] === undefined) {
+    failures.push("masks are stamped but the manifest declares no frame to measure them against");
+  }
+
+  // THE STAMPED RESOLUTION IS CHECKED AGAINST A REAL FRAME (MX3), WHENEVER IT IS STAMPED.
+  //
+  // It used to fire only for a MASKED anchor, because the number existed only to be a mask
+  // denominator. Now every approval stamps it, and every stamped number is quoted back to
+  // an operator as the size to restore the Game view to, so an unchecked one is a fiction
+  // in the one sentence that is supposed to tell them what to do. One decode, not one per
+  // frame: the sha loop above already proved the remaining frames are the approved bytes,
+  // and both `approve` and `trace mask` refuse a mixed-size baseline.
+  //
+  // ABSENT IS NOT A FAILURE, and that is a back-compat statement rather than a skipped
+  // check: an anchor approved before the stamp existed asserts no size, so there is nothing
+  // to disprove, and the grade-time comparison of decoded frames still catches a real
+  // resize. `frameDimsRefusal` above has already refused a half-stamped pair, so reaching
+  // here with one of the two present is impossible.
+  if (loaded.frameWidth !== undefined && loaded.frameHeight !== undefined) {
     const first = loaded.pngs[0];
-    if (first === undefined) {
-      failures.push("masks are stamped but the manifest declares no frame to measure them against");
-    } else {
+    if (first !== undefined) {
       try {
         const image = await readPng(path.join(dir, `${first.captureId}.png`));
         if (image.width !== loaded.frameWidth || image.height !== loaded.frameHeight) {
           failures.push(
             `the stamped frame size ${loaded.frameWidth}x${loaded.frameHeight} is not the size of the approved ` +
               `frames (${first.captureId}.png is ${image.width}x${image.height}): every masked fraction on ` +
-              "every surface was computed against a denominator that does not exist. Re-stamp with " +
-              "`loombridge trace mask --set` against the real frames, or `--clear`",
+              "every surface was computed against a denominator that does not exist, and the resolution this " +
+              "anchor tells operators to restore is not the resolution it holds. Re-approve, or re-stamp with " +
+              "`loombridge trace mask --set` against the real frames (or `--clear`)",
           );
         }
       } catch (error) {
         failures.push(
-          `masks are stamped but the approved frame '${first.captureId}.png' could not be decoded ` +
-            `(${message(error)}), so the masked fraction cannot be measured`,
+          `the anchor stamps a frame size but the approved frame '${first.captureId}.png' could not be decoded ` +
+            `(${message(error)}), so that size cannot be checked against anything`,
         );
       }
     }
