@@ -52,7 +52,14 @@ test("recordObservedTrace: reset → observe_start → observe_stop → trace (g
   const { trace } = await recordObservedTrace(send, meta, { waitForStop: async () => {} });
 
   // The op spine: a full reset cycle (now ending with the run-in-background keepalive so the
-  // player loop ticks while the bridge drives unfocused), then observe_start, then observe_stop.
+  // player loop ticks while the bridge drives unfocused), a viewport read, then
+  // observe_start, then observe_stop.
+  //
+  // `ui.get_screen_rects` lands BETWEEN the reset and the observation, and both sides of
+  // that position are load-bearing. AFTER the reset, because the reset enters Play Mode and
+  // the Game view is the surface every later capture is a screenshot of. BEFORE the
+  // observation, so the round trip is not competing with the human's own input. What it
+  // reads becomes `trace.viewport`, the size the demonstration was performed at.
   const commands = calls.map((c) => c.command);
   assert.deepEqual(commands, [
     "editor.stop",
@@ -61,10 +68,17 @@ test("recordObservedTrace: reset → observe_start → observe_stop → trace (g
     "editor.play",
     "editor.wait_for",
     "editor.set_run_in_background",
+    "ui.get_screen_rects",
     "input.observe_start",
     "input.observe_stop",
   ]);
   assert.equal(calls.find((c) => c.command === "scene.open_scene")!.params.path, meta.scene);
+
+  // AND A BRIDGE THAT CANNOT STATE A VIEWPORT STILL RECORDS. This fake answers every op
+  // with `{}`, so the screen-rects read came back unusable: the field is simply absent, the
+  // trace is otherwise unchanged, and the recording is NOT thrown away. A demonstration a
+  // human performs once must never be lost to a provenance round trip.
+  assert.equal(trace.viewport, undefined, "an unusable viewport is an absent field, never a refusal");
 
   // The trace is the parsed/validated transform of the observed click.
   assert.equal(trace.id, "demo");

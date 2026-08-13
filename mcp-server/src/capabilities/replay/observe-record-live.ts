@@ -162,6 +162,24 @@ export async function recordObservedTrace(
     throw new Error(`record: reset failed (${reset.reason ?? "reset-unavailable"})`);
   }
 
+  // THE SIZE THE HUMAN IS ABOUT TO DEMONSTRATE AT, written onto the trace (see
+  // `ReplayTrace.viewport`). Read AFTER the reset, because the reset enters Play Mode and
+  // the Game view is the surface every later capture is a screenshot of; read BEFORE the
+  // observation starts, so the round trip is not competing with the human's own input.
+  //
+  // NEVER FATAL. `recordedViewport` returns null instead of throwing, and the field is
+  // simply omitted: a demonstration a human performs once is not worth losing to a
+  // screen-rects round trip, and the pixel gate re-derives the real sizes from the decoded
+  // frames regardless. Absence is the same back-compatible state every older trace is in.
+  const viewport = await driver.recordedViewport();
+  if (viewport !== null) meta = { ...meta, viewport };
+  else {
+    options.onNotice?.(
+      "note: the editor did not report a Game view size, so this trace records none. The pixel gate " +
+        "still compares the real frames; only the up-front resolution note is unavailable.",
+    );
+  }
+
   // If the recording declared a state signal, pass it to observe_start so the
   // observer SAMPLES that field per gesture (the value lands on each click as
   // `click.stateSignal`, which the transform turns into a `wait-for-condition`

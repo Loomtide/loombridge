@@ -735,6 +735,32 @@ export class UnityDriver implements ReplayDriver {
   }
 
   /**
+   * The live Game view size for a RECORDER to write onto the trace, or `null` when the
+   * editor could not state one.
+   *
+   * NULL RATHER THAN A THROW, and that asymmetry with {@link getViewport} is the point. A
+   * drag that needs to denormalize a release point has no honest fallback, so it throws and
+   * the dispatch fails. A recording does: the viewport is PROVENANCE on the trace, the
+   * pixel gate re-derives the real sizes from the decoded frames either way, and a
+   * demonstration a human just performed once must never be thrown away because a
+   * screen-rects round trip came back empty. Absent is already the back-compatible reading.
+   *
+   * ROUNDED TO WHOLE PIXELS, because the bridge reports the viewport as floats and a frame
+   * is an integer number of pixels. A stamped `1920.0000001` would print as an unfamiliar
+   * number in a resolution sentence and would be refused by the trace parser.
+   */
+  async recordedViewport(): Promise<{ width: number; height: number } | null> {
+    try {
+      const vp = await this.getViewport();
+      const width = Math.round(vp.width);
+      const height = Math.round(vp.height);
+      return width > 0 && height > 0 ? { width, height } : null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
    * Lazily open an input session on the InputSystem backend (the ONLY backend that
    * injects gameplay keys — EditorEvent reaches IMGUI/uGUI only). Returns `blocked`
    * (latched) when the Input System is unavailable (a legacy-only project) or an

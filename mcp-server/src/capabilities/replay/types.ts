@@ -269,6 +269,32 @@ export interface ReplayTrace {
    * uGUI taps still dispatch under either, so a menu→gameplay trace can mix them.
    */
   input: { backend: "ui-events" | "input-system" };
+  /**
+   * THE GAME VIEW RESOLUTION (px) THIS DEMONSTRATION WAS RECORDED AT, read from the live
+   * editor at record time.
+   *
+   * WHY A TRACE CARRIES IT AT ALL. Every frame this demonstration will ever be graded
+   * against is a screenshot of the Game view, so the view's SIZE is a term of the pixel
+   * comparison exactly as the pacing and the capture clock are. Nothing recorded it: the
+   * trace named no size, the baseline manifest stamped one only when masks existed, and
+   * resizing the Game view between `approve` and `replay` therefore surfaced as 100% pixel
+   * drift at the GAME tier. The operator was told their game had changed completely and
+   * nothing anywhere pointed at the window edge they had dragged.
+   *
+   * IT IS PROVENANCE, NOT THE GATE. The load-bearing check is at grade time, where the
+   * DECODED capture and the DECODED baseline are measured against each other
+   * (`applyVisualDiff`'s `dimensionsMatch` read). That one cannot be laundered by omitting
+   * a field, because it reads pixels. This field exists so a mismatch can be NAMED before
+   * the replay drives the editor and spends a capture per gesture, and so a re-recording at
+   * a new size is legible on disk afterwards.
+   *
+   * ABSENT IS BACK-COMPATIBLE AND NEVER A REFUSAL. Every trace recorded before this field
+   * existed carries none, and a recording whose editor could not state a viewport carries
+   * none either. Absence means "this demonstration never wrote its size down", which is a
+   * missing NOTE and not a mismatch: it silences the pre-drive line and changes no verdict.
+   * A PRESENT value is validated (two positive integers) rather than coerced.
+   */
+  viewport?: { width: number; height: number };
   segments: Segment[];
   assertions?: Assertion[];
   /**
