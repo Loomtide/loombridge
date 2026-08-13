@@ -640,6 +640,24 @@ export async function runTuningSession(args: {
   });
 }
 
+/** Usage text. A command an agent is told to run has to be answerable about itself. */
+export const TUNING_RUNNER_USAGE = [
+  "Usage: loombridge-tune \\",
+  "  --acceptance <acceptance.json> \\",
+  "  --config <tuning-config.json> \\",
+  "  --out <tuning-trials.json> \\",
+  "  [--project <projectPathCanonical|projectName>]",
+  "",
+  "Drives the feel-tuning trial loop against a running Unity editor and writes the trial",
+  "report to --out. When --project is omitted, LOOMBRIDGE_UNITY_PROJECT is honored before",
+  "single-editor auto-selection.",
+].join("\n");
+
+/** Sentinel: `--help`/`-h` anywhere in argv. Asking for help is never a usage error. */
+export function wantsTuningRunnerHelp(argv: string[]): boolean {
+  return argv.slice(2).some((a) => a === "--help" || a === "-h");
+}
+
 export function parseTuningRunnerArgs(argv: string[]): TuningRunnerArgs {
   let acceptancePath = "";
   let configPath = "";
@@ -677,6 +695,10 @@ export function parseTuningRunnerArgs(argv: string[]): TuningRunnerArgs {
 }
 
 async function main(): Promise<number> {
+  if (wantsTuningRunnerHelp(process.argv)) {
+    console.log(TUNING_RUNNER_USAGE);
+    return 0;
+  }
   try {
     const args = parseTuningRunnerArgs(process.argv);
     const acceptance = assertValidAcceptanceContract(await readJson(args.acceptancePath));

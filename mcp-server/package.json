@@ -15,7 +15,10 @@
     "loombridge-mcp": "dist/surfaces/index.js",
     "loombridge-run-gates": "dist/capabilities/verification/run-gates.js",
     "loombridge-capture-runner": "dist/capabilities/verification/capture-runner.js",
-    "loombridge-analyze-frames": "dist/capabilities/verification/analyze-frames.js"
+    "loombridge-analyze-frames": "dist/capabilities/verification/analyze-frames.js",
+    "loombridge-capture": "dist/capabilities/verification/capture-runner.js",
+    "loombridge-handoff-check": "dist/capabilities/assets/handoff-consistency.js",
+    "loombridge-tune": "dist/capabilities/verification/tuning-runner.js"
   },
   "scripts": {
     "clean": "rm -rf dist",
