@@ -33,9 +33,13 @@ import {
   DEFAULT_SNAPSHOT_TOLERANCES,
   SNAPSHOT_CONTRACT_FILE,
   SNAPSHOT_MEASUREMENTS_FILE,
+  TOLERANCE_OVERRIDE_KEYS,
   derivationsFromContract,
   rederiveView,
+  toleranceMagnitudeRefusals,
+  tolerancePolicyRefusals,
   verifySnapshotIntegrity,
+  widenedToleranceConsentLine,
   writeSnapshotBundle,
   type FeelSnapshotManifest,
   type FeelSnapshotTolerancePolicy,
@@ -275,10 +279,27 @@ async function readTolerances(
     defaultAbsFloorByDerivation?: unknown;
     perMetric?: Record<string, { relPct?: number; abs?: number }>;
   };
+  // A tolerance that is not a finite number > 0 must never reach the policy. Silently
+  // falling back to the default here was the SECOND half of the same bug the value check
+  // below closes: `{"defaultRelPct":"5%"}` froze the default while the operator believed
+  // their number was in force, and `{"defaultAbsFloorByDerivation":{"trajectory":"x"}}`
+  // was spread straight through into the frozen manifest, where it made every comparison
+  // NaN. Both are refusals now, named at the key that carries them.
+  //
+  // `>= 0`, NOT `> 0`, and the two doors say so identically. An earlier cut refused a zero here
+  // while `tolerancePolicyRefusals` accepted one at read, and the comment below claimed the two
+  // refuse the same things. A zero relative band is a legitimate, STRICTER choice (the per-metric
+  // override already accepts it, and there is a test asserting so), which is exactly the class of
+  // value a cap must never touch: refusals belong on what LOOSENS the gate.
+  if (doc.defaultRelPct !== undefined && !(typeof doc.defaultRelPct === "number" && Number.isFinite(doc.defaultRelPct) && doc.defaultRelPct >= 0)) {
+    return {
+      error: `--tolerances defaultRelPct must be a finite number >= 0 (got ${JSON.stringify(doc.defaultRelPct)}).`,
+    };
+  }
   const policy: FeelSnapshotTolerancePolicy = {
     defaultRelPct:
-      typeof doc.defaultRelPct === "number" && doc.defaultRelPct > 0
-        ? doc.defaultRelPct
+      doc.defaultRelPct !== undefined
+        ? (doc.defaultRelPct as number)
         : DEFAULT_SNAPSHOT_TOLERANCES.defaultRelPct,
     defaultAbsFloorByDerivation: {
       ...DEFAULT_SNAPSHOT_TOLERANCES.defaultAbsFloorByDerivation,
@@ -295,9 +316,31 @@ async function readTolerances(
       if (!knownMetricIds.has(id)) {
         return { error: `--tolerances overrides unknown metric '${id}' (not in the candidate measurements)` };
       }
+      // Refuse-on-unknown INSIDE the entry too. `{"perMetric":{"runSpeed":{"relPCT":0.5}}}`
+      // previously parsed, contributed nothing, and froze a lockfile whose override the
+      // operator believed was in force: the same failure the top-level key check exists to
+      // prevent, one level down.
+      const override = doc.perMetric[id] as Record<string, unknown>;
+      if (typeof override !== "object" || override === null || Array.isArray(override)) {
+        return { error: `--tolerances perMetric.${id} must be an object of { relPct?, abs? }` };
+      }
+      const unknownOverrideKeys = Object.keys(override).filter((k) => !TOLERANCE_OVERRIDE_KEYS.has(k));
+      if (unknownOverrideKeys.length > 0) {
+        return {
+          error:
+            `--tolerances perMetric.${id} has unrecognized key(s): ${unknownOverrideKeys.join(", ")}. ` +
+            'Expected { relPct?, abs? }, e.g. {"perMetric":{"jumpApex":{"abs":0.1}}}.',
+        };
+      }
     }
     policy.perMetric = doc.perMetric;
   }
+  // THE VALUE CHECK, over the assembled policy rather than the raw document, so approve
+  // refuses exactly what `verifySnapshotIntegrity` would refuse at read time. Without it a
+  // typo'd tolerance freezes into the manifest and every later comparison silently matches
+  // (demonstrated: `runSpeed: 2.816 -> 99999 (delta +99996.1839, tolerance NaN) ok`, exit 0).
+  const valueRefusals = tolerancePolicyRefusals(policy, "--tolerances");
+  if (valueRefusals.length > 0) return { error: valueRefusals.join("; ") };
   return policy;
 }
 
@@ -363,6 +406,18 @@ async function runSnapshotApprove(cli: SnapshotCliArgs): Promise<number> {
     };
   }
 
+  // THE MAGNITUDE BOUND AT THE APPROVE DOOR (A2). The same predicate `verifySnapshotIntegrity`
+  // runs at read, over the metrics about to be frozen, so a vacuous band never enters the anchor
+  // in the first place. It has to run HERE rather than inside `readTolerances`: the absolute half
+  // of `max(abs, relPct * |baseline|)` is in the metric's native unit and can only be judged
+  // against the baselines this approve is freezing, which `readTolerances` has never seen.
+  const magnitudeRefusals = toleranceMagnitudeRefusals(metrics, tolerancePolicy, "--tolerances");
+  if (magnitudeRefusals.length > 0) {
+    console.error(`${TAG} REFUSED: a tolerance this wide is not a looser gate, it is no gate:`);
+    for (const r of magnitudeRefusals) console.error(`${TAG}   - ${r}`);
+    return 2;
+  }
+
   let capturedAt = nowIso();
   try {
     const staged = JSON.parse(await fs.readFile(path.join(candidateDir, "candidate-report.json"), "utf-8"));
@@ -399,6 +454,11 @@ async function runSnapshotApprove(cli: SnapshotCliArgs): Promise<number> {
     `${TAG} snapshot APPROVED: ${Object.keys(manifest.metrics).length} metric(s) frozen (${verifiedCount} verified)` +
       (cli.note ? ` with note "${cli.note}"` : ""),
   );
+  // THE CONSENT SENTENCE, at the surface that establishes the band (the trace-tolerance
+  // precedent: blindness a human chose is stated where it is chosen, and again everywhere it is
+  // used). Silent for a default-tolerance snapshot, which is most of them.
+  const consent = widenedToleranceConsentLine(manifest.metrics, manifest.tolerancePolicy);
+  if (consent) console.error(`${TAG} ${consent}`);
   console.error(`${TAG} drift gate: \`loombridge verify --snapshot --workspace ${cli.workspace}\``);
   return 0;
 }

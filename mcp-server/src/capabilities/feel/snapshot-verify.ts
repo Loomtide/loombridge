@@ -29,6 +29,7 @@ import {
   rederiveView,
   sha256,
   verifySnapshotIntegrity,
+  widenedToleranceConsentLine,
   type FeelSnapshotManifest,
 } from "./snapshot-manifest.js";
 import {
@@ -188,12 +189,28 @@ export async function runVerifySnapshot(args: RunVerifySnapshotArgs): Promise<nu
   const currentDir = paths.snapshotCurrentDir;
 
   const integrity = await verifySnapshotIntegrity(currentDir);
+  // A TAMPERED ANCHOR IS NOT AN ABSENT ONE, and the two need different words. Both exit 2, so no
+  // gate moves here, but `loadSnapshotManifest` returns null for a manifest whose SHAPE is
+  // refused (a `tolerancePolicy: []`, a half-stamped portable pair), and reporting that as "no
+  // approved feel snapshot: nothing to grade" told an operator to create a snapshot that is
+  // already on disk, and described a hand-edited anchor as an empty workspace. `snapshot status`
+  // has drawn this distinction since `manifestRefused` existed; this surface had not.
+  if (integrity.manifestRefused) {
+    console.error(`${TAG} the approved feel snapshot at ${currentDir} is present but REFUSED:`);
+    for (const f of integrity.failures) console.error(`${TAG}   - ${f}`);
+    console.error(`${TAG} re-capture and re-approve to restore a trustworthy baseline: \`loombridge feel snapshot capture\`.`);
+    return 2;
+  }
   if (!integrity.manifest) {
     console.error(`${TAG} no approved feel snapshot at ${currentDir}: nothing to grade.`);
     console.error(`${TAG} create one: \`loombridge feel snapshot capture\` then \`loombridge feel snapshot approve\`.`);
     return 2;
   }
   const manifest: FeelSnapshotManifest = integrity.manifest;
+  // THE CONSENT SENTENCE, at the surface that GRADES against the widened band (the trace
+  // precedent: stated where it is chosen, and again everywhere it is used).
+  const consentLine = widenedToleranceConsentLine(manifest.metrics, manifest.tolerancePolicy);
+  if (consentLine) console.error(`${TAG} ${consentLine}`);
   const manifestPath = path.join(currentDir, FEEL_SNAPSHOT_MANIFEST);
   const manifestSha256 = sha256(await fs.readFile(manifestPath));
 

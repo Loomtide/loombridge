@@ -45,7 +45,7 @@ import type { GenrePromotionReport } from "../genre/genre-contract/promote.js";
 import { readGenrePromotionReport } from "../genre/promotion-report.js";
 import { inspectContractPresence, noContractRefusal } from "../../domain/contract-presence.js";
 import { assertValidAcceptanceContract } from "./validator.js";
-import { SFX_GATE_NAMES } from "./run-gates.js";
+import { SFX_GATE_NAMES, contractCoverageRefusals, sliceCaptureManifestEntries } from "./run-gates.js";
 import { unifiedScopedReportPath, unifiedVerifyReportPath } from "./unified/report.js";
 import {
   deriveEvidenceClassesFromUntrusted,
@@ -241,6 +241,14 @@ export interface DiskDesignTargetFacts {
   pngSha256?: string | null;
   /** True when the current hero-shot bytes still match the frozen hash. */
   frozenMatches: boolean;
+  /**
+   * THE META'S OWN RECORD OF ITS APPROVAL (B2). `setDesignTarget` writes `approvedAt: null` for a
+   * draft and `approveDesignTarget` stamps a timestamp, so a meta carrying one while its status
+   * says otherwise is a target that WAS approved and is not any more. That transition is the
+   * thing the refusal is about; a list of bad status words would only have named the one the
+   * attacker happened to type.
+   */
+  approvedAt?: string | null;
 }
 
 /**
@@ -268,14 +276,28 @@ export function diskTruthDesignTargetRefusals(
   design: DiskDesignTargetFacts,
   verdict: VerdictLike | null,
   stateDesignTarget?: string | null,
+  stateRecordMissing?: boolean,
 ): string[] {
   if (design.status !== "approved") {
-    if (stateDesignTarget === "approved" && verdict?.designTarget?.status !== "approved") {
-      return [
-        "STATE says Design Target is `approved` but the on-disk design target is missing/unapproved and the verdict carries no approved `designTarget` binding — cannot prove hero-shot fidelity was evaluated; restore the target or re-run `loombridge verify` against the approved target (plan §3c/§P0.1)",
-      ];
-    }
-    return [];
+    // THE SAME TRANSITION RULE AS THE SLICE TWIN (B2). This branch used to read STATE alone, so a
+    // target DOWNGRADED to `draft` with the STATE record scrubbed refused nothing here either.
+    // The verdict's own claim stays a SEPARATE condition rather than a claim row: on this path a
+    // verdict that still binds the approved target keeps `checkHeroShotFidelity` running, so the
+    // fidelity review is not skipped and refusing here as well would double-report it.
+    if (verdict?.designTarget?.status === "approved") return [];
+    const claims = designTargetApprovalClaims(design, {
+      stateDesignTarget,
+      stateRecordMissing,
+      verdictClaimsApproved: false,
+      orphanedDesignArtifacts: false,
+    });
+    if (claims.length === 0) return [];
+    return [
+      `the on-disk Design Target is \`${design.status}\` but ${claims.join(", and ")}, and the verdict ` +
+        "carries no approved `designTarget` binding: cannot prove hero-shot fidelity was evaluated; " +
+        "re-approve the target you certified against (`loombridge target approve`), restore it, or re-run " +
+        "`loombridge verify` against the approved target (plan §3c/§P0.1)",
+    ];
   }
   if (design.kind === "composition-reference") return [COMPOSITION_REFERENCE_REFUSAL];
 
@@ -1361,9 +1383,178 @@ export function validateVlmReviewFindingsShape(input: unknown): string[] {
   return issues;
 }
 
-async function checkSliceRollupHeroShotFidelity(paths: LoombridgePaths, planGenre: string): Promise<string[]> {
+/**
+ * The evidence, independent of the on-disk `design-target.json`, that this project HAS an
+ * approved Design Target. Each field is a separate artifact written by a separate step, so
+ * scrubbing one does not scrub the others.
+ */
+export interface SliceDesignTargetEvidence {
+  /** STATE's sticky record (`plan`/`target approve` write it; deleting the meta leaves it). */
+  stateDesignTarget?: string | null;
+  /**
+   * True when a STATE file EXISTS and carries no `designTarget` key at all, while a design-target
+   * meta sits on disk (B2). `setDesignTarget` and `approveDesignTarget` both write the meta and
+   * the STATE record in one call, so a meta with no record beside it is the same "bundle taken
+   * apart" shape as `orphanedDesignArtifacts`, one level up. Undefined when there is no STATE at
+   * all: a project with no supervisor file is not a project that scrubbed one.
+   */
+  stateRecordMissing?: boolean;
+  /** The whole-game verdict's own claim (a full `verify` writes one for a sliced project too). */
+  verdictClaimsApproved: boolean;
+  /** Hero-shot ARTIFACTS still sitting in `.loombridge/design/` with no approval record beside them. */
+  orphanedDesignArtifacts: boolean;
+  /**
+   * A PER-SLICE verdict's own `designTarget.status` (B2). `verify --slice` reads `designStatus`
+   * and stamps it into every verdict it mints, and `isSliceDone` cannot certify a slice whose
+   * verdict is missing, so this is the one signal in the union the attacker cannot simply delete:
+   * removing it removes the proof the roll-up exists to roll up.
+   */
+  sliceVerdictClaimsApproved?: boolean;
+}
+
+/**
+ * THE EVIDENCE, IN SENTENCES, THAT THIS PROJECT'S DESIGN TARGET WAS EVER APPROVED (B2).
+ *
+ * ONE predicate, shared by the whole-game and slice doneness paths, because both were asking the
+ * same question with different (and differently incomplete) answers.
+ *
+ * WHAT THE FIRST CUT GOT WRONG. It refused a target that was ABSENT and read the status field to
+ * decide, so a target that was PRESENT but `draft` tripped nothing: `orphanedDesignArtifacts` is
+ * scoped to a MISSING meta (a draft has one), the whole-game verdict does not exist on a
+ * slice-planned project that never ran one, and STATE was the only remaining signal. Two
+ * hand-edits, nothing deleted, took the fixture from `exit 1 / hero-shot-fidelity: REFUSE` to
+ * `exit 0 / hero-shot faithful`. Refusing a LIST of bad statuses would have moved the hole to
+ * whichever word was not on the list, so the rule here is about the TRANSITION instead: evidence
+ * of approval refuses a target that is not approved now, whatever it currently calls itself.
+ *
+ * WHAT EACH SIGNAL COSTS AN ATTACKER, stated rather than assumed, because a union of writable
+ * values is a union of writable values however long it is:
+ *
+ *  - `approvedAt` in the meta: one more field in the file they are already editing. It is here
+ *    because it makes the CHEAPEST edit (change one word) self-refuting, not because it is hard
+ *    to remove.
+ *  - STATE's record, present-and-approved OR absent-entirely: two different files must now agree
+ *    on the same lie, and "delete the key" and "keep the key" are both covered, so the edit has
+ *    to be a specific non-approved word rather than any scrub.
+ *  - the whole-game verdict's claim: a third file, and one the rest of the roll-up reads.
+ *  - orphaned hero-shot artifacts: structural, not a value. Deleting the png is the only way to
+ *    silence it, and that deletes the frozen anchor itself.
+ *  - the per-slice verdict's claim: the one that costs something the attacker WANTS. The verdict
+ *    is the slice's proof; delete it and `isSliceDone` refuses the slice outright.
+ *
+ * NONE of these is recomputable from something the attacker does not control, and that is the
+ * honest answer for this door: unlike a capture manifest or a tolerance, "was this target ever
+ * approved" leaves no artifact that can be re-derived from bytes. What the union buys is that the
+ * lie has to be told consistently in four files at once, and one of them cannot be deleted.
+ */
+export function designTargetApprovalClaims(
+  design: Pick<DiskDesignTargetFacts, "status" | "approvedAt">,
+  evidence: SliceDesignTargetEvidence,
+): string[] {
+  return [
+    evidence.stateDesignTarget === "approved" ? "STATE records `designTarget: approved`" : null,
+    evidence.verdictClaimsApproved ? "build-verdict.json claims an approved `designTarget`" : null,
+    evidence.orphanedDesignArtifacts
+      ? "hero-shot artifacts are still in `.loombridge/design/` with no approval record beside them"
+      : null,
+    typeof design.approvedAt === "string" && design.approvedAt.length > 0
+      ? "the design-target meta records its own approval (`approvedAt`), so this target was approved and then downgraded"
+      : null,
+    evidence.stateRecordMissing
+      ? "a design-target meta is on disk but STATE carries no `designTarget` record at all, and the one command that writes either writes both"
+      : null,
+    evidence.sliceVerdictClaimsApproved
+      ? "a slice verdict this roll-up certifies claims an approved `designTarget`"
+      : null,
+  ].filter((claim): claim is string => claim !== null);
+}
+
+/**
+ * Disk-truth Design-Target refusal for the SLICE roll-up (§3c): the twin of
+ * `diskTruthDesignTargetRefusals` on the whole-game path.
+ *
+ * THE HOLE THIS CLOSES, and why the polarity was the tell. Both slice-path fidelity checks
+ * opened with `if (design.status !== "approved") return []`, and `designStatus` resolves a
+ * DELETED `design-target.json` to `status: "missing"`. So a CORRUPT target refused (`readMeta`
+ * rethrows anything that is not ENOENT, and the CLI reports it as a fatal) while a DELETED one
+ * certified. Deleting is strictly easier than corrupting, so the cheaper attack was the one
+ * that worked. Demonstrated on one fixture, changing nothing but that file:
+ *
+ *   target PRESENT : exit 1, `hero-shot-fidelity: REFUSE`
+ *   target CORRUPT : exit 1, fatal (JSON parse)
+ *   target DELETED : exit 0, `hero-shot-fidelity: PASS`,
+ *                    `OK — 1/1 slices approved + ... + hero-shot faithful`
+ *
+ * ...while STATE still recorded `designTarget: approved` throughout.
+ *
+ * WHAT THE NEW REFUSAL DEPENDS ON, and how manipulable that is. It fires on the UNION of three
+ * independently-written signals, so no single deletion silences it:
+ *
+ *  - STATE's sticky `designTarget` record. Hand-editable, which is exactly why it is not alone
+ *    here (`artModeRefusals` already leans on it for the same TOCTOU quadrant).
+ *  - the whole-game `build-verdict.json`'s own `designTarget` claim. A different file, written
+ *    by `verify`, and one an attacker WANTS to keep because the rest of the roll-up reads it.
+ *  - hero-shot ARTIFACTS still present in `.loombridge/design/` with the approval record gone.
+ *    `setDesignTarget` writes the meta and the frozen png together, so a png with no meta at all
+ *    is a bundle somebody took apart. Scoped to `status: "missing"` (no meta) rather than "not
+ *    approved", so a legitimately DRAFT target, which has a meta, is untouched.
+ *
+ * A project that genuinely never had a Design Target trips none of the three, which is what
+ * keeps gray-box and `--allow-ungrounded-prototype` builds green.
+ */
+export function sliceDiskTruthDesignTargetRefusals(
+  design: DiskDesignTargetFacts & { hasPng?: boolean; hasHtml?: boolean },
+  evidence: SliceDesignTargetEvidence,
+): string[] {
+  if (design.status === "approved") return [];
+  const claims = designTargetApprovalClaims(design, evidence);
+  if (claims.length === 0) return [];
+  return [
+    `the on-disk Design Target is \`${design.status}\` but ${claims.join(", and ")}. The slice roll-up ` +
+      "cannot evaluate hero-shot fidelity against a target that is not APPROVED, and a target that is " +
+      "absent, corrupt, or downgraded is a REFUSAL rather than a skipped check (none of the three may be " +
+      "the cheaper path). Re-approve the target you certified against " +
+      "(`loombridge target approve`), restore `.loombridge/design/design-target.json`, or " +
+      "`loombridge target set --image <frame> --kind rendered-unity-frame --approve` to re-freeze it " +
+      "(plan §3c/§P0.1)",
+  ];
+}
+
+/**
+ * Does ANY per-slice verdict this roll-up certifies claim an approved Design Target? (B2)
+ *
+ * The verdicts are read through the same `slice.proof.verdictPath` `isSliceDone` reads, so this
+ * asks about the exact files the certificate rests on. A verdict that cannot be read contributes
+ * nothing here (its absence is already a per-slice refusal with a better message), which keeps
+ * this signal purely additive.
+ */
+async function anySliceVerdictClaimsApprovedTarget(plan: SlicePlan, paths: LoombridgePaths): Promise<boolean> {
+  for (const slice of plan.slices) {
+    const verdictPath = slice.proof?.verdictPath;
+    if (!verdictPath) continue;
+    const abs = path.isAbsolute(verdictPath) ? verdictPath : path.resolve(paths.root, verdictPath);
+    try {
+      const verdict = JSON.parse(await fs.readFile(abs, "utf-8")) as VerdictLike;
+      if (verdict?.designTarget?.status === "approved") return true;
+    } catch {
+      // Unreadable/absent: `isSliceDone` owns that refusal; this signal stays additive.
+    }
+  }
+  return false;
+}
+
+async function checkSliceRollupHeroShotFidelity(
+  paths: LoombridgePaths,
+  planGenre: string,
+  evidence: SliceDesignTargetEvidence,
+): Promise<string[]> {
   const design = await designStatus(paths);
-  if (design.status !== "approved") return [];
+  if (design.status !== "approved") {
+    return sliceDiskTruthDesignTargetRefusals(
+      { ...design, hasPng: design.hasPng, hasHtml: design.hasHtml },
+      evidence,
+    );
+  }
   if (!design.frozenMatches) {
     return ["approved Design Target changed since approval (frozen hash mismatch) — re-approve before certifying done"];
   }
@@ -1619,11 +1810,56 @@ export async function isSliceDone(slice: SliceEntry, paths: LoombridgePaths): Pr
       }
     }
 
+    // OMITTING THE FIELD MUST NOT BE CHEAPER THAN DECLARING IT. `proof.captureManifest ?? []`
+    // meant a slice whose captures were DECLARED and absent refused, while the same slice with
+    // the field omitted certified: `assertValidSlicePlan` accepts the omission (it is optional,
+    // and the closed-key check only rejects UNKNOWN keys), so nothing else noticed. Demonstrated
+    // on the real `doneness` path with one fixture and one deletion: declared-but-missing exits
+    // 1 with `missing slice captureManifest entries: s1/verify-manifest.json`; the field removed
+    // exits 0 with `s1: PASS`.
+    //
+    // `runSliceBuild` ALWAYS stamps the field (`captureManifest`, possibly `[]`), so an absent
+    // one is never something an honest build left behind: it is a hand-edited SLICES.json, or a
+    // proof minted by something that is not `build`. Either way it is not a proof.
+    if (proof.captureManifest === undefined) {
+      reasons.push(
+        "slice.proof.captureManifest is ABSENT: a proof that declares no captures is not a proof that " +
+          "the captures exist (`loombridge build` always stamps this field, empty or not); re-run " +
+          "`loombridge build` for this slice rather than hand-editing SLICES.json",
+      );
+    }
+
+    // AND THE DENOMINATOR WALK (the PR #88 rule applied to this path). Refusing only the ABSENT
+    // field would move the attack rather than close it: `captureManifest: []` is one character
+    // more work and produces the same vacuous pass. The honest expected set is recomputable from
+    // the slice's OWN declared gates via the same `sliceCaptureManifestEntries` that `build`
+    // mints from, so a manifest that no longer covers them is a shrunken anchor, not a smaller
+    // obligation. A slice whose gates genuinely have no captured-op file derives `[]` on both
+    // sides and is untouched (that is what `build` prints as "none — slice gates have no
+    // captured-op file").
+    let expectedEntries: string[] = [];
+    try {
+      expectedEntries = sliceCaptureManifestEntries(slice.id, slice.acceptance.gates);
+    } catch (error) {
+      reasons.push(
+        `slice captureManifest cannot be re-derived from this slice's gates: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+    const declaredEntries = proof.captureManifest ?? [];
+    const undeclared = expectedEntries.filter((entry) => !declaredEntries.includes(entry));
+    if (undeclared.length) {
+      reasons.push(
+        `slice.proof.captureManifest does not declare the capture(s) this slice's own gates require: ` +
+          `${undeclared.join(", ")} (re-run \`loombridge build\` to re-mint the proof; a smaller declared ` +
+          "manifest is not a smaller obligation)",
+      );
+    }
+
     // THE shared manifest predicate (`capture`, `status` and the whole-game
     // doneness path call the same one). A slice manifest is additionally scoped
     // to its own verify dir.
     const completeness = await checkCaptureManifest({
-      manifest: proof.captureManifest ?? [],
+      manifest: declaredEntries,
       verifyRoot: paths.verifyInputs,
       scopeRoot: getSliceVerifyDir(paths, slice.id),
     });
@@ -1731,7 +1967,15 @@ export async function wholeGameDonenessReasons(
   // `art.deferred` is true there is no approved Design Target (the contradiction
   // is refused above), so this is a no-op except for the STATE-mismatch safety
   // refusal — which still applies.
-  for (const r of diskTruthDesignTargetRefusals(design, verdict, state?.designTarget)) {
+  for (const r of diskTruthDesignTargetRefusals(
+    design,
+    verdict,
+    state?.designTarget,
+    // A STATE file that EXISTS and carries no `designTarget` key, while a meta sits on disk, is
+    // the scrub half of the B2 transition rule. `state === null` is no STATE at all, which is a
+    // fact about the project, not a scrub.
+    state !== null && state.designTarget === undefined && design.status !== "missing",
+  )) {
     if (!reasons.some((existing) => existing === r)) reasons.push(r);
   }
   for (const r of art.refusals) {
@@ -1891,6 +2135,28 @@ export async function evaluateSliceDoneness(
   // disk) applies.
   const design = await designStatus(paths);
   const rollupState = await readState(paths);
+  // Read the whole-game verdict BEFORE the art-mode resolution: a full `loombridge verify`
+  // writes `build-verdict.json` for a slice-planned project too, and its own `designTarget`
+  // claim is one of the independent signals that a Design Target was approved. The coverage
+  // block below reads the same object.
+  const wholeGameVerdict = await readVerdictIfPresent(paths.verdict);
+  const designTargetEvidence: SliceDesignTargetEvidence = {
+    stateDesignTarget: rollupState?.designTarget ?? null,
+    // The SCRUB half of the B2 transition rule: a meta on disk with no STATE record beside it.
+    // `rollupState === null` is a project with no supervisor file, not a scrubbed one.
+    stateRecordMissing:
+      rollupState !== null && rollupState.designTarget === undefined && design.status !== "missing",
+    verdictClaimsApproved: wholeGameVerdict?.designTarget?.status === "approved",
+    // `setDesignTarget` writes the meta and the frozen hero shot TOGETHER, so artifacts with
+    // no meta at all are a bundle that was taken apart, not a project that never had one.
+    // Scoped to `missing` (no meta) so a legitimately DRAFT target, which has a meta, is not
+    // caught by it.
+    orphanedDesignArtifacts: design.status === "missing" && (design.hasPng || design.hasHtml),
+    // The signal that costs the attacker something they want: `verify --slice` stamps the
+    // target's status into every verdict it mints, and `isSliceDone` refuses a slice whose
+    // verdict is missing, so this one cannot be silenced by deletion.
+    sliceVerdictClaimsApproved: await anySliceVerdictClaimsApprovedTarget(plan, paths),
+  };
   const art = artModeRefusals({
     contractArtMode: await readDeclaredArtMode(paths.acceptance),
     verdictArtMode: undefined,
@@ -1898,10 +2164,22 @@ export async function evaluateSliceDoneness(
     // No single whole-game verdict in the slice path; the sticky STATE record is
     // the run-bound claim (deleting the on-disk meta leaves STATE stale at
     // "approved"), so it closes the same TOCTOU quadrant for the slice rollup.
-    runtimeClaimsApprovedDesignTarget: rollupState?.designTarget === "approved",
+    //
+    // The verdict's claim and the orphaned artifacts join it for the same reason: art:deferred
+    // is INCOHERENT with any of the three, and without them, scrubbing STATE alone would flip
+    // `deferred` to true and take the fidelity roll-up (and the refusal below it) out of play.
+    //
+    // THE SAME UNION the refusal reads, through the same predicate (B2). Keeping two lists here
+    // is how the art-mode escape and the fidelity refusal drift apart: a signal added to one and
+    // not the other means scrubbing STATE flips the project to `deferred` and takes the whole
+    // fidelity roll-up, refusal included, out of play.
+    runtimeClaimsApprovedDesignTarget:
+      designTargetApprovalClaims(design, designTargetEvidence).length > 0,
   });
 
-  const fidelityReasons = art.deferred ? [] : await checkSliceRollupHeroShotFidelity(paths, plan.genre);
+  const fidelityReasons = art.deferred
+    ? []
+    : await checkSliceRollupHeroShotFidelity(paths, plan.genre, designTargetEvidence);
   if (fidelityReasons.length) ok = false;
   const assetFidelityReasons = art.deferred ? [] : await checkSliceRollupAssetSourceFidelity(paths);
   if (assetFidelityReasons.length) ok = false;
@@ -1929,7 +2207,6 @@ export async function evaluateSliceDoneness(
   // fact about the path rather than a suppressed scope. But a block that is PRESENT and DISAGREES
   // with disk is a forged claim on either path, and is refused on both.
   const coverage = deriveGenreCoverage({ genre: plan.genre, promotion: await readGenrePromotionReport(paths) });
-  const wholeGameVerdict = await readVerdictIfPresent(paths.verdict);
   const coverageRefusals = genreCoverageRefusals({
     resolved: coverage,
     claimed: wholeGameVerdict?.genreCoverage,
@@ -1954,6 +2231,28 @@ export async function evaluateSliceDoneness(
         "from; re-run `loombridge plan` at one genre with --force, or restore the contract)",
     );
   }
+  // CONTRACT COVERAGE ON THE DONENESS DOOR (C2). The gate list a slice declares is the
+  // denominator C bound `captureManifest` to, and the note C shipped with said that shrinking
+  // that list costs the attacker "the gate coverage the roll-up separately grades". On THIS path
+  // it cost nothing: `contractCoverageRefusals` lives under `verify --rollup`, and nothing here
+  // called it. So gates and captureManifest could be shrunk TOGETHER, stayed self-consistent
+  // under C's re-derivation, and the certificate printed while four capture files sat deleted.
+  //
+  // Demonstrated on a project with a real `ACCEPTANCE.json`: control exit 0; captures deleted
+  // exit 1; gates+manifest shrunk with the contract UNTOUCHED, exit 0.
+  //
+  // The union is over APPROVED slices, matching the roll-up: an unapproved slice is already a
+  // per-slice refusal above, and reporting every contract section as uncovered on a half-built
+  // project would bury that. `requiredContentSections` reads only sections that DECLARE content,
+  // so a contract that asks for nothing refuses nothing.
+  const approvedSlices = plan.slices.filter((s) => s.state === "approved");
+  if (approvedSlices.length > 0) {
+    const gateUnion = new Set<string>();
+    for (const s of approvedSlices) for (const gate of s.acceptance.gates) gateUnion.add(gate);
+    coverageRefusals.push(
+      ...contractCoverageRefusals({ acceptance: await readAcceptanceContract(paths.acceptance), gates: gateUnion }),
+    );
+  }
   if (coverageRefusals.length) ok = false;
 
   // The unified `verify` roll-up (H3) applies to BOTH doneness paths: a slice-planned
@@ -1972,6 +2271,24 @@ async function declaredAcceptanceGenre(acceptancePath: string): Promise<string |
     return typeof doc.genre === "string" && doc.genre.length > 0 ? doc.genre : null;
   } catch {
     return null;
+  }
+}
+
+/**
+ * The on-disk acceptance contract as LOOSE JSON, or `{}` when there is none (C2).
+ *
+ * Loose on purpose, and the same choice `requiredContentSections` documents: this feeds the
+ * coverage question ("does the plan walk what the contract declares?"), which is worth asking of
+ * a contract that would not pass full schema validation. An absent or unparseable contract
+ * declares nothing, so it refuses nothing: a project with no contract is not a project whose
+ * contract went uncovered. (`acceptanceContractValid` below is the separate, stricter question,
+ * and it has its own refusal.)
+ */
+async function readAcceptanceContract(acceptancePath: string): Promise<unknown> {
+  try {
+    return JSON.parse(await fs.readFile(acceptancePath, "utf-8")) as unknown;
+  } catch {
+    return {};
   }
 }
 

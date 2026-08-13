@@ -712,6 +712,102 @@ fix to a rule every gate reads.
   names at least one graded gate. `tests` stays permanently unanchored, and `slices` already
   derived from the run.
 
+### And then it moved again: PRESENT BUT VACUOUS
+
+An adversarial review of the refuse-on-absent wave found the same shape one step to the right.
+Every predicate that wave added asks whether the bound input is THERE and is the RIGHT TYPE.
+None of them asks whether the value it holds still CONSTRAINS anything. So the identical false
+green was reachable by supplying a legal value that means nothing: a tolerance of `1e6`, a
+design target downgraded rather than deleted, a gate list shrunk rather than a manifest emptied,
+a list entry dropped rather than a field blanked. Four were demonstrated end to end against the
+real engines and all four are closed here.
+
+**The rule this wave applies everywhere:** a bound value needs a RECOMPUTABLE BOUND, not just a
+type. That is the counting wave's rule (an `expected` must be recomputable from artifacts on
+disk) turned on the values themselves.
+
+- **A2: the tolerance was bounded for type and never for magnitude.** `tolerancePolicyRefusals`
+  accepted any finite `>= 0`, and there was no upper bound at all. The same +99996 drift that
+  exits 1 under the intact policy exited 0 under `defaultRelPct: 1e6`, with `integrity.ok: TRUE`:
+  the tampered anchor positively certified itself, which is worse than the silence A1 removed.
+  Also reachable with `1e308`, with `defaultAbsFloorByDerivation.trajectory = 1e9`, with
+  `perMetric.<id>.abs = MAX_VALUE`, and through the APPROVE door with no hand-edit at all. The
+  precedent was already in the repo pointing the other way: the trace baseline caps
+  `driftTolerance` at `MAX_DRIFT_TOLERANCE` inside `loadTraceBaselineManifest`, the one reader
+  every grader goes through. Mirrored here in TWO halves, because one constant cannot bound both
+  terms of `max(abs, relPct * |baseline|)`: `relPct` is dimensionless and is capped by the
+  constant `MAX_SNAPSHOT_REL_PCT` (0.5); `abs` is in the metric's native unit and is bounded
+  against the FROZEN BASELINE instead, `applied <= max(MAX_SNAPSHOT_REL_PCT * |baseline|, the
+  shipped floor for the derivation)`. The shipped floor keeps the ceiling non-zero for a metric
+  that legitimately measures near zero, and makes the DEFAULT policy provably inside the cap for
+  every baseline value. Both doors run the same predicates (approve and read), and every surface
+  that grades against a widened band prints the consent sentence naming how wide it is.
+- **B2: a DOWNGRADED design target certified, and the first cut enshrined it in a test.** B
+  refused a target that was ABSENT and read the status field to decide, so a target that is
+  PRESENT but `draft` tripped none of the three signals: `orphanedDesignArtifacts` is scoped to a
+  MISSING meta, the whole-game verdict does not exist on a slice-planned project that never ran
+  one, and STATE is one hand-edit away. Two edits, nothing deleted, took a fixture from `exit 1 /
+  hero-shot-fidelity: REFUSE` to `exit 0 / hero-shot faithful`, and the wave's own false-failure
+  test asserted `draft.code === 0`, so the escape hatch shipped as an assertion. Refusing a LIST
+  of bad statuses would only move the hole to the word not on the list, so the rule is about the
+  TRANSITION: any evidence that this target was EVER approved refuses a target that is not
+  approved NOW, whatever it currently calls itself. Three signals join the union, through ONE
+  predicate (`designTargetApprovalClaims`) now shared by the whole-game and slice paths, which
+  had the same hole and different partial answers: the meta's own `approvedAt`, a STATE that
+  carries no `designTarget` record while a meta sits on disk, and any PER-SLICE verdict's own
+  `designTarget` claim. The last is the one that costs something: the verdict is the slice's
+  proof, and deleting it refuses the slice outright.
+- **C2: shrinking the gate list cost nothing on the door that prints the certificate.** C's own
+  known-open said the cost of shrinking `slice.acceptance.gates` was "the gate coverage the
+  roll-up separately grades". On the doneness path that price was zero: `contractCoverageRefusals`
+  lives in `slice-rollup.ts` under `verify --rollup`, and `evaluateSliceDoneness` never called it.
+  So gates and `captureManifest` could be shrunk TOGETHER, stayed self-consistent under C's
+  re-derivation, and the certificate printed with four capture files deleted. `doneness` now binds
+  the union of the APPROVED slices' gate lists to the on-disk `ACCEPTANCE.json` through the same
+  predicate the verify door uses. This is F3's territory entered from the doneness side.
+- **D2: D converted "delete a field" into "delete a list entry".** The drift row became
+  unconditional on the observation EXISTING, and stayed conditional on the observation existing at
+  all, so dropping the whole entry (or the whole array) was cheaper and still passed, AND the
+  wrapped input still counted as GRADED evidence that the run measured the game. Closed with PR
+  #88's denominator rule: the expected observations are recomputable as `manifest.assets`, walked
+  by the same reader, with the reverse walk beside it (an observation of an asset the approved
+  manifest never declared is a refusal). The staged-document carve-out survives, NARROWED to what
+  its own argument covers: a BARE `ASSET_MANIFEST.json` carries no observations by construction and
+  owes none. Which shape the gate read is decided in `run-gates.ts` from the bytes on disk and
+  injected AFTER the input is spread, so a staged input can never declare its own exemption.
+
+**Whether each new bound is recomputable, or one more value the attacker can write**, asked per
+fix because the previous two waves each MOVED the false green by not asking:
+
+- **A2 (relPct cap): a code constant.** Not attacker-writable, not recomputable either; it is a
+  product decision about what a gate is.
+- **A2 (effective-tolerance ceiling): RECOMPUTABLE.** It is arithmetic over the frozen baseline,
+  which the same reader has already bound to the measurements file's sha256 and to its own §0
+  re-derivation, and over a shipped floor that lives in code. Raising the ceiling means moving the
+  value the snapshot was approved AS.
+- **B2: NOT recomputable, and stated as such.** "Was this target ever approved" leaves no artifact
+  that can be re-derived from bytes, so the union is writable values all the way down. What it
+  buys is that the lie must be told consistently in four files, one of which (the slice verdict)
+  cannot be deleted without refusing the slice.
+- **C2: RECOMPUTABLE.** The expected gate coverage comes from `ACCEPTANCE.json`, which is not a
+  claim about the run but the specification the run is measured against, and doneness already
+  refuses a contract whose genre disagrees with the roadmap.
+- **D2: RECOMPUTABLE.** `manifest.assets` in the approved manifest is the denominator, walked by
+  the same code path that reads the observations.
+
+#### Known-open after this wave
+
+- **The B2 union is still a union of writable values.** Four coordinated edits across four files
+  buy the certificate. The honest close needs an artifact that records approval and cannot be
+  rewritten with the approval it records, which none of today's files is.
+- **The magnitude cap does not bind `derivation`.** A hand-edited manifest can relabel a metric's
+  derivation to borrow a larger shipped floor. The contract's own recipe re-derives it and the
+  contract is sha-pinned, so the check is available; it is not written here because every route
+  to it is bounded by the relative half of the ceiling anyway (the shipped floors are all small).
+- **C2 grades the APPROVED slices' union only.** A project with no approved slice is refused for
+  other reasons first, so the coverage question is not asked there, which is right for noise and
+  is a gap if that ever stops being true.
+
 ### Then the attack moved: SHRINKING the denominator
 
 An adversarial review of the wave above attacked the new mechanism rather than the gates, and
@@ -758,6 +854,81 @@ the same code path that reads it.
 - **F5: SFX gate ids are in `SUPPORTED_GATE_IDS` but not `GATE_SPECS`**, so an SFX-only slice
   yields `expected: 0` and a vacuous coverage check. The re-grade divergence check appears to
   cover it; confirm before adding a second mechanism.
+
+### And the wave before that one: SKIPPING ON ABSENT
+
+The counting wave above closed "the gate ran on a subset". This wave closes the older and
+plainer class beside it: **an absent or malformed input made a check SKIP rather than refuse.**
+Four were demonstrated end to end and all four are closed here. The house rule they all violate
+is stated in `CLAUDE.md`: a gate predicate must REFUSE when a bound field is absent.
+
+- **A. A non-numeric tolerance made every feel metric match forever.**
+  `resolveTolerance` computes `max(abs, relPct * |baseline|)`; `Math.max` returns NaN if any
+  argument is NaN, and every comparison against NaN is false, so `|delta| > applied` was false
+  for every delta. Two ORDINARY routes reached it: an operator typo at approve
+  (`--tolerances '{"perMetric":{"runSpeed":{"relPct":"5%"}}}'`, whose KEYS were validated and
+  whose VALUES were not), and deleting the single key `tolerancePolicy.defaultRelPct` from a
+  frozen `manifest.json` (which nothing covered, because the manifest carries no self-hash).
+  Both produced `runSpeed: 2.816 -> 99999 (delta +99996.1839, tolerance NaN) ok`, `clean`,
+  exit 0. Now refused at BOTH doors a tolerance can enter through, by one predicate: at approve
+  in `readTolerances`, and at read in `verifySnapshotIntegrity`, beside the reverse walk, so one
+  place owns manifest trust. `compareSnapshot`'s drift test is additionally written fail-closed
+  (`!(|delta| <= applied + 1e-9)`), identical for every finite tolerance, DRIFT for a NaN one.
+- **B. The slice path had no disk-truth Design Target guard, and the polarity was backwards.**
+  Both slice-path fidelity checks opened with `if (design.status !== "approved") return []`, and
+  a DELETED `design-target.json` resolves to `status: "missing"`. So a CORRUPT target refused
+  (`readMeta` rethrows anything that is not ENOENT) while a DELETED one certified: same fixture,
+  target present `exit 1 / hero-shot-fidelity: REFUSE`, target deleted
+  `exit 0 / hero-shot-fidelity: PASS / OK — … + hero-shot faithful`, with STATE still recording
+  `designTarget: approved`. Deleting is strictly easier than corrupting, so the cheaper attack
+  was the one that worked. `sliceDiskTruthDesignTargetRefusals` now refuses on the UNION of three
+  independently-written signals (STATE's sticky record, the whole-game verdict's own claim, and
+  hero-shot artifacts left in `.loombridge/design/` with no approval record beside them), so no
+  single deletion silences it, and the same union feeds `runtimeClaimsApprovedDesignTarget` so
+  scrubbing STATE cannot flip the project to `art:deferred` to skip the roll-up entirely.
+- **C. Omitting `captureManifest` certified where declaring it refused.** `isSliceDone` read
+  `proof.captureManifest ?? []`, and `assertValidSlicePlan` accepts the omission (optional field;
+  the closed-key check only rejects UNKNOWN keys). Declared-and-absent exited 1
+  (`missing slice captureManifest entries: s1/verify-manifest.json`); the field removed exited 0.
+  Refusing only the ABSENT field would have moved the hole one character (`captureManifest: []`
+  certified too), so the expected set is RE-DERIVED from the slice's own declared gates through
+  the same `sliceCaptureManifestEntries` that `build` mints from. That is the counting wave's
+  rule applied here: the denominator is recomputable from disk by the code path that reads it.
+- **D. An observation that omitted the bound id skipped the drift check.** The literal
+  anti-pattern, `if (observed?.registryAssetId && manifest !== observed.registryAssetId)`, on both
+  the registry and generated branches. Demonstrated on the real `runGates` path: an honest
+  observation passes, a wrong `registryAssetId` FAILS the gate, and the same record with the field
+  deleted PASSES. The drift row is now emitted whenever an observation exists, pass or fail, so
+  the comparison is counted rather than conditionally present.
+
+**What each new refusal now depends on** is the question this wave had to answer for itself,
+because the previous one moved the false green instead of removing it. A (both routes) depends
+only on arithmetic over the frozen manifest's own bytes. C depends on the slice's declared gates,
+which an attacker CAN shrink, but only by deleting the gates the slice claims to have passed,
+which the roll-up's coverage checks already read. B depends on a union of three artifacts rather
+than one. D depends on the observed record still being agent-authored, so it makes lying
+EXPLICIT rather than free: an absent field is now a refusal, and a matching-but-false id is a
+stated claim the capture path can later bind.
+
+#### Known-open after this wave
+
+- **A declared `captureManifest` can still be shrunk by shrinking the slice's gate list.** The
+  re-derivation binds the manifest to `slice.acceptance.gates`, so editing both together stays
+  self-consistent. What that costs the attacker is the gate coverage the roll-up separately
+  grades; closing it fully means binding the gate list to the contract, which is F3's territory.
+  **CLOSED by C2 above, and the sentence above was wrong about the price:** on the doneness path
+  the roll-up's coverage check was never called, so shrinking the gate list cost nothing at all on
+  the door that prints the certificate.
+- **`checkSliceRollupAssetSourceFidelity` still returns `[]` on a non-approved target.** It is no
+  longer reachable as a false green (the hero-shot refusal fires first on the same facts), so it
+  is left with one answer per question rather than two.
+- **"No observation at all" is still a PASS on the asset-source gate.** Deliberate: `verify`
+  stages the bare `ASSET_MANIFEST.json` into the inputs dir itself, so failing it would
+  manufacture a tier-1 game defect out of a harness gap on every ordinary project. The
+  staged-document marker already keeps that copy out of `gradedGates`, which is the honest answer
+  to "did this run measure the game". **NARROWED by D2 above:** the carve-out was wider than its
+  own argument. It now applies to the BARE staged declaration only, which is the only shape the
+  argument is about; a CAPTURE owes one observation per declared manifest asset.
 
 ## Out of scope
 

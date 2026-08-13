@@ -128,7 +128,7 @@ test("3d-shooter primitive fallback is recorded as a placeholder, never approved
   // The asset-source fidelity gate REFUSES the placeholder binding — proving the
   // fallback is never laundered into an approved-green asset, while the all-real
   // siblings still pass.
-  const report = evaluateAssetSourceFidelity({ manifest: result });
+  const report = evaluateAssetSourceFidelity({ manifest: result, stagedDocument: true });
   const playerBinding = report.checks.find((check) => check.id === "asset-source.binding.player_model");
   assert.equal(playerBinding?.status, "fail", "placeholder player binding must fail the fidelity gate");
   const enemyBinding = report.checks.find((check) => check.id === "asset-source.binding.enemy_model");
