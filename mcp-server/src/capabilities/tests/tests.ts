@@ -39,8 +39,10 @@ import {
   gradeTestResults,
   isNUnitParseError,
   parseNUnitResults,
+  type DeclaredTestSurface,
   type TestsGrade,
 } from "./nunit-parse.js";
+import { projectDeclaresTests, projectTestSurface } from "./test-declaration.js";
 import {
   TEST_RESULTS_FILE,
   TEST_RESULTS_MANIFEST,
@@ -88,6 +90,29 @@ export const MISPLACED_REFUSAL = "results are not at the project they claim";
  * in the declared slot and to fail against its own bytes.
  */
 export const TAMPERED_REFUSAL = "a stamped pair that does not verify";
+
+/**
+ * Printed when results sit in a PROJECT'S DECLARED SLOT with no manifest beside them (H5).
+ *
+ * THE ATTACK THIS CLOSES, demonstrated end to end. H1 refuses a manifest that is present and
+ * failing. It says nothing about an ABSENT one, and absent is strictly cheaper: with an honest
+ * manifest on disk (`exitCode: 3`, `compileErrors: 42`, `mutatedProject: true`) the verb exits
+ * 2 under `GITHUB_ACTIONS=true`; `rm test-results-manifest.json` and the IDENTICAL green bytes
+ * exit 0 through the CI attestation. H1's only behavioural change was inside that branch, which
+ * is precisely where deletion lands, so the attestation had to learn the difference between
+ * "nobody stamped this" and "the stamp was taken away".
+ *
+ * WHAT MAKES THE DIFFERENCE CHECKABLE is position, not provenance: `.loombridge/tests/` is the
+ * one directory `tests run` writes, and `projectRootForTestResultsDir` inverts that path
+ * exactly. A file THERE, in a project that DECLARES tests, with no manifest, is a stamp that is
+ * missing rather than a stamp that was never owed.
+ *
+ * CI IS UNAFFECTED, and for a reason that is checkable rather than asserted: the workflow
+ * grades `unity-test-results/<label>/*.xml`, which is not any project's `.loombridge/tests/`
+ * directory, so `impliedRoot` is null there and this refusal cannot fire. A guard test pins
+ * that a bare XML at an operator-named path still attests.
+ */
+export const MISSING_MANIFEST_REFUSAL = "results in a stamped slot with the stamp removed";
 
 /**
  * The EXACT value GitHub sets for `GITHUB_ACTIONS` (FXF).
@@ -269,11 +294,16 @@ function usage(): void {
       "  Skipped); bucket accounting that disagrees with the walked total; a Unity exit",
       "  code the test-case walk cannot account for; a roll-up that disagrees with the",
       "  cases beneath it, on <test-run> or on any <test-suite> that declares counts",
-      "  (only DECLARED counts are compared, so a writer that omits total is fine).",
+      "  (only DECLARED counts are compared, so a writer that omits total is fine);",
+      "  results whose assemblies are none of the ones the PROJECT declares in",
+      "  Packages/manifest.json testables or its Test-Runner .asmdef files, and results",
+      "  that declare no assembly suite at all. A project that declares no test surface,",
+      "  and an XML with no project behind it, are noted rather than refused.",
       "",
       "`grade` additionally exits 2 on a GREEN it cannot attribute to anyone but the",
       "caller: unstamped input, a stamped pair that is not at the project its manifest",
-      "claims, or a stamped pair that does not verify against its own bytes.",
+      "claims, a stamped pair that does not verify against its own bytes, or results",
+      "sitting in a project's declared results slot with the binding manifest removed.",
       `The one exception is the environment variable GITHUB_ACTIONS="${GITHUB_ACTIONS_VALUE}"`,
       "(that exact value, nothing else), where the runner chose and produced the file.",
       "That exception attests an UNSTAMPED file only: it never launders a manifest that",
@@ -590,6 +620,11 @@ export async function runTests(cli: RunArgs, opts: TestsRunOpts = {}): Promise<n
   const grade = gradeTestResults({
     run: parsed,
     strict: cli.strict,
+    // H4: read from the project this run was launched against. The producer cannot be caught
+    // lying by it (the XML came from the editor this process spawned), but the pair it is about
+    // to STAMP is what every later door reads, so a mismatch with the project's own asmdefs is
+    // named at the moment the stamp is written rather than three doors downstream.
+    surface: await projectTestSurface(root),
     // H3: this process spawned the editor, so the three facts come from the run itself. It
     // does not claim `stamped`: the summary and assembly cross-checks would be this function
     // comparing `deriveSummary(parsed)` against itself, which is a check that cannot fail.
@@ -668,17 +703,29 @@ export async function gradeStoredResults(cli: GradeArgs, opts: TestsGradeOpts = 
   // inverts `testResultsDir`, so the two directions cannot drift.
   const dir = path.dirname(cli.results);
   const stampedResults = testResultsPath(dir);
-  let stamped = false;
+  const atDeclaredSlot = path.resolve(stampedResults) === path.resolve(cli.results);
+  // The project this file would belong to if it is a stamped pair, from the PATH alone. It is
+  // computed here rather than inside the branch below because two checks need it: the declared
+  // test surface (H4) and the missing-manifest refusal (H5).
+  const impliedRoot = atDeclaredSlot ? projectRootForTestResultsDir(dir) : null;
   let stampedNote = `no ${TEST_RESULTS_MANIFEST} beside ${cli.results}`;
   let misplaced: string | null = null;
   let tampered: string | null = null;
+  /** H5: the file sits in a real project's declared slot, that project declares tests, and the
+   * manifest `tests run` always writes is not there. See {@link MISSING_MANIFEST_REFUSAL}. */
+  let strippedSlot: string | null = null;
   let integrityManifest: TestResultsManifest | undefined;
-  if (path.resolve(stampedResults) === path.resolve(cli.results)) {
-    const impliedRoot = projectRootForTestResultsDir(dir);
+  if (atDeclaredSlot) {
     const integrity = await verifyTestResults(dir);
     const claimedRoot = integrity.manifest?.projectRoot;
     if (integrity.unstamped) {
       stampedNote = `no ${TEST_RESULTS_MANIFEST} in ${dir}`;
+      if (impliedRoot !== null && (await projectDeclaresTests(impliedRoot)).declared) {
+        const how = (await projectDeclaresTests(impliedRoot)).how;
+        strippedSlot =
+          `${MISSING_MANIFEST_REFUSAL}: ${dir} is the declared results slot of ${impliedRoot}, which declares ` +
+          `tests (${how}), but there is no ${TEST_RESULTS_MANIFEST} beside these results`;
+      }
     } else if (!integrity.ok) {
       // H1. A manifest that is PRESENT and does not verify is evidence of tampering, and it
       // is refused HERE rather than degraded to the unstamped path, where the CI attestation
@@ -702,13 +749,23 @@ export async function gradeStoredResults(cli: GradeArgs, opts: TestsGradeOpts = 
         `, but this pair sits under ${impliedRoot}`;
       stampedNote = misplaced;
     } else {
-      stamped = true;
       integrityManifest = integrity.manifest;
       stampedNote = `stamped by ${integrity.manifest?.resolvedEditorPath ?? "an unknown editor"} at ${
         integrity.manifest?.finishedAt ?? "an unknown time"
       }`;
     }
   }
+
+  // H4: the one fact from outside the pair. There is a project to read only when this file
+  // sits at some project's declared slot; a bare CI XML at an operator-named path has none,
+  // and says so rather than being handed an empty list that would read like "checked and fine".
+  const surface: DeclaredTestSurface =
+    impliedRoot !== null
+      ? await projectTestSurface(impliedRoot)
+      : {
+          kind: "unknown",
+          why: `${cli.results} is not at any project's declared results slot, so no project surface was read`,
+        };
 
   // H3: which of the three inputs this is, stated once. A manifest reaches the grader ONLY
   // through the `stamped` shape, which owes all five producer facts; anything else is the
@@ -717,6 +774,7 @@ export async function gradeStoredResults(cli: GradeArgs, opts: TestsGradeOpts = 
   const grade = gradeTestResults({
     run: parsed,
     strict: cli.strict,
+    surface,
     attribution:
       integrityManifest !== undefined
         ? {
@@ -734,30 +792,55 @@ export async function gradeStoredResults(cli: GradeArgs, opts: TestsGradeOpts = 
   console.log(`${TAG} ${stampedNote}`);
   printGrade(grade);
 
-  if (grade.tier !== 0) {
-    console.log(`${TAG} ${GRADE_DIAGNOSTIC_BANNER}`);
-    return grade.tier;
-  }
-
-  if (stamped) {
-    console.log(`${TAG} stamped and verifying: this green is quotable.`);
-    console.log(`${TAG} ${GRADE_DIAGNOSTIC_BANNER}`);
-    return 0;
-  }
+  // TAMPERING IS ORDERED BEFORE THE TIER GATE (H6), and this is a behaviour change.
+  //
+  // Both refusals below used to sit AFTER `if (grade.tier !== 0) return grade.tier`, so they
+  // only ever fired when the tier mapping happened to come out green. A tampered manifest over
+  // an XML that also graded red therefore returned tier 1: a GAME-DEFECT verdict for evidence
+  // nobody can trust, conditional on the attacker's luck with the mapping. That is exactly the
+  // bug H1 fixed one level up (a positive signal of tampering degraded into a lesser answer),
+  // and CLAUDE.md's rule is unambiguous: a harness fault is never a game defect. Neither is a
+  // false pass, so this only ever raises the exit; the failing cases are still printed above.
   if (tampered !== null) {
-    // H1, ordered with `misplaced` and BEFORE the CI attestation, for the same reason: a
-    // stamped pair that fails its own integrity is a positive signal of tampering rather than
-    // an absence of provenance. Degrading it to "unstamped" is what let a manifest carrying
-    // five refusals exit 0 under GITHUB_ACTIONS with none of them evaluated.
     console.error(`${TAG} ${tampered}`);
     console.log(`${TAG} ${GRADE_DIAGNOSTIC_BANNER}`);
     return 2;
   }
   if (misplaced !== null) {
-    // Checked BEFORE the CI attestation on purpose. A stamped pair that has been moved is a
-    // positive signal of tampering, not merely an absence of provenance, and CI grades bare
-    // GameCI XMLs (the unstamped path), so nothing this workflow actually does is affected.
+    // Same class of signal, same ordering, and additionally BEFORE the CI attestation: a
+    // stamped pair that has been moved is a positive signal of tampering rather than an
+    // absence of provenance, and CI grades bare GameCI XMLs (the unstamped path), so nothing
+    // this workflow actually does is affected.
     console.error(`${TAG} ${misplaced}`);
+    console.log(`${TAG} ${GRADE_DIAGNOSTIC_BANNER}`);
+    return 2;
+  }
+
+  if (grade.tier !== 0) {
+    console.log(`${TAG} ${GRADE_DIAGNOSTIC_BANNER}`);
+    return grade.tier;
+  }
+
+  // F5: the grader's own answer, not a second derivation of it beside it. `attributed` shipped
+  // with a docstring claiming every door that could quote a green read it, and no reader at all.
+  if (grade.attributed) {
+    console.log(`${TAG} stamped and verifying: this green is quotable.`);
+    console.log(`${TAG} ${GRADE_DIAGNOSTIC_BANNER}`);
+    return 0;
+  }
+  if (strippedSlot !== null) {
+    // H5, ordered BEFORE the CI attestation and AFTER the tier gate, deliberately both ways.
+    //
+    // Before the attestation, because it is the cheaper half of the H1 attack: H1 refuses a
+    // manifest that is present and failing, and DELETING that manifest cost the forger nothing
+    // and reached exit 0 under GITHUB_ACTIONS over the identical green bytes.
+    //
+    // After the tier gate, because unlike `tampered` this is an ABSENCE, and absence cannot
+    // distinguish "the manifest was removed" from "tests run has never been run here". A red
+    // walk in this slot is still an honest red, and reporting it as a harness fault would be
+    // the harness-fault rule pointed backwards.
+    console.error(`${TAG} ${strippedSlot}`);
+    console.error(`${TAG} ${UNSTAMPED_REFUSAL}`);
     console.log(`${TAG} ${GRADE_DIAGNOSTIC_BANNER}`);
     return 2;
   }

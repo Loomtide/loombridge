@@ -692,6 +692,12 @@ three are closed here.
   check runs BEFORE the attestation because a moved pair is "a positive signal of tampering, not
   merely an absence of provenance". A sha mismatch is the same class of signal, and is now ordered
   there too. CI is untouched: the workflow grades bare GameCI XMLs, which have no manifest at all.
+  **CORRECTED BY H5 BELOW, and the sentence above claimed more than it bought:** locally both
+  shapes already exited 2, so H1's ONLY behavioural change is inside the `GITHUB_ACTIONS` branch,
+  and that is precisely where the cheaper bypass landed. H1 refuses a manifest that is present
+  and failing; it said nothing about an ABSENT one, and `rm test-results-manifest.json` reached
+  exit 0 over the identical green bytes. H1's real value is against accidental tampering plus a
+  much better message. The bypass is closed by H5.
 - **H2: omitting one XML attribute disabled the roll-up cross-check.** `runAttrSummary` was `null`
   whenever `<test-run total>` was absent, and the only comparison drawn from it was `failed > 0`.
   So `<test-run result="Passed" passed="1" failed="3">` with one passing case graded tier 0, and
@@ -723,8 +729,13 @@ three are closed here.
   two files have to lie in agreement instead of one failure hiding the other.
 - **H2: RECOMPUTABLE, and the strongest of the three.** The denominator is the walk of the
   document being graded, by the same reader that produced the roll-up, so the two numbers come
-  from one pass over one byte stream. There is no field to delete that buys silence at one level
-  without contradicting the level above it.
+  from one pass over one byte stream. ~~There is no field to delete that buys silence at one level
+  without contradicting the level above it.~~ **WRONG, and F4 below disproves it**: `testcasecount`
+  is written by real Unity on `<test-run>` and on every `<test-suite>`, was in no closed set, and
+  was read by nothing, so a document declaring `testcasecount="500"` over one walked case graded
+  tier 0 with the report silent about the other 499. It is read now, as a NOTE. The deeper point
+  the sentence missed is that all of H2 is a document held against ITSELF: one byte stream, one
+  reader, one author. That is what H4 addresses.
 - **H3: NOT a bound, and stated as such.** Attribution is a discipline on CALLERS, not a fact
   about bytes: it makes omission impossible and the bare-XML case explicit. What it buys is that
   H1's shape (a manifest present, its facts silently `undefined`) is no longer expressible.
@@ -733,24 +744,112 @@ three are closed here.
 
 - **Nothing binds the stamped pair to a real Unity run.** `resultsSha256` binds the XML to the
   manifest and H1 makes that binding load-bearing, but both files are written by the thing being
-  graded: a self-consistent forged pair still grades as `stamped`. The ceiling is unchanged and
-  documented above (`tests` is permanently unanchored, so the unified door's exit for a forged
-  pair is 2, and `tests grade` prints "not a verification verdict" on every path), but the honest
-  close needs a fact from outside the pair. **The candidate is the project's own declared test
-  surface**: `Packages/manifest.json` `testables` and the `.asmdef` files that reference the Test
-  Runner, which discovery ALREADY reads to decide a project declares tests, and which the XML's
-  assembly set could be held against. That is a genuinely recomputable denominator written by a
-  different artifact. It is not shipped here because the mapping from asmdef to assembly-suite
-  name has real false-failure surface (a test asmdef excluded by platform, or holding no tests, is
-  a legitimate absence), and a moat fix that reds out ordinary projects is a moat fix that gets
-  relaxed.
+  graded: a self-consistent forged pair still grades as `stamped`. **DEMONSTRATED AND PARTLY
+  CLOSED by H4 below**, which ships exactly the candidate this bullet named.
 - **Deleting a roll-up entirely is still cheaper than lying in it.** H2 compares what is declared;
   a document with every count attribute stripped from `<test-run>` and every `<test-suite>` has
   nothing left to disagree with. For a STAMPED pair the manifest's `summary` and `assemblies`
   cross-checks still bind it. For a bare CI XML nothing does, which is the same gap as the bullet
-  above and closes with it.
+  above and narrows with it (H4 refuses a document that declares no assembly suite at all).
 - **The suite cross-check is capped at five named refusals.** A single deleted case disagrees with
   every ancestor, so the cap is about readability; the tier is unaffected.
+
+### And it moved once more, INSIDE the pair: SELF-CONSISTENT FORGERY
+
+The wave above strengthened the internal consistency of two files, and an adversarial review
+found the flaw that leaves: **none of H1, H2 or H3 adds a fact from outside the pair.** H2's two
+readings both come from the graded byte stream. H3 is a discipline on callers. H1's re-hash is
+computed by whoever wrote the bytes. So one self-consistent forgery satisfies all three at once,
+and the reviewer flipped the test-results section from `fail`/exit 1 to `pass (unanchored)`/exit 0
+with a thirty-line script, no Unity, and `createHash` for the sha. Three more findings came with
+it. All four are demonstrated end to end and closed here.
+
+- **H4: the one fact from OUTSIDE the pair.** `projectTestSurface` reads the assemblies the
+  PROJECT declares (`Packages/manifest.json` `testables`, resolved the three ways Unity resolves
+  them, plus every Test-Runner `.asmdef` under `Assets/`) and the XML's assembly set is held
+  against it at every door, as a REQUIRED discriminated input for the same reason H3's attribution
+  is: an optional field is the field the next door forgets. The previous wave named this candidate
+  and deferred it over false-failure surface; the surface is real and the split is made
+  deliberately rather than by taking the strictest reading. **REFUSALS**: the walk names no
+  assembly suite at all (the cheapest evasion of everything else, and the "delete the denominator"
+  shape the screens and feel waves already closed twice); and no assembly the walk names is one
+  the project declares, on a COMPLETE surface only. **NOTES**: a declared assembly the walk does
+  not contain (the direction that would catch a whole failing assembly being hidden, and the
+  direction where a platform-excluded or test-free asmdef is a legitimate absence); an assembly
+  the walk names that the project does not declare (predefined assemblies land here honestly); and
+  a `none` or `unknown` surface, because a project with no declared test surface and a bare CI XML
+  with no project at all are both supported inputs. The false-failure bar is met on REAL bytes:
+  the committed real Unity document's assembly set equals, exactly and both ways, what this
+  repository's own `unity-dev-project` declares through its `file:` testable.
+- **H5: DELETING the manifest was cheaper than failing it.** H1 refuses a manifest that is present
+  and failing and says nothing about an absent one. With an honest failing manifest on disk
+  (`exitCode: 3`, `compileErrors: 42`, `mutatedProject: true`) `tests grade` exits 2 under
+  `GITHUB_ACTIONS=true`; `rm test-results-manifest.json` and the IDENTICAL green bytes exited 0
+  through the CI attestation. Since locally both already exited 2, that branch is the ONLY place
+  H1 changed behaviour, which is exactly where deletion landed. The attestation now distinguishes
+  "nobody stamped this" from "the stamp was taken away", by POSITION rather than provenance:
+  results sitting in a project's own `.loombridge/tests/` slot, in a project that DECLARES tests,
+  with no manifest beside them. CI is unaffected for a checkable reason rather than an asserted
+  one: the workflow grades `unity-test-results/<label>/*.xml`, which inverts to no project root at
+  all.
+- **H6: `TAMPERED_REFUSAL` was ordered behind a tier gate.** `if (grade.tier !== 0) return
+  grade.tier` ran before the tampered and misplaced checks, so a tampered manifest over an XML
+  that ALSO graded red returned tier 1: a game-defect verdict for evidence nobody can trust,
+  firing only when the mapping happened to come out green. Never a false pass, but a positive
+  signal of tampering conditional on the attacker's luck, and the same shape H1 fixed one level
+  up. Both are ordered before the tier gate now. H5 is deliberately ordered AFTER it, because
+  unlike tampering an ABSENCE cannot tell "the manifest was removed" from "`tests run` never ran
+  here", and an honest red in that slot is still an honest red.
+- **The fourth-door guard was one `as` keyword wide.** H3's whole "a fourth door cannot appear"
+  claim rested on a scan for `/\bgradeTestResults\(/`, which is blind to
+  `import { gradeTestResults as gradeIt }`, to `const g = gradeTestResults; g(…)`, and to a
+  namespace import. A real aliased fourth door was planted on disk, grading an unattributed walk,
+  and the guard file reported `tests 4 / pass 4 / fail 0`. The scan resolves the IMPORT now, which
+  aliasing cannot hide (`import { X as y }` still contains `X`), and refuses outright the three
+  shapes that would launder the name out of an import clause: a namespace import, a re-export, and
+  a dynamic import. The old LITMUS did not cover the bug it claimed to, because it drove
+  `deepEqual` over a hand-made list rather than the scanner; the scanner now takes its source root
+  as a parameter so the LITMUS points the SHIPPING function at planted trees.
+
+**Whether each new bound is recomputable, or one more value the attacker can write:**
+
+- **H4: RECOMPUTABLE, and the first bound in this area that is not written by the run.** The
+  denominator is `.asmdef` and `Packages/manifest.json` files authored by the GAME, walked by the
+  same code path that reads them. **What it does not buy, stated plainly:** the declared surface
+  is READABLE, so a forger who opens one asmdef can name a real assembly and pass. It raises the
+  cost from "invent two files" to "invent two files that agree with a third the run did not
+  write", and it makes a project with no test surface impossible to forge INTO having tests
+  without also editing the game. A forger who additionally edits `Packages/manifest.json` to add
+  an unresolvable testable can downgrade the disjointness refusal to a note, which is an edit to
+  the build input rather than to the evidence.
+- **H5: NOT a bound, and stated as such.** It is a POSITION rule: `.loombridge/tests/` is the one
+  directory `tests run` writes and `projectRootForTestResultsDir` inverts that path exactly. What
+  it buys is that deleting the stamp is no longer cheaper than failing it.
+- **H6: an ORDERING, not a bound.** It buys that a harness fault is never reported as a game
+  defect, whatever the mapping happens to say.
+- **The door scan: a source guard, and it can only see module bindings.** A door that obtains the
+  function without one (via `globalThis`, `eval`, or a compiled artifact) is invisible to it. The
+  honest close remains the TYPE, which no door can satisfy without stating both an attribution and
+  a surface.
+
+#### Known-open after this wave
+
+- **The assembly set is not the CASE set.** A forger who names a real declared assembly can still
+  invent its contents, and H4 says nothing about them. The next honest denominator is the
+  project's own test SOURCES: the `[Test]`/`[UnityTest]` methods under each test asmdef are
+  authored by the game and are what a real run must have executed. It is not shipped here because
+  reading them means parsing C# well enough to survive parameterized cases, `[TestCase]`, nested
+  classes and source-generated names, and a mapping that guesses wrong reds out an honest project.
+  That is a wave of its own, not a line in this one.
+- **`none` and `unknown` surfaces are notes, and a project can be edited into `none`.** Deleting a
+  game's test asmdefs would take a project from `declared` to `none` and drop H4 to a note. That
+  is a visible edit to the game rather than to the evidence, and refusing it would red out every
+  project that keeps its EditMode tests in the predefined assemblies, which is a legal Unity
+  shape. Named here rather than closed.
+- **H5 cannot fire on a bare XML outside a declared slot**, by construction, which is what keeps
+  CI working and is also the shape a forger would choose if they controlled the path. `verify`
+  never reads such a file (discovery only looks at the slot), so this is scoped to `tests grade`,
+  which prints "not a verification verdict" on every path.
 
 ### Comparison-counting delivery notes (the denominator wave)
 

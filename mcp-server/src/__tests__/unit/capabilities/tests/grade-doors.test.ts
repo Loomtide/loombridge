@@ -30,7 +30,8 @@
  */
 
 import assert from "node:assert/strict";
-import { readFileSync, readdirSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
 
@@ -63,27 +64,126 @@ function walkTs(dir: string, out: string[] = []): string[] {
   return out;
 }
 
+/** The grader's declaring module, by path segments, so the specifier match cannot drift. */
+const DECLARING_MODULE = ["capabilities", "tests", "nunit-parse.ts"] as const;
+const GRADER = "gradeTestResults";
+
 /**
- * Source files under `src/` that CALL the grader, excluding the tests that drive it.
+ * Does this specifier name the module that declares the grader?
  *
- * Walked rather than listed: a new door in a new file is exactly what this guard is for, and
- * a hand-written list would not notice one. The declaring file itself is excluded by matching
- * a CALL (`gradeTestResults(`) preceded by something other than `export function`.
+ * Suffix-matched on the basename rather than resolved, because the guard reads SOURCE (`.js`
+ * specifiers pointing at `.ts` files under NodeNext) and a resolver here would be a second
+ * implementation of module resolution that could disagree with the compiler's.
  */
-function productionCallSites(): string[] {
-  const srcRoot = path.join(PKG_ROOT, "src");
+function isDeclaringSpecifier(specifier: string): boolean {
+  const base = specifier.split("/").pop() ?? "";
+  return base === "nunit-parse.js" || base === "nunit-parse";
+}
+
+/**
+ * Every import/export-from statement in a source file, as `{ clause, specifier }`.
+ *
+ * Deliberately syntactic and small: this is a guard, not a compiler. It sees the four shapes
+ * that can carry a binding across a module boundary (named import, namespace import,
+ * re-export, `export *`) plus dynamic `import(...)`, which is handled separately below.
+ */
+function moduleBindings(source: string): Array<{ clause: string; specifier: string; isExport: boolean }> {
+  const out: Array<{ clause: string; specifier: string; isExport: boolean }> = [];
+  const re = /\b(import|export)\b([\s\S]*?)\bfrom\s*["']([^"']+)["']/g;
+  for (const m of source.matchAll(re)) {
+    out.push({ clause: m[2]!, specifier: m[3]!, isExport: m[1] === "export" });
+  }
+  return out;
+}
+
+/**
+ * WHY THE SCAN IS SEMANTIC AND NOT TEXTUAL (the fourth-door finding).
+ *
+ * The first cut of this guard tested `/\bgradeTestResults\(/` against the file's text. That
+ * catches a door written the naive way and NOTHING else. The reviewer planted a real fourth
+ * production door on disk, grading an unattributed walk, and the whole guard file reported
+ * `tests 4 / pass 4 / fail 0`:
+ *
+ *   import { gradeTestResults as gradeIt, ... } from "../tests/nunit-parse.js";
+ *   return gradeIt({ run, strict: false, attribution: { kind: "unattributed", why: "shortcut" } }).tier;
+ *
+ * `const g = gradeTestResults; g(...)` is the same class, and so is a namespace import. H3's
+ * entire "a fourth door cannot appear" claim rested on that one regex.
+ *
+ * THE FIX RESOLVES THE BINDING RATHER THAN THE CALL. A module cannot use the grader without
+ * naming it in an import statement, and ALIASING DOES NOT HIDE THE NAME: `import { X as y }`
+ * still contains `X`. So a file is a door when it imports `gradeTestResults` from the declaring
+ * module under any spelling. Three shapes that would launder the name out of the import clause
+ * are refused outright rather than resolved, because none of them has an honest use here:
+ *
+ *   - a NAMESPACE import (`import * as np from "…/nunit-parse.js"`), which puts every export
+ *     behind a property access this scan would have to model;
+ *   - a RE-EXPORT of the grader, which would make some other module the declaring module and
+ *     move the doors out of this scan's reach entirely;
+ *   - a DYNAMIC import of the declaring module, same reason as the namespace import.
+ *
+ * What remains uncovered is stated rather than papered over: a door that obtains the function
+ * without any module binding at all (via `globalThis`, `eval`, or a compiled artifact) is not
+ * visible to a source scan. The belt-and-braces textual check below catches the plain form of
+ * that; the honest close is the type, which no door can satisfy without stating an attribution
+ * and a surface.
+ */
+export function graderDoorScan(srcRoot: string = path.join(PKG_ROOT, "src")): {
+  doors: string[];
+  violations: string[];
+} {
   const testsRoot = path.join(srcRoot, "__tests__");
-  const declaring = path.join(srcRoot, "capabilities", "tests", "nunit-parse.ts");
-  return walkTs(srcRoot)
-    .filter((abs) => !abs.startsWith(testsRoot) && abs !== declaring)
-    .filter((abs) => /\bgradeTestResults\(/.test(readFileSync(abs, "utf-8")))
-    .map((abs) => path.relative(PKG_ROOT, abs))
-    .sort();
+  const declaring = path.join(srcRoot, ...DECLARING_MODULE);
+  const doors: string[] = [];
+  const violations: string[] = [];
+
+  for (const abs of walkTs(srcRoot)) {
+    if (abs.startsWith(testsRoot) || abs === declaring) continue;
+    const source = readFileSync(abs, "utf-8");
+    const rel = path.relative(srcRoot, abs).split(path.sep).join("/");
+    let bound = false;
+
+    for (const { clause, specifier, isExport } of moduleBindings(source)) {
+      if (!isDeclaringSpecifier(specifier)) continue;
+      if (/\*\s*as\s+\w+/.test(clause) || /^\s*\*\s*$/.test(clause)) {
+        violations.push(`${rel} takes a namespace binding on the grader's module: import/export * from ${specifier}`);
+        continue;
+      }
+      if (isExport) {
+        violations.push(`${rel} RE-EXPORTS from the grader's module (${clause.trim()}); a re-export moves the doors`);
+        continue;
+      }
+      // An alias (`{ gradeTestResults as gradeIt }`) still names the export it aliases.
+      if (new RegExp(`\\b${GRADER}\\b`).test(clause)) bound = true;
+    }
+
+    if (new RegExp(`import\\s*\\(\\s*["'][^"']*nunit-parse(\\.js)?["']`).test(source)) {
+      violations.push(`${rel} dynamically imports the grader's module; a door must bind it statically`);
+    }
+    // Belt and braces: a call with no import at all is not a door this scan can resolve, and
+    // saying so is better than reporting a clean list.
+    if (!bound && new RegExp(`\\b${GRADER}\\s*\\(`).test(source)) {
+      violations.push(`${rel} calls ${GRADER} without importing it from the declaring module`);
+    }
+    if (bound) doors.push(path.relative(PKG_ROOT, abs));
+  }
+  return { doors: doors.sort(), violations: violations.sort() };
+}
+
+/** The door list alone, for the assertion that names the known doors. */
+function productionCallSites(): string[] {
+  return graderDoorScan().doors;
 }
 
 test("H3: the ONLY production callers of gradeTestResults are the three known doors", () => {
+  const scan = graderDoorScan();
   assert.deepEqual(
-    productionCallSites(),
+    scan.violations,
+    [],
+    "a production file reaches the test-results grader through a binding this guard cannot resolve",
+  );
+  assert.deepEqual(
+    scan.doors,
     DOORS.map((d) => d.file).sort(),
     "a new caller of the test-results grader appeared; give it an attribution and add it here, " +
       "or it is a door with rules the other doors do not have",
@@ -125,34 +225,118 @@ test("H3: the unified door has NO unattributed path, structurally", () => {
 });
 
 /**
- * LITMUS, run against the REAL guard with a REAL fourth door on disk.
+ * LITMUS, driving the REAL scanner over REAL planted doors on disk.
  *
- * `src/capabilities/scratchdoor/new-door.ts` planted, containing a genuine
- * `gradeTestResults({ run, strict: false, attribution: { kind: "unattributed", why: "shortcut" } })`,
- * then `npm run build` and the guard re-run. Observed verbatim:
+ * THE PREVIOUS LITMUS DID NOT COVER THE BUG IT CLAIMED TO. It fed a hand-made list to
+ * `assert.deepEqual` and asserted that `deepEqual` notices a longer list, which is a fact about
+ * `node:assert`. It never called `productionCallSites()`, so the textual scan inside it could
+ * be, and was, blind to an aliased import while this test stayed green.
  *
- *   ✖ H3: the ONLY production callers of gradeTestResults are the three known doors
- *     AssertionError [ERR_ASSERTION]: a new caller of the test-results grader appeared; give it an
- *     attribution and add it here, or it is a door with rules the other doors do not have
- *   ℹ tests 4 / ℹ pass 3 / ℹ fail 1
- *
- * File removed, rebuilt: `ℹ tests 4 / ℹ pass 4 / ℹ fail 0`.
- *
- * The in-process LITMUS below drives the same `deepEqual` the guard uses, so the check cannot
- * be weakened without this failing too.
+ * `graderDoorScan` therefore takes the source root as a parameter, so the LITMUS can point the
+ * SHIPPING function at a temp tree instead of mutating `src/`. Each case below plants a real
+ * file, runs the real scan, and asserts on what the scan says.
  */
-test("LITMUS: the door scan really fails when a fourth door appears", () => {
-  // Feed the REAL comparison a planted extra caller. A LITMUS that re-implements the check
-  // inline proves nothing about the code that ships, so this drives the same `deepEqual` the
-  // guard uses, over a list with one file added.
-  const real = DOORS.map((d) => d.file).sort();
-  const planted = [...real, "src/capabilities/somewhere/new-door.ts"].sort();
-  assert.throws(
-    () => assert.deepEqual(planted, real),
-    "a new production caller must not be able to slip past the guard",
-  );
+function plantTree(files: Record<string, string>): string {
+  const root = mkdtempSync(path.join(tmpdir(), "grade-doors-litmus-"));
+  for (const [rel, body] of Object.entries(files)) {
+    const abs = path.join(root, rel);
+    mkdirSync(path.dirname(abs), { recursive: true });
+    writeFileSync(abs, body);
+  }
+  return root;
+}
 
-  // …and the allowed-kind check fires on a door that states one it may not.
+/** A stand-in for the declaring module, so the scan has the file it excludes. */
+const DECLARING_STUB = "capabilities/tests/nunit-parse.ts";
+const DECLARING_BODY = "export function gradeTestResults(input: unknown): unknown { return input; }\n";
+
+test("LITMUS: the door scan catches an ALIASED fourth door (the textual scan did not)", () => {
+  const aliased =
+    'import { gradeTestResults as gradeIt, type NUnitRun } from "../tests/nunit-parse.js";\n' +
+    "export function fourthDoor(run: NUnitRun): number {\n" +
+    '  return gradeIt({ run, strict: false, attribution: { kind: "unattributed", why: "shortcut" } }).tier;\n' +
+    "}\n";
+  const root = plantTree({
+    [DECLARING_STUB]: DECLARING_BODY,
+    "capabilities/scratchdoor/new-door.ts": aliased,
+  });
+  try {
+    // NON-VACUITY, and the whole point: the OLD predicate is blind to this exact file. If this
+    // assertion ever fails, the planted door stopped being the shape the finding was about.
+    assert.equal(/\bgradeTestResults\(/.test(aliased), false, "the planted door must evade the textual scan");
+
+    const scan = graderDoorScan(root);
+    assert.deepEqual(scan.doors, ["capabilities/scratchdoor/new-door.ts"].map((f) => path.join(path.relative(PKG_ROOT, root), f)));
+    // …and the assertion the guard actually makes fails on it.
+    assert.throws(() => assert.deepEqual(scan.doors, []));
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("LITMUS: `const g = gradeTestResults; g(...)` is the same class, and is caught", () => {
+  const root = plantTree({
+    [DECLARING_STUB]: DECLARING_BODY,
+    "capabilities/scratchdoor/indirect.ts":
+      'import { gradeTestResults } from "../tests/nunit-parse.js";\n' +
+      "const g = gradeTestResults;\n" +
+      "export const call = (input: unknown) => g(input);\n",
+  });
+  try {
+    assert.equal(graderDoorScan(root).doors.length, 1, "an indirect call through a local alias is still a door");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("LITMUS: a namespace import, a re-export and a dynamic import are each a VIOLATION", () => {
+  for (const [name, body] of [
+    ["namespace", 'import * as np from "../tests/nunit-parse.js";\nexport const t = (r: unknown) => np.gradeTestResults(r);\n'],
+    ["re-export", 'export { gradeTestResults } from "../tests/nunit-parse.js";\n'],
+    ["star-re-export", 'export * from "../tests/nunit-parse.js";\n'],
+    ["dynamic", 'export async function t(r: unknown) {\n  const m = await import("../tests/nunit-parse.js");\n  return m.gradeTestResults(r);\n}\n'],
+  ] as const) {
+    const root = plantTree({ [DECLARING_STUB]: DECLARING_BODY, [`capabilities/scratchdoor/${name}.ts`]: body });
+    try {
+      const scan = graderDoorScan(root);
+      assert.ok(
+        scan.violations.length > 0,
+        `${name} must be refused: it moves the grader binding somewhere this scan cannot resolve`,
+      );
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  }
+});
+
+/**
+ * F5: `TestsGrade.attributed` shipped WRITE-ONLY, under a docstring claiming otherwise.
+ *
+ * The field was set at the grader, described as the thing "every door that could quote a green
+ * reads … rather than re-deriving its own idea", and had no consumer and no test at all, while
+ * `tests grade` re-derived the same fact into a local variable beside it. A field nothing reads
+ * is a claim nothing keeps true, and the two derivations were free to drift apart. This guard
+ * is why it cannot go back to being write-only: it is the "declared path nothing walks" rule
+ * that this repo keeps paying for, applied to a field instead of a path.
+ */
+test("F5: `grade.attributed` has a PRODUCTION reader, and is not write-only", () => {
+  const srcRoot = path.join(PKG_ROOT, "src");
+  const testsRoot = path.join(srcRoot, "__tests__");
+  const declaring = path.join(srcRoot, ...DECLARING_MODULE);
+  const readers = walkTs(srcRoot)
+    .filter((abs) => !abs.startsWith(testsRoot) && abs !== declaring)
+    .filter((abs) => /\.attributed\b/.test(readFileSync(abs, "utf-8")))
+    .map((abs) => path.relative(PKG_ROOT, abs))
+    .sort();
+  assert.deepEqual(
+    readers,
+    ["src/capabilities/tests/tests.ts"],
+    "`attributed` must be READ by the door that decides whether a green is quotable; a field " +
+      "nothing reads is a claim nothing keeps true",
+  );
+});
+
+test("LITMUS: the allowed-kind check fires on a door that states a kind it may not", () => {
   const allowed = ["stamped"];
   assert.throws(() => {
     for (const k of ["stamped", "unattributed"]) {

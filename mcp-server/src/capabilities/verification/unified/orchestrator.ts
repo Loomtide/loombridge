@@ -70,6 +70,7 @@ import {
   summaryDisagreements,
   deriveSummary,
 } from "../../tests/nunit-parse.js";
+import { projectTestSurface } from "../../tests/test-declaration.js";
 import {
   TEST_RESULTS_FILE,
   TEST_RESULTS_MANIFEST,
@@ -1087,6 +1088,12 @@ async function testsSection(
   const grade = gradeTestResults({
     run: parsed,
     strict: opts.strict,
+    // H4: THE ONE FACT FROM OUTSIDE THE PAIR, and the reason this section is no longer flippable
+    // by a forgery. Everything else this door re-derives (the sha, the summary, the assembly
+    // list, every roll-up) comes from bytes the graded run wrote, so a self-consistent forged
+    // pair satisfied all of them at once and took this section from `fail`/exit 1 to
+    // `pass (unanchored)`/exit 0. The project's declared test surface is written by the GAME.
+    surface: await projectTestSurface(root),
     attribution: {
       kind: "stamped",
       exitCode: manifest.exitCode,

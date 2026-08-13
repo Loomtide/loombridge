@@ -24,6 +24,7 @@ import {
   GITHUB_ACTIONS_VALUE,
   GRADE_DIAGNOSTIC_BANNER,
   MISPLACED_REFUSAL,
+  MISSING_MANIFEST_REFUSAL,
   TAMPERED_REFUSAL,
   UNSTAMPED_REFUSAL,
   run as runTestsVerb,
@@ -732,5 +733,189 @@ test("FALSE-FAILURE: an all-skipped suite still refuses for the reason it always
     assert.ok(!out.includes("cases are missing from the document"), out);
   } finally {
     await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+/* -------------------------------------------------------------------------- */
+/* H5: deleting the manifest was cheaper than failing it                       */
+/* -------------------------------------------------------------------------- */
+
+/** Give a planted root a real, ordinary declared test surface (one Test-Runner asmdef). */
+async function declareTests(root: string, name = "Dev.Editor.Tests"): Promise<void> {
+  const dir = path.join(root, "Assets", "Tests");
+  await fs.mkdir(dir, { recursive: true });
+  await fs.writeFile(
+    path.join(dir, `${name}.asmdef`),
+    JSON.stringify({ name, references: ["UnityEditor.TestRunner", "UnityEngine.TestRunner"] }),
+    "utf-8",
+  );
+}
+
+test("H5: DELETING the manifest must not reach exit 0 under GITHUB_ACTIONS on a project that declares tests", async () => {
+  // THE BYPASS THIS CLOSES, demonstrated end to end before the fix. H1 refuses a manifest that
+  // is PRESENT and failing; it said nothing about an ABSENT one, and absent is strictly
+  // cheaper. With an honest failing manifest on disk the verb exits 2; `rm` it and the
+  // IDENTICAL green bytes exited 0 through the CI attestation. H1's only behavioural change
+  // was inside that branch, which is exactly where deletion lands.
+  const { root, results } = await plantStamped(GREEN_XML, {
+    exitCode: 3,
+    compileErrors: 42,
+    mutatedProject: true,
+  });
+  try {
+    await declareTests(root);
+
+    const present = await capture(["grade", "--results", results], { GITHUB_ACTIONS: GITHUB_ACTIONS_VALUE });
+    assert.equal(present.code, 2, present.all);
+    assert.match(present.all, /42 compile error line/);
+
+    await fs.rm(path.join(testResultsDir(root), "test-results-manifest.json"));
+    const absent = await capture(["grade", "--results", results], { GITHUB_ACTIONS: GITHUB_ACTIONS_VALUE });
+    assert.equal(absent.code, 2, `deleting the stamp must not be cheaper than failing it:\n${absent.all}`);
+    assert.ok(absent.all.includes(MISSING_MANIFEST_REFUSAL), absent.all);
+    assert.ok(
+      !absent.out.includes("treating the file as runner-produced"),
+      "the CI attestation must not launder a stamp that was removed from a declared slot",
+    );
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test("FALSE-FAILURE: CI's own shape is untouched — a bare XML at an operator-named path still attests", async () => {
+  // The workflow grades `unity-test-results/<label>/*.xml`, which is not any project's
+  // `.loombridge/tests/` directory, so H5's refusal cannot fire there. This is the check that
+  // keeps the fix narrow, and it is a fact about POSITION rather than an assertion of intent.
+  const { root, results } = await plantBare();
+  try {
+    const ci = await capture(["grade", "--results", results], { GITHUB_ACTIONS: GITHUB_ACTIONS_VALUE });
+    assert.equal(ci.code, 0, ci.all);
+    assert.match(ci.out, /treating the file as runner-produced/);
+    assert.ok(!ci.all.includes(MISSING_MANIFEST_REFUSAL), ci.all);
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test("FALSE-FAILURE: an unstamped slot in a project that declares NO tests still attests under CI", async () => {
+  // `tests run` has simply never run here, and there is no declaration saying it should have.
+  // Refusing this would be reading an absence as a removal.
+  const { root, results } = await plantStamped();
+  try {
+    await fs.rm(path.join(testResultsDir(root), "test-results-manifest.json"));
+    const ci = await capture(["grade", "--results", results], { GITHUB_ACTIONS: GITHUB_ACTIONS_VALUE });
+    assert.equal(ci.code, 0, ci.all);
+    assert.ok(!ci.all.includes(MISSING_MANIFEST_REFUSAL), ci.all);
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+/* -------------------------------------------------------------------------- */
+/* H6: tampering is ordered BEFORE the tier gate                               */
+/* -------------------------------------------------------------------------- */
+
+test("H6: a TAMPERED manifest over a RED walk is the HARNESS tier, not a game defect", async () => {
+  // THE BUG. `if (grade.tier !== 0) return grade.tier` ran BEFORE the tampered check, so a
+  // tampered manifest whose XML also graded red returned tier 1: a GAME-DEFECT verdict for
+  // evidence nobody can trust, firing only when the mapping happened to come out green. That
+  // is the same shape H1 fixed one level up, and CLAUDE.md is unambiguous: a harness fault is
+  // never a game defect.
+  const { root, results } = await plantStamped(RED_XML, {
+    summary: { total: 1, passed: 0, failed: 1, inconclusive: 0, skipped: 0 },
+    assemblies: ["Dev.Editor.Tests.dll"],
+    exitCode: 2,
+    resultsSha256: sha256("these are not the bytes that were stamped"),
+  });
+  try {
+    const { code, all } = await capture(["grade", "--results", results]);
+    assert.equal(code, 2, `tampered evidence must refuse at the harness tier regardless of the mapping:\n${all}`);
+    assert.ok(all.includes(TAMPERED_REFUSAL), all);
+    // Nothing is hidden by the reclassification: the failing case is still named.
+    assert.match(all, /1 test\(s\) failed: N\.F\.a/);
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test("H6: a MISPLACED pair over a RED walk is the HARNESS tier too", async () => {
+  const { root, results } = await plantStamped(RED_XML, {
+    projectRoot: path.join(os.tmpdir(), "some-other-checkout"),
+    summary: { total: 1, passed: 0, failed: 1, inconclusive: 0, skipped: 0 },
+    exitCode: 2,
+  });
+  try {
+    const { code, all } = await capture(["grade", "--results", results]);
+    assert.equal(code, 2, all);
+    assert.ok(all.includes(MISPLACED_REFUSAL), all);
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test("FALSE-FAILURE: an HONEST red is still a GAME DEFECT (tier 1), not the harness tier", async () => {
+  // The whole point of the ordering change is that it only ever raises the exit for evidence
+  // that cannot be trusted. An ordinary failing suite must keep saying "the game is broken".
+  const { root, results } = await plantStamped(RED_XML, {
+    summary: { total: 1, passed: 0, failed: 1, inconclusive: 0, skipped: 0 },
+    exitCode: 2,
+  });
+  try {
+    const { code, all } = await capture(["grade", "--results", results]);
+    assert.equal(code, 1, all);
+    assert.match(all, /tier 1/);
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+/* -------------------------------------------------------------------------- */
+/* H4 at this door, and F5's reader                                            */
+/* -------------------------------------------------------------------------- */
+
+test("H4: a stamped GREEN naming an assembly the project does NOT declare is refused here too", async () => {
+  const { root, results } = await plantStamped();
+  try {
+    // The project declares a DIFFERENT test assembly from the one the results name.
+    await declareTests(root, "Something.Else.Tests");
+    const { code, all } = await capture(["grade", "--results", results]);
+    assert.equal(code, 2, all);
+    assert.match(all, /is one this project declares/);
+    assert.ok(!all.includes("this green is quotable"), all);
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test("FALSE-FAILURE: a stamped GREEN naming the DECLARED assembly is still quotable", async () => {
+  const { root, results } = await plantStamped();
+  try {
+    await declareTests(root);
+    const { code, out } = await capture(["grade", "--results", results]);
+    assert.equal(code, 0, out);
+    assert.match(out, /stamped and verifying: this green is quotable/);
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test("F5: the quotable decision reads grade.attributed, not a second derivation beside it", async () => {
+  // `attributed` shipped with a docstring claiming every door that could quote a green read
+  // it, and no reader at all. It has one now, and the two must agree on both sides.
+  const { root, results } = await plantStamped();
+  try {
+    const stampedRun = await capture(["grade", "--results", results]);
+    assert.match(stampedRun.out, /attribution: producer facts from a verified stamped manifest/);
+    assert.match(stampedRun.out, /this green is quotable/);
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+  const bare = await plantBare();
+  try {
+    const bareRun = await capture(["grade", "--results", bare.results]);
+    assert.match(bareRun.out, /attribution: NOT attributed to any run/);
+    assert.ok(!bareRun.out.includes("this green is quotable"), bareRun.all);
+  } finally {
+    await fs.rm(bare.root, { recursive: true, force: true });
   }
 });

@@ -530,3 +530,134 @@ test("LITMUS: a HALF-stamped test-results manifest is BROKEN at the door, in eit
     }
   }
 });
+
+/* -------------------------------------------------------------------------- */
+/* H4: the one fact from OUTSIDE the pair                                      */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * A green NUnit3 document naming exactly `assembly`, or naming none when it is null.
+ *
+ * `greenNUnitXml()` above names `Green.Tests.dll`; these variants exist so a test can decide
+ * whether the document agrees with the project's own asmdefs, which is the whole of H4.
+ */
+function greenNamingAssembly(assembly: string | null, green = true): string {
+  const r = green
+    ? 'result="Passed" total="2" passed="2" failed="0" inconclusive="0" skipped="0"'
+    : 'result="Failed" total="2" passed="1" failed="1" inconclusive="0" skipped="0"';
+  const cases = green
+    ? '        <test-case id="1003" name="A" fullname="Green.GreenTests.A" runstate="Runnable" result="Passed" />\n' +
+      '        <test-case id="1004" name="B" fullname="Green.GreenTests.B" runstate="Runnable" result="Passed" />'
+    : '        <test-case id="1003" name="A" fullname="Green.GreenTests.A" runstate="Runnable" result="Passed" />\n' +
+      '        <test-case id="1004" name="B" fullname="Green.GreenTests.B" runstate="Runnable" result="Failed">' +
+      "<failure><message>expected 3 but was 4</message></failure></test-case>";
+  const fixture = `      <test-suite type="TestFixture" id="1002" name="GreenTests" fullname="Green.GreenTests" runstate="Runnable" ${r}>\n${cases}\n      </test-suite>`;
+  const body =
+    assembly === null
+      ? fixture
+      : `    <test-suite type="Assembly" id="1001" name="${assembly}" fullname="/x/${assembly}" runstate="Runnable" ${r}>\n${fixture}\n    </test-suite>`;
+  return [
+    '<?xml version="1.0" encoding="utf-8" standalone="no"?>',
+    `<test-run id="2" testcasecount="2" ${r} asserts="0">`,
+    `  <test-suite type="TestSuite" id="1000" name="EditMode" fullname="EditMode" runstate="Runnable" ${r}>`,
+    body,
+    "  </test-suite>",
+    "</test-run>",
+  ].join("\n");
+}
+
+/** Give a root the ordinary declared test surface a game author writes. */
+async function declareTestSurface(root: string, name = "Green.Tests"): Promise<void> {
+  const dir = path.join(root, "Assets", "Tests");
+  await fs.mkdir(dir, { recursive: true });
+  await fs.writeFile(
+    path.join(dir, `${name}.asmdef`),
+    JSON.stringify({ name, references: ["UnityEditor.TestRunner", "UnityEngine.TestRunner"] }),
+    "utf-8",
+  );
+}
+
+test("H4: a FORGED green pair cannot flip this section from exit 1 to exit 0", async () => {
+  // THE EXPLOIT THIS WAVE CLOSES, driven exactly as the reviewer drove it: an honest RED pair,
+  // then the same directory overwritten with a self-consistent forged GREEN pair whose every
+  // sha, summary and roll-up agrees, because the forger computed all of them. Nothing INSIDE
+  // the pair could catch it. The project's own `.asmdef` is not inside the pair.
+  const root = await tmpDir("tests-section-h4-");
+  const workspace = await tmpDir("tests-section-h4-ws-");
+  try {
+    await declareTestSurface(root);
+
+    await plantTestResults(root, { xml: greenNamingAssembly("Green.Tests.dll", false), exitCode: 2 });
+    const red = await captured(() => runVerifyCli(["--root", root, "--workspace", workspace]));
+    assert.equal((await readUnified(root)).sections.tests?.exit, 1, red.lines.join("\n"));
+    assert.equal((await readUnified(root)).sections.tests?.status, "fail");
+
+    // The forgery: same slot, same command, every internal binding satisfied.
+    await plantTestResults(root, { xml: greenNamingAssembly("Totally.Made.Up.dll", true), exitCode: 0 });
+    const forged = await captured(() => runVerifyCli(["--root", root, "--workspace", workspace]));
+    const text = forged.lines.join("\n");
+    const section = (await readUnified(root)).sections.tests;
+    assert.equal(section?.exit, 2, `a forged green must not reach exit 0:\n${text}`);
+    assert.equal(section?.status, "harness-fault", "evidence that is not about this project is a HARNESS fault");
+    assert.match(text, /is one this project declares/, "the refusal names what disagreed");
+  } finally {
+    for (const d of [root, workspace]) await fs.rm(d, { recursive: true, force: true });
+  }
+});
+
+test("H4: DELETING the assembly suites is the cheapest evasion, and it is refused", async () => {
+  const root = await tmpDir("tests-section-h4-nodecl-");
+  const workspace = await tmpDir("tests-section-h4-nodecl-ws-");
+  try {
+    await declareTestSurface(root);
+    await plantTestResults(root, { xml: greenNamingAssembly(null, true), exitCode: 0 });
+    const run = await captured(() => runVerifyCli(["--root", root, "--workspace", workspace]));
+    const section = (await readUnified(root)).sections.tests;
+    assert.equal(section?.exit, 2, run.lines.join("\n"));
+    assert.match(run.lines.join("\n"), /declare no assembly suite at all/);
+  } finally {
+    for (const d of [root, workspace]) await fs.rm(d, { recursive: true, force: true });
+  }
+});
+
+test("FALSE-FAILURE: an HONEST pair whose assembly IS declared still grades exactly as before", async () => {
+  // The bar this fix has to clear: a real project with a real declared surface and real
+  // results must be untouched, both green and red. A gate that reds out ordinary projects is a
+  // gate that gets relaxed, and the hole comes back.
+  const root = await tmpDir("tests-section-h4-ok-");
+  const workspace = await tmpDir("tests-section-h4-ok-ws-");
+  try {
+    await declareTestSurface(root);
+
+    await plantTestResults(root, { xml: greenNamingAssembly("Green.Tests.dll", true), exitCode: 0 });
+    const green = await captured(() => runVerifyCli(["--root", root, "--workspace", workspace]));
+    const greenSection = (await readUnified(root)).sections.tests;
+    assert.equal(greenSection?.exit, 0, green.lines.join("\n"));
+    assert.equal(greenSection?.status, "pass");
+    assert.equal(greenSection?.anchored, false, "permanently unanchored (R8), untouched by H4");
+
+    await plantTestResults(root, { xml: greenNamingAssembly("Green.Tests.dll", false), exitCode: 2 });
+    const red = await captured(() => runVerifyCli(["--root", root, "--workspace", workspace]));
+    const redSection = (await readUnified(root)).sections.tests;
+    assert.equal(redSection?.exit, 1, `an honest red is a GAME defect, never the harness tier:\n${red.lines.join("\n")}`);
+    assert.equal(redSection?.status, "fail");
+  } finally {
+    for (const d of [root, workspace]) await fs.rm(d, { recursive: true, force: true });
+  }
+});
+
+test("FALSE-FAILURE: a project with NO declared test surface grades as it always did, with a NOTE", async () => {
+  // Every other test in this file plants into a root with no `Assets/` at all, so this is also
+  // the assertion that the whole existing suite is not silently passing for a new reason.
+  const root = await tmpDir("tests-section-h4-nosurface-");
+  const workspace = await tmpDir("tests-section-h4-nosurface-ws-");
+  try {
+    await plantTestResults(root, { xml: greenNamingAssembly("Anything.dll", true), exitCode: 0 });
+    const run = await captured(() => runVerifyCli(["--root", root, "--workspace", workspace]));
+    const section = (await readUnified(root)).sections.tests;
+    assert.equal(section?.exit, 0, run.lines.join("\n"));
+    assert.match(run.lines.join("\n"), /bound to nothing outside these results/, "the gap is NAMED, not silent");
+  } finally {
+    for (const d of [root, workspace]) await fs.rm(d, { recursive: true, force: true });
+  }
+});
