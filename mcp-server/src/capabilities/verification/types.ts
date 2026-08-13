@@ -670,12 +670,41 @@ export interface SfxVerificationSection {
   note?: string;
 }
 
+/**
+ * A human's recorded decision that a required contract section has no covering gate and is
+ * knowingly ungraded.
+ *
+ * WHY THIS IS NOT `verification.gates`. The obvious shortcut is to treat "every covering gate is
+ * `not_applicable`" as consent. It is not: `promote.ts` WRITES that field itself
+ * (`verificationOverrides` marks six gates `not_applicable` whenever a promoted contract's core
+ * vertical does not gate them), and four required sections are covered ONLY by those six
+ * (`placement`, `platformer`, `props`, `reachability`). A promoted contract would grant itself
+ * consent and silently stop refusing, which is the self-graded shape the moat exists to prevent.
+ * Measured: 1 refusal before the machine-written waiver, 0 after.
+ *
+ * So consent lives in its own field that the promoter never writes, and it carries WHO and WHY,
+ * because an unattributable waiver is indistinguishable from a machine's.
+ */
+export interface SectionWaiver {
+  /** Why this section cannot be graded. Free text, required, and non-empty. */
+  reason: string;
+  /** Who accepted that. A name or handle; required, and non-empty. */
+  approvedBy: string;
+}
+
 export interface VerificationSection {
   /**
    * Per-game gate applicability. Omitted gates default to "required" so existing
    * platformer contracts keep their current behavior.
+   *
+   * NOT a consent surface: it is machine-written by `promote.ts`. See `SectionWaiver`.
    */
   gates?: Record<string, VerificationGateMode>;
+  /**
+   * Explicit, attributed waivers for required contract sections that no gate walks.
+   * Keyed by contract section name. See `SectionWaiver` for why this is separate from `gates`.
+   */
+  sectionWaivers?: Record<string, SectionWaiver>;
   /** Opt-in SFX verification (backlog High #7). Absent ⇒ no SFX gates run. */
   sfx?: SfxVerificationSection;
   /**

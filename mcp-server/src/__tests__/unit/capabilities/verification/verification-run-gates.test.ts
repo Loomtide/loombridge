@@ -15,7 +15,7 @@ import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
-import { gradedGates, runGates, isGateInStage, VERIFY_STAGES, type ReviewFindings } from "../../../../capabilities/verification/run-gates.js";
+import { contractCoverageRefusals, gradedGates, runGates, isGateInStage, VERIFY_STAGES, type ReviewFindings } from "../../../../capabilities/verification/run-gates.js";
 import type { AcceptanceContract } from "../../../../capabilities/verification/types.js";
 import { createDraftAssetManifest, type AssetManifest } from "../../../../capabilities/assets/asset-manifest.js";
 import { REPO_ROOT as REPO_ROOT_SUPPORT } from "../../../_support/paths.js";
@@ -1456,4 +1456,74 @@ test("gradedGates: a not_applicable gate never counts, however it became not_app
   } finally {
     await fs.rm(dir, { recursive: true, force: true });
   }
+});
+
+// --- Section waivers: the human exit, and only the human exit ---------------------------------
+//
+// A genre can be structurally uncertifiable: the 3d-shooter seed's validator REQUIRES `win.rule`
+// while the only gate covering `win` is `playability`, a 2D observer a 3D build cannot satisfy.
+// The waiver is the recorded human decision that a section is knowingly ungraded.
+
+/** A contract that REQUIRES the reachability section, with no gate in the plan walking it. */
+function uncoveredContract(verification?: unknown): unknown {
+  return {
+    schemaVersion: "1", game: "X", genre: "g",
+    reachability: { jumps: [{ id: "a", gapM: 3 }] },
+    ...(verification ? { verification } : {}),
+  };
+}
+
+test("an uncovered required section refuses", () => {
+  assert.equal(contractCoverageRefusals({ acceptance: uncoveredContract(), gates: [] }).length, 1);
+});
+
+test("an explicit, attributed waiver clears the refusal", () => {
+  const waived = uncoveredContract({
+    sectionWaivers: { reachability: { reason: "3D genre; the reachability grader is 2D-only", approvedBy: "avinash" } },
+  });
+  assert.deepEqual(contractCoverageRefusals({ acceptance: waived, gates: [] }), []);
+});
+
+test("LITMUS: the MACHINE-written gate-applicability field cannot waive anything", () => {
+  // The bypass this design exists to prevent. `promote.ts` writes `verification.gates` itself
+  // (`verificationOverrides` marks six gates `not_applicable`), and four required sections are
+  // covered ONLY by those six. Keying consent off that field lets a promoted contract grant
+  // itself consent: measured 1 refusal before, 0 after.
+  const machineWritten = uncoveredContract({ gates: { reachability: "not_applicable" } });
+  assert.equal(
+    contractCoverageRefusals({ acceptance: machineWritten, gates: [] }).length,
+    1,
+    "gate applicability is machine-written and must never read as human consent",
+  );
+});
+
+test("LITMUS: an unattributable or unexplained waiver does not count", () => {
+  // Without this, `{}` or a blank string silences the refusal and the waiver carries no more
+  // information than the machine-written field it replaced.
+  for (const bad of [
+    {},
+    { reason: "x" },
+    { approvedBy: "y" },
+    { reason: "", approvedBy: "y" },
+    { reason: "x", approvedBy: "   " },
+    "just a string",
+  ]) {
+    assert.equal(
+      contractCoverageRefusals({ acceptance: uncoveredContract({ sectionWaivers: { reachability: bad } }), gates: [] }).length,
+      1,
+      `a waiver of ${JSON.stringify(bad)} must not silence the refusal`,
+    );
+  }
+});
+
+test("a waiver is per SECTION: it does not silence a different uncovered section", () => {
+  const two = {
+    schemaVersion: "1", game: "X", genre: "g",
+    reachability: { jumps: [{ id: "a", gapM: 3 }] },
+    placement: { groundedItems: [{ id: "crate" }] },
+    verification: { sectionWaivers: { reachability: { reason: "r", approvedBy: "a" } } },
+  };
+  const refusals = contractCoverageRefusals({ acceptance: two, gates: [] });
+  assert.equal(refusals.length >= 1, true, "the un-waived section must still refuse");
+  assert.equal(refusals.some((r) => r.includes("reachability")), false, "the waived one must not");
 });

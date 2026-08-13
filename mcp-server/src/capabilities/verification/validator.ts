@@ -464,6 +464,34 @@ export function validateAcceptanceContract(input: unknown): AcceptanceValidation
           }
         }
       }
+      // A waiver is a HUMAN's recorded decision, so it must be attributable and explained.
+      // Blank strings are refused: an unattributable waiver is indistinguishable from a
+      // machine's, and the whole point of this field is that `promote.ts` never writes it.
+      if (input.verification.sectionWaivers !== undefined) {
+        if (!isRecord(input.verification.sectionWaivers)) {
+          push(issues, "INVALID_VERIFICATION", "verification.sectionWaivers must be an object.", "verification.sectionWaivers");
+        } else {
+          for (const [section, waiver] of Object.entries(input.verification.sectionWaivers)) {
+            const path = `verification.sectionWaivers.${section}`;
+            if (!isRecord(waiver)) {
+              push(issues, "INVALID_VERIFICATION", `${path} must be an object with reason + approvedBy.`, path);
+              continue;
+            }
+            for (const field of ["reason", "approvedBy"] as const) {
+              const value = waiver[field];
+              if (typeof value !== "string" || value.trim().length === 0) {
+                push(
+                  issues,
+                  "INVALID_VERIFICATION",
+                  `${path}.${field} must be a non-empty string. A waiver says a required section is knowingly ungraded, so it records WHY and WHO.`,
+                  `${path}.${field}`,
+                );
+              }
+            }
+          }
+        }
+      }
+
       // Anti-compression evidence gate (dogfood learnings §6 / High #7): every requested
       // class must be a known member of the fixed enum — an unknown class name is
       // a validation refusal, never silently accepted (it could never be satisfied
