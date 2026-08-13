@@ -5,6 +5,7 @@ import path from "node:path";
 import process from "node:process";
 import type { ScenarioDocument, ScenarioStep, ScenarioToolCallStep } from "../scenario/types.js";
 import type { AssetPrepareReport, PreparedAsset } from "./types.js";
+import { isMainModule as isMainModuleUrl } from "../../shared/main-module.js";
 
 interface PlatformerScenarioTemplate {
   schemaVersion: "1";
@@ -383,7 +384,7 @@ async function run(): Promise<number> {
   return 0;
 }
 
-const isMainModule = process.argv[1]?.endsWith("platformer-scenario.js") || process.argv[1]?.endsWith("platformer-scenario.ts");
+const isMainModule = isMainModuleUrl(import.meta.url);
 if (isMainModule) {
   run().then((code) => {
     process.exitCode = code;

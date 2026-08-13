@@ -18,6 +18,7 @@ import { realpathSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 import { resolveBuildStamp, formatBuildStamp } from "../shared/build-stamp.js";
+import { isMainModule as isMainModuleUrl } from "../shared/main-module.js";
 
 /**
  * Print the running build's version + stamp so a partner can detect a STALE frozen
@@ -330,15 +331,13 @@ export async function loombridgeCli(argv: string[]): Promise<number> {
  * suffix check alone would silently no-op (the command would print nothing). Both
  * sides are realpath'd so a symlinked bin resolves to this module.
  */
+// Uses the shared helper like every other entrypoint. The private copy this replaces carried an
+// extra `entry.endsWith("cli.js")` branch, which ALSO matches `scenario-cli.js`, `prepare-cli.js`
+// and `assets-authoring-cli.js`: any of those reaching this module would have run the whole
+// loombridge CLI. Latent rather than live (no such import path exists today), but the suffix
+// shortcut is exactly the pattern the sweep removed everywhere else.
 function isMainModule(): boolean {
-  const entry = process.argv[1];
-  if (!entry) return false;
-  if (entry.endsWith("cli.js") || entry.endsWith("cli.ts")) return true;
-  try {
-    return realpathSync(entry) === realpathSync(fileURLToPath(import.meta.url));
-  } catch {
-    return false;
-  }
+  return isMainModuleUrl(import.meta.url);
 }
 
 if (isMainModule()) {

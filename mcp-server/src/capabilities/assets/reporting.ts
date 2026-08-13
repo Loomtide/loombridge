@@ -11,6 +11,7 @@ import type {
   PreparedAsset,
   PreparedAssetImport,
 } from "./types.js";
+import { isMainModule as isMainModuleUrl } from "../../shared/main-module.js";
 
 type CountBucket = { selected: number; accepted: number; rejected: number };
 
@@ -161,7 +162,7 @@ async function run(): Promise<number> {
   return 0;
 }
 
-const isMainModule = process.argv[1]?.endsWith("reporting.js") || process.argv[1]?.endsWith("reporting.ts");
+const isMainModule = isMainModuleUrl(import.meta.url);
 if (isMainModule) {
   run().then((code) => {
     process.exitCode = code;

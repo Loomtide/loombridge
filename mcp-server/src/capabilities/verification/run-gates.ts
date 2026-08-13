@@ -89,6 +89,7 @@ import type {
   SfxLatencyCapture,
   SfxSequenceCapture,
 } from "../sfx/capture-shapes.js";
+import { isMainModule as isMainModuleUrl } from "../../shared/main-module.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Contract sections (H1/L108: what a gate WALKS)
@@ -1281,8 +1282,7 @@ async function run(): Promise<number> {
   }
 }
 
-const isMainModule =
-  process.argv[1]?.endsWith("run-gates.js") || process.argv[1]?.endsWith("run-gates.ts");
+const isMainModule = isMainModuleUrl(import.meta.url);
 if (isMainModule) {
   run().then((code) => {
     process.exitCode = code;

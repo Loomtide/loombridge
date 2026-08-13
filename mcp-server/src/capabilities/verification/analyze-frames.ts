@@ -13,6 +13,7 @@ import path from "node:path";
 import { inflateSync } from "node:zlib";
 
 import type { VisualArtifactsInput } from "./gates/visual-artifacts.js";
+import { isMainModule as isMainModuleUrl } from "../../shared/main-module.js";
 
 interface RgbaImage {
   width: number;
@@ -473,6 +474,11 @@ function parseNumberFlag(name: string, value: string | undefined): number {
   return parsed;
 }
 
+/** `--help`/`-h` anywhere in argv. Asking a command how it works is never a usage error. */
+export function wantsAnalyzeFramesHelp(argv: string[]): boolean {
+  return argv.some((a) => a === "--help" || a === "-h");
+}
+
 function parseArgs(argv: string[]): CliArgs {
   const args: CliArgs = {
     baselineId: "spawn",
@@ -530,6 +536,10 @@ function parseArgs(argv: string[]): CliArgs {
 }
 
 async function main(): Promise<void> {
+  if (wantsAnalyzeFramesHelp(process.argv.slice(2))) {
+    console.log(usage());
+    return;
+  }
   const args = parseArgs(process.argv.slice(2));
   const baseline: NamedFrame = {
     id: args.baselineId,
@@ -550,8 +560,7 @@ async function main(): Promise<void> {
   console.log(`[analyze-frames] wrote ${args.outputPath} (${findingCount} visual finding${findingCount === 1 ? "" : "s"})`);
 }
 
-const invokedAsCli =
-  process.argv[1]?.endsWith("analyze-frames.js") || process.argv[1]?.endsWith("analyze-frames.ts");
+const invokedAsCli = isMainModuleUrl(import.meta.url);
 
 if (invokedAsCli) {
   main().catch((error: unknown) => {
