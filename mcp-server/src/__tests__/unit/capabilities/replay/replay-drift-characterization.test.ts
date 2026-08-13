@@ -125,9 +125,17 @@ function scriptedClient(frameFor: (captureId: string) => Buffer): () => {
       "editor.set_run_in_background": () => ({}),
       "scene.open_scene": () => ({ opened: true }),
       "editor.console_logs": () => ({ logs: [] }),
+      // THE WINDOW, HELD APART FROM THE FRAME ON PURPOSE. This used to report `W`/`H`, the
+      // same numbers as the PNGs below, and a fixture that cannot tell the Game view WINDOW
+      // apart from the rendered FRAME cannot fail when code confuses them. It once did: a
+      // pre-drive note compared a record-time window size against an anchor's frame size
+      // and warned about a resize on a healthy project every run (see
+      // `replay-capture-resolution.test.ts`). A capture is rendered at the screenshot op's
+      // capture width and the view's ASPECT, so the two are different measurements that
+      // only ever coincide in a fixture.
       "ui.get_screen_rects": () => ({
         objects: [{ isVisible: true }],
-        viewport: { width: W, height: H },
+        viewport: { width: W * 2, height: H * 2, aspect: W / H },
       }),
       "ui.dispatch_pointer": () => ({ actuated: true, raycastHit: true, handlersFired: ["click"] }),
       "runtime.wait_for_condition": () => ({ passed: true }),

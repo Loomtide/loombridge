@@ -52,14 +52,18 @@ test("recordObservedTrace: reset → observe_start → observe_stop → trace (g
   const { trace } = await recordObservedTrace(send, meta, { waitForStop: async () => {} });
 
   // The op spine: a full reset cycle (now ending with the run-in-background keepalive so the
-  // player loop ticks while the bridge drives unfocused), a viewport read, then
-  // observe_start, then observe_stop.
+  // player loop ticks while the bridge drives unfocused), then observe_start, then
+  // observe_stop. Nothing else, and the exhaustive `deepEqual` is what says so.
   //
-  // `ui.get_screen_rects` lands BETWEEN the reset and the observation, and both sides of
-  // that position are load-bearing. AFTER the reset, because the reset enters Play Mode and
-  // the Game view is the surface every later capture is a screenshot of. BEFORE the
-  // observation, so the round trip is not competing with the human's own input. What it
-  // reads becomes `trace.viewport`, the size the demonstration was performed at.
+  // THE SPINE SHRANK BACK BY ONE OP, ON PURPOSE. A `ui.get_screen_rects` call sat between
+  // the reset and the observation to stamp the Game view size onto the trace as
+  // `viewport`. That size is the WINDOW; a capture is the game camera rendered at the
+  // screenshot op's capture width and the window's ASPECT, so the frames are a different
+  // size (1280x720 window, 1024x576 frames on the project this was measured on), and the
+  // one thing that read the stamp compared the two and warned about a resize that had not
+  // happened. The stamp is gone, so its round trip is gone with it: a recording no longer
+  // spends a main-thread trip, in the moment before a human starts performing, on a number
+  // nothing can honestly use.
   const commands = calls.map((c) => c.command);
   assert.deepEqual(commands, [
     "editor.stop",
@@ -68,17 +72,16 @@ test("recordObservedTrace: reset → observe_start → observe_stop → trace (g
     "editor.play",
     "editor.wait_for",
     "editor.set_run_in_background",
-    "ui.get_screen_rects",
     "input.observe_start",
     "input.observe_stop",
   ]);
   assert.equal(calls.find((c) => c.command === "scene.open_scene")!.params.path, meta.scene);
 
-  // AND A BRIDGE THAT CANNOT STATE A VIEWPORT STILL RECORDS. This fake answers every op
-  // with `{}`, so the screen-rects read came back unusable: the field is simply absent, the
-  // trace is otherwise unchanged, and the recording is NOT thrown away. A demonstration a
-  // human performs once must never be lost to a provenance round trip.
-  assert.equal(trace.viewport, undefined, "an unusable viewport is an absent field, never a refusal");
+  // AND NO RESOLUTION LANDS ON THE TRACE. Asserted on the KEYS, so an explicit
+  // `viewport: undefined` (which serialises away and reads as absent) cannot pass this:
+  // the field is gone, not blanked. The size a run is graded at is re-derived from the
+  // decoded frames at grade time, where both sides are the same measurement.
+  assert.ok(!Object.keys(trace).includes("viewport"), "a trace records no Game view size");
 
   // The trace is the parsed/validated transform of the observed click.
   assert.equal(trace.id, "demo");
@@ -87,6 +90,35 @@ test("recordObservedTrace: reset → observe_start → observe_stop → trace (g
   assert.deepEqual(trace.segments[0].actions[1], { do: "tap", locator: { path: "/HUD/Start" } });
   assert.doesNotThrow(() => parseTrace(trace as unknown));
 });
+
+/*
+ * LITMUS for the shrunken spine. BREAK, restore the record-time Game view read PR #94
+ * shipped (`git checkout c373d08 -- src/capabilities/replay/`). OBSERVED (node --test),
+ * verbatim:
+ *
+ *     ✖ recordObservedTrace: reset → observe_start → observe_stop → trace (green by construction)
+ *       AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+ *       + actual - expected
+ *
+ *         [
+ *           'editor.stop',
+ *           'editor.wait_for',
+ *           'scene.open_scene',
+ *           'editor.play',
+ *           'editor.wait_for',
+ *           'editor.set_run_in_background',
+ *       +   'ui.get_screen_rects',
+ *           'input.observe_start',
+ *           'input.observe_stop'
+ *         ]
+ *
+ *         operator: 'deepStrictEqual'
+ *
+ * The exhaustive `deepEqual` is what makes this non-vacuous in BOTH directions: an op added
+ * to the recording spine fails here whether or not anyone remembers to assert about it.
+ * `replay-capture-resolution.test.ts` carries the companion guard for the field itself, and
+ * for the healthy differing-numbers case the removed comparison got wrong.
+ */
 
 test("recordObservedTrace (no --scene): resolves the editor's active scene via scene.get_active and resets to it", async () => {
   const { send, calls } = fakeBridge({

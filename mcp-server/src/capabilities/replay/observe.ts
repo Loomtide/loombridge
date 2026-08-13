@@ -276,14 +276,6 @@ export interface ObserveTraceMeta {
    * without a declared signal). Takes precedence over `stateSignal`. Absent/false ⇒ unchanged.
    */
   autoDetectStateSignal?: boolean;
-  /**
-   * The Game view size the demonstration was performed at, read from the live editor by
-   * `recordObservedTrace` and copied onto the trace (see `ReplayTrace.viewport`). Not a CLI
-   * argument: nothing an operator types could be trusted to describe the window they are
-   * about to demonstrate in. Absent ⇒ the trace records no size, exactly as every trace
-   * written before this field did.
-   */
-  viewport?: { width: number; height: number };
 }
 
 /** Default per-tap wait budget — the human's targets appear within a frame or two. */
@@ -446,10 +438,6 @@ export function observedClicksToTrace(
     ...(meta.intent ? { intent: meta.intent } : {}),
     start: { scene: meta.scene, reset: "scene-load" },
     input: { backend: "ui-events" },
-    // The size the human demonstrated at. Spread conditionally so a recording that could
-    // not read a viewport emits BYTE-IDENTICAL JSON to the one this transform emitted
-    // before the field existed, rather than a `"viewport": null` no reader expects.
-    ...(meta.viewport ? { viewport: meta.viewport } : {}),
     segments,
     // Captured outcome assertions (the trustworthy-verdict layer): replay asserts
     // the game reached the recorded end state, not just that the taps actuated.
@@ -615,9 +603,6 @@ export function observedEdgesToTrace(
     // Keyboard gameplay is driven by the simulated Input System keyboard; uGUI taps
     // in the timeline still dispatch under this backend (capabilityCheck accepts both).
     input: { backend: "input-system" },
-    // The size the human demonstrated at, on the keyboard timeline for the same reason it
-    // is on the pointer one: both transforms produce traces the same pixel gate grades.
-    ...(meta.viewport ? { viewport: meta.viewport } : {}),
     segments: [{
       id: "recorded",
       actions,

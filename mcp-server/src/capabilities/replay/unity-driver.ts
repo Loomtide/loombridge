@@ -734,31 +734,15 @@ export class UnityDriver implements ReplayDriver {
     return this.viewport;
   }
 
-  /**
-   * The live Game view size for a RECORDER to write onto the trace, or `null` when the
-   * editor could not state one.
-   *
-   * NULL RATHER THAN A THROW, and that asymmetry with {@link getViewport} is the point. A
-   * drag that needs to denormalize a release point has no honest fallback, so it throws and
-   * the dispatch fails. A recording does: the viewport is PROVENANCE on the trace, the
-   * pixel gate re-derives the real sizes from the decoded frames either way, and a
-   * demonstration a human just performed once must never be thrown away because a
-   * screen-rects round trip came back empty. Absent is already the back-compatible reading.
-   *
-   * ROUNDED TO WHOLE PIXELS, because the bridge reports the viewport as floats and a frame
-   * is an integer number of pixels. A stamped `1920.0000001` would print as an unfamiliar
-   * number in a resolution sentence and would be refused by the trace parser.
+  /*
+   * THE VIEWPORT IS A DISPATCH DETAIL, NOT A RESOLUTION TO PUBLISH. `getViewport` above
+   * exists to denormalize a drag's release point and to rescale `travelPx` per device, and
+   * that is the whole of its business. A `recordedViewport()` wrapper briefly exposed it to
+   * the trace RECORDER, where the Game view WINDOW size it returns was written onto the
+   * trace and then compared against the approved FRAME size, which is the capture width at
+   * that window's aspect. The two are different measurements, so the comparison warned about
+   * a resize on a healthy project every run. Frame sizes come from decoded frames.
    */
-  async recordedViewport(): Promise<{ width: number; height: number } | null> {
-    try {
-      const vp = await this.getViewport();
-      const width = Math.round(vp.width);
-      const height = Math.round(vp.height);
-      return width > 0 && height > 0 ? { width, height } : null;
-    } catch {
-      return null;
-    }
-  }
 
   /**
    * Lazily open an input session on the InputSystem backend (the ONLY backend that

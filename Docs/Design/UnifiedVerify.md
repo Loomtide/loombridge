@@ -495,21 +495,40 @@ comparison or the gate stays permanently red.
   exit 0 on the bare `trace replay`), with nothing anywhere naming the window. Observed live
   on a consumer project. `comparePerceptual` had ALWAYS returned `dimensionsMatch: false` for
   this; nothing on the replay path read it, so the one fact separating "the game changed"
-  from "the window changed" was discarded a line after it was derived. Three changes: every
-  `approve` stamps the decoded resolution; `trace record` writes the live Game view size onto
-  the trace as `viewport` (provenance, so a mismatch can be NAMED before the replay spends a
-  capture per gesture); and `applyVisualDiff` reads `dimensionsMatch` and tiers it as a
-  HARNESS fault naming both resolutions. It was never a false green (a cross-resolution
-  comparison cannot be laundered into a pass); it was the wrong tier and an unactionable
-  message. The refusal is deliberate and there is no opt-out: two frames of different sizes
-  share no pixels, so there is no honest verdict between refusing and lying. The way forward
-  for a free-aspect project is the newly stamped number: RESTORE the Game view to the
-  approved size (the anchor is untouched, no new consent is minted, the next run is green),
-  with re-approving named second because it mints an anchor from frames nothing compared. The
-  capture-level `harnessFault` is deliberately NOT set, so `approve` stays available: it is
-  the escape hatch the refusal itself points at. An anchor with no stamped size and a trace
-  with no `viewport` keep working unchanged, because the grade-time check measures DECODED
+  from "the window changed" was discarded a line after it was derived. Two changes: every
+  `approve` stamps the decoded resolution, and `applyVisualDiff` reads `dimensionsMatch` and
+  tiers it as a HARNESS fault naming both resolutions. It was never a false green (a
+  cross-resolution comparison cannot be laundered into a pass); it was the wrong tier and an
+  unactionable message. The refusal is deliberate and there is no opt-out: two frames of
+  different sizes share no pixels, so there is no honest verdict between refusing and lying.
+  The way forward for a free-aspect project is the newly stamped number: RESTORE the Game
+  view's ASPECT to the approved frames' (the anchor is untouched, no new consent is minted,
+  the next run is green), with re-approving named second because it mints an anchor from
+  frames nothing compared. The capture-level `harnessFault` is deliberately NOT set, so
+  `approve` stays available: it is the escape hatch the refusal itself points at. An anchor
+  with no stamped size keeps working unchanged, because the grade-time check measures DECODED
   frames and needs no field to be present.
+- **AND A TRACE DELIBERATELY RECORDS NO RESOLUTION, which the first pass got wrong.** That
+  pass also had `trace record` stamp the live Game view size onto the trace as `viewport` and
+  compare it, pre-drive, against the anchor's stamped frame size. On a healthy consumer
+  project the note fired on EVERY run: *"recorded at 1280x720 but its approved frames are
+  1024x576 … set the Game view to 1024x576 first"*, with nothing resized. THE TWO NUMBERS ARE
+  NOT THE SAME MEASUREMENT. `ui.get_screen_rects` reports the Game view WINDOW
+  (`Handles.GetMainGameViewSize()`); a capture is the game camera rendered into an offscreen
+  RenderTexture at the screenshot op's capture width and that window's ASPECT
+  (`ScreenshotCapture`: `width = maxWidth; height = round(width / aspect)`), so the frames
+  were 1024x576 in every run and every baseline. The stamp, its parser branch and its one
+  reader are gone: with the comparison removed the field had no reader at all, and a
+  machine-written field that reads as wired is this repo's most expensive recurring shape.
+  The real gate was never involved and never wrong (it compares decoded bytes on both sides
+  and stayed silent), so this was a false WARNING, never a false verdict. Nine
+  LITMUS-verified tests shipped with the note and none caught it, for one reason: every
+  fixture used the SAME NUMBER for the window size and the frame size. The guard that
+  replaces the note holds them apart (`replay-capture-resolution.test.ts` §6), and the
+  operator-facing resize prose now names the approved size as a FRAME size to restore the
+  ASPECT to, never as a window size to type in. There is no proxy for the frame size
+  available before the first capture is decoded: a replay learns its own resolution by taking
+  a frame.
 - **The mask is part of the ANCHOR.** `baseline-manifest.json` gained `maskRects`
   (`{ captureId?, x, y, w, h, reason }`) plus the `frameWidth`/`frameHeight` the rects were
   measured against, stamped by a new verb, `trace mask`, that mirrors `trace tolerance`
