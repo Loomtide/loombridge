@@ -64,11 +64,17 @@ export function installerShims(sh: string = fs.readFileSync(INSTALLER, "utf-8"))
   return names;
 }
 
-/** Each wrapper's exec TARGET, so a moved file cannot silently break the command. */
+/**
+ * Each wrapper's exec TARGET, so a moved file cannot silently break the command.
+ *
+ * Returns [] once the `for wname in src:name` loop is gone, which is the current state: those
+ * three verbs became package bins, so `package-entrypoints.test.ts` walks their targets instead.
+ * Kept because the loop is the shape a future aux verb would reuse.
+ */
 export function shimExecTargets(sh: string = fs.readFileSync(INSTALLER, "utf-8")): Array<{ bin: string; target: string }> {
   const out: Array<{ bin: string; target: string }> = [];
   const rule = /\[ "\$src_basename" = "([a-z-]+)" \] && src_subdir="([a-z/]+)" \|\| src_subdir="([a-z/]+)"/.exec(sh);
-  assert.ok(rule, "could not parse the wrapper subdir rule; this guard is reading a stale script");
+  if (!rule) return out;
   const [, specialBasename, specialDir, defaultDir] = rule;
   for (const m of sh.matchAll(/for\s+wname\s+in\s+([a-z:\s-]+?);\s*do/g)) {
     for (const pair of m[1]!.trim().split(/\s+/)) {
@@ -99,6 +105,21 @@ export function mintedByScrubber(src: string = fs.readFileSync(SCRUBBER, "utf-8"
  * `file::name` pairs allowed to name a non-resolving command. PER PAIR, not per file: a whole-file
  * exemption let the ledger name any command at all, including in its prescriptive "Fix" column.
  */
+/**
+ * Aux commands that exist ONLY on the frozen-runtime channel (installer wrappers backed by shell
+ * scripts, not dist entrypoints), yet are named in shipped docs.
+ *
+ * THIS LIST IS A KNOWN GAP, NOT A BLESSING. An npm-only user following a doc that names one of
+ * these gets command-not-found, which is precisely the bug that made a builder agent hand-roll a
+ * capture pipeline. Each entry is a debt with a reason. The fix for any of them is the same fix
+ * applied to capture/handoff-check/tune here: make it a package bin so both channels agree. Do
+ * not add to this list to silence a failure.
+ */
+const INSTALLER_ONLY_DOC_COMMANDS = new Map<string, string>([
+  ["loombridge-asset-prep", "wraps scripts/prepare-project-assets.sh (a shell script, not a dist entrypoint); npm-only users cannot run it"],
+  ["loombridge-embed-bridge", "wraps scripts/loombridge-embed-bridge.sh; `loombridge install-bridge --embedded` is the supported CLI path, so the doc should prefer that"],
+]);
+
 const ALLOWED_DOC_NAMES = new Set<string>([
   "Docs/Design/SniperShooterPlanLedger.md::loombridge-capture",
   // Not a command: the Unity PROJECT name in the phase-2.6 validation report. The broadened scan
@@ -137,14 +158,22 @@ function trackedDocs(): Array<{ file: string; text: string }> {
     .map((file) => ({ file, text: fs.readFileSync(path.join(REPO_ROOT, file), "utf-8") }));
 }
 
-test("every loombridge-* command NAMED in a shipped doc resolves to a bin or installer wrapper", () => {
-  const resolvable = resolvableNames();
-  const dangling = referencedInDocs().filter((f) => !resolvable.has(f.split(": ")[1]!));
+test("every loombridge-* command NAMED in a shipped doc resolves ON THE NPM CHANNEL", () => {
+  // CHANNEL-AWARE, and the first version was not. It accepted a name if EITHER channel provided
+  // it, so `loombridge-capture` passed as an installer wrapper while being command-not-found for
+  // every npm user, which is the exact population that hit the bug.
+  const bins = declaredBins();
+  const dangling = referencedInDocs()
+    .map((f) => f.split(": ")[1]!)
+    .filter((n) => !bins.has(n) && !INSTALLER_ONLY_DOC_COMMANDS.has(n))
+    .filter((n, i, a) => a.indexOf(n) === i)
+    .sort();
   assert.deepEqual(
     dangling,
     [],
-    "a doc tells an agent to run a command that does not exist. This is how a builder agent ended " +
-      `up hand-rolling the capture pipeline:\n  ${dangling.join("\n  ")}`,
+    "a doc names a command that is not a package bin, so an npm-installed user gets " +
+      "command-not-found. Make it a bin (both channels then agree), or record it in " +
+      `INSTALLER_ONLY_DOC_COMMANDS with the reason:\n  ${dangling.join("\n  ")}`,
   );
 });
 
@@ -161,8 +190,8 @@ test("every loombridge-* command the SCRUBBER can mint resolves", () => {
 test("every installer wrapper EXECS a file that exists", () => {
   // The defect the first draft missed: the command resolved on PATH and died on exec, because the
   // src layering moved its target and nothing walked it.
+  // No wrapper loop today (see shimExecTargets). This stays so reintroducing one is guarded.
   const targets = shimExecTargets();
-  assert.ok(targets.length >= 3, `expected wrapper targets, saw ${targets.length}`);
   const missing = targets
     .filter(({ target }) => !fs.existsSync(path.join(REPO_ROOT, "mcp-server", target)))
     .map(({ bin, target }) => `${bin} -> ${target}`)
