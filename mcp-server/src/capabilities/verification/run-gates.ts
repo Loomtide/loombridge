@@ -512,15 +512,42 @@ export function requiredContentSections(acceptance: unknown): RequiredContentSec
  * every gate that WOULD cover it, so the fix ("add `manifest` to a slice's
  * acceptance.gates, or empty the section with human consent") is in the message rather
  * than in someone's head.
+ *
+ * WAIVER SEAM. A section carrying an explicit `verification.sectionWaivers[section]` entry is a
+ * recorded human decision that it is knowingly ungraded, and does not refuse. This exists because
+ * a genre can be structurally uncertifiable: the 3d-shooter seed's validator REQUIRES `win.rule`
+ * while the only gate covering `win` is `playability`, a 2D-platformer observer that a 3D build
+ * cannot produce evidence for. Validator demands the section, coverage demands a gate nothing can
+ * satisfy, and the genre can never certify.
+ *
+ * IT IS DELIBERATELY NOT `verification.gates`. Treating "every covering gate is `not_applicable`"
+ * as consent looks equivalent and is not: `promote.ts` WRITES that field itself, marking six gates
+ * `not_applicable` whenever a promoted contract's core vertical does not gate them, and four
+ * required sections (`placement`, `platformer`, `props`, `reachability`) are covered ONLY by those
+ * six. A promoted contract would grant itself consent. Measured on that shape: 1 refusal before the
+ * machine-written waiver, 0 after. The waiver therefore lives in a field the promoter never writes
+ * and carries `reason` + `approvedBy`, both validated non-empty.
  */
 export function contractCoverageRefusals(args: {
   acceptance: unknown;
   gates: Iterable<string>;
 }): string[] {
   const covered = new Set(contractSectionsForGates(args.gates));
+  const acceptanceRecord = isRecord(args.acceptance) ? args.acceptance : {};
+  const verification = isRecord(acceptanceRecord.verification) ? acceptanceRecord.verification : {};
+  const waivers = isRecord(verification.sectionWaivers) ? verification.sectionWaivers : {};
   const refusals: string[] = [];
   for (const required of requiredContentSections(args.acceptance)) {
     if (covered.has(required.section)) continue;
+    // An attributed, validated waiver is the human exit. Shape is checked here too, not only at
+    // validation time, because this function is called directly by the slice roll-up on contracts
+    // that may not have been re-validated in this process.
+    const waiver = waivers[required.section];
+    if (
+      isRecord(waiver) &&
+      typeof waiver.reason === "string" && waiver.reason.trim().length > 0 &&
+      typeof waiver.approvedBy === "string" && waiver.approvedBy.trim().length > 0
+    ) continue;
     const candidates = [...SUPPORTED_GATE_IDS].filter((gate) =>
       (contractSectionsForGate(gate) ?? []).includes(required.section),
     );
@@ -528,7 +555,8 @@ export function contractCoverageRefusals(args: {
       `contract section \`${required.section}\` declares ${required.declares} and NO gate in the plan walks it ` +
         `(gates that would: ${candidates.length > 0 ? candidates.join(", ") : "none exist"}). ` +
         "A contract requirement nothing grades is a declared path nothing walks: add a covering gate to a " +
-        "slice's acceptance.gates, or amend the contract with explicit human consent.",
+        "slice's acceptance.gates, or record an explicit waiver at " +
+        `\`verification.sectionWaivers.${required.section}\` with a non-empty reason + approvedBy.`,
     );
   }
   return refusals;
