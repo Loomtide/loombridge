@@ -16,7 +16,8 @@ slice announced. It did not fail. What it cost to get there is the finding.
 | Catalog endpoint discoverability | SNP-P01 | **Fixed** | this branch |
 | Consumer-side discoverability | SNP-P02, SNP-T02 | **Fixed** | this branch |
 | Vitest trap | SNP-T03 | **Open** | |
-| Registry onboarding | SNP-O01 | **Fixed** | this branch |
+| Registry onboarding | SNP-O01 | **Fixed** | PR #85 |
+| Broken installer wrappers | SNP-P03 | **Fixed** | this branch |
 | Sniper sub-genre feel | SNP-G01 | **Candidate** (needs a 2nd run) | |
 
 ## Methodology
@@ -77,7 +78,33 @@ layer out: a declared path with no guard, invisible to a green suite.
 | ID | Finding | Provenance / Conf. | Sev | Evidence | Fix | Status |
 |---|---|---|---|---|---|---|
 | SNP-P01 | **Headline.** Catalog base URL is promised as "published alongside the asset store"; the store publishes nothing and the URL had to be scraped from JS bundles | `[observed-this-session]` `[direct]` | High | 16 curl calls; store 404s on every doc path; agent's own closing note | All SEVEN docs now say the URL is not published at a fixed path; a flatten-aware guard bans the claim returning | **Fixed** |
+| SNP-P03 | **The `loombridge-capture` wrapper was on PATH and died on exec.** The installer creates it (and `loombridge-handoff-check`, `loombridge-tune`) deliberately, so docs never spell a node path, but all three exec PRE-LAYERING targets: `dist/verification/...` and `dist/asset-layer/...` moved to `dist/capabilities/...`. A builder agent needing that runner hand-rolled a scratchpad `unity-ops.mjs` instead | `[observed-this-session]` `[direct]` | High | all three exec targets MISSING on disk; `loombridge-install-locally.sh:170` | Wrapper paths corrected; a guard now walks doc-referenced names, scrubber-minted names, AND every wrapper exec target | **Fixed** |
 | SNP-P02 | **32 of 78 bash calls (41%) read Loombridge's own `src/`/`dist/`** from inside the consumer project, to work out the asset flow (`catalog-source.js`, `assets.js`, `manifest-selection`, `asset-genre-profile`, `generated-assets`, `asset-manifest.d.ts`) | `[observed-this-session]` `[direct]` | High | line 143→288 cluster | `loombridge assets roles` prints the genre's roles; wired into plan.md and the asset-layer skill | **Fixed** |
+
+### SNP-P03 detail: the cost, and the wrong diagnosis
+
+The first attempt read `loombridge-capture` as a typo for the `loombridge-capture-runner` bin and
+renamed the docs. That was backwards: renaming fixes the npm channel and BREAKS the frozen-runtime
+channel the wrapper serves. Adversarial review caught it. Recorded because the wrong fix was
+plausible and passed its own tests.
+
+What the hand-rolled pipeline cost:
+
+1. **Base64 scraping.** `unity_editor_screenshot` states in its own description: *"pass `outputPath`
+   ... Do not scrape trace/artifacts for agent-facing screenshots."* The hand-rolled path did
+   exactly that, turning each 1080p frame into megabytes of base64 written, re-read and decoded,
+   on every re-verify loop. That is the bulk of the wall clock.
+2. **Positional frame labelling.** `zip(["aim","scoped","unscoped"], shots)` assumes three captures
+   succeeded IN ORDER. The surrounding `except ValueError: continue` proves the stream is noisy. A
+   dropped or reordered capture silently MISLABELS the evidence, and `analyze-frames` then renders
+   a confident verdict about the wrong pair: a verdict not bound to the run it claims.
+3. **No provenance.** The runner writes frames, capture-sequence.json, visual-artifacts.json and
+   console.json in one pass. The hand-rolled path produced only frames.
+
+**Open, not fixed here (SNP-P04):** the runner selects from `verification/scenarios/`, which
+contains only `platformer-2d-basic.json`. A 3D contract does not match, so it refuses unless the
+agent hand-authors `--scenario`, whose schema no shipped doc documents. Fixing the wrapper is
+necessary and NOT sufficient for the sniper case.
 
 ## O: onboarding / distribution
 

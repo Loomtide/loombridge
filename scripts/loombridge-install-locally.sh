@@ -162,7 +162,12 @@ done
 for wname in capture-runner:capture handoff-consistency:handoff-check tuning-runner:tune; do
   src_basename="${wname%%:*}"
   bin_name="loombridge-${wname##*:}"
-  [ "$src_basename" = "handoff-consistency" ] && src_subdir="asset-layer" || src_subdir="verification"
+  # Paths are under dist/capabilities/ since the src root was layered into
+  # bridge/ + surfaces/ + capabilities/. These wrappers were left pointing at the
+  # PRE-layering layout (dist/verification, dist/asset-layer), so every one of them
+  # exec'd a file that does not exist. `command-names-resolve.test.ts` now walks these
+  # targets so a move cannot silently break them again.
+  [ "$src_basename" = "handoff-consistency" ] && src_subdir="capabilities/assets" || src_subdir="capabilities/verification"
   echo "  -> $BIN_DIR/$bin_name"
   cat > "$BIN_DIR/$bin_name" <<EOF
 #!/usr/bin/env bash
