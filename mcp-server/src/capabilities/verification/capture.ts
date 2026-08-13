@@ -52,6 +52,7 @@ import { captureConsoleEvidence } from "./capture-console.js";
 import { captureFeelEvidence } from "./capture-feel.js";
 import { capturePlayabilityEvidence } from "./capture-playability.js";
 import { captureFramingEvidence } from "./capture-framing.js";
+import { captureVisualArtifactsEvidence } from "./capture-visual-artifacts.js";
 import { captureTileEvidence, TILE_CAPTURE_FILES } from "./capture-tiles.js";
 import { loombridgePaths, readState } from "../../domain/state.js";
 import { getSliceVerifyDir, readSlicePlan, type SliceEntry } from "./slices.js";
@@ -80,6 +81,13 @@ export interface CaptureArgs {
   cameraPath?: string;
   /** boundsMode for screen rects (framing capture). */
   boundsMode?: string;
+  /**
+   * Scenario JSON for the visual-artifacts recipe: it declares WHICH frames to capture and which
+   * is the baseline. Explicit because bundled pack selection matches on game kind and only the
+   * 2D-platformer pack ships, so every other genre must name a project-local scenario rather than
+   * have one guessed.
+   */
+  scenarioPath?: string;
   /** Capture kind override (when --out is used without --slice). */
   kind?: CaptureKind;
   /** Routing target for multi-editor setups (projectPathCanonical or unique projectName). */
@@ -93,6 +101,7 @@ export interface CaptureDeps {
   captureConsole: typeof captureConsoleEvidence;
   captureFeel: typeof captureFeelEvidence;
   capturePlayability: typeof capturePlayabilityEvidence;
+  captureVisualArtifacts: typeof captureVisualArtifactsEvidence;
 }
 
 const defaultDeps: CaptureDeps = {
@@ -101,6 +110,7 @@ const defaultDeps: CaptureDeps = {
   captureConsole: captureConsoleEvidence,
   captureFeel: captureFeelEvidence,
   capturePlayability: capturePlayabilityEvidence,
+  captureVisualArtifacts: captureVisualArtifactsEvidence,
 };
 
 type ParseHelp = { help: true; usageError?: boolean };
@@ -112,6 +122,7 @@ function parseArgs(args: string[]): CaptureArgs | ParseHelp {
   let locators: string[] = [];
   let cameraPath: string | undefined;
   let boundsMode: string | undefined;
+  let scenarioPath: string | undefined;
   let project: string | undefined;
 
   for (let i = 0; i < args.length; i += 1) {
@@ -126,6 +137,7 @@ function parseArgs(args: string[]): CaptureArgs | ParseHelp {
         .filter(Boolean);
     } else if (arg === "--camera") cameraPath = args[(i += 1)] ?? "";
     else if (arg === "--bounds-mode") boundsMode = args[(i += 1)] ?? "";
+    else if (arg === "--scenario") scenarioPath = path.resolve(root, args[(i += 1)] ?? "");
     else if (arg === "--project") project = args[(i += 1)] ?? "";
     else if (arg === "--help" || arg === "-h") return { help: true };
     else {
@@ -146,6 +158,7 @@ function parseArgs(args: string[]): CaptureArgs | ParseHelp {
     locators: locators.length > 0 ? locators : ["/Player"],
     cameraPath,
     boundsMode,
+    scenarioPath,
     ...(project ? { project } : {}),
   };
 }
@@ -409,6 +422,33 @@ export async function runCapture(args: CaptureArgs, deps: CaptureDeps = defaultD
         continue;
       }
 
+      if (recipe === "visual-artifacts") {
+        // Needs the contract for scenario selection, and the scenario names WHICH frames to
+        // capture. Both refusals surface here with the JSON to author.
+        let contract: unknown = undefined;
+        try {
+          contract = JSON.parse(await fs.readFile(paths.acceptance, "utf-8"));
+        } catch (error) {
+          contract = undefined;
+          void error;
+        }
+        const result = await deps.captureVisualArtifacts({
+          outDir,
+          acceptancePath: paths.acceptance,
+          acceptance: contract,
+          runId,
+          ...(args.scenarioPath ? { scenarioPath: args.scenarioPath } : {}),
+          ...(args.project ? { project: args.project } : {}),
+        });
+        noteWritten(result.visualArtifactsPath);
+        console.error(
+          `[loombridge capture] visual-artifacts: wrote ${rel(result.visualArtifactsPath)} ` +
+            `+ frames under ${rel(result.framesDir)} (scenario: ${rel(result.scenarioPath)})`,
+        );
+        outcomes.push({ recipe, ok: true });
+        continue;
+      }
+
       if (recipe === "playability") {
         // The observer needs the CONTRACT for both halves of its binding: the
         // `harness.playability` seam (which component carries win/score/lives) and
@@ -619,6 +659,8 @@ function recipeSelectionForKind(kind: CaptureKind): string[] {
       ? ["console.json"]
       : kind === "feel"
         ? ["feel.json"]
+        : kind === "visual-artifacts"
+          ? ["visual-artifacts.json"]
         : kind === "playability"
           ? ["playability.json"]
           : ["screen-rects.json"];
@@ -661,6 +703,9 @@ function printUsage(): void {
       "  --locators <a,b,c>   Comma-separated object paths to project (framing; default: /Player)",
       "  --camera <path>      Camera GameObject path (framing; default: /Main Camera)",
       "  --bounds-mode <m>    Screen-rects bounds mode (opaque | renderer | collider)",
+    "  --scenario <path>    Capture scenario JSON for the visual-artifacts recipe: it declares",
+    "                       WHICH frames to capture and which is the baseline. Required for any",
+    "                       genre with no bundled pack (only 2D platformer ships one).",
       "  --project <p>        Route to a specific Unity editor (projectPathCanonical or",
       "                       unique projectName). Omit to honor LOOMBRIDGE_UNITY_PROJECT,",
       "                       then single-editor auto-selection.",

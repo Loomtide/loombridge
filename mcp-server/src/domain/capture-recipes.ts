@@ -17,7 +17,7 @@
  */
 
 /** A deterministic capture recipe the CLI can run itself. */
-export type CaptureKind = "framing" | "tiles" | "feel" | "playability" | "console";
+export type CaptureKind = "framing" | "tiles" | "feel" | "playability" | "visual-artifacts" | "console";
 
 /**
  * Files each recipe writes as its REASON FOR EXISTING. A manifest entry listed
@@ -36,6 +36,11 @@ const RECIPE_PRIMARY_OUTPUTS: Record<CaptureKind, readonly string[]> = {
   // anti-teleport control (ledger L97/L98): and is now derived from a continuous
   // in-game-loop recording of the play session plus CLI-driven post-win probes.
   playability: ["playability.json"],
+  // The last manifest entry nothing produced. `capture` reported it as agent-assembly and exited
+  // 0, and a real session answered that by hand-rolling a base64 scraper that labelled frames
+  // positionally. Delegates to the scenario session in `capture-runner`, which already writes
+  // frames + this file, rather than becoming a second producer of the same evidence.
+  "visual-artifacts": ["visual-artifacts.json"],
   console: [],
 };
 
@@ -56,6 +61,9 @@ const RECIPE_INCIDENTAL_OUTPUTS: Record<CaptureKind, readonly string[]> = {
   // (ledger L106: console.json came from a play-enter soak BEFORE the played run,
   // so console-clean certified a session in which the game was never played).
   playability: ["console.json"],
+  // The scenario session holds play mode for the whole capture sweep, so its console snapshot
+  // covers the run the frames came from.
+  "visual-artifacts": ["console.json"],
   console: ["console.json"],
 };
 
@@ -66,7 +74,9 @@ const RECIPE_INCIDENTAL_OUTPUTS: Record<CaptureKind, readonly string[]> = {
  * already done when the drive-now line prints, and its console snapshot then
  * covers the whole run including the played completion.
  */
-const RECIPE_ORDER: readonly CaptureKind[] = ["tiles", "framing", "feel", "playability", "console"];
+// `visual-artifacts` runs before `playability` for the same reason everything else does: the
+// observer hands control to a human for minutes, so every CLI-driven recipe finishes first.
+const RECIPE_ORDER: readonly CaptureKind[] = ["tiles", "framing", "feel", "visual-artifacts", "playability", "console"];
 
 /** Every file a recipe writes (primary + incidental). */
 export function recipeOutputs(kind: CaptureKind): string[] {
