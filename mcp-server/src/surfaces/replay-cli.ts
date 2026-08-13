@@ -14,6 +14,7 @@ import path from "node:path";
 
 import { parseTrace } from "../capabilities/replay/index.js";
 import { runLiveReplay } from "../capabilities/replay/run-live.js";
+import { isMainModule as isMainModuleUrl } from "../shared/main-module.js";
 
 interface CliArgs {
   trace: string;
@@ -81,7 +82,7 @@ async function main(): Promise<void> {
   process.exit(report.status === "pass" ? 0 : report.status === "blocked" ? 2 : 1);
 }
 
-main().catch((error) => {
+if (isMainModuleUrl(import.meta.url)) main().catch((error) => {
   console.error(`[replay] harness error: ${error instanceof Error ? error.message : String(error)}`);
   process.exit(3);
 });
