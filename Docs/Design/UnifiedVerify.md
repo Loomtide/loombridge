@@ -421,7 +421,10 @@ note, so no guard enforces it.
   project its own manifest names (every sha survives a copy, so location is the last thing
   left to check: a moved pair exits 2 with *results are not at the project they claim*), or
   under `GITHUB_ACTIONS=true` (that exact value), where the trust root is the runner rather
-  than the operator's shell. That attestation is env-CLAIMED, not verified provenance, and
+  than the operator's shell. A manifest that is PRESENT and FAILS its own integrity is a third
+  refusal in that same ordered group (*a stamped pair that does not verify*), checked before
+  the attestation: see the test-results wave below for why leaving it to degrade into the
+  unstamped path was a path to exit 0. That attestation is env-CLAIMED, not verified provenance, and
   the output says so. CI runs the verb over the GameCI artifacts so the CLI's mapping and
   CI's verdict cannot diverge, keeping the WORST tier across the graded files.
 - **The on-ramp is deliberately UNCHANGED.** It stays the trace record/replay/approve
@@ -669,6 +672,85 @@ be silent about what it did not.
   when some workspace on the machine stamps this root.
 - **The same gaps ride in `verify.json` and the `loombridge_verify` MCP payload**, so a CI
   consumer and an agent see what the human saw rather than having to regex stderr.
+
+### And it moved once more: THE EVIDENCE ITSELF (the test-results wave)
+
+The audit's last cluster, and the first one where the attack was not on a gate's predicate but
+on the **document the predicate reads**. The waves below all made a gate compare more; this one
+is about a document that lies about what it contains, and a manifest whose own failure was the
+thing that silenced it. All three were demonstrated end to end against the real verb and all
+three are closed here.
+
+- **H1: a manifest that FAILS integrity degraded to "unstamped", and CI attestation then passed
+  it.** `gradeStoredResults` set a note on `!integrity.ok` and left `stamped = false`,
+  `integrityManifest = undefined`, so control reached the `GITHUB_ACTIONS` branch and returned 0.
+  Because the five producer bindings were optional fields read off that same `undefined`, ONE
+  failed sha silenced all five at once. Demonstrated with a manifest declaring `exitCode: 3`,
+  `compileErrors: 42`, `mutatedProject: true`, `summary: 999 passed` and a wrong assembly list,
+  beside a green two-case XML: **all five refusals present on disk, none reached the grader, exit
+  0.** The ordering precedent was already in the file and pointed the right way: the misplaced-pair
+  check runs BEFORE the attestation because a moved pair is "a positive signal of tampering, not
+  merely an absence of provenance". A sha mismatch is the same class of signal, and is now ordered
+  there too. CI is untouched: the workflow grades bare GameCI XMLs, which have no manifest at all.
+- **H2: omitting one XML attribute disabled the roll-up cross-check.** `runAttrSummary` was `null`
+  whenever `<test-run total>` was absent, and the only comparison drawn from it was `failed > 0`.
+  So `<test-run result="Passed" passed="1" failed="3">` with one passing case graded tier 0, and
+  so did `total="500" passed="499"` with one passing case, because `failed="0"` was honest and
+  nothing else was read. The module's own docstring promised "the verdict is the UNION of the two
+  readings, and any DISAGREEMENT between them is itself a refusal". That is now true: every count a
+  roll-up DECLARES is held against the cases walked beneath it, on `<test-run>` **and on every
+  `<test-suite>`**, so hiding a case means scrubbing the roll-up of every ancestor rather than
+  deleting one attribute. Only declared counts are compared, because an older writer that omits
+  `total` is stating no fact rather than claiming zero. `total` is the one asymmetric count
+  (over-claiming refuses, under-claiming is a note) and the asymmetry is calibrated to the writer
+  convention this file already documents: a Warning case lands in `total` and in no other bucket.
+- **H3: the grader skipped all five producer bindings on absence, with the refusal delegated to
+  the call sites.** Judged intentional by the audit (a bare CI XML is a supported input) but
+  argued against by the file's own comment two screens above the guards: *a rule enforced by one
+  door is a rule the other doors do not have.* It is also what made H1 reachable at all. **Decided
+  the other way**: the bindings are MANDATORY at the grader as a required discriminated
+  `attribution` (`producer` | `stamped` | `unattributed`), the `stamped` shape owes all five facts
+  by type, and the bare-XML case is an explicit NAMED opt-in carrying the reason it is
+  unattributed. The compiler now refuses a call site that omits what its shape owes, `tests grade`
+  prints the attribution on every path, and a source guard walks `src/` for callers so a FOURTH
+  door cannot appear silently.
+
+**Whether each new bound is recomputable, or one more value the attacker can write:**
+
+- **H1: RECOMPUTABLE.** The refusal reads `verifyTestResults`, which re-hashes the XML on disk
+  and compares against the stamped `resultsSha256`. The attacker cannot both edit the results and
+  keep the pair verifying without also rewriting the manifest, which is the point: it makes the
+  two files have to lie in agreement instead of one failure hiding the other.
+- **H2: RECOMPUTABLE, and the strongest of the three.** The denominator is the walk of the
+  document being graded, by the same reader that produced the roll-up, so the two numbers come
+  from one pass over one byte stream. There is no field to delete that buys silence at one level
+  without contradicting the level above it.
+- **H3: NOT a bound, and stated as such.** Attribution is a discipline on CALLERS, not a fact
+  about bytes: it makes omission impossible and the bare-XML case explicit. What it buys is that
+  H1's shape (a manifest present, its facts silently `undefined`) is no longer expressible.
+
+#### Known-open after this wave
+
+- **Nothing binds the stamped pair to a real Unity run.** `resultsSha256` binds the XML to the
+  manifest and H1 makes that binding load-bearing, but both files are written by the thing being
+  graded: a self-consistent forged pair still grades as `stamped`. The ceiling is unchanged and
+  documented above (`tests` is permanently unanchored, so the unified door's exit for a forged
+  pair is 2, and `tests grade` prints "not a verification verdict" on every path), but the honest
+  close needs a fact from outside the pair. **The candidate is the project's own declared test
+  surface**: `Packages/manifest.json` `testables` and the `.asmdef` files that reference the Test
+  Runner, which discovery ALREADY reads to decide a project declares tests, and which the XML's
+  assembly set could be held against. That is a genuinely recomputable denominator written by a
+  different artifact. It is not shipped here because the mapping from asmdef to assembly-suite
+  name has real false-failure surface (a test asmdef excluded by platform, or holding no tests, is
+  a legitimate absence), and a moat fix that reds out ordinary projects is a moat fix that gets
+  relaxed.
+- **Deleting a roll-up entirely is still cheaper than lying in it.** H2 compares what is declared;
+  a document with every count attribute stripped from `<test-run>` and every `<test-suite>` has
+  nothing left to disagree with. For a STAMPED pair the manifest's `summary` and `assemblies`
+  cross-checks still bind it. For a bare CI XML nothing does, which is the same gap as the bullet
+  above and closes with it.
+- **The suite cross-check is capped at five named refusals.** A single deleted case disagrees with
+  every ancestor, so the cap is about readability; the tier is unaffected.
 
 ### Comparison-counting delivery notes (the denominator wave)
 

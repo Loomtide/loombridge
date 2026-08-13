@@ -72,6 +72,24 @@ export const UNSTAMPED_REFUSAL =
 export const MISPLACED_REFUSAL = "results are not at the project they claim";
 
 /**
+ * Printed when a manifest is PRESENT in the declared slot and FAILS its own integrity (H1).
+ *
+ * Ordered with `MISPLACED_REFUSAL`, and for the same reason the comment on that check already
+ * gives: a stamped pair that does not verify is a POSITIVE SIGNAL OF TAMPERING, not merely an
+ * absence of provenance. A sha mismatch is the same class of signal as a moved pair and was
+ * not ordered there, so the failure degraded to "unstamped" and the CI attestation exited 0
+ * over it. The audit demonstrated the whole shape at once: a manifest declaring `exitCode: 3`,
+ * `compileErrors: 42`, `mutatedProject: true`, a forged summary and a forged assembly list,
+ * beside a green XML, with `resultsSha256` pointing at bytes that are not there. All five
+ * producer refusals were on disk, none reached the grader, and the verb exited 0.
+ *
+ * CI IS UNAFFECTED: the workflow grades BARE GameCI XMLs, which have no manifest at all and
+ * therefore take the unstamped path exactly as before. This refusal needs a manifest to exist
+ * in the declared slot and to fail against its own bytes.
+ */
+export const TAMPERED_REFUSAL = "a stamped pair that does not verify";
+
+/**
  * The EXACT value GitHub sets for `GITHUB_ACTIONS` (FXF).
  *
  * Compared with `===`, never for truthiness. `GITHUB_ACTIONS=0`, `=false`, or `=yes` are not
@@ -249,12 +267,17 @@ function usage(): void {
       "  an inconclusive case; a case",
       "  result outside NUnit's vocabulary (Passed, Failed, Warning, Inconclusive,",
       "  Skipped); bucket accounting that disagrees with the walked total; a Unity exit",
-      "  code the test-case walk cannot account for.",
+      "  code the test-case walk cannot account for; a roll-up that disagrees with the",
+      "  cases beneath it, on <test-run> or on any <test-suite> that declares counts",
+      "  (only DECLARED counts are compared, so a writer that omits total is fine).",
       "",
       "`grade` additionally exits 2 on a GREEN it cannot attribute to anyone but the",
-      "caller: unstamped input, or a stamped pair that is not at the project its manifest",
-      `claims. The one exception is the environment variable GITHUB_ACTIONS="${GITHUB_ACTIONS_VALUE}"`,
+      "caller: unstamped input, a stamped pair that is not at the project its manifest",
+      "claims, or a stamped pair that does not verify against its own bytes.",
+      `The one exception is the environment variable GITHUB_ACTIONS="${GITHUB_ACTIONS_VALUE}"`,
       "(that exact value, nothing else), where the runner chose and produced the file.",
+      "That exception attests an UNSTAMPED file only: it never launders a manifest that",
+      "is present and failing.",
     ].join("\n"),
   );
 }
@@ -420,6 +443,9 @@ function printGrade(grade: TestsGrade): void {
     `${TAG} ${s.total} test(s): ${s.passed} passed, ${s.failed} failed, ` +
       `${s.inconclusive} inconclusive, ${s.skipped} skipped`,
   );
+  // H3: where the producer facts came from, on EVERY path. An unattributed walk printed the
+  // same five numbers as a stamped one, so the one fact distinguishing them was invisible.
+  console.log(`${TAG}   attribution: ${grade.attribution}`);
   for (const reason of grade.reasons) console.log(`${TAG}   refusal: ${reason}`);
   for (const note of grade.notes) console.log(`${TAG}   note: ${note}`);
   for (const failure of grade.failures.slice(0, 10)) {
@@ -564,9 +590,15 @@ export async function runTests(cli: RunArgs, opts: TestsRunOpts = {}): Promise<n
   const grade = gradeTestResults({
     run: parsed,
     strict: cli.strict,
-    exitCode: spawned.exitCode ?? -1,
-    compileErrors,
-    mutatedProject,
+    // H3: this process spawned the editor, so the three facts come from the run itself. It
+    // does not claim `stamped`: the summary and assembly cross-checks would be this function
+    // comparing `deriveSummary(parsed)` against itself, which is a check that cannot fail.
+    attribution: {
+      kind: "producer",
+      exitCode: spawned.exitCode ?? -1,
+      compileErrors,
+      mutatedProject,
+    },
   });
 
   const manifest: TestResultsManifest = {
@@ -639,6 +671,7 @@ export async function gradeStoredResults(cli: GradeArgs, opts: TestsGradeOpts = 
   let stamped = false;
   let stampedNote = `no ${TEST_RESULTS_MANIFEST} beside ${cli.results}`;
   let misplaced: string | null = null;
+  let tampered: string | null = null;
   let integrityManifest: TestResultsManifest | undefined;
   if (path.resolve(stampedResults) === path.resolve(cli.results)) {
     const impliedRoot = projectRootForTestResultsDir(dir);
@@ -647,6 +680,10 @@ export async function gradeStoredResults(cli: GradeArgs, opts: TestsGradeOpts = 
     if (integrity.unstamped) {
       stampedNote = `no ${TEST_RESULTS_MANIFEST} in ${dir}`;
     } else if (!integrity.ok) {
+      // H1. A manifest that is PRESENT and does not verify is evidence of tampering, and it
+      // is refused HERE rather than degraded to the unstamped path, where the CI attestation
+      // would have exited 0 over it. See TAMPERED_REFUSAL for the demonstrated attack.
+      tampered = `${TAMPERED_REFUSAL}: ${integrity.failures.join("; ")}`;
       stampedNote = `manifest present but not verifying: ${integrity.failures.join("; ")}`;
     } else if (impliedRoot === null) {
       misplaced =
@@ -673,14 +710,24 @@ export async function gradeStoredResults(cli: GradeArgs, opts: TestsGradeOpts = 
     }
   }
 
+  // H3: which of the three inputs this is, stated once. A manifest reaches the grader ONLY
+  // through the `stamped` shape, which owes all five producer facts; anything else is the
+  // named `unattributed` opt-in carrying the reason. There is no longer a shape of this call
+  // in which a manifest exists and its facts silently arrive as `undefined`.
   const grade = gradeTestResults({
     run: parsed,
     strict: cli.strict,
-    exitCode: integrityManifest?.exitCode,
-    compileErrors: integrityManifest?.compileErrors,
-    mutatedProject: integrityManifest?.mutatedProject,
-    manifestSummary: integrityManifest?.summary,
-    manifestAssemblies: integrityManifest?.assemblies,
+    attribution:
+      integrityManifest !== undefined
+        ? {
+            kind: "stamped",
+            exitCode: integrityManifest.exitCode,
+            compileErrors: integrityManifest.compileErrors,
+            mutatedProject: integrityManifest.mutatedProject,
+            manifestSummary: integrityManifest.summary,
+            manifestAssemblies: integrityManifest.assemblies,
+          }
+        : { kind: "unattributed", why: stampedNote },
   });
 
   console.log(`${TAG} ${cli.results}`);
@@ -696,6 +743,15 @@ export async function gradeStoredResults(cli: GradeArgs, opts: TestsGradeOpts = 
     console.log(`${TAG} stamped and verifying: this green is quotable.`);
     console.log(`${TAG} ${GRADE_DIAGNOSTIC_BANNER}`);
     return 0;
+  }
+  if (tampered !== null) {
+    // H1, ordered with `misplaced` and BEFORE the CI attestation, for the same reason: a
+    // stamped pair that fails its own integrity is a positive signal of tampering rather than
+    // an absence of provenance. Degrading it to "unstamped" is what let a manifest carrying
+    // five refusals exit 0 under GITHUB_ACTIONS with none of them evaluated.
+    console.error(`${TAG} ${tampered}`);
+    console.log(`${TAG} ${GRADE_DIAGNOSTIC_BANNER}`);
+    return 2;
   }
   if (misplaced !== null) {
     // Checked BEFORE the CI attestation on purpose. A stamped pair that has been moved is a

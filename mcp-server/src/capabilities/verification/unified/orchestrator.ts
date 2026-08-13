@@ -1080,14 +1080,21 @@ async function testsSection(
     return refuse(`${TEST_RESULTS_FILE} is unreadable: ${parsed.error}`);
   }
 
+  // H3: `stamped`, and structurally so. Every path above this line that could NOT produce a
+  // verified manifest has already returned a refusal, so this door has no shape in which it
+  // grades an unattributed walk: the compiler will not let it omit a producer fact, and
+  // reaching here at all means `verifyTestResults` said ok and the sha was re-checked.
   const grade = gradeTestResults({
     run: parsed,
     strict: opts.strict,
-    exitCode: manifest.exitCode,
-    compileErrors: manifest.compileErrors,
-    mutatedProject: manifest.mutatedProject,
-    manifestSummary: manifest.summary,
-    manifestAssemblies: manifest.assemblies,
+    attribution: {
+      kind: "stamped",
+      exitCode: manifest.exitCode,
+      compileErrors: manifest.compileErrors,
+      mutatedProject: manifest.mutatedProject,
+      manifestSummary: manifest.summary,
+      manifestAssemblies: manifest.assemblies,
+    },
   });
 
   const s = grade.summary;

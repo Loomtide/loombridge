@@ -24,6 +24,7 @@ import {
   GITHUB_ACTIONS_VALUE,
   GRADE_DIAGNOSTIC_BANNER,
   MISPLACED_REFUSAL,
+  TAMPERED_REFUSAL,
   UNSTAMPED_REFUSAL,
   run as runTestsVerb,
 } from "../../../../capabilities/tests/tests.js";
@@ -344,17 +345,35 @@ test("a stamped pair whose manifest summary was hand-edited grades tier 2 (G12)"
   }
 });
 
-test("a stamped pair whose XML was edited after the run is NOT treated as stamped", async () => {
+test("H1: a stamped pair whose XML was edited after the run is REFUSED as tampering, not degraded", async () => {
+  // THIS TEST'S OWN ASSERTION USED TO BE THE HOLE. It asserted the exit came from
+  // `UNSTAMPED_REFUSAL`, which is to say it pinned the very degradation Finding A exploits:
+  // a manifest that FAILS integrity fell through to the unstamped path, and the unstamped
+  // path exits 0 under GITHUB_ACTIONS. The test passed only because it never set that
+  // variable, so the suite proved the verdict was right in the one environment where the
+  // exploit does not fire.
   const { root, results } = await plantStamped();
   try {
     await fs.writeFile(results, GREEN_XML.replace('name="b"', 'name="b_renamed"'), "utf-8");
     const { code, out, err } = await capture(["grade", "--results", results]);
     assert.match(out, /manifest present but not verifying/);
     assert.match(out, /sha256 mismatch/);
-    // The mapping itself is still green (the edit was cosmetic), so the exit comes from the
-    // unstamped rule: an unverifiable manifest buys exactly nothing.
     assert.equal(code, 2);
-    assert.ok(err.includes(UNSTAMPED_REFUSAL));
+    assert.ok(err.includes(TAMPERED_REFUSAL), err);
+    assert.ok(
+      !err.includes(UNSTAMPED_REFUSAL),
+      "a manifest that is PRESENT and failing is not the same fact as no manifest at all",
+    );
+
+    // …AND UNDER THE CI ATTESTATION, which is the environment the original assertion never
+    // visited and the only one in which this mattered.
+    const ci = await capture(["grade", "--results", results], { GITHUB_ACTIONS: GITHUB_ACTIONS_VALUE });
+    assert.equal(ci.code, 2, `GITHUB_ACTIONS must not launder a failing manifest: ${ci.all}`);
+    assert.ok(ci.err.includes(TAMPERED_REFUSAL), ci.all);
+    assert.ok(
+      !ci.out.includes("treating the file as runner-produced"),
+      "the attestation must not even be reached for a present-but-failing manifest",
+    );
   } finally {
     await fs.rm(root, { recursive: true, force: true });
   }
@@ -407,4 +426,311 @@ test("grade without --results is a usage refusal, not a default guess", async ()
   const { code, err } = await capture(["grade"]);
   assert.equal(code, 2);
   assert.match(err, /grade requires --results <xml>/);
+});
+
+/* -------------------------------------------------------------------------- */
+/* H1: the audit's five-refusal manifest, reproduced end to end               */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * THE ATTACK, VERBATIM. A manifest sitting in the declared slot beside a green XML, carrying
+ * every single producer refusal this gate owns:
+ *
+ *   exitCode: 3            "the run itself failed"
+ *   compileErrors: 42      "assemblies that did not compile ran no tests"
+ *   mutatedProject: true   "the project is not the one that was measured"
+ *   summary: 999 passed    the stamped-vs-graded cross-check (G12)
+ *   assemblies: [wrong]    the assembly binding (G4)
+ *
+ * …plus `resultsSha256: "deadbeef"`, which is what made the other five invisible: the
+ * integrity failure degraded the pair to "unstamped", the five facts became `undefined`, and
+ * `undefined` skipped every one of the five checks. Observed before the fix, under
+ * `GITHUB_ACTIONS=true`: `tier 0`, `EXIT 0`.
+ */
+async function plantFiveRefusalManifest(): Promise<{ root: string; results: string }> {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "loombridge-grade-forged-"));
+  const dir = testResultsDir(root);
+  await fs.mkdir(dir, { recursive: true });
+  await fs.writeFile(testResultsPath(dir), GREEN_XML, "utf-8");
+  await fs.writeFile(testRunLogPath(dir), LOG, "utf-8");
+  await writeTestResultsManifest(
+    dir,
+    manifestFor(root, GREEN_XML, {
+      exitCode: 3,
+      compileErrors: 42,
+      mutatedProject: true,
+      summary: { total: 999, passed: 999, failed: 0, inconclusive: 0, skipped: 0 },
+      assemblies: ["NotTheAssemblyInTheXml.dll"],
+      resultsSha256: "deadbeef",
+    }),
+  );
+  return { root, results: testResultsPath(dir) };
+}
+
+/**
+ * LITMUS, run against the REAL code path. `if (tampered !== null)` in `gradeStoredResults`
+ * replaced by `if (false as boolean)`, which is exactly the pre-fix control flow (the failing
+ * manifest falls through to the unstamped path). Both H1 tests fail; observed verbatim:
+ *
+ *   ✖ H1: a manifest carrying ALL FIVE producer refusals cannot reach exit 0, CI attestation included
+ *     AssertionError [ERR_ASSERTION]: [loombridge tests] DIAGNOSTIC: not a verification verdict
+ *     [loombridge tests] …/.loombridge/tests/test-results.xml
+ *     [loombridge tests] manifest present but not verifying: test-results.xml sha256 mismatch: the
+ *                        results were edited after the run that stamped them
+ *     [loombridge tests] 2 test(s): 2 passed, 0 failed, 0 inconclusive, 0 skipped
+ *     [loombridge tests]   attribution: NOT attributed to any run: manifest present but not verifying: …
+ *     [loombridge tests] tier 0
+ *
+ *   ✖ H1: a stamped pair whose XML was edited after the run is REFUSED as tampering, not degraded
+ *     AssertionError [ERR_ASSERTION]: [loombridge tests] unstamped input; run `loombridge tests run`
+ *                                     to produce quotable results
+ *
+ *   ℹ tests 24 / ℹ pass 22 / ℹ fail 2
+ *
+ * Restored: `ℹ tests 24 / ℹ pass 24 / ℹ fail 0`.
+ */
+test("H1: a manifest carrying ALL FIVE producer refusals cannot reach exit 0, CI attestation included", async () => {
+  const { root, results } = await plantFiveRefusalManifest();
+  try {
+    for (const env of [{}, { GITHUB_ACTIONS: GITHUB_ACTIONS_VALUE }]) {
+      const label = JSON.stringify(env);
+      const { code, out, err, all } = await capture(["grade", "--results", results], env);
+      assert.equal(code, 2, `the five-refusal manifest exited ${code} under ${label}:\n${all}`);
+      assert.ok(err.includes(TAMPERED_REFUSAL), all);
+      assert.match(out, /sha256 mismatch/);
+      assert.ok(!out.includes("this green is quotable"), "a forged pair is never quotable");
+      assert.ok(
+        !out.includes("treating the file as runner-produced"),
+        "the CI attestation must not be reached for a present-but-failing manifest",
+      );
+    }
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test("LITMUS: the H1 refusal really is what stops it; restore the sha and the SAME pair is quotable", async () => {
+  // Non-vacuity for the test above. If `plantFiveRefusalManifest` were simply unreadable, or
+  // if `tests grade` had started refusing everything, the assertion would pass for the wrong
+  // reason. So: the same directory, the same green XML, the same five forged facts, with ONLY
+  // `resultsSha256` corrected. Integrity then passes, the pair grades as `stamped`, and the
+  // five facts reach the grader as they always should have. Observed output of this half:
+  //
+  //   [loombridge tests]   attribution: producer facts from a verified stamped manifest
+  //   [loombridge tests]   refusal: 42 compile error line(s) in the Unity log; assemblies that
+  //                        did not compile ran no tests
+  //   [loombridge tests]   refusal: the run MUTATED ProjectSettings/ProjectVersion.txt; …
+  //   [loombridge tests]   refusal: Unity exited 3, which the test-case walk does not account for
+  //   [loombridge tests]   refusal: manifest summary disagrees with the graded walk: total 999 vs 2; …
+  //   [loombridge tests]   refusal: assembly set disagrees with the manifest; stamped but absent
+  //                        from the XML: NotTheAssemblyInTheXml.dll; …
+  //   [loombridge tests] tier 2
+  const { root, results } = await plantFiveRefusalManifest();
+  try {
+    const dir = testResultsDir(root);
+    await writeTestResultsManifest(
+      dir,
+      manifestFor(root, GREEN_XML, {
+        exitCode: 3,
+        compileErrors: 42,
+        mutatedProject: true,
+        summary: { total: 999, passed: 999, failed: 0, inconclusive: 0, skipped: 0 },
+        assemblies: ["NotTheAssemblyInTheXml.dll"],
+        // The ONE difference: the sha now matches the bytes on disk.
+        resultsSha256: sha256(GREEN_XML),
+      }),
+    );
+    const { code, out } = await capture(["grade", "--results", results], { GITHUB_ACTIONS: GITHUB_ACTIONS_VALUE });
+    assert.equal(code, 2, out);
+    // Every one of the five now names itself, which is the proof they were REACHED. Before
+    // H1 this same manifest produced `tier 0` and none of these lines.
+    for (const refusal of [
+      /42 compile error line\(s\)/,
+      /MUTATED ProjectSettings/,
+      /Unity exited 3/,
+      /manifest summary disagrees with the graded walk: total 999 vs 2/,
+      /stamped but absent from the XML: NotTheAssemblyInTheXml\.dll/,
+    ]) {
+      assert.match(out, refusal, `a producer refusal never reached the grader: ${refusal}`);
+    }
+    assert.match(out, /attribution: producer facts from a verified stamped manifest/);
+
+    // And with the forgeries removed as well, the honest pair really is quotable, so the
+    // refusals above are about the FORGERY and not about a verb that stopped exiting 0.
+    await writeTestResultsManifest(dir, manifestFor(root, GREEN_XML));
+    const honest = await capture(["grade", "--results", results]);
+    assert.equal(honest.code, 0, honest.all);
+    assert.match(honest.out, /this green is quotable/);
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+/* -------------------------------------------------------------------------- */
+/* H2: the roll-up cross-check, through the real verb                        */
+/* -------------------------------------------------------------------------- */
+
+/** The audit's B1: omit ONE attribute (`total`) and the whole cross-check used to switch off. */
+const NO_TOTAL_XML =
+  '<?xml version="1.0" encoding="utf-8"?>\n' +
+  '<test-run id="2" result="Passed" passed="1" failed="3" inconclusive="0" skipped="0">\n' +
+  '  <test-suite type="Assembly" id="1" name="Dev.Editor.Tests.dll" result="Passed">\n' +
+  '    <test-case id="2" name="a" fullname="N.F.a" result="Passed" />\n' +
+  "  </test-suite>\n</test-run>\n";
+
+/** The audit's B2: only `failed` was ever compared, so inflate the two counts nobody read. */
+const INFLATED_XML =
+  '<?xml version="1.0" encoding="utf-8"?>\n' +
+  '<test-run id="2" result="Passed" total="500" passed="499" failed="0" inconclusive="0" skipped="0">\n' +
+  '  <test-suite type="Assembly" id="1" name="Dev.Editor.Tests.dll" result="Passed">\n' +
+  '    <test-case id="2" name="a" fullname="N.F.a" result="Passed" />\n' +
+  "  </test-suite>\n</test-run>\n";
+
+/**
+ * LITMUS for the whole H2 rule, run against the REAL code path. `rollupCrossCheck` at the run
+ * level replaced by the pre-fix predicate (`<test-run failed> > 0`, and only when `total` was
+ * also declared), and the suite-level loop's result discarded with `void suiteRefusals`.
+ * Five tests fail across the two files; observed verbatim:
+ *
+ *   ✖ ADVERSARIAL: nested suites whose attributes disagree never outvote the case walk
+ *   ✖ H2: a count that is not a whole number is MALFORMED, never coerced to zero
+ *   ✖ H2: a SUITE roll-up is held against its own subtree, so hiding a case costs every ancestor
+ *   ✖ H2: a roll-up with no `total` still cross-checks, and `failed=3` over one passing case refuses
+ *     AssertionError [ERR_ASSERTION]: [loombridge tests] DIAGNOSTIC: not a verification verdict
+ *     [loombridge tests] …/results.xml
+ *     [loombridge tests] no test-results-manifest.json beside …/results.xml
+ *   ✖ H2: `total="500" passed="499"` over ONE walked case refuses on both counts
+ *
+ * Restored: `ℹ tests 108 / ℹ pass 108 / ℹ fail 0` across the tests capability suite.
+ */
+test("H2: a roll-up with no `total` still cross-checks, and `failed=3` over one passing case refuses", async () => {
+  // Observed BEFORE the fix, under the most permissive path this verb has:
+  //   [loombridge tests] 1 test(s): 1 passed, 0 failed, 0 inconclusive, 0 skipped
+  //   [loombridge tests] tier 0
+  //   EXIT 0
+  const { root, results } = await plantBare(NO_TOTAL_XML);
+  try {
+    const { code, out } = await capture(["grade", "--results", results], { GITHUB_ACTIONS: GITHUB_ACTIONS_VALUE });
+    assert.equal(code, 2, out);
+    assert.match(out, /<test-run> declares failed="3" but the walk beneath it found 0/);
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test('H2: `total="500" passed="499"` over ONE walked case refuses on both counts', async () => {
+  // Observed BEFORE the fix: `1 test(s): 1 passed`, `tier 0`, EXIT 0. Only `failed` was
+  // compared, and `failed="0"` was honest, so 499 tests that do not exist cost nothing.
+  const { root, results } = await plantBare(INFLATED_XML);
+  try {
+    const { code, out } = await capture(["grade", "--results", results], { GITHUB_ACTIONS: GITHUB_ACTIONS_VALUE });
+    assert.equal(code, 2, out);
+    assert.match(out, /<test-run> declares total="500" but only 1 test case\(s\) are present/);
+    assert.match(out, /<test-run> declares passed="499" but the walk beneath it found 1/);
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+/* -------------------------------------------------------------------------- */
+/* H3: attribution is stated at every door, and the bare-XML flow survives    */
+/* -------------------------------------------------------------------------- */
+
+test("H3: a bare CI XML is UNATTRIBUTED, says so on every path, and CI still exits 0", async () => {
+  // THE FALSE-FAILURE BAR. A genuine headless CI run produces exactly this: a GameCI NUnit3
+  // artifact with no manifest, no log, and nothing that could attribute it to a producer. It
+  // must stay green, or the moat fix gets relaxed the first Monday it reds out a real repo.
+  const { root, results } = await plantBare();
+  try {
+    const ci = await capture(["grade", "--results", results], { GITHUB_ACTIONS: GITHUB_ACTIONS_VALUE });
+    assert.equal(ci.code, 0, ci.all);
+    // …and the gap is VISIBLE rather than absent: the reason is printed, not inferred from a
+    // missing line. This is what the named opt-in buys over an omitted field.
+    assert.match(ci.out, /attribution: NOT attributed to any run: no test-results-manifest\.json/);
+
+    // The same file WITHOUT the runner's attestation is still a refusal.
+    const local = await capture(["grade", "--results", results]);
+    assert.equal(local.code, 2);
+    assert.ok(local.err.includes(UNSTAMPED_REFUSAL));
+    assert.match(local.out, /attribution: NOT attributed to any run/);
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test("H3: a stamped, verifying pair grades as ATTRIBUTED and says which facts it used", async () => {
+  const { root, results } = await plantStamped();
+  try {
+    const { code, out } = await capture(["grade", "--results", results]);
+    assert.equal(code, 0, out);
+    assert.match(out, /attribution: producer facts from a verified stamped manifest/);
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+/* -------------------------------------------------------------------------- */
+/* FALSE-FAILURE BAR: legitimate documents that must NOT turn red             */
+/* -------------------------------------------------------------------------- */
+
+test("FALSE-FAILURE: an older writer that omits `total` entirely is graded on what it DOES declare", async () => {
+  // Absence is not disagreement. A writer that never emits `total` (or `warnings`, which real
+  // Unity output already omits) is compared on the counts it states, and an honest document
+  // still exits 0 under the CI attestation. Refusing an absent count would have turned every
+  // such writer red, which is the shape of fix that gets reverted.
+  const noTotalButHonest =
+    '<?xml version="1.0" encoding="utf-8"?>\n' +
+    '<test-run id="2" result="Passed" passed="2" failed="0">\n' +
+    '  <test-suite type="Assembly" id="1" name="Dev.Editor.Tests.dll" result="Passed">\n' +
+    '    <test-case id="2" name="a" fullname="N.F.a" result="Passed" />\n' +
+    '    <test-case id="3" name="b" fullname="N.F.b" result="Passed" />\n' +
+    "  </test-suite>\n</test-run>\n";
+  const { root, results } = await plantBare(noTotalButHonest);
+  try {
+    const { code, out } = await capture(["grade", "--results", results], { GITHUB_ACTIONS: GITHUB_ACTIONS_VALUE });
+    assert.equal(code, 0, out);
+    assert.match(out, /tier 0/);
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test("FALSE-FAILURE: a suite that declares NO counts at all is not held to counts it never stated", async () => {
+  const noSuiteCounts =
+    '<?xml version="1.0" encoding="utf-8"?>\n' +
+    '<test-run id="2" result="Passed" total="1" passed="1" failed="0" inconclusive="0" skipped="0">\n' +
+    '  <test-suite type="Assembly" id="1" name="Dev.Editor.Tests.dll" result="Passed">\n' +
+    '    <test-suite type="TestFixture" id="9" name="F" result="Passed">\n' +
+    '      <test-case id="2" name="a" fullname="N.F.a" result="Passed" />\n' +
+    "    </test-suite>\n  </test-suite>\n</test-run>\n";
+  const { root, results } = await plantBare(noSuiteCounts);
+  try {
+    const { code, out } = await capture(["grade", "--results", results], { GITHUB_ACTIONS: GITHUB_ACTIONS_VALUE });
+    assert.equal(code, 0, out);
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test("FALSE-FAILURE: an all-skipped suite still refuses for the reason it always did, and no other", async () => {
+  // The pre-existing "checked nothing" refusal must stay the reason. If the roll-up rule had
+  // been written to read an absent count as zero, or `skipped` asymmetrically, this document
+  // would have grown a second, wrong refusal on top of the right one.
+  const allSkipped =
+    '<?xml version="1.0" encoding="utf-8"?>\n' +
+    '<test-run id="2" result="Skipped" total="2" passed="0" failed="0" inconclusive="0" skipped="2">\n' +
+    '  <test-suite type="Assembly" id="1" name="Dev.Editor.Tests.dll" result="Passed" total="2" passed="0" failed="0" inconclusive="0" skipped="2">\n' +
+    '    <test-case id="2" name="a" fullname="N.F.a" result="Skipped" label="Ignored" />\n' +
+    '    <test-case id="3" name="b" fullname="N.F.b" result="Skipped" label="Ignored" />\n' +
+    "  </test-suite>\n</test-run>\n";
+  const { root, results } = await plantBare(allSkipped);
+  try {
+    const { code, out } = await capture(["grade", "--results", results], { GITHUB_ACTIONS: GITHUB_ACTIONS_VALUE });
+    assert.equal(code, 2, out);
+    assert.match(out, /every one of the 2 test case\(s\) was skipped/);
+    assert.ok(!out.includes("the roll-up and the cases disagree"), out);
+    assert.ok(!out.includes("cases are missing from the document"), out);
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
 });

@@ -28,11 +28,51 @@ import {
   gradeTestResults,
   isNUnitParseError,
   parseNUnitResults,
+  rollupCrossCheck,
   summaryDisagreements,
   type NUnitRun,
+  type TestsAttribution,
+  type TestsProducerFacts,
 } from "../../../../capabilities/tests/nunit-parse.js";
 
 const FIXTURE = path.join(REPO_ROOT, "mcp-server/src/__tests__/fixtures/nunit/editmode-run.xml");
+
+/**
+ * H3: a bare XML nobody stamped, stated EXPLICITLY.
+ *
+ * Every one of these call sites used to pass no producer facts at all, and that omission was
+ * indistinguishable from a caller that HAD facts and forgot them. It is now the named opt-in,
+ * so the tests below are testing the document, and the attribution is never accidental.
+ */
+const BARE: TestsAttribution = { kind: "unattributed", why: "a synthetic document, nobody stamped it" };
+
+/** Producer facts for a run this process is pretending to have spawned. */
+function producer(facts: Partial<TestsProducerFacts> = {}): TestsAttribution {
+  return { kind: "producer", exitCode: 0, compileErrors: 0, mutatedProject: false, ...facts };
+}
+
+/**
+ * A verified stamped manifest. The `stamped` shape owes ALL FIVE facts, so this helper takes
+ * overrides for the two under test and supplies honest values for the rest: a test that varies
+ * the summary must not accidentally also be testing an unexplained exit code.
+ */
+function stamped(overrides: {
+  manifestSummary?: { total: number; passed: number; failed: number; inconclusive: number; skipped: number };
+  manifestAssemblies?: readonly string[];
+  exitCode?: number;
+  compileErrors?: number;
+  mutatedProject?: boolean;
+}): TestsAttribution {
+  return {
+    kind: "stamped",
+    exitCode: 0,
+    compileErrors: 0,
+    mutatedProject: false,
+    manifestSummary: { total: 1, passed: 1, failed: 0, inconclusive: 0, skipped: 0 },
+    manifestAssemblies: ["A.dll"],
+    ...overrides,
+  };
+}
 
 /** Parse or fail the test with the parser's own message (never `as` past an error). */
 function parseOk(xml: string): NUnitRun {
@@ -59,15 +99,31 @@ test("the realistic EditMode fixture parses into the exact case set it declares"
   assert.deepEqual(deriveSummary(run), { total: 5, passed: 3, failed: 1, inconclusive: 0, skipped: 1 });
 
   // The roll-up the document declares agrees with the walk: recomputed for the trimmed
-  // subset, so the union rule (G3) has something true to agree with.
-  assert.deepEqual(run.runAttrSummary, {
-    total: 5,
-    passed: 3,
-    failed: 1,
-    inconclusive: 0,
-    skipped: 1,
-    warnings: 0,
+  // subset, so the union rule (G3) has something true to agree with. Real Unity output
+  // declares five of the six counts and NO `warnings`, which is why only declared keys are
+  // compared: a rule that read an absent count as zero would be reading a fact this writer
+  // never stated.
+  assert.deepEqual(run.rollup, {
+    declared: { total: 5, passed: 3, failed: 1, inconclusive: 0, skipped: 1 },
+    malformed: [],
   });
+  assert.equal("warnings" in run.rollup.declared, false, "real Unity output omits `warnings` entirely");
+
+  // H2: EVERY suite in the real document declares its own roll-up, and every one of them
+  // agrees with the cases beneath it. This is the false-failure guard for the suite-level
+  // cross-check: it runs against REAL Unity bytes, not against a document written to pass it.
+  for (const suite of run.suites) {
+    assert.deepEqual(
+      rollupCrossCheck(`suite '${suite.name}'`, suite.rollup, suite.walked),
+      { refusals: [], notes: [] },
+      `real Unity output must not trip the suite cross-check (suite '${suite.name}')`,
+    );
+  }
+  // Non-vacuity: the suites really did declare counts, and the walk really did attribute
+  // cases to them, so the loop above compared something.
+  const assembly = run.suites.find((s) => s.name === "com.loomtide.loombridge.tests.dll");
+  assert.deepEqual(assembly?.rollup.declared, { total: 4, passed: 2, failed: 1, inconclusive: 0, skipped: 1 });
+  assert.deepEqual(assembly?.walked, { total: 4, passed: 2, failed: 1, inconclusive: 0, skipped: 1, warnings: 0 });
 
   assert.deepEqual(run.assemblies, [
     "com.loomtide.loombridge.tests.dll",
@@ -191,7 +247,7 @@ test("a clean run with everything passing is tier 0", () => {
         "</test-suite>",
     ),
   );
-  const grade = gradeTestResults({ run, strict: false });
+  const grade = gradeTestResults({ run, strict: false, attribution: BARE });
   assert.equal(grade.tier, 0);
   assert.deepEqual(grade.reasons, []);
 });
@@ -199,7 +255,7 @@ test("a clean run with everything passing is tier 0", () => {
 test("the realistic fixture (a real red) is tier 1, not a harness fault", () => {
   const run = parseOk(fs.readFileSync(FIXTURE, "utf-8"));
   // Unity exits 2 when tests failed; the walk accounts for that, so it is not "unexplained".
-  const grade = gradeTestResults({ run, strict: false, exitCode: 2, compileErrors: 0, mutatedProject: false });
+  const grade = gradeTestResults({ run, strict: false, attribution: producer({ exitCode: 2 }) });
   assert.equal(grade.tier, 1, `expected a game defect, reasons: ${grade.reasons.join(" | ")}`);
   assert.equal(grade.failures.length, 1);
   assert.match(grade.reasons.join(" "), /1 test\(s\) failed/);
@@ -219,7 +275,7 @@ test("ADVERSARIAL: a suite-level TearDown failure with every case passing is tie
       'id="2" result="Failed" total="2" passed="2" failed="0" inconclusive="0" skipped="0"',
     ),
   );
-  const grade = gradeTestResults({ run, strict: false });
+  const grade = gradeTestResults({ run, strict: false, attribution: BARE });
   assert.equal(grade.tier, 2, `reasons: ${grade.reasons.join(" | ")}`);
   assert.match(grade.reasons.join(" "), /suite-level failure with a clean test-case walk/);
   assert.match(grade.reasons.join(" "), /A\.dll/);
@@ -234,14 +290,23 @@ test("ADVERSARIAL: a run-level Cancelled is tier 2 even when every case passed",
       'id="2" result="Cancelled" total="1" passed="1" failed="0" inconclusive="0" skipped="0"',
     ),
   );
-  const grade = gradeTestResults({ run, strict: false });
+  const grade = gradeTestResults({ run, strict: false, attribution: BARE });
   assert.equal(grade.tier, 2);
   assert.match(grade.reasons.join(" "), /Cancelled/);
 });
 
-test("ADVERSARIAL: nested suites whose attributes disagree do not outvote the case walk", () => {
-  // Outer suites claim Passed; a case three levels down failed. The case walk wins and the
-  // result is a defect (tier 1), not the cheerful roll-up's green.
+test("ADVERSARIAL: nested suites whose attributes disagree never outvote the case walk", () => {
+  // Outer suites claim Passed and `passed="2" failed="0"`; a case three levels down failed.
+  //
+  // THIS ASSERTION MOVED WITH H2, and the move is the point. It used to read tier 1: the
+  // walk won, so the failure was reported as a game defect and the lying roll-up cost the
+  // document nothing. Now the contradiction is itself a refusal, which is what this module's
+  // own docstring has always promised ("any DISAGREEMENT between them is itself a refusal").
+  // Tier 2 is the honest word for a document that cannot be read as a verdict, and the
+  // failure it does contain is still named, so nothing is hidden by the reclassification.
+  //
+  // A REAL red does NOT land here: the realistic-fixture test above grades tier 1 with real
+  // Unity bytes, where every suite roll-up agrees with its own cases.
   const run = parseOk(
     wrapRun(
       '<test-suite type="Assembly" id="1" name="A.dll" result="Passed" total="2" passed="2" failed="0">' +
@@ -254,9 +319,13 @@ test("ADVERSARIAL: nested suites whose attributes disagree do not outvote the ca
       'id="2" result="Passed" total="2" passed="2" failed="0" inconclusive="0" skipped="0"',
     ),
   );
-  const grade = gradeTestResults({ run, strict: false });
-  assert.equal(grade.tier, 1, `reasons: ${grade.reasons.join(" | ")}`);
-  assert.equal(grade.failures[0].fullname, "N.F.b");
+  const grade = gradeTestResults({ run, strict: false, attribution: BARE });
+  assert.equal(grade.tier, 2, `reasons: ${grade.reasons.join(" | ")}`);
+  assert.equal(grade.failures[0].fullname, "N.F.b", "the failure it DOES contain is still named");
+  const reasons = grade.reasons.join(" | ");
+  assert.match(reasons, /suite 'A\.dll' declares failed="0" but the walk beneath it found 1/);
+  assert.match(reasons, /<test-run> declares failed="0" but the walk beneath it found 1/);
+  assert.match(reasons, /1 test\(s\) failed: N\.F\.b/);
 });
 
 test("ADVERSARIAL: a roll-up claiming failures the document no longer contains is tier 2", () => {
@@ -270,7 +339,7 @@ test("ADVERSARIAL: a roll-up claiming failures the document no longer contains i
       'id="2" result="Failed" total="3" passed="1" failed="2" inconclusive="0" skipped="0"',
     ),
   );
-  const grade = gradeTestResults({ run, strict: false });
+  const grade = gradeTestResults({ run, strict: false, attribution: BARE });
   assert.equal(grade.tier, 2);
   assert.match(grade.reasons.join(" "), /cases are missing from the document/);
 });
@@ -279,7 +348,7 @@ test("ADVERSARIAL: total 0 is tier 2 (a run that checked nothing is not a pass)"
   const run = parseOk(
     wrapRun("", 'id="2" result="Passed" total="0" passed="0" failed="0" inconclusive="0" skipped="0"'),
   );
-  const grade = gradeTestResults({ run, strict: false });
+  const grade = gradeTestResults({ run, strict: false, attribution: BARE });
   assert.equal(grade.tier, 2);
   assert.match(grade.reasons.join(" "), /zero test cases/);
 });
@@ -294,7 +363,7 @@ test("ADVERSARIAL: an all-skipped run is tier 2 (checked-nothing precedent)", ()
       'id="2" result="Skipped" total="2" passed="0" failed="0" inconclusive="0" skipped="2"',
     ),
   );
-  const grade = gradeTestResults({ run, strict: false });
+  const grade = gradeTestResults({ run, strict: false, attribution: BARE });
   assert.equal(grade.tier, 2);
   assert.match(grade.reasons.join(" "), /every one of the 2 test case\(s\) was skipped/);
 });
@@ -311,7 +380,7 @@ test("ADVERSARIAL: a skipped or ignored SUITE is tier 2 even when the rest of th
       'id="2" result="Passed" total="1" passed="1" failed="0" inconclusive="0" skipped="0"',
     ),
   );
-  const grade = gradeTestResults({ run, strict: false });
+  const grade = gradeTestResults({ run, strict: false, attribution: BARE });
   assert.equal(grade.tier, 2, `reasons: ${grade.reasons.join(" | ")}`);
   assert.match(grade.reasons.join(" "), /skipped or ignored suite\(s\).*IgnoredFixture/s);
 });
@@ -326,7 +395,7 @@ test("a skipped CASE subset stays tier 0 and is NAMED in the notes, never hidden
       'id="2" result="Passed" total="2" passed="1" failed="0" inconclusive="0" skipped="1"',
     ),
   );
-  const grade = gradeTestResults({ run, strict: false });
+  const grade = gradeTestResults({ run, strict: false, attribution: BARE });
   assert.equal(grade.tier, 0);
   assert.match(grade.notes.join(" "), /1 skipped case\(s\): N\.F\.b/);
 });
@@ -340,7 +409,7 @@ test("a Failed case labelled Invalid is tier 2, and an Inconclusive case is tier
       'id="2" result="Failed" total="1" passed="0" failed="1" inconclusive="0" skipped="0"',
     ),
   );
-  const invalidGrade = gradeTestResults({ run: invalid, strict: false });
+  const invalidGrade = gradeTestResults({ run: invalid, strict: false, attribution: BARE });
   assert.equal(invalidGrade.tier, 2);
   assert.match(invalidGrade.reasons.join(" "), /label Invalid/);
 
@@ -352,7 +421,7 @@ test("a Failed case labelled Invalid is tier 2, and an Inconclusive case is tier
       'id="2" result="Inconclusive" total="1" passed="0" failed="0" inconclusive="1" skipped="0"',
     ),
   );
-  const inconclusiveGrade = gradeTestResults({ run: inconclusive, strict: false });
+  const inconclusiveGrade = gradeTestResults({ run: inconclusive, strict: false, attribution: BARE });
   assert.equal(inconclusiveGrade.tier, 2);
   assert.match(inconclusiveGrade.reasons.join(" "), /inconclusive case/);
 });
@@ -365,11 +434,11 @@ test("a Warning is a note by default and a defect under --strict", () => {
       "</test-suite>",
     'id="2" result="Warning" total="2" passed="1" failed="0" inconclusive="0" skipped="0" warnings="1"',
   );
-  const lenient = gradeTestResults({ run: parseOk(xml), strict: false });
+  const lenient = gradeTestResults({ run: parseOk(xml), strict: false, attribution: BARE });
   assert.equal(lenient.tier, 0);
   assert.match(lenient.notes.join(" "), /not gating without --strict/);
 
-  const strict = gradeTestResults({ run: parseOk(xml), strict: true });
+  const strict = gradeTestResults({ run: parseOk(xml), strict: true, attribution: BARE });
   assert.equal(strict.tier, 1);
   assert.match(strict.reasons.join(" "), /warning case\(s\) under --strict/);
 });
@@ -381,10 +450,10 @@ test("compile errors, a mutated project, and an unexplained exit code each refus
       "</test-suite>",
   );
   const run = parseOk(xml);
-  assert.equal(gradeTestResults({ run, strict: false, compileErrors: 3 }).tier, 2);
-  assert.equal(gradeTestResults({ run, strict: false, mutatedProject: true }).tier, 2);
-  assert.equal(gradeTestResults({ run, strict: false, exitCode: 3 }).tier, 2);
-  assert.equal(gradeTestResults({ run, strict: false, exitCode: 0 }).tier, 0);
+  assert.equal(gradeTestResults({ run, strict: false, attribution: producer({ compileErrors: 3 }) }).tier, 2);
+  assert.equal(gradeTestResults({ run, strict: false, attribution: producer({ mutatedProject: true }) }).tier, 2);
+  assert.equal(gradeTestResults({ run, strict: false, attribution: producer({ exitCode: 3 }) }).tier, 2);
+  assert.equal(gradeTestResults({ run, strict: false, attribution: producer({ exitCode: 0 }) }).tier, 0);
 
   // Unity's exit-code table: 2 means "tests failed". With failures in the walk that is
   // accounted for; without them it is a document that lost its failing cases.
@@ -405,14 +474,14 @@ test("a manifest summary that disagrees with the graded walk refuses (G12)", () 
   const honest = gradeTestResults({
     run,
     strict: false,
-    manifestSummary: { total: 1, passed: 1, failed: 0, inconclusive: 0, skipped: 0 },
+    attribution: stamped({ manifestSummary: { total: 1, passed: 1, failed: 0, inconclusive: 0, skipped: 0 } }),
   });
   assert.equal(honest.tier, 0);
 
   const laundered = gradeTestResults({
     run,
     strict: false,
-    manifestSummary: { total: 9, passed: 9, failed: 0, inconclusive: 0, skipped: 0 },
+    attribution: stamped({ manifestSummary: { total: 9, passed: 9, failed: 0, inconclusive: 0, skipped: 0 } }),
   });
   assert.equal(laundered.tier, 2);
   assert.match(laundered.reasons.join(" "), /manifest summary disagrees.*total 9 vs 1/s);
@@ -434,11 +503,11 @@ test("an assembly stamped in the manifest but absent from the XML refuses (G4)",
         "</test-suite>",
     ),
   );
-  const grade = gradeTestResults({ run, strict: false, manifestAssemblies: ["A.dll", "B.dll"] });
+  const grade = gradeTestResults({ run, strict: false, attribution: stamped({ manifestAssemblies: ["A.dll", "B.dll"] }) });
   assert.equal(grade.tier, 2);
   assert.match(grade.reasons.join(" "), /stamped but absent from the XML: B\.dll/);
 
-  const extra = gradeTestResults({ run, strict: false, manifestAssemblies: [] });
+  const extra = gradeTestResults({ run, strict: false, attribution: stamped({ manifestAssemblies: [] }) });
   assert.equal(extra.tier, 2);
   assert.match(extra.reasons.join(" "), /in the XML but not stamped: A\.dll/);
 });
@@ -474,7 +543,7 @@ test("FXA: a case result outside NUnit's vocabulary is tier 2, and the case and 
   // MAPPING and not about a document that failed to parse.
   assert.equal(run.cases.length, 4);
 
-  const grade = gradeTestResults({ run, strict: false });
+  const grade = gradeTestResults({ run, strict: false, attribution: BARE });
   assert.equal(grade.tier, 2, `reasons: ${grade.reasons.join(" | ")}`);
   const reasons = grade.reasons.join(" ");
   assert.match(reasons, /outside NUnit's vocabulary/);
@@ -484,7 +553,7 @@ test("FXA: a case result outside NUnit's vocabulary is tier 2, and the case and 
 
 test("FXA: bucket accounting refuses a walked total the five buckets cannot account for", () => {
   const run = parseOk(UNKNOWN_RESULT_XML);
-  const grade = gradeTestResults({ run, strict: false });
+  const grade = gradeTestResults({ run, strict: false, attribution: BARE });
   assert.match(
     grade.reasons.join(" "),
     /bucket accounting disagrees with the walk: 4 case\(s\) walked but 2 landed in a bucket/,
@@ -502,7 +571,7 @@ test("FXA: bucket accounting refuses a walked total the five buckets cannot acco
       'id="2" result="Warning" total="2" passed="1" failed="0" inconclusive="0" skipped="0" warnings="1"',
     ),
   );
-  const warningGrade = gradeTestResults({ run: warning, strict: false });
+  const warningGrade = gradeTestResults({ run: warning, strict: false, attribution: BARE });
   assert.equal(warningGrade.tier, 0, `a Warning case must stay accountable: ${warningGrade.reasons.join(" | ")}`);
   assert.ok(!warningGrade.reasons.join(" ").includes("bucket accounting"));
 });
@@ -523,9 +592,127 @@ test("FXI: a <test-run> with NO result attribute and a clean walk is tier 2, nev
   );
   assert.equal(run.result, "", "the fixture really does carry no run-level result attribute");
 
-  const grade = gradeTestResults({ run, strict: false });
+  const grade = gradeTestResults({ run, strict: false, attribution: BARE });
   assert.equal(grade.tier, 2, `reasons: ${grade.reasons.join(" | ")}`);
   assert.match(grade.reasons.join(" "), /test-run result is '\(absent\)'/);
+});
+
+/* -------------------------------------------------------------------------- */
+/* H2: the roll-up cross-check                                                */
+/* -------------------------------------------------------------------------- */
+
+test("H2: an absent count is not a claim of zero, and a declared one is compared both ways", () => {
+  const walked = { total: 3, passed: 2, failed: 1, inconclusive: 0, skipped: 0, warnings: 0 };
+
+  // Nothing declared: nothing to disagree with. This is the older-writer case, and it must
+  // stay silent, or every NUnit writer that omits an attribute goes red.
+  assert.deepEqual(rollupCrossCheck("<test-run>", { declared: {}, malformed: [] }, walked), {
+    refusals: [],
+    notes: [],
+  });
+
+  // Declared and honest: silent.
+  assert.deepEqual(
+    rollupCrossCheck("<test-run>", { declared: { total: 3, passed: 2, failed: 1 }, malformed: [] }, walked),
+    { refusals: [], notes: [] },
+  );
+
+  // Over-claiming `total` is the hiding direction: cases were removed, the summary was not.
+  assert.match(
+    rollupCrossCheck("<test-run>", { declared: { total: 9 }, malformed: [] }, walked).refusals.join(" "),
+    /declares total="9" but only 3 test case\(s\) are present/,
+  );
+
+  // UNDER-claiming `total` is the one direction with a documented writer convention (a
+  // Warning case lands in `total` and in no other bucket), and it hides nothing, so it is a
+  // NOTE. Making it a refusal is how this rule would red out a legitimate writer.
+  const under = rollupCrossCheck("<test-run>", { declared: { total: 2 }, malformed: [] }, walked);
+  assert.deepEqual(under.refusals, []);
+  assert.match(under.notes.join(" "), /declares total="2" over 3 walked case\(s\)/);
+
+  // The five per-result counts have no such hazard: each is a count of one NUnit result word,
+  // and the walk counts it the same way. Both directions refuse.
+  for (const [declared, direction] of [
+    [{ failed: 4 }, "claiming failures the document no longer contains"],
+    [{ failed: 0 }, "claiming fewer failures than the document contains"],
+    [{ passed: 99 }, "claiming passes the document no longer contains"],
+    [{ skipped: 1 }, "claiming a skip that is not there"],
+    [{ warnings: 2 }, "claiming warnings that are not there"],
+  ] as const) {
+    assert.equal(
+      rollupCrossCheck("<test-run>", { declared, malformed: [] }, walked).refusals.length,
+      1,
+      `${direction} must be a refusal`,
+    );
+  }
+});
+
+test("H2: a count that is not a whole number is MALFORMED, never coerced to zero", () => {
+  // `Number.parseInt("lots")` is NaN and the old reader answered 0 for it, so a roll-up of
+  // unreadable values agreed with an empty walk. "Unreadable" and "zero" are different facts.
+  const run = parseOk(
+    wrapRun(
+      '<test-suite type="Assembly" id="1" name="A.dll" result="Passed">' +
+        '<test-case id="2" name="a" fullname="N.F.a" result="Passed" />' +
+        "</test-suite>",
+      'id="2" result="Passed" total="lots" passed="-1" failed="0" inconclusive="0" skipped="0"',
+    ),
+  );
+  assert.deepEqual(run.rollup.malformed, ["total", "passed"]);
+  assert.equal("total" in run.rollup.declared, false, "an unreadable count is not a declared count");
+
+  const grade = gradeTestResults({ run, strict: false, attribution: BARE });
+  assert.equal(grade.tier, 2, `reasons: ${grade.reasons.join(" | ")}`);
+  assert.match(grade.reasons.join(" "), /declares total, passed as something other than a whole number/);
+});
+
+test("H2: a SUITE roll-up is held against its own subtree, so hiding a case costs every ancestor", () => {
+  // The shrinking attack applied to this wave's own mechanism: delete the `<test-run>`
+  // roll-up entirely and there is nothing left at the run level to disagree with. Each
+  // enclosing suite still counts its own subtree, so the failing case it lost still names it.
+  const run = parseOk(
+    wrapRun(
+      '<test-suite type="Assembly" id="1" name="A.dll" result="Passed" total="2" passed="1" failed="1">' +
+        '<test-suite type="TestFixture" id="2" name="F" result="Passed" total="2" passed="1" failed="1">' +
+        '<test-case id="3" name="a" fullname="N.F.a" result="Passed" />' +
+        "</test-suite></test-suite>",
+      // No counts at all on `<test-run>`: the run-level cross-check has nothing to say.
+      'id="2" result="Passed"',
+    ),
+  );
+  assert.deepEqual(run.rollup.declared, {}, "the run-level roll-up really was deleted");
+
+  const grade = gradeTestResults({ run, strict: false, attribution: BARE });
+  assert.equal(grade.tier, 2, `reasons: ${grade.reasons.join(" | ")}`);
+  const reasons = grade.reasons.join(" | ");
+  assert.match(reasons, /suite 'A\.dll' declares total="2" but only 1 test case\(s\) are present/);
+  assert.match(reasons, /suite 'F' declares failed="1" but the walk beneath it found 0/);
+});
+
+test("H2: a suite's walk is its OWN subtree, not its siblings' (the accumulator is scoped)", () => {
+  // If the open-suite stack were not popped on close, a fixture would keep collecting the
+  // cases of every later sibling and its honest roll-up would start disagreeing. That is a
+  // false-failure bug, and it would have looked exactly like a caught forgery.
+  const run = parseOk(
+    wrapRun(
+      '<test-suite type="Assembly" id="1" name="A.dll" result="Passed" total="2" passed="2">' +
+        '<test-suite type="TestFixture" id="2" name="First" result="Passed" total="1" passed="1">' +
+        '<test-case id="3" name="a" fullname="N.First.a" result="Passed" />' +
+        "</test-suite>" +
+        '<test-suite type="TestFixture" id="4" name="Second" result="Passed" total="1" passed="1">' +
+        '<test-case id="5" name="b" fullname="N.Second.b" result="Passed" />' +
+        "</test-suite>" +
+        "</test-suite>",
+      'id="2" result="Passed" total="2" passed="2" failed="0" inconclusive="0" skipped="0"',
+    ),
+  );
+  const first = run.suites.find((s) => s.name === "First");
+  const second = run.suites.find((s) => s.name === "Second");
+  assert.equal(first?.walked.total, 1, "the first fixture must not have absorbed its sibling's case");
+  assert.equal(second?.walked.total, 1);
+  assert.equal(run.suites.find((s) => s.name === "A.dll")?.walked.total, 2, "…while the parent sees both");
+
+  assert.equal(gradeTestResults({ run, strict: false, attribution: BARE }).tier, 0);
 });
 
 test("a tier-2 run still LISTS its real failures; the reclassification hides nothing", () => {
@@ -539,7 +726,7 @@ test("a tier-2 run still LISTS its real failures; the reclassification hides not
       'id="2" result="Failed" total="1" passed="0" failed="1" inconclusive="0" skipped="0"',
     ),
   );
-  const grade = gradeTestResults({ run, strict: false, compileErrors: 7, exitCode: 2 });
+  const grade = gradeTestResults({ run, strict: false, attribution: producer({ compileErrors: 7, exitCode: 2 }) });
   assert.equal(grade.tier, 2);
   assert.match(grade.reasons.join(" "), /compile error line/);
   assert.match(grade.reasons.join(" "), /1 test\(s\) failed: N\.F\.a/);
