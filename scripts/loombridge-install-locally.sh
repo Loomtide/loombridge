@@ -120,12 +120,17 @@ for sh in loombridge-checkpoint.sh loombridge-restore.sh; do
 done
 
 # 1. CLI wrappers — AUX verbs only, all pointing at the FROZEN RUNTIME, never the dev
-# repo. Names the released loombridge already provides (loombridge, loombridge-mcp,
-# loombridge-mcp-server, loombridge-analyze-frames, loombridge-capture-runner,
-# loombridge-run-gates) are NEVER created here: ~/.local/bin precedes the npm global bin
-# on PATH, so a wrapper would shadow the release install (see header). Heal machines
-# where an older version of this script created the shadowing wrappers:
-for stale in loombridge loombridge-mcp loombridge-mcp-server loombridge-analyze-frames loombridge-capture-runner loombridge-run-gates; do
+# repo. Names the released loombridge already provides are NEVER created here:
+# ~/.local/bin precedes the npm global bin on PATH, so a wrapper would shadow the release
+# install (see header). Heal machines where an older version of this script created the
+# shadowing wrappers.
+#
+# loombridge-capture / -handoff-check / -tune JOINED that list: they used to be wrappers
+# here, and they exec'd pre-layering paths (dist/verification/..., dist/asset-layer/...)
+# that moved to dist/capabilities/..., so the command was on PATH and died on exec. They
+# are package bins now, which also makes them real on the npm channel, where the docs
+# named them and nothing provided them.
+for stale in loombridge loombridge-mcp loombridge-mcp-server loombridge-analyze-frames loombridge-capture-runner loombridge-run-gates loombridge-capture loombridge-handoff-check loombridge-tune; do
   if [ -e "$BIN_DIR/$stale" ]; then
     echo "  -> removing stale shadowing wrapper $BIN_DIR/$stale (the CLI comes from get.loomtide.ai now)"
     rm -f "$BIN_DIR/$stale"
@@ -153,27 +158,6 @@ for verb in checkpoint restore; do
 exec "$RUNTIME/scripts/loombridge-$verb.sh" "\$@"
 EOF
   chmod +x "$BIN_DIR/loombridge-$verb"
-done
-
-# Additional internal dist wrappers (capture, handoff check, tuning) so agent-facing
-# command/skill content never has to spell out a node path. analyze-frames is NOT here —
-# the released loombridge ships a `loombridge-analyze-frames` bin (see the exclusion list
-# above); only names the release does not provide may be wrapped.
-for wname in capture-runner:capture handoff-consistency:handoff-check tuning-runner:tune; do
-  src_basename="${wname%%:*}"
-  bin_name="loombridge-${wname##*:}"
-  # Paths are under dist/capabilities/ since the src root was layered into
-  # bridge/ + surfaces/ + capabilities/. These wrappers were left pointing at the
-  # PRE-layering layout (dist/verification, dist/asset-layer), so every one of them
-  # exec'd a file that does not exist. `command-names-resolve.test.ts` now walks these
-  # targets so a move cannot silently break them again.
-  [ "$src_basename" = "handoff-consistency" ] && src_subdir="capabilities/assets" || src_subdir="capabilities/verification"
-  echo "  -> $BIN_DIR/$bin_name"
-  cat > "$BIN_DIR/$bin_name" <<EOF
-#!/usr/bin/env bash
-exec "$NODE_BIN" "$RT_MCP/dist/$src_subdir/$src_basename.js" "\$@"
-EOF
-  chmod +x "$BIN_DIR/$bin_name"
 done
 
 # 2. Slash commands
