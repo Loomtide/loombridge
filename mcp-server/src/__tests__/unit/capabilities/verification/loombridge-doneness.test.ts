@@ -542,8 +542,9 @@ test("checkAssetSourceFidelity — an approved 3d-shooter manifest passes the as
     preferredLicense: "CC0-1.0",
   });
 
-  // The real (genre-agnostic) fidelity gate produces the verdict checks…
-  const report = evaluateAssetSourceFidelity({ manifest: approved });
+  // The real (genre-agnostic) fidelity gate produces the verdict checks… (`stagedDocument: true`
+  // names the shape: the project's declaration, not a capture (see D2).)
+  const report = evaluateAssetSourceFidelity({ manifest: approved, stagedDocument: true });
   assert.ok(report.checks.every((check) => check.status === "pass"), JSON.stringify(report.checks.filter((c) => c.status !== "pass"), null, 2));
 
   // …and the doneness asset-source gate accepts them for an approved design target.
@@ -673,9 +674,41 @@ test("diskTruthDesignTargetRefusals — no approved disk target is N/A unless ST
   const missingDisk = { status: "missing", kind: "rendered-unity-frame", pngSha256: null, frozenMatches: false };
   assert.deepEqual(diskTruthDesignTargetRefusals(missingDisk, null), []);
   assert.deepEqual(diskTruthDesignTargetRefusals({ status: "draft", kind: "rendered-unity-frame", pngSha256: DISK_SHA, frozenMatches: true }, null), []);
+  // The sentence is now the one the SLICE twin prints, because both paths ask the question
+  // through the same `designTargetApprovalClaims` predicate (B2). Same refusal, same facts, one
+  // vocabulary.
   assert.ok(
     diskTruthDesignTargetRefusals(missingDisk, { status: "pass" }, "approved")
-      .some((r) => /STATE says Design Target is `approved`/.test(r)),
+      .some((r) => /STATE records `designTarget: approved`/.test(r)),
+  );
+  // AND THE TRANSITION RULE ON THIS PATH TOO: a target DOWNGRADED to `draft` with the STATE
+  // record scrubbed refuses on the meta's own record of its approval. Before B2 this branch read
+  // STATE alone, so the same two edits certified here as well.
+  assert.deepEqual(
+    diskTruthDesignTargetRefusals(
+      { status: "draft", kind: "rendered-unity-frame", pngSha256: DISK_SHA, frozenMatches: true },
+      { status: "pass" },
+      undefined,
+    ),
+    [],
+    "a draft that was never approved is not a downgrade",
+  );
+  assert.ok(
+    diskTruthDesignTargetRefusals(
+      { status: "draft", kind: "rendered-unity-frame", pngSha256: DISK_SHA, frozenMatches: true, approvedAt: "2026-05-28T00:00:00.000Z" },
+      { status: "pass" },
+      undefined,
+    ).some((r) => /records its own approval/.test(r)),
+    "an `approvedAt` on a non-approved target is a downgrade, whatever the status word says",
+  );
+  assert.ok(
+    diskTruthDesignTargetRefusals(
+      { status: "draft", kind: "rendered-unity-frame", pngSha256: DISK_SHA, frozenMatches: true },
+      { status: "pass" },
+      undefined,
+      true,
+    ).some((r) => /STATE carries no `designTarget` record/.test(r)),
+    "a meta on disk with the STATE record scrubbed is the pair taken apart",
   );
   assert.deepEqual(
     diskTruthDesignTargetRefusals(missingDisk, { status: "pass", designTarget: { status: "approved", pngSha256: DISK_SHA } }, "approved"),
@@ -1026,7 +1059,7 @@ test("doneness (whole-game path) — deleting the on-disk target cannot launder 
     } finally {
       console.error = originalError;
     }
-    assert.ok(lines.some((line) => /STATE says Design Target is `approved`/.test(line)), lines.join("\n"));
+    assert.ok(lines.some((line) => /STATE records `designTarget: approved`/.test(line)), lines.join("\n"));
   } finally {
     await fs.rm(root, { recursive: true, force: true });
   }
@@ -2141,9 +2174,26 @@ async function certifyingSliceProject(opts: { approveDesignTarget?: boolean } = 
     captureManifest: deriveSliceCaptureManifest(slice),
     approvedAt: "2026-05-28T02:00:00.000Z",
   };
-  await writeSliceProofFiles(root, slice);
+  // The design target is approved BEFORE the slice verdict is written, because that is the real
+  // order: `verify --slice` reads `designStatus` and stamps the target's status into the verdict
+  // it mints. A fixture whose verdict omitted the block would be testing a proof no `verify`
+  // produces, and would silently exempt itself from the signal that block carries.
+  const pngSha256 = opts.approveDesignTarget ? await approveFakeDesignTarget(root) : null;
+  await writeSliceProofFiles(
+    root,
+    slice,
+    pngSha256
+      ? {
+          designTarget: {
+            status: "approved",
+            kind: "rendered-unity-frame",
+            pngSha256,
+            frozenMatches: true,
+          },
+        }
+      : {},
+  );
   await writeSlicePlan(paths, planOf([slice]));
-  if (opts.approveDesignTarget) await approveFakeDesignTarget(root);
   await writeState(paths, {
     genre: "platformer-2d",
     engine: "unity",
@@ -2236,22 +2286,36 @@ test("MOAT (B): a DELETED design target on the SLICE path refuses exactly as a c
   }
 });
 
-test("B false-failure check: a project that never had a Design Target still certifies, and a DRAFT one is not a deleted one", async () => {
+test("B false-failure check: a project MID-AUTHORING (a draft that was never approved) still certifies", async () => {
   // The refusal fires on EVIDENCE that a target was approved, never on the absence of one. If
   // it ever fires on absence, every gray-box and `--allow-ungrounded-prototype` project is
   // permanently red.
+  //
+  // WHAT THIS TEST IS FOR, stated precisely, because the first cut of it asserted something
+  // wider than it meant and thereby ENSHRINED the B2 hole: the case that must stay green is a
+  // draft that was NEVER approved, which is what `target set` (no `--approve`) writes and what a
+  // project genuinely mid-authoring has. A draft that carries an `approvedAt`, or one whose STATE
+  // record was scrubbed, is a DOWNGRADE and refuses; see MOAT (B2). "A DRAFT design target is
+  // not a deleted one" was true and beside the point.
   const { root, paths } = await certifyingSliceProject();
   try {
     assert.equal(await runDoneness({ root }), 0, "no Design Target anywhere is not a refusal");
 
-    // A DRAFT target: the meta EXISTS, so `design.status` is `draft`, not `missing`. Nothing
-    // was taken apart, so the orphaned-artifacts signal must stay quiet.
+    // A DRAFT target: the meta EXISTS, so `design.status` is `draft`, not `missing`. Nothing was
+    // taken apart, so no signal in the union may fire.
     const image = path.join(root, "draft-hero.png");
     await fs.writeFile(image, "draft-pixels", "utf-8");
     await setDesignTarget({ root, imagePath: image, mode: "generated", kind: "rendered-unity-frame", approve: false });
-    assert.equal((await designStatus(paths)).status, "draft");
+    const status = await designStatus(paths);
+    assert.equal(status.status, "draft");
+    assert.equal(status.approvedAt, null, "a never-approved draft carries no approval timestamp");
+    assert.equal(
+      (await readState(paths))?.designTarget,
+      "draft",
+      "`target set` writes the meta and the STATE record together, so the pair is intact",
+    );
     const draft = await captureDonenessOutput(root);
-    assert.equal(draft.code, 0, "a DRAFT design target is not a deleted one");
+    assert.equal(draft.code, 0, "a draft that was never approved is a project mid-authoring, not a downgrade");
     assert.doesNotMatch(draft.text, /the on-disk Design Target is/);
   } finally {
     await fs.rm(root, { recursive: true, force: true });
@@ -2364,6 +2428,211 @@ test("C false-failure check: a slice whose gates genuinely have no captures stil
       updatedAt: "2026-05-28T00:00:00.000Z",
     });
     assert.equal(await runDoneness({ root }), 0, "an honestly capture-free slice must still certify");
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+// ── present-but-vacuous: the class the refuse-on-absent wave left behind ─────
+//
+// The wave above closed "the bound input is ABSENT". Every predicate it added asks whether the
+// bound input is there and is the right type, and none asks whether the value it holds still
+// CONSTRAINS anything. So the same false green was reachable by supplying a legal value that
+// means nothing. The four tests below are that class, one per door.
+
+/**
+ * B2: A DOWNGRADED DESIGN TARGET CERTIFIED, AND THE FIRST CUT ENSHRINED IT IN A TEST.
+ *
+ * `sliceDiskTruthDesignTargetRefusals` opens with `if (design.status === "approved") return []`
+ * and then refuses on a union of three signals, none of which a target that is PRESENT but
+ * `draft` trips: `orphanedDesignArtifacts` was scoped to `status === "missing"` (a draft HAS a
+ * meta), the whole-game verdict is absent on a slice-planned project that never ran one, and
+ * STATE is one hand-edit away. So the certificate a DELETION could not buy was available for a
+ * DOWNGRADE, with nothing deleted at all.
+ *
+ * BEFORE, one fixture, two hand-edits:
+ *
+ *   [B2 control: approved target, no review]              exit 1  (hero-shot-fidelity REFUSE)
+ *   [B2 target DOWNGRADED to "draft", STATE untouched]    exit 1
+ *   [B2 ATTACK: + `designTarget` key removed from STATE]  exit 0  "hero-shot faithful"
+ *
+ * The first cut's own false-failure test asserted `draft.code === 0`, so the escape hatch shipped
+ * as an assertion rather than as an oversight. That test is corrected below: what it was really
+ * protecting is a project MID-AUTHORING (a draft that was never approved), and that case is
+ * still green.
+ *
+ * THE RULE ADDED IS ABOUT THE TRANSITION, not a list of bad statuses: any evidence that this
+ * target was EVER approved refuses a target that is not approved NOW, whichever non-approved
+ * word is in the file. Three new signals carry it, and the meta's OWN `approvedAt` is the one
+ * that makes a downgrade self-refuting.
+ *
+ * LITMUS, run 2026-08-13. The three new claim rows removed from
+ * `designTargetApprovalClaims` (leaving the original three), rebuilt, re-run:
+ *
+ *   ✖ MOAT (B2): a DOWNGRADED design target refuses exactly as a deleted one does (10.386458ms)
+ *     AssertionError [ERR_ASSERTION]: a target downgraded to `draft` with STATE scrubbed must not certify
+ *
+ *     0 !== 1
+ *
+ *   ℹ pass 84
+ *   ℹ fail 1
+ *
+ * Restored: 85 pass, 0 fail.
+ */
+test("MOAT (B2): a DOWNGRADED design target refuses exactly as a deleted one does", async () => {
+  const { root, paths } = await certifyingSliceProject({ approveDesignTarget: true });
+  try {
+    const metaPath = designPaths(paths).meta;
+
+    // CONTROL: an approved target with no review owes a fidelity review and refuses.
+    const approved = await captureDonenessOutput(root);
+    assert.equal(approved.code, 1, "an approved target with no review must refuse");
+    assert.match(approved.text, /hero-shot-fidelity: REFUSE/);
+
+    // ATTACK STEP 1: downgrade the status. Nothing is deleted; `approvedAt` is still in the file.
+    const meta = JSON.parse(await fs.readFile(metaPath, "utf-8"));
+    assert.equal(meta.status, "approved");
+    assert.ok(typeof meta.approvedAt === "string" && meta.approvedAt.length > 0);
+    await fs.writeFile(metaPath, JSON.stringify({ ...meta, status: "draft" }, null, 2), "utf-8");
+    const downgraded = await captureDonenessOutput(root);
+    assert.equal(downgraded.code, 1, "STATE still says approved, so this must refuse");
+
+    // ATTACK STEP 2: scrub STATE's record too. This is where the certificate used to be issued.
+    const state = (await readState(paths))!;
+    const scrubbedState = { ...state };
+    delete (scrubbedState as { designTarget?: unknown }).designTarget;
+    await writeState(paths, scrubbedState);
+    const scrubbed = await captureDonenessOutput(root);
+    assert.equal(scrubbed.code, 1, "a target downgraded to `draft` with STATE scrubbed must not certify");
+    assert.match(scrubbed.text, /hero-shot-fidelity: REFUSE/);
+    assert.match(scrubbed.text, /the on-disk Design Target is `draft`/);
+    assert.match(scrubbed.text, /records its own approval/);
+
+    // ATTACK STEP 3: put a NON-approved word back in STATE, so the "no record at all" signal is
+    // quiet too. The meta's own approval timestamp is what refuses now.
+    await writeState(paths, { ...scrubbedState, designTarget: "draft" });
+    const restated = await captureDonenessOutput(root);
+    assert.equal(restated.code, 1, "renaming the STATE record must not buy the certificate either");
+    assert.match(restated.text, /records its own approval/);
+
+    // ATTACK STEP 4: delete `approvedAt` from the meta as well. The per-slice verdict, which the
+    // roll-up cannot do without (delete it and the slice is not done), recorded the target's
+    // status at grade time and still says `approved`.
+    await fs.writeFile(metaPath, JSON.stringify({ ...meta, status: "draft", approvedAt: null }, null, 2), "utf-8");
+    const stripped = await captureDonenessOutput(root);
+    assert.equal(stripped.code, 1, "the slice verdict's own claim is the fourth independent signal");
+    assert.match(stripped.text, /slice verdict/);
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+/**
+ * C2: SHRINKING THE SLICE'S GATE LIST COST NOTHING ON THE DOOR THAT PRINTS THE CERTIFICATE.
+ *
+ * C bound `slice.proof.captureManifest` to `slice.acceptance.gates`, which is the right
+ * denominator, and the note it shipped with said an attacker who shrinks the gate list pays for
+ * it in "the gate coverage the roll-up separately grades". On the DONENESS path that price was
+ * zero: `contractCoverageRefusals` lives in `slice-rollup.ts`, under `verify --rollup`, and
+ * `evaluateSliceDoneness` never called it. So the pair (gates, captureManifest) could be shrunk
+ * TOGETHER, stayed self-consistent, and the contract on disk, untouched, still declared the
+ * content nothing was walking any more.
+ *
+ * BEFORE, one project with a real `ACCEPTANCE.json` declaring `manifest.elements`:
+ *
+ *   [C2 control: gates ["manifest"], captures present]         exit 0
+ *   [C2 captures deleted, manifest intact]                     exit 1   <- the honest refusal
+ *   [C2 ATTACK: gates+captureManifest shrunk, contract INTACT] exit 0   <- capture files gone,
+ *                                                                         certificate issued
+ *
+ * The C false-failure fixture (gates `["asset-source-fidelity"]`, `captureManifest: []`, which
+ * certifies) IS this attack minus the deletion; what makes it honest there is that it has no
+ * contract declaring anything, which is exactly the difference this refusal reads.
+ *
+ * THE BOUND ADDED IS RECOMPUTABLE: the expected gate coverage is derived from `ACCEPTANCE.json`,
+ * the artifact whose CONTENTS ARE the grading, by the same `contractCoverageRefusals` the verify
+ * door uses. An attacker who wants the gate list to owe less must delete the contract section
+ * that asks for it, and the contract is not a claim about the run: it is the specification the
+ * run is measured against, and doneness already refuses a contract whose genre disagrees with the
+ * roadmap.
+ *
+ * LITMUS, run 2026-08-13. The `contractCoverageRefusals` block removed from
+ * `evaluateSliceDoneness`, rebuilt, re-run:
+ *
+ *   ✖ MOAT (C2): shrinking a slice's gate list must cost the contract coverage it stops walking (12.146583ms)
+ *     AssertionError [ERR_ASSERTION]: shrinking gates + manifest together must not buy the certificate
+ *
+ *     0 !== 1
+ *
+ *   ℹ pass 84
+ *   ℹ fail 1
+ *
+ * Restored: 85 pass, 0 fail.
+ */
+test("MOAT (C2): shrinking a slice's gate list must cost the contract coverage it stops walking", async () => {
+  const { root, paths, slice } = await certifyingSliceProject();
+  try {
+    // A REAL contract section that declares content, and a slice whose gate list walks it.
+    await fs.writeFile(
+      paths.acceptance,
+      JSON.stringify({ manifest: { elements: [{ id: "player", kind: "sprite" }] } }, null, 2),
+      "utf-8",
+    );
+    assert.deepEqual(slice.acceptance.gates, ["manifest"], "the fixture slice must walk the declared section");
+    assert.equal(await runDoneness({ root }), 0, "a covered contract must still certify");
+
+    // THE HONEST REFUSAL the attack exists to get around: the declared captures are gone.
+    const declared = slice.proof!.captureManifest!;
+    assert.ok(declared.length > 0);
+    for (const entry of declared) await fs.rm(path.join(paths.verifyInputs, entry));
+    const missing = await captureDonenessOutput(root);
+    assert.equal(missing.code, 1);
+    assert.match(missing.text, /missing slice captureManifest entries/);
+
+    // THE ATTACK: shrink the gate list to one that owes no captures, and shrink the manifest
+    // with it, so the two stay self-consistent and C's re-derivation is satisfied. The capture
+    // files stay deleted and `ACCEPTANCE.json` is not touched.
+    const shrunk: SliceEntry = {
+      ...slice,
+      acceptance: { gates: ["asset-source-fidelity"] },
+      proof: { ...slice.proof!, captureManifest: [] },
+    };
+    assert.deepEqual(deriveSliceCaptureManifest(shrunk), [], "the shrunken pair must be self-consistent");
+    await writeSlicePlan(paths, planOf([shrunk]));
+    const attacked = await captureDonenessOutput(root);
+    assert.equal(attacked.code, 1, "shrinking gates + manifest together must not buy the certificate");
+    assert.match(attacked.text, /contract section `manifest` declares 1 required scene element\(s\)/);
+    assert.match(attacked.text, /NO gate in the plan walks it/);
+
+    // AND THE CONTROL BACK: restore the honest gate list and the captures, and it certifies.
+    await writeSlicePlan(paths, planOf([slice]));
+    for (const entry of declared) {
+      const abs = path.join(paths.verifyInputs, entry);
+      await fs.mkdir(path.dirname(abs), { recursive: true });
+      await fs.writeFile(abs, "{}", "utf-8");
+    }
+    assert.equal(await runDoneness({ root }), 0, "the honest project must go green again");
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test("C2 false-failure check: a contract that declares nothing, and a slice whose gates genuinely owe no captures, both certify", async () => {
+  // The coverage refusal reads sections that DECLARE required content. A contract with an EMPTY
+  // or absent section declares nothing and must stay silent, or every project whose genre does
+  // not use a section goes permanently red, and a refusal that gets relaxed later is how the
+  // hole comes back.
+  const { root, paths } = await certifyingSliceProject();
+  try {
+    assert.equal(await runDoneness({ root }), 0, "no contract at all is no claim");
+    await fs.writeFile(
+      paths.acceptance,
+      JSON.stringify({ manifest: { elements: [] }, hud: {}, audio: { cues: [] } }, null, 2),
+      "utf-8",
+    );
+    const empty = await captureDonenessOutput(root);
+    assert.equal(empty.code, 0, "empty sections declare nothing, so nothing is uncovered");
+    assert.doesNotMatch(empty.text, /NO gate in the plan walks it/);
   } finally {
     await fs.rm(root, { recursive: true, force: true });
   }

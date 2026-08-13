@@ -30,6 +30,7 @@ import { deriveRepoIdentity, projectBindingPairError } from "../../shared/repo-i
 import { rederiveFromSources } from "../verification/gates/feel-rederive.js";
 import { stimulusDistrust } from "../verification/gates/feel-provenance.js";
 import { parseMeasurements, type FeelMeasurementsFile } from "./measurements.js";
+import { resolveTolerance } from "./snapshot-compare.js";
 import type { FeelCaptureCoverageEntry } from "./types.js";
 
 export const FEEL_SNAPSHOT_MANIFEST = "manifest.json";
@@ -193,7 +194,22 @@ export function tolerancePolicyRefusals(policy: unknown, where: string): string[
     }
   };
 
+  // THE MAGNITUDE HALF (A2). `checkNumber` bounds the TYPE; this bounds the SIZE. A relative
+  // band is DIMENSIONLESS, so one constant bounds every metric in every genre, which is why the
+  // cap lives on `relPct` and never on `abs` (see `toleranceMagnitudeRefusals` for that half).
+  const checkRelPct = (value: unknown, at: string): void => {
+    if (typeof value === "number" && Number.isFinite(value) && value > MAX_SNAPSHOT_REL_PCT) {
+      failures.push(
+        `${at} is ${value}, above the ${MAX_SNAPSHOT_REL_PCT} cap: a relative band wider than ` +
+          `${MAX_SNAPSHOT_REL_PCT * 100}% lets a metric change by more than half its approved value and still ` +
+          "read `ok`, which is not a looser gate but NO gate. Narrow the band, or re-capture and re-approve " +
+          "the snapshot if the game genuinely moved",
+      );
+    }
+  };
+
   checkNumber(policy.defaultRelPct, `${where}.defaultRelPct`);
+  checkRelPct(policy.defaultRelPct, `${where}.defaultRelPct`);
 
   if (!isRecord(policy.defaultAbsFloorByDerivation)) {
     failures.push(`${where}.defaultAbsFloorByDerivation must be an object of derivation -> absolute floor`);
@@ -215,11 +231,130 @@ export function tolerancePolicyRefusals(policy: unknown, where: string): string[
         for (const field of ["relPct", "abs"] as const) {
           if (override[field] !== undefined) checkNumber(override[field], `${where}.perMetric.${id}.${field}`);
         }
+        checkRelPct(override.relPct, `${where}.perMetric.${id}.relPct`);
       }
     }
   }
 
   return failures;
+}
+
+/**
+ * The widest RELATIVE band a frozen snapshot may grade at, as a fraction of |baseline|.
+ *
+ * WHY A CAP EXISTS AT ALL, and why this repo already believes in one: the trace baseline caps
+ * `driftTolerance` at `MAX_DRIFT_TOLERANCE` inside `loadTraceBaselineManifest`, the one reader
+ * every grader goes through, precisely because the stamp is a JSON file an operator can edit and
+ * a hand-written `0.9` would otherwise be a self-service exemption from the pixel gate. The feel
+ * snapshot had the type check and no size check, so the SAME exemption was available here by
+ * writing a bigger number instead of a wrong one: `defaultRelPct: 1e6` took a +99996 drift from
+ * exit 1 to exit 0 with `integrity.ok: true`.
+ *
+ * WHY 0.5. At half the approved value the metric can change more than any tuning pass would
+ * survive unnoticed, so anything above it is not a wider gate but the absence of one. It is
+ * deliberately far above the 0.05 shipped default, so a project that genuinely needs a wide band
+ * (a jittery sync metric, a shortHop-style injection) can still stamp one without an argument.
+ */
+export const MAX_SNAPSHOT_REL_PCT = 0.5;
+
+/**
+ * THE MAGNITUDE BOUND ON THE ABSOLUTE HALF (A2), which no constant can supply.
+ *
+ * `resolveTolerance` returns `max(abs, relPct * |baseline|)`. The relative half is dimensionless
+ * and capped by {@link MAX_SNAPSHOT_REL_PCT} in `tolerancePolicyRefusals`. The ABSOLUTE half is
+ * in the metric's NATIVE UNIT (seconds for a bisection, milliseconds for a sync, world units for
+ * a trajectory), and metric ids are opaque strings by design, so there is no constant to compare
+ * it against. Left unbounded it was the same hole one field over:
+ * `defaultAbsFloorByDerivation.trajectory = 1e9` and `perMetric.runSpeed.abs = MAX_VALUE` both
+ * reached exit 0 on a +99996 drift.
+ *
+ * So the bound is RECOMPUTED from the bundle rather than declared:
+ *
+ *   applied <= max(MAX_SNAPSHOT_REL_PCT * |baseline|, the SHIPPED floor for the derivation)
+ *
+ * The baseline is the frozen measured value, which this same reader has already bound to the
+ * measurements file's sha256 and to its own §0 re-derivation, so widening the ceiling means
+ * moving the value the snapshot was approved AS. The shipped floor comes from
+ * {@link DEFAULT_SNAPSHOT_TOLERANCES} in this file, never from the manifest's own
+ * `defaultAbsFloorByDerivation`, so a hand-written floor cannot raise its own ceiling.
+ *
+ * WHY THE SHIPPED FLOOR IS IN THE CEILING AT ALL: without it the bound would be
+ * `MAX * |baseline|`, which goes to ZERO as the baseline does, and a metric that legitimately
+ * measures near zero (or exactly zero) would be refused for carrying the product's own default
+ * tolerance. With it, the DEFAULT policy is inside the cap by construction for every baseline
+ * value: `max(shippedFloor, relPct|b|) <= max(shippedFloor, MAX|b|)` whenever
+ * `relPct <= MAX`, which `tolerancePolicyRefusals` has already established.
+ *
+ * Written as the NEGATION of "within the ceiling", for the same reason `compareSnapshot`'s drift
+ * test is: a non-finite `applied` must land on REFUSE, not on a comparison that is false forever.
+ */
+export function toleranceMagnitudeRefusals(
+  metrics: Record<string, FeelSnapshotMetricEntry>,
+  policy: FeelSnapshotTolerancePolicy,
+  where: string,
+): string[] {
+  const failures: string[] = [];
+  for (const [id, entry] of Object.entries(metrics)) {
+    if (typeof entry?.value !== "number" || !Number.isFinite(entry.value)) {
+      failures.push(`${where} metric '${id}' has no finite frozen value, so no tolerance can be measured against it`);
+      continue;
+    }
+    const { applied } = resolveTolerance(policy, id, entry.derivation, entry.value);
+    const ceiling = toleranceCeiling(entry.value, entry.derivation);
+    if (!(applied <= ceiling)) {
+      failures.push(
+        `${where} metric '${id}' grades at a tolerance of ${applied}, above the ${ceiling} this snapshot can ` +
+          `justify (max of ${MAX_SNAPSHOT_REL_PCT * 100}% of its ${entry.value} baseline and the shipped ` +
+          `${entry.derivation ?? "(no derivation)"} floor): a band that wide cannot be crossed, so the metric ` +
+          "reports `ok` at any value. Narrow `tolerancePolicy`, or re-capture and re-approve the snapshot at " +
+          "the value the game actually has now",
+      );
+    }
+  }
+  return failures;
+}
+
+/** The widest tolerance a metric with this baseline + derivation can justify. One reader (A4). */
+function toleranceCeiling(baselineValue: number, derivation: string | undefined): number {
+  const shippedFloor =
+    derivation !== undefined ? (DEFAULT_SNAPSHOT_TOLERANCES.defaultAbsFloorByDerivation[derivation] ?? 0) : 0;
+  return Math.max(MAX_SNAPSHOT_REL_PCT * Math.abs(baselineValue), shippedFloor);
+}
+
+/**
+ * THE CONSENT SENTENCE (the trace-tolerance precedent). A widened band is blindness somebody
+ * chose, so every surface that grades against this anchor says how much of it was widened and by
+ * how much, in the same breath as the verdict. Returns null for a snapshot whose bands are all
+ * within the shipped default policy, so an ordinary project gains no noise: the sentence appears
+ * exactly when there is something to consent to.
+ */
+export function widenedToleranceConsentLine(
+  metrics: Record<string, FeelSnapshotMetricEntry>,
+  policy: FeelSnapshotTolerancePolicy,
+): string | null {
+  let widest: { id: string; applied: number; shipped: number; baseline: number } | null = null;
+  let count = 0;
+  for (const [id, entry] of Object.entries(metrics)) {
+    if (typeof entry?.value !== "number" || !Number.isFinite(entry.value)) continue;
+    const { applied } = resolveTolerance(policy, id, entry.derivation, entry.value);
+    const shipped = resolveTolerance(DEFAULT_SNAPSHOT_TOLERANCES, id, entry.derivation, entry.value).applied;
+    if (!(applied > shipped)) continue;
+    count += 1;
+    if (widest === null || applied / Math.max(shipped, Number.MIN_VALUE) > widest.applied / Math.max(widest.shipped, Number.MIN_VALUE)) {
+      widest = { id, applied, shipped, baseline: entry.value };
+    }
+  }
+  if (widest === null) return null;
+  const pct = Math.abs(widest.baseline) > 0 ? ` (${round(100 * (widest.applied / Math.abs(widest.baseline)))}% of its baseline)` : "";
+  return (
+    `WIDENED TOLERANCE: ${count} metric(s) grade at a band wider than the shipped default. The widest is ` +
+    `'${widest.id}' at +/-${round(widest.applied)}${pct}, against a default of +/-${round(widest.shipped)}: ` +
+    `it can move that far and still read \`ok\`. The cap is ${MAX_SNAPSHOT_REL_PCT * 100}% of baseline.`
+  );
+}
+
+function round(value: number): number {
+  return Number(value.toFixed(4));
 }
 
 /**
@@ -424,7 +559,16 @@ export async function verifySnapshotIntegrity(dir: string): Promise<SnapshotInte
   // all (see `tolerancePolicyRefusals`), so it is refused here rather than silently
   // matching every metric. Beside the reverse walk on purpose: one place owns what a
   // frozen manifest has to be.
-  failures.push(...tolerancePolicyRefusals(manifest.tolerancePolicy, "tolerancePolicy"));
+  const policyRefusals = tolerancePolicyRefusals(manifest.tolerancePolicy, "tolerancePolicy");
+  failures.push(...policyRefusals);
+  // AND THE MAGNITUDE HALF, which is what makes the type check a BOUND rather than a shape (A2).
+  // Only when the numbers are numbers: the arithmetic below is meaningless over a NaN policy, and
+  // the refusal above already names it. `manifest.metrics` is the denominator here for the same
+  // reason it is everywhere else in this file, and its values are cross-checked against the frozen
+  // measurements a few lines down, so the ceiling cannot be raised without moving the anchor.
+  if (policyRefusals.length === 0) {
+    failures.push(...toleranceMagnitudeRefusals(manifest.metrics, manifest.tolerancePolicy, "the frozen"));
+  }
 
   let measurementsBytes: Buffer | null = null;
   try {

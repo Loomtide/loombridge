@@ -625,19 +625,26 @@ test("manifest: extras FAIL when extrasAreFailure is true", () => {
 });
 
 test("asset-source-fidelity: approved manifest and matching observed paths pass", () => {
+  // D2: the observation set is built from `manifest.assets`, because that IS the denominator the
+  // gate walks. This fixture used to observe ONE of nine declared assets and assert `pass`,
+  // which is the shrunken-denominator attack written as a fixture; the gate now refuses it (see
+  // MOAT (D2) in verification-run-gates.test.ts).
   const manifest = approvedGeneratedAssetManifest();
-  const r = evaluateAssetSourceFidelity({
-    manifest,
-    observedAssets: [{
-      assetId: "player_character",
-      source: "generated",
-      paths: ["Assets/Art/Generated/player_character.png"],
-      generatedSetId: "generated_set_needed",
-    }],
-  });
+  const observedAssets = manifest.assets.map((asset) => ({
+    assetId: asset.id,
+    source: asset.source,
+    paths: asset.resolvedPaths ?? [],
+    generatedSetId: asset.generatedExport?.generatedSetId,
+  }));
+  const r = evaluateAssetSourceFidelity({ manifest, observedAssets });
   assert.equal(r.verdict, "pass", r.checks.filter((check) => check.status === "fail").map((check) => check.detail).join(" | "));
   assert.equal(checkById(r, "asset-source.manifest-approved").status, "pass");
   assert.equal(checkById(r, "asset-source.observed.player_character").status, "pass");
+
+  // And the same capture with ONE observation dropped is a refusal, not a smaller obligation.
+  const short = evaluateAssetSourceFidelity({ manifest, observedAssets: observedAssets.slice(1) });
+  assert.equal(short.verdict, "fail");
+  assert.equal(checkById(short, `asset-source.observed.${manifest.assets[0]!.id}`).status, "fail");
 });
 
 test("asset-source-fidelity: flags unapproved source and observed asset drift separately", () => {

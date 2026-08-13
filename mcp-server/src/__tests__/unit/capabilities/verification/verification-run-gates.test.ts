@@ -493,6 +493,162 @@ test("D false-failure check: a BARE staged manifest with no observations at all 
   }
 });
 
+/*
+ * D2: D CONVERTED "DELETE A FIELD" INTO "DELETE A LIST ENTRY".
+ *
+ * D made the drift row unconditional on the observation EXISTING, so an observation that omits
+ * the bound id refuses. It left the row conditional on the observation existing AT ALL, and
+ * deleting the whole entry is cheaper than blanking a field inside it. Worse, `run-gates.ts`
+ * decides capture-versus-staged-document purely on the presence of a `manifest` key, so a
+ * WRAPPED capture carrying an EMPTY observation list counted as GRADED evidence that the run
+ * measured the game.
+ *
+ * BEFORE, one registry-bound manifest, four inputs, real `runGates`:
+ *
+ *   [honest]                   pass, graded ["asset-source-fidelity"]
+ *   [wrong id]                 fail
+ *   [omitted field (D's fix)]  fail
+ *   [ATTACK: drop that ENTRY]  pass, graded ["asset-source-fidelity"]
+ *   [ATTACK: observedAssets=[] ] pass, graded ["asset-source-fidelity"]
+ *
+ * THE FIX IS PR #88's DENOMINATOR RULE: the expected observations are RECOMPUTABLE as
+ * `manifest.assets`, by the same code path that reads them, so a capture that observed fewer
+ * assets than the manifest declares has a shrunken denominator rather than a smaller obligation.
+ * The reverse walk comes with it: an observation for an asset the manifest does not declare is
+ * an observation of something nobody approved.
+ *
+ * The staged-document carve-out stays, NARROWED to what its own argument covers: a BARE
+ * `.loombridge/ASSET_MANIFEST.json` (which `verify` stages itself and which carries no
+ * observations by construction) is a declaration, not a capture, and failing it would
+ * manufacture a tier-1 game defect out of a harness gap. A WRAPPED input is a capture and is
+ * held to the manifest's own denominator, which is the difference `assetSourceIsCapture` was
+ * already drawing everywhere except here.
+ *
+ * LITMUS, run 2026-08-13. The `asset-source.observed.<id>` no-observation branch reverted to
+ * `status: "pass"` and the undeclared-observation walk removed, rebuilt, re-run:
+ *
+ *   ✖ MOAT (D2): a capture that observed FEWER assets than the manifest declares is a shrunken denominator (7.478958ms)
+ *     AssertionError [ERR_ASSERTION]: dropping the observation ENTRY must not be cheaper than blanking a field in it
+ *
+ *     'pass' !== 'fail'
+ *
+ *   ℹ pass 25
+ *   ℹ fail 1
+ *
+ * Restored: 26 pass, 0 fail.
+ */
+test("MOAT (D2): a capture that observed FEWER assets than the manifest declares is a shrunken denominator", async () => {
+  const acceptance = await loadAcceptance();
+  const manifest = approvedRegistryManifest();
+  const honest = manifest.assets.map((asset) => ({
+    assetId: asset.id,
+    source: asset.source,
+    paths: asset.resolvedPaths ?? [],
+    registryAssetId: asset.registrySelection!.registryAssetId,
+  }));
+  assert.ok(honest.length >= 2, "the fixture needs more than one asset for 'drop one entry' to be meaningful");
+
+  const gradeWith = async (observedAssets: unknown[]): Promise<{ gate: string; failures: string[]; graded: string[] }> => {
+    const dir = await mkTmpDir();
+    try {
+      await writeCaptures(dir, { "asset-manifest.json": { manifest, observedAssets } });
+      const report = await runGates({
+        acceptance,
+        inputsDir: dir,
+        selectGates: new Set(["asset-source-fidelity"]),
+      });
+      return {
+        gate: String(report.gates["asset-source-fidelity"]),
+        failures: report.failures.map((f) => f.id),
+        graded: gradedGates(report),
+      };
+    } finally {
+      await fs.rm(dir, { recursive: true, force: true });
+    }
+  };
+
+  // CONTROL: the full observation set passes and IS graded evidence.
+  const control = await gradeWith(honest);
+  assert.deepEqual({ gate: control.gate, failures: control.failures }, { gate: "pass", failures: [] });
+  assert.deepEqual(control.graded, ["asset-source-fidelity"]);
+
+  // ATTACK 1: drop ONE entry. Every remaining observation is honest.
+  const dropped = honest.slice(1);
+  const droppedReport = await gradeWith(dropped);
+  assert.equal(
+    droppedReport.gate,
+    "fail",
+    "dropping the observation ENTRY must not be cheaper than blanking a field in it",
+  );
+  assert.ok(
+    droppedReport.failures.some((id) => id === `asset-source.observed.${manifest.assets[0]!.id}`),
+    `the refusal must name the unobserved asset: ${droppedReport.failures.join(", ")}`,
+  );
+
+  // ATTACK 2: drop them ALL, which is the same attack taken to its end and the one that also
+  // counted as GRADED.
+  const emptied = await gradeWith([]);
+  assert.equal(emptied.gate, "fail", "an empty observation list is a shrunken denominator, not a clean run");
+  assert.equal(
+    emptied.failures.length,
+    manifest.assets.length,
+    `every declared asset owes an observation: ${emptied.failures.join(", ")}`,
+  );
+
+  // AND THE REVERSE WALK: an observation for an asset the approved manifest does not declare.
+  const undeclared = await gradeWith([...honest, { assetId: "not-in-the-manifest", source: "registry", paths: [] }]);
+  assert.equal(undeclared.gate, "fail", "an observation of something nobody approved is not evidence of fidelity");
+  assert.ok(
+    undeclared.failures.some((id) => id === "asset-source.observed-undeclared.not-in-the-manifest"),
+    `the refusal must name it: ${undeclared.failures.join(", ")}`,
+  );
+});
+
+test("D2 false-failure check: the BARE staged declaration is still exempt, and a gray-box primitive-final role owes no observation", async () => {
+  // The two shapes that MUST stay green, because the denominator rule is exactly the kind of
+  // tightening that turns an ordinary project red and then gets relaxed back into a hole.
+  //
+  //  1. the BARE `.loombridge/ASSET_MANIFEST.json` `verify` stages itself. It carries no
+  //     observations BY CONSTRUCTION, so holding it to the manifest's denominator would report a
+  //     tier-1 game defect on every ordinary project. Harness fault is never a game defect.
+  //  2. a `primitiveFinal` role under `art.mode:"deferred"`: the engine primitive IS the
+  //     deliverable, there is no imported asset to observe, and the gate says so already.
+  const acceptance = await loadAcceptance();
+  const bare = await mkTmpDir();
+  try {
+    await writeCaptures(bare, { "asset-manifest.json": approvedRegistryManifest() });
+    const report = await runGates({ acceptance, inputsDir: bare, selectGates: new Set(["asset-source-fidelity"]) });
+    assert.notEqual(report.gates["asset-source-fidelity"], "fail", "a bare staged declaration must not fail");
+    assert.deepEqual(gradedGates(report), [], "and it is still not evidence that this run measured the game");
+  } finally {
+    await fs.rm(bare, { recursive: true, force: true });
+  }
+
+  const grayboxManifest = approvedRegistryManifest();
+  grayboxManifest.assets = grayboxManifest.assets.map((asset) => ({
+    ...asset,
+    primitiveFinal: true,
+    resolvedPaths: [],
+    registrySelection: undefined,
+  }));
+  const graybox = await mkTmpDir();
+  try {
+    await writeCaptures(graybox, { "asset-manifest.json": { manifest: grayboxManifest, observedAssets: [] } });
+    const report = await runGates({
+      acceptance: { ...acceptance, art: { mode: "deferred" } },
+      inputsDir: graybox,
+      selectGates: new Set(["asset-source-fidelity"]),
+    });
+    assert.notEqual(
+      report.gates["asset-source-fidelity"],
+      "fail",
+      "a gray-box role whose deliverable is the engine primitive owes no observation",
+    );
+  } finally {
+    await fs.rm(graybox, { recursive: true, force: true });
+  }
+});
+
 test("run-gates: asset-manifest input adds asset-source-fidelity gate and flags drift", async () => {
   const acceptance = await loadAcceptance();
   const dir = await mkTmpDir();

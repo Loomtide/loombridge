@@ -1162,6 +1162,13 @@ export async function runGates(args: {
             ? (assetManifestInput as Record<string, unknown>)
             : { manifest: assetManifestInput }),
           artDeferred: assetArtDeferred,
+          // D2: WHICH SHAPE THIS GATE ACTUALLY READ, decided here and stated to the gate.
+          // The bare document is normalised INTO the wrapper two lines up, so by the time the
+          // gate sees it the two shapes are indistinguishable, and the gate's observation
+          // denominator (one observation per declared asset) has to know which it is. Derived
+          // from the bytes on disk and spread AFTER the input, for the same RCL-D02 reason
+          // `artDeferred` is: a staged input must never be able to declare its own exemption.
+          stagedDocument: !assetSourceIsCapture,
         }
       : assetManifestInput;
   if (assetManifestInput !== null && assetSourceInScope) {

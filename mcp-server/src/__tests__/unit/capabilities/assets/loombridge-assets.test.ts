@@ -297,7 +297,10 @@ test("loombridge assets registry-plan/apply approves a 3d-shooter manifest with 
   assert.ok(models.every((asset) => asset.resolvedPaths?.[0]?.startsWith("Assets/Models/")));
 
   // The asset-source fidelity gate passes on the approved, manifest-bound 3d-shooter manifest.
-  const report = evaluateAssetSourceFidelity({ manifest: approved! });
+  // `stagedDocument: true` says which SHAPE this is (D2): the project's DECLARATION, which
+  // carries no observations by construction. A CAPTURE owes one observation per declared asset,
+  // and the flag is fail-closed, so a caller that means "declaration" has to say so.
+  const report = evaluateAssetSourceFidelity({ manifest: approved!, stagedDocument: true });
   assert.ok(report.checks.every((check) => check.status === "pass"), JSON.stringify(report.checks.filter((c) => c.status !== "pass"), null, 2));
 });
 

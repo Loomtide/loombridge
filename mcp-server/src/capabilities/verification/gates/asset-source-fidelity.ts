@@ -28,6 +28,14 @@ export interface AssetSourceFidelityInput {
    * build cannot self-declare it to skip asset-source fidelity.
    */
   artDeferred?: boolean;
+  /**
+   * TRUE when the input was the project's STAGED DECLARATION (`.loombridge/ASSET_MANIFEST.json`,
+   * which `verify` copies into the inputs dir itself) rather than a CAPTURE of what the build
+   * used (D2). Set by `run-gates.ts` from the shape of the bytes on disk, never by the document.
+   * FAIL-CLOSED default `false`: an input that does not say otherwise is held to the manifest's
+   * own denominator, one observation per declared asset.
+   */
+  stagedDocument?: boolean;
 }
 
 function manifestCandidate(input: unknown): unknown {
@@ -35,6 +43,23 @@ function manifestCandidate(input: unknown): unknown {
     return (input as { manifest?: unknown }).manifest;
   }
   return input;
+}
+
+/**
+ * Is this input a CAPTURE of what the build used, or the project's staged DECLARATION? (D2)
+ *
+ * FAIL-CLOSED: absent means CAPTURE, so the observation obligation applies unless something
+ * explicitly says the input was the staged document. The flag cannot be self-declared from
+ * inside the file: `run-gates.ts` derives it from the SHAPE of the bytes it read (bare document
+ * vs `{ manifest, observedAssets }` wrapper) and injects it at the wrapper level AFTER spreading
+ * the input, exactly as `artDeferred` is derived from the on-disk contract rather than trusted
+ * from the staged input. Reading the shape here instead is not available: run-gates normalises
+ * the bare document INTO the wrapper before this gate sees it, so by this point both shapes look
+ * identical, and keying off "does the `observedAssets` key exist" would be the skip-on-absent
+ * anti-pattern one field over (delete the key, become a declaration, owe nothing).
+ */
+function isCaptureInput(input: unknown): boolean {
+  return !(input && typeof input === "object" && (input as AssetSourceFidelityInput).stagedDocument === true);
 }
 
 function asManifest(input: unknown, artDeferred: boolean): AssetManifest | null {
@@ -94,6 +119,13 @@ export function evaluateAssetSourceFidelity(input: AssetSourceFidelityInput | un
   const observedById = new Map(
     ((input as AssetSourceFidelityInput).observedAssets ?? []).map((asset) => [asset.assetId, asset]),
   );
+  // THE DENOMINATOR FOR THE OBSERVATION WALK (D2). A CAPTURE owes one observation per declared
+  // manifest asset; a BARE staged declaration owes none (see `isCaptureInput`). Without this,
+  // D's fix converted "delete a field" into "delete a list entry", which is cheaper: the drift
+  // row was unconditional on the observation EXISTING but still conditional on the observation
+  // existing at all, so dropping the entry (or the whole array) took a failing gate back to
+  // `pass` AND kept it in `gradedGates`.
+  const isCapture = isCaptureInput(input);
 
   for (const source of manifest.assetSources) {
     checks.push({
@@ -142,17 +174,26 @@ export function evaluateAssetSourceFidelity(input: AssetSourceFidelityInput | un
         : `Manifest asset '${asset.id}' is not an approved path-bound asset.`,
     });
 
+    // The observation row, with the DENOMINATOR RULE on the "not observed" case (D2). A CAPTURE
+    // that does not observe a declared asset is a shrunken denominator: the expected set is
+    // recomputable as `manifest.assets`, by this same reader, so a smaller observed list is not a
+    // smaller obligation. A BARE staged declaration observes nothing by construction and keeps
+    // the old pass, which is the whole of the carve-out's own argument (the marker in
+    // `run-gates.ts` is what keeps that copy out of `gradedGates`).
+    const matched = !!observed && observed.source === asset.source && samePaths(expectedPaths, observed.paths);
     checks.push({
       id: `asset-source.observed.${asset.id}`,
       expected: `${asset.source} ${expectedPaths.join(",")}`,
       actual: describeObserved(observed),
-      status: !observed || (
-        observed.source === asset.source &&
-        samePaths(expectedPaths, observed.paths)
-      ) ? "pass" : "fail",
+      status: matched ? "pass" : !observed && !isCapture ? "pass" : "fail",
       detail: !observed
-        ? `No observed asset-use capture for '${asset.id}'; manifest binding remains the source of truth.`
-        : observed.source === asset.source && samePaths(expectedPaths, observed.paths)
+        ? isCapture
+          ? `This capture observed no use of '${asset.id}', which the approved manifest declares. A capture that ` +
+            "observed fewer assets than the manifest declares has a shrunken denominator, not a smaller " +
+            "obligation: re-capture asset usage for every declared asset, or re-approve a manifest that no " +
+            "longer declares this one."
+          : `No observed asset-use capture for '${asset.id}'; manifest binding remains the source of truth.`
+        : matched
           ? `Observed use of '${asset.id}' matches the manifest source and paths.`
           : `Observed use of '${asset.id}' differs from the manifest source or paths.`,
     });
@@ -234,6 +275,28 @@ export function evaluateAssetSourceFidelity(input: AssetSourceFidelityInput | un
         actual: asset.source,
         status: "fail",
         detail: `Asset '${asset.id}' uses an unknown source mode.`,
+      });
+    }
+  }
+
+  // AND THE REVERSE WALK, which is what makes `manifest.assets` a DENOMINATOR rather than a
+  // filter (D2). Walking only manifest -> observations meant an observation of something the
+  // approved manifest never declared had nothing to disagree with: the capture could report using
+  // an asset nobody approved and the gate would never look at it. Scoped to a CAPTURE for the same
+  // reason the forward walk is: a bare declaration has no observations to walk.
+  if (isCapture) {
+    const declaredIds = new Set(manifest.assets.map((asset) => asset.id));
+    for (const [id] of observedById) {
+      if (declaredIds.has(id)) continue;
+      checks.push({
+        id: `asset-source.observed-undeclared.${id}`,
+        expected: "an asset id the approved ASSET_MANIFEST.json declares",
+        actual: id,
+        status: "fail",
+        detail:
+          `This capture observed use of '${id}', which the approved manifest does not declare. An asset the ` +
+          "build used and nobody approved is exactly what this gate exists to find: add it to the manifest and " +
+          "re-approve, or stop using it.",
       });
     }
   }

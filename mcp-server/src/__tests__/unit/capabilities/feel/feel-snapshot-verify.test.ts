@@ -449,6 +449,250 @@ test("A1 false-failure check: ordinary snapshots, ZERO tolerances, and --allow-p
     0,
     "an exactly-matching capture under a zero tolerance must still be clean",
   );
+
+  // APPROVE/READ PARITY, in the STRICT direction. `readTolerances` refused a top-level
+  // `defaultRelPct` unless it was `> 0` while `tolerancePolicyRefusals` (the read door) accepts
+  // `>= 0`, and the comment beside it claimed the two refuse identically. A zero band is a
+  // legitimate, STRICTER choice, which is exactly the class of value a refusal must never touch:
+  // the bounds belong on what LOOSENS the gate. It could not false-green, but a door pair that
+  // disagrees is a door pair somebody will later "fix" in the wrong direction.
+  const strictZero = await scaffold();
+  const strictCandidate = feelPaths(strictZero.ws).snapshotCandidateDir;
+  await fs.mkdir(strictCandidate, { recursive: true });
+  await fs.copyFile(path.join(LIVE_DIR, "feel.json"), path.join(strictCandidate, SNAPSHOT_MEASUREMENTS_FILE));
+  await fs.writeFile(path.join(strictCandidate, SNAPSHOT_CONTRACT_FILE), JSON.stringify(CONTRACT_FIXTURE, null, 2), "utf-8");
+  const strictTolerances = path.join(path.dirname(strictZero.ws), "strict.json");
+  await fs.writeFile(strictTolerances, JSON.stringify({ defaultRelPct: 0 }), "utf-8");
+  assert.equal(
+    await runFeelCli(["snapshot", "approve", "--root", strictZero.root, "--workspace", strictZero.ws, "--tolerances", strictTolerances]),
+    0,
+    "a zero DEFAULT relative band is as legitimate as a zero per-metric one, and both doors must say so",
+  );
+  const frozenStrict = JSON.parse(
+    await fs.readFile(path.join(feelPaths(strictZero.ws).snapshotCurrentDir, FEEL_SNAPSHOT_MANIFEST), "utf-8"),
+  );
+  assert.equal(
+    frozenStrict.tolerancePolicy.defaultRelPct,
+    0,
+    "and the zero must FREEZE, not silently fall back to the 0.05 default the operator did not ask for",
+  );
+});
+
+test("a tampered tolerancePolicy reads as a TAMPERED anchor, not as an absent one", async () => {
+  // `loadSnapshotManifest` returns null for a manifest whose SHAPE is refused, and
+  // `runVerifySnapshot` reported that as "no approved feel snapshot: nothing to grade", pointing
+  // the operator at `feel snapshot capture` for a snapshot that is already on disk. The exit code
+  // was right (2) and the narration was not: a hand-edited anchor read as an empty workspace.
+  const { root, ws } = await scaffold();
+  const baseline = await approvedSnapshot(root, ws);
+  const manifestPath = path.join(feelPaths(ws).snapshotCurrentDir, FEEL_SNAPSHOT_MANIFEST);
+  const doc = JSON.parse(await fs.readFile(manifestPath, "utf-8"));
+  doc.tolerancePolicy = [];
+  await fs.writeFile(manifestPath, JSON.stringify(doc, null, 2), "utf-8");
+  const measurements = await writeMeasurements(path.dirname(ws), baseline);
+
+  const lines: string[] = [];
+  const originalError = console.error;
+  console.error = (...parts: unknown[]) => { lines.push(parts.map(String).join(" ")); };
+  let code: number;
+  try {
+    code = await runVerifyCli(["--snapshot", "--root", root, "--workspace", ws, "--measurements", measurements]);
+  } finally {
+    console.error = originalError;
+  }
+  const text = lines.join("\n");
+  assert.equal(code, 2, "a tampered anchor is a harness-tier refusal, as it always was");
+  assert.match(text, /present but REFUSED/, text);
+  assert.doesNotMatch(text, /nothing to grade/, text);
+});
+
+/*
+ * A2: THE TOLERANCE WAS BOUNDED FOR TYPE AND NEVER FOR MAGNITUDE.
+ *
+ * A1 (above) closed "the tolerance is not a number". The attack then moved one step to the
+ * right: supply a number that is finite, non-negative, correctly typed, and so large that
+ * nothing can ever fall outside it. `tolerancePolicyRefusals` accepted any finite `>= 0`, so
+ * the SAME +99996 drift that exits 1 under the intact policy exited 0 under `1e6`, and
+ * `integrity.ok` came back TRUE: the tampered anchor positively certified itself, which is
+ * worse than the silence A1 removed.
+ *
+ * BEFORE, one approved snapshot, one drifted capture, four routes:
+ *
+ *   [control: intact policy, +99996 drift]                  exit 1
+ *   [ATTACK: defaultRelPct = 1e6]                           exit 0  clean  integrity.ok: true
+ *                                                           "runSpeed: … tolerance 1000000000 ok."
+ *   [ATTACK: defaultAbsFloorByDerivation.trajectory = 1e9]  exit 0  clean  integrity.ok: true
+ *   [ATTACK: perMetric.runSpeed.abs = MAX_VALUE]            exit 0  clean  integrity.ok: true
+ *   [ATTACK via the approve door, no hand-edit at all:
+ *     --tolerances '{"defaultRelPct":1e6}']                 approve exit 0, verify exit 0
+ *
+ * THE PRECEDENT IS IN THIS REPO AND POINTS THE OTHER WAY: the trace baseline caps
+ * `driftTolerance` at `MAX_DRIFT_TOLERANCE` (0.02) inside `loadTraceBaselineManifest`, the one
+ * reader every grader goes through, with the refusal naming the cap. This mirrors it.
+ *
+ * TWO BOUNDS, because one constant cannot bound both halves of `max(abs, relPct * |baseline|)`:
+ *
+ *  - `relPct` is DIMENSIONLESS, so a constant bounds it: `MAX_SNAPSHOT_REL_PCT`.
+ *  - `abs` is in the metric's NATIVE UNIT (seconds, ms, world units), so no constant can bound
+ *    it. It is bounded against the frozen BASELINE instead, which is recomputable from the
+ *    bundle by the same reader: `applied <= max(MAX_SNAPSHOT_REL_PCT * |baseline|,
+ *    shipped floor for the derivation)`. The shipped floor is a code constant, so the
+ *    zero-baseline case (where the relative half is 0) still has a bound.
+ *
+ * LITMUS, run 2026-08-13. `toleranceMagnitudeRefusals` neutered to `return []` and the
+ * `MAX_SNAPSHOT_REL_PCT` check removed from `tolerancePolicyRefusals`, rebuilt, re-run:
+ *
+ *   ✖ MOAT (A2): a tolerance so wide that nothing can fall outside it is not a tolerance (11.653625ms)
+ *     AssertionError [ERR_ASSERTION]: a relPct of 1e6 makes every metric match forever
+ *
+ *     0 !== 2
+ *
+ *   ✖ MOAT (A2): the approve door refuses a vacuous tolerance before it can freeze (7.9865ms)
+ *     AssertionError [ERR_ASSERTION]: approve must refuse {"defaultRelPct":1000000}
+ *
+ *     0 !== 2
+ *
+ *   ℹ pass 13
+ *   ℹ fail 2
+ *
+ * `0 !== 2` is a +99996 drift reaching exit 0 with `integrity.ok: true`. Restored: 15 pass, 0 fail.
+ */
+test("MOAT (A2): a tolerance so wide that nothing can fall outside it is not a tolerance", async () => {
+  const { root, ws } = await scaffold();
+  const baseline = await approvedSnapshot(root, ws);
+  const manifestPath = path.join(feelPaths(ws).snapshotCurrentDir, FEEL_SNAPSHOT_MANIFEST);
+  const drifted = await writeMeasurements(path.dirname(ws), { ...baseline, runSpeed: 99999 });
+  const frozen = JSON.parse(await fs.readFile(manifestPath, "utf-8"));
+
+  // CONTROL: the drift every attack below exists to hide.
+  assert.equal(
+    await runVerifyCli(["--snapshot", "--root", root, "--workspace", ws, "--measurements", drifted]),
+    1,
+    "the intact policy must catch a +99996 drift",
+  );
+
+  // Each attack edits ONE tolerance number. The frozen measurements are untouched, so their
+  // sha256 still matches and every other integrity check stays green.
+  const attacks: Array<{ label: string; mutate: (policy: Record<string, unknown>) => void; names: RegExp }> = [
+    {
+      label: "defaultRelPct = 1e6",
+      mutate: (p) => { p.defaultRelPct = 1e6; },
+      names: /tolerancePolicy\.defaultRelPct/,
+    },
+    {
+      label: "defaultRelPct = 1e308",
+      mutate: (p) => { p.defaultRelPct = 1e308; },
+      names: /tolerancePolicy\.defaultRelPct/,
+    },
+    {
+      label: "defaultAbsFloorByDerivation.trajectory = 1e9",
+      mutate: (p) => { (p.defaultAbsFloorByDerivation as Record<string, number>).trajectory = 1e9; },
+      names: /runSpeed/,
+    },
+    {
+      label: "perMetric.runSpeed.abs = MAX_VALUE",
+      mutate: (p) => { p.perMetric = { runSpeed: { abs: Number.MAX_VALUE } }; },
+      names: /runSpeed/,
+    },
+  ];
+
+  for (const attack of attacks) {
+    const doc = JSON.parse(JSON.stringify(frozen));
+    attack.mutate(doc.tolerancePolicy);
+    await fs.writeFile(manifestPath, JSON.stringify(doc, null, 2), "utf-8");
+    assert.equal(
+      await runVerifyCli(["--snapshot", "--root", root, "--workspace", ws, "--measurements", drifted]),
+      2,
+      `a ${attack.label} makes every metric match forever`,
+    );
+    const report = JSON.parse(await fs.readFile(feelPaths(ws).driftReport, "utf-8"));
+    assert.equal(report.integrity.ok, false, `${attack.label}: a tampered anchor must never certify itself`);
+    assert.ok(
+      report.integrity.failures.some((f: string) => attack.names.test(f)),
+      `${attack.label}: the refusal must name what is too wide: ${JSON.stringify(report.integrity.failures)}`,
+    );
+    assert.equal(report.summary.total, 0, `${attack.label}: a refused snapshot grades nothing`);
+  }
+});
+
+test("MOAT (A2): the approve door refuses a vacuous tolerance before it can freeze", async () => {
+  // The hand-edit above is the harder route. These reach the same place through the ORDINARY
+  // door, with no editing of a frozen file at all.
+  const { root, ws } = await scaffold();
+  const candidate = feelPaths(ws).snapshotCandidateDir;
+  await fs.mkdir(candidate, { recursive: true });
+  await fs.copyFile(path.join(LIVE_DIR, "feel.json"), path.join(candidate, SNAPSHOT_MEASUREMENTS_FILE));
+  await fs.writeFile(path.join(candidate, SNAPSHOT_CONTRACT_FILE), JSON.stringify(CONTRACT_FIXTURE, null, 2), "utf-8");
+  const tolerances = path.join(path.dirname(ws), "wide-tolerances.json");
+
+  for (const bad of [
+    { defaultRelPct: 1e6 },
+    { defaultRelPct: 1 },
+    { perMetric: { runSpeed: { relPct: 5 } } },
+    { perMetric: { runSpeed: { abs: Number.MAX_VALUE } } },
+    { defaultAbsFloorByDerivation: { trajectory: 1e9 } },
+  ]) {
+    await fs.writeFile(tolerances, JSON.stringify(bad), "utf-8");
+    assert.equal(
+      await runFeelCli(["snapshot", "approve", "--root", root, "--workspace", ws, "--tolerances", tolerances]),
+      2,
+      `approve must refuse ${JSON.stringify(bad)}`,
+    );
+  }
+});
+
+test("A2 false-failure check: the shipped defaults, a legitimately WIDE band, and a small baseline all still grade", async () => {
+  // The magnitude cap runs on every manifest read, so a cap that is even slightly wrong turns a
+  // legitimate project permanently red, and a cap that gets relaxed later is how the hole comes
+  // back. Four shapes that MUST stay green:
+  //
+  //  1. the shipped default policy on the real live-capture baseline (`applied = max(shipped
+  //     floor, 0.05|b|)` is inside `max(MAX_SNAPSHOT_REL_PCT |b|, shipped floor)` BY
+  //     CONSTRUCTION, for every baseline value including zero. That is the argument for the
+  //     shape of the bound, and this is the test of it);
+  //  2. a project that legitimately needs a WIDE band: 40% relative on a jittery metric;
+  //  3. a per-metric ABS override several times the shipped floor, on a metric whose baseline is
+  //     large enough to justify it;
+  //  4. a SMALL baseline (jumpApex 0.8, whose 5% relative band is under the shipped 0.05 floor),
+  //     which is the case a naive `applied <= MAX * |baseline|` cap would have failed.
+  const { root, ws } = await scaffold();
+  const baseline = await approvedSnapshot(root, ws);
+  const clean = await writeMeasurements(path.dirname(ws), baseline);
+  assert.equal(
+    await runVerifyCli(["--snapshot", "--root", root, "--workspace", ws, "--measurements", clean]),
+    0,
+    "the shipped default policy must never trip its own cap",
+  );
+
+  const wide = await scaffold();
+  const wideCandidate = feelPaths(wide.ws).snapshotCandidateDir;
+  await fs.mkdir(wideCandidate, { recursive: true });
+  await fs.copyFile(path.join(LIVE_DIR, "feel.json"), path.join(wideCandidate, SNAPSHOT_MEASUREMENTS_FILE));
+  await fs.writeFile(path.join(wideCandidate, SNAPSHOT_CONTRACT_FILE), JSON.stringify(CONTRACT_FIXTURE, null, 2), "utf-8");
+  const wideTolerances = path.join(path.dirname(wide.ws), "wide.json");
+  await fs.writeFile(
+    wideTolerances,
+    JSON.stringify({ defaultRelPct: 0.4, perMetric: { timeToApex: { abs: 4 } } }),
+    "utf-8",
+  );
+  assert.equal(
+    await runFeelCli(["snapshot", "approve", "--root", wide.root, "--workspace", wide.ws, "--tolerances", wideTolerances]),
+    0,
+    "a 40% band and a 4-unit floor on a 40.53 baseline are wide but not vacuous",
+  );
+  const wideClean = await writeMeasurements(path.dirname(wide.ws), baseline);
+  assert.equal(
+    await runVerifyCli(["--snapshot", "--root", wide.root, "--workspace", wide.ws, "--measurements", wideClean]),
+    0,
+    "a legitimately wide snapshot must still grade",
+  );
+  // And it is still a gate: 40% of 2.816 is 1.126, so a +2 drift is still DRIFT.
+  const wideDrift = await writeMeasurements(path.dirname(wide.ws), { ...baseline, runSpeed: baseline.runSpeed + 2 });
+  assert.equal(
+    await runVerifyCli(["--snapshot", "--root", wide.root, "--workspace", wide.ws, "--measurements", wideDrift]),
+    1,
+    "a wide band is still a band",
+  );
 });
 
 // ── contract binding (live path, refused before any capture) ─────────────────
