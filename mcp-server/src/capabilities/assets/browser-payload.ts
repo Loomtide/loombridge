@@ -26,6 +26,7 @@ import {
 import { applyCatalogEnvFallback } from "./catalog-env.js";
 import { assetKindOf, loadAssetProfile, loadRegistryPack } from "./registry.js";
 import { reviewStatusForEntry, trustTierForEntry } from "./trust.js";
+import { isMainModule as isMainModuleUrl } from "../../shared/main-module.js";
 
 type FetchLike = (url: string) => Promise<{
   ok: boolean;
@@ -758,7 +759,7 @@ async function run(): Promise<number> {
   return 0;
 }
 
-const isMainModule = process.argv[1]?.endsWith("browser-payload.js") || process.argv[1]?.endsWith("browser-payload.ts");
+const isMainModule = isMainModuleUrl(import.meta.url);
 if (isMainModule) {
   run().then((code) => {
     process.exitCode = code;

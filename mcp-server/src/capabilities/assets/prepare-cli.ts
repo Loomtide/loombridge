@@ -32,6 +32,7 @@ import type {
   PrepareAssetsOptions,
   PreparedAsset,
 } from "./types.js";
+import { isMainModule as isMainModuleUrl } from "../../shared/main-module.js";
 
 interface CliArgs extends PrepareAssetsOptions {
   help: boolean;
@@ -560,7 +561,7 @@ async function run(): Promise<number> {
   return report.status === "pass" ? 0 : 1;
 }
 
-const isMainModule = process.argv[1]?.endsWith("prepare-cli.js") || process.argv[1]?.endsWith("prepare-cli.ts");
+const isMainModule = isMainModuleUrl(import.meta.url);
 if (isMainModule) {
   run().then((code) => {
     process.exitCode = code;

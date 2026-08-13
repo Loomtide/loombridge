@@ -4,6 +4,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 import type { AssetPrepareReport, PreparedAsset } from "./types.js";
+import { isMainModule as isMainModuleUrl } from "../../shared/main-module.js";
 
 export interface HandoffConsistencyIssue {
   code:
@@ -271,7 +272,7 @@ async function run(): Promise<number> {
   return report.status === "pass" ? 0 : 1;
 }
 
-const isMainModule = process.argv[1]?.endsWith("handoff-consistency.js") || process.argv[1]?.endsWith("handoff-consistency.ts");
+const isMainModule = isMainModuleUrl(import.meta.url);
 if (isMainModule) {
   run().then((code) => {
     process.exitCode = code;

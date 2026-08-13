@@ -24,6 +24,7 @@ import {
   createUnityClientForCli,
   type UnityRoutingMetadata,
 } from "../../bridge/unity-client-resolver.js";
+import { isMainModule as isMainModuleUrl } from "../../shared/main-module.js";
 
 export interface TuningPersistInput {
   config: TuningSessionConfig;
@@ -416,8 +417,7 @@ async function main(): Promise<number> {
   }
 }
 
-const isMainModule =
-  process.argv[1]?.endsWith("tuning-persist.js") || process.argv[1]?.endsWith("tuning-persist.ts");
+const isMainModule = isMainModuleUrl(import.meta.url);
 if (isMainModule) {
   main().then((code) => {
     process.exitCode = code;

@@ -16,6 +16,7 @@ import { writeScenarioResult } from "../capabilities/scenario/result-writer.js";
 import { validateScenarioDocument } from "../capabilities/scenario/validator.js";
 import type { ScenarioDocument, ScenarioRunResult, ScenarioToolResult } from "../capabilities/scenario/types.js";
 import { packageRoot } from "../shared/pkg-root.js";
+import { isMainModule as isMainModuleUrl } from "../shared/main-module.js";
 
 interface CliArgs {
   scenarioPath: string;
@@ -234,7 +235,7 @@ async function run(): Promise<number> {
   }
 }
 
-const isMainModule = process.argv[1]?.endsWith("scenario-cli.js") || process.argv[1]?.endsWith("scenario-cli.ts");
+const isMainModule = isMainModuleUrl(import.meta.url);
 if (isMainModule) {
   run().then((code) => {
     process.exitCode = code;

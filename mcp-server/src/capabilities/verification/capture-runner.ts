@@ -33,6 +33,7 @@ import {
   type VerificationScenario,
   type VerificationSequence,
 } from "./scenario.js";
+import { isMainModule as isMainModuleUrl } from "../../shared/main-module.js";
 
 export interface CaptureRunnerArgs {
   acceptancePath: string;
@@ -887,8 +888,7 @@ async function main(): Promise<number> {
   }
 }
 
-const isMainModule =
-  process.argv[1]?.endsWith("capture-runner.js") || process.argv[1]?.endsWith("capture-runner.ts");
+const isMainModule = isMainModuleUrl(import.meta.url);
 if (isMainModule) {
   main().then((code) => {
     process.exitCode = code;
