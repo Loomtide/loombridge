@@ -19,6 +19,7 @@ import {
 import { CAPTURE_REPORT_FILE } from "../../../../domain/capture-manifest.js";
 import { loombridgePaths, writeState } from "../../../../domain/state.js";
 import { REPO_ROOT } from "../../../_support/paths.js";
+import { resolveVisualArtifactsScenario } from "../../../../capabilities/verification/capture-visual-artifacts.js";
 
 // ── captureRecipesForFiles (dispatch on the manifest FILE LIST, not gate names) ──
 //
@@ -325,6 +326,19 @@ function recordingDeps(options: { writeFiles?: boolean } = {}): RecordedDeps {
         playMode: false,
       };
     },
+    captureVisualArtifacts: async (a) => {
+      calls.push("visual-artifacts");
+      runIds.push(a.runId);
+      const visualArtifactsPath = path.join(a.outDir, "visual-artifacts.json");
+      if (writeFiles) {
+        await writeProduced(visualArtifactsPath, { frames: [], comparisons: [] }, a.runId);
+        // The scenario session holds play mode for the whole sweep, so it writes console.json
+        // too (RECIPE_INCIDENTAL_OUTPUTS). Omitting it here made the console recipe unnecessary
+        // while nothing wrote the file: producer-ran-but-file-missing, exit 1.
+        await writeProduced(path.join(a.outDir, "console.json"), { logs: [] }, a.runId);
+      }
+      return { visualArtifactsPath, framesDir: path.join(a.outDir, "frames"), scenarioPath: "/fixture/scenario.json" };
+    },
     captureConsole: async (a) => {
       calls.push("console");
       runIds.push(a.runId);
@@ -390,6 +404,7 @@ test("runCapture: tile capture requires both expected gate files to be provenanc
         playMode: false,
       };
     },
+    captureVisualArtifacts: async () => { throw new Error("visual-artifacts not exercised by this fixture"); },
     captureConsole: async () => {
       throw new Error("should not be called");
     },
@@ -399,12 +414,16 @@ test("runCapture: tile capture requires both expected gate files to be provenanc
   await fs.rm(root, { recursive: true, force: true });
 });
 
-test("runCapture: parallax slice (console-clean, no framing/tiles) dispatches to the console capture", async () => {
+test("runCapture: parallax slice dispatches visual-artifacts + console (no framing/tiles)", async () => {
+  // This slice carries the `visual-artifacts` gate. Before the recipe existed, that entry was
+  // agent-assembly and only `console` ran; now the file has a producer, so it is captured.
   const root = await scaffold();
   const { deps, calls } = recordingDeps();
   const code = await runCapture(baseArgs(root, "parallax"), deps);
   assert.equal(code, 0);
-  assert.deepEqual(calls, ["console"]);
+  // console.json comes from the visual-artifacts session itself, so the console-only recipe
+  // is not also needed (RECIPE_INCIDENTAL_OUTPUTS).
+  assert.deepEqual(calls, ["visual-artifacts"]);
   await fs.rm(root, { recursive: true, force: true });
 });
 
@@ -429,6 +448,10 @@ function projectRecordingDeps(): { deps: CaptureDeps; seen: Record<string, unkno
       seen.tiles = a.project;
       return base.deps.captureTiles(a);
     },
+    captureVisualArtifacts: async (a) => {
+      seen.visualArtifacts = a.project;
+      return base.deps.captureVisualArtifacts(a);
+    },
     captureConsole: async (a) => {
       seen.console = a.project;
       return base.deps.captureConsole(a);
@@ -447,7 +470,7 @@ function projectRecordingDeps(): { deps: CaptureDeps; seen: Record<string, unkno
 
 test("runCapture: --project is threaded into the dispatched capture helper", async () => {
   const root = await scaffold();
-  for (const [slice, key] of [["framing", "framing"], ["ground-tiling", "tiles"], ["parallax", "console"]] as const) {
+  for (const [slice, key] of [["framing", "framing"], ["ground-tiling", "tiles"], ["parallax", "visualArtifacts"]] as const) {
     const { deps, seen } = projectRecordingDeps();
     const code = await runCapture({ ...baseArgs(root, slice), project: "/Users/dev/GameB" }, deps);
     assert.equal(code, 0);
@@ -508,6 +531,7 @@ test("runCapture: a missing-GroundTiling bridge error surfaces as exit 1 (not a 
         "capture.invoke_static failed: Capture component type 'GroundTiling' not found in any loaded assembly.",
       );
     },
+    captureVisualArtifacts: async () => { throw new Error("visual-artifacts not exercised by this fixture"); },
     captureConsole: async () => {
       throw new Error("should not be called");
     },
@@ -792,17 +816,17 @@ test("runCapture E13: an unprovenanced entry with a PRODUCER is a producer failu
   const deps: CaptureDeps = {
     ...recordingDeps().deps,
     // The recipe "succeeds" and writes nothing: the leftover above is all that is on disk.
-    captureConsole: async (a) => ({
-      consolePath: path.join(a.outDir, "console.json"),
-      logCount: 0,
-      startupCount: 0,
-      steadyCount: 0,
+    // The recipe "succeeds" and writes nothing: the leftover on disk is all there is.
+    captureVisualArtifacts: async (a) => ({
+      visualArtifactsPath: path.join(a.outDir, "visual-artifacts.json"),
+      framesDir: path.join(a.outDir, "frames"),
+      scenarioPath: "/fixture/scenario.json",
     }),
   };
   const { code, errors } = await runCapturing(baseArgs(root, "parallax"), deps);
   assert.equal(code, 1);
   const report = await readReport(root, "parallax");
-  assert.deepEqual(report.producerFailed, ["parallax/console.json"]);
+  assert.deepEqual((report.producerFailed as string[]).slice().sort(), ["parallax/console.json", "parallax/visual-artifacts.json"]);
   assert.deepEqual(report.produced, []);
   assert.ok(errors.some((line) => /UNPROVENANCED/.test(line)), errors.join("\n"));
   await fs.rm(root, { recursive: true, force: true });
@@ -850,11 +874,11 @@ test("runCapture E14 LITMUS: a recipe whose file was written by an EARLIER run i
 
   const deps: CaptureDeps = {
     ...recordingDeps().deps,
-    captureConsole: async (a) => ({
-      consolePath: path.join(a.outDir, "console.json"),
-      logCount: 0,
-      startupCount: 0,
-      steadyCount: 0,
+    // The recipe "succeeds" and writes nothing: the leftover on disk is all there is.
+    captureVisualArtifacts: async (a) => ({
+      visualArtifactsPath: path.join(a.outDir, "visual-artifacts.json"),
+      framesDir: path.join(a.outDir, "frames"),
+      scenarioPath: "/fixture/scenario.json",
     }),
   };
   const { code, errors } = await runCapturing(baseArgs(root, "parallax"), deps);
@@ -862,7 +886,66 @@ test("runCapture E14 LITMUS: a recipe whose file was written by an EARLIER run i
   const report = await readReport(root, "parallax");
   assert.deepEqual(report.produced, []);
   assert.deepEqual(report.presentFromOtherSources, ["parallax/console.json"]);
-  assert.deepEqual(report.producerFailed, ["parallax/console.json"]);
+  // visual-artifacts.json is producer-owned and never landed, so it fails alongside the stale one.
+  assert.deepEqual((report.producerFailed as string[]).slice().sort(), ["parallax/console.json", "parallax/visual-artifacts.json"]);
   assert.ok(errors.some((line) => /STALE/.test(line)), errors.join("\n"));
   await fs.rm(root, { recursive: true, force: true });
+});
+
+// --- visual-artifacts recipe -------------------------------------------------------------------
+//
+// `visual-artifacts.json` was the last manifest entry NO recipe produced, so capture reported it
+// as agent-assembly and exited 0. A real 3d-shooter session answered that invitation by writing a
+// scratchpad driver, scraping base64 screenshots out of a JSONL stream, and labelling frames with
+// `zip(["aim","scoped","unscoped"], shots)`. Positional labelling silently mislabels the evidence
+// whenever a capture drops or arrives out of order.
+
+test("visual-artifacts.json now selects a recipe instead of agent-assembly", () => {
+  const dispatch = captureRecipesForFiles(["visual-artifacts.json"]);
+  const entry = dispatch.files.find((file) => file.file === "visual-artifacts.json");
+  assert.ok(entry, "visual-artifacts.json must appear in the producer map");
+  assert.equal(entry.recipe, "visual-artifacts", "it must have a producer, not null (null = agent-assembly)");
+  assert.deepEqual(dispatch.unproduced, [], "it must no longer be an agent-assembly entry");
+  assert.ok(dispatch.recipes.includes("visual-artifacts"), "the recipe must be selected to run");
+});
+
+test("the recipe writes console.json too, so a slice needing both runs one recipe", () => {
+  assert.deepEqual(recipeOutputs("visual-artifacts").sort(), ["console.json", "visual-artifacts.json"]);
+});
+
+test("LITMUS: an unresolvable scenario REFUSES and names what to author", () => {
+  // The refusal IS the feature for every genre with no bundled pack, which is every genre except
+  // 2D platformer. Degrading to "agent-assembly required" here is exactly what produced the
+  // hand-rolled pipeline, so it must throw rather than return.
+  assert.throws(
+    () => resolveVisualArtifactsScenario({ acceptance: { game: "SniperShooter", genre: "3d-shooter" } }),
+    (error: Error) => {
+      assert.match(error.message, /--scenario/, "must name the flag that fixes it");
+      assert.match(error.message, /baselineFrameId/, "must show the shape to author");
+      assert.match(error.message, /captures/, "must show that frame ids are declared, not positional");
+      return true;
+    },
+  );
+});
+
+test("an explicit --scenario wins over bundled pack selection", () => {
+  // A project-local scenario is the supported path for a genre with no pack, so it must not be
+  // second-guessed by game-kind matching.
+  assert.equal(
+    resolveVisualArtifactsScenario({
+      acceptance: { game: "SniperShooter", genre: "3d-shooter" },
+      scenarioPath: "/tmp/project-scenario.json",
+    }),
+    "/tmp/project-scenario.json",
+  );
+});
+
+test("LITMUS: a contract WITH a bundled pack still resolves without --scenario", () => {
+  // Guards the refusal from the other side: if pack selection were broken, the test above would
+  // pass while every genre refused.
+  const resolved = resolveVisualArtifactsScenario({
+    // The bundled pack matches on the CONTRACT SHAPE (a `platformer` section), not on genre id.
+    acceptance: { game: "demo-platformer", genre: "platformer-2d", platformer: { tiles: {} } },
+  });
+  assert.match(resolved, /platformer-2d-basic\.json$/);
 });
