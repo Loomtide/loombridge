@@ -937,7 +937,7 @@ async function resolveReplaySpeed(
  * {@link baselineHasApprovedFrames}.
  *
  * THE COST IS STATED RATHER THAN HIDDEN. An aligned settle needs the bridge's
- * `replay.settle_and_capture` op (bridge >= 0.2.0), so a project pinned to an older bridge
+ * `replay.settle_and_capture` op (bridge >= 0.1.0), so a project pinned to an older bridge
  * now takes a HARNESS FAULT (exit 2, no frame, named in the report) on its first unanchored
  * replay where it used to take the wall-clock path. That is the correct tier for "the
  * harness could not do what was asked" and it is loud, not a false green; the fix is

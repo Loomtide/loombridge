@@ -115,7 +115,7 @@ registry + dependency:
     }
   ],
   "dependencies": {
-    "com.loomtide.loombridge": "0.2.0"
+    "com.loomtide.loombridge": "0.1.0"
   }
 }
 ```

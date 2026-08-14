@@ -56,7 +56,7 @@ reference it; when they disagree, the ledger is the fresher truth.
    (background throttling trips settle budgets today, measured live at ~10Hz). Includes
    the `UNITY_LICENSE` CI path for the EditMode gate.
 4. **Paused-stepped replay.** The measured next step for pixel baselines on animated
-   games: capture-aligned settles shipped in 0.2.0 and the idle-probe discriminator
+   games: capture-aligned settles shipped in 0.1.0 and the idle-probe discriminator
    proved the residual drift is game-clock phase desync accumulating in the unaligned
    inter-segment windows, which only whole-run stepped execution closes. The
    preconditions are recorded in the aligned-wave review; either it ships, or a game
@@ -111,9 +111,9 @@ reference it; when they disagree, the ledger is the fresher truth.
 - **Second engine.** The CLI core is engine-agnostic by design; a second engine is
   deliberately deferred until the Unity surface is the obvious default choice.
 
-## Recently shipped (context for the items above; 0.2.0 is the evidence release)
+## Recently shipped (context for the items above; 0.1.0 is the evidence release)
 
-- **Post-0.2.0, pre-announcement**: the bridge op journal (every executed op leaves a
+- **Post-0.1.0, pre-announcement**: the bridge op journal (every executed op leaves a
   sequenced, target-resolved record through BOTH executor doors, batch children
   included, with an instance id so a reset cannot impersonate a clean window);
   `loombridge reopen` (approvals withdraw through the state machine, cascaded, with
@@ -121,7 +121,7 @@ reference it; when they disagree, the ledger is the fresher truth.
   three-way slice warn exit (capture gaps to the harness tier, graded warns strict by
   default, a machine-readable `approvable` on the verdict).
 
-- **The evidence architecture** (0.2.0, the four-stage arc): evidence is produced,
+- **The evidence architecture** (0.1.0, the four-stage arc): evidence is produced,
   observed, or honestly second-class. The CLI produces feel evidence itself through a
   declared harness seam (op echoes, never typed numbers; known-truth calibrated tick
   conventions; a behaviorally proven input-reader disable); playability is observed by a

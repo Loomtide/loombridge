@@ -34,8 +34,8 @@
 # RELEASE CANDIDATES: point the installer at a locally built asset instead of a published
 # release, so an RC can be smoke-tested through THIS script before it is cut. Needs no auth
 # and touches no network:
-#   LOOMBRIDGE_CLI_TARBALL=mcp-server/loombridge-cli-0.2.0.tgz sh scripts/install.sh
-#   sh scripts/install.sh --tarball mcp-server/loombridge-cli-0.2.0.tgz
+#   LOOMBRIDGE_CLI_TARBALL=mcp-server/loombridge-cli-0.1.0.tgz sh scripts/install.sh
+#   sh scripts/install.sh --tarball mcp-server/loombridge-cli-0.1.0.tgz
 #
 # Env overrides:
 #   LOOMBRIDGE_VERSION      pin a release tag (default: latest)
