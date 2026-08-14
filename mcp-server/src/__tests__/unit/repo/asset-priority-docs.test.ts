@@ -512,25 +512,28 @@ export function spdxCounts(prefix: string): Map<string, number> {
   return counts;
 }
 
-test("the README's CC0 counts match what the tree actually records", () => {
+test("the asset-priority doc's CC0 counts match what the tree actually records", () => {
   const registry = spdxCounts("asset-layer/registry/");
   const all = spdxCounts("asset-layer/");
   const registryCc0 = registry.get("CC0-1.0") ?? 0;
   const allCc0 = all.get("CC0-1.0") ?? 0;
   assert.ok(registryCc0 > 0, "the licence scan found nothing: it is vacuous");
 
-  const readme = read("README.md");
+  // The counts live in the asset-priority DOC, not the landing README: they describe the 80
+  // test/demo assets committed here, which is not landing-page material. The hosted catalog is a
+  // separate set this repo cannot verify, so no count for it is guarded anywhere.
+  const readme = read(DOC);
   assert.ok(
     readme.includes(`**${registryCc0} assets as \`CC0-1.0\`**`),
-    `README must state the derived registry count (${registryCc0} CC0 in asset-layer/registry/**)`,
+    `Docs/Assets/AssetPriority.md must state the derived registry count (${registryCc0} CC0 in asset-layer/registry/**)`,
   );
   assert.ok(
     readme.includes(`**${allCc0} \`CC0-1.0\`**`),
-    `README must state the derived tree-wide count (${allCc0} CC0 across asset-layer/)`,
+    `Docs/Assets/AssetPriority.md must state the derived tree-wide count (${allCc0} CC0 across asset-layer/)`,
   );
   // Every non-CC0 licence the tree records must be named, so "predominantly CC0" is checkable.
   for (const spdx of [...all.keys()].filter((key) => key !== "CC0-1.0")) {
-    assert.ok(readme.includes(spdx), `README must name the non-CC0 licence ${spdx} it records`);
+    assert.ok(readme.includes(spdx), `Docs/Assets/AssetPriority.md must name the non-CC0 licence ${spdx} it records`);
   }
 });
 

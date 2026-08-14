@@ -89,6 +89,20 @@ certify nothing: shipping one as final art certifies against a fiction.
 verification, sha256 checksums, trust tiers, and the human approval checkpoint all run on the
 same code path, so choosing local over hosted costs nothing in rigor.
 
+## What this repo actually records
+
+Every record carries an SPDX identifier, a license URL, an explicit `requiresAttribution` flag, a
+`sha256` over the bytes, and its source/provider provenance. Only `trusted-default` records
+(verified review plus a commercial-use-compatible license plus a checksum that matches) are
+auto-selected; anything attribution-required or unverified is browseable but needs an explicit
+human decision.
+
+The registry packs committed in this repo (`asset-layer/registry/**`) record **80 assets as `CC0-1.0`**; across the whole of `asset-layer/` that is **85 `CC0-1.0`**, plus one `CC-BY-4.0` and one `LicenseRef-Unknown`, both test fixtures under `asset-layer/catalog-fixtures/`.
+
+Those numbers are derived from the tree by a test, and describe what this repo records, not an
+audit of what the remote serves. The hosted catalog is a separate, much larger set this repo
+cannot verify: any count quoted for it is a claim about a service, not a checkable fact here.
+
 ## See also
 
 - `ARCHITECTURE.md` ("Public Hosted Asset Catalog") — the hosted catalog architecture + API contract.
