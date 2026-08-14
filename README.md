@@ -11,6 +11,10 @@
 
 https://github.com/user-attachments/assets/58ef3db4-726d-4fb5-8902-963283e15881
 
+**Status: 0.1.0, the first public release.** Pre-1.0, so surfaces can still change, with
+deprecation aliases where a rename would break you. [`ROADMAP.md`](ROADMAP.md) states
+direction, not dates.
+
 # Install
 
 ```bash
@@ -119,6 +123,14 @@ Loombridge is a local, single-developer editor tool. The agent talks to the MCP 
 - **No telemetry.** No analytics, usage beacons, or phone-home. This will not change.
 - **No cloud requirement.** Core CLI and bridge run fully local.
 - **Not a game factory.** Loombridge carries no opinion about what a good game is; it is the machinery for stating yours once and enforcing it forever.
+
+## Help and bugs
+
+Something broken, confusing, or missing? [Open an issue](https://github.com/Loomtide/loombridge/issues).
+The fastest reports include the command you ran and the report it wrote under
+`.loombridge/run/reports/`, since that names what was checked and what was not.
+
+Security vulnerabilities go through [`SECURITY.md`](SECURITY.md) privately, not a public issue.
 
 ## Contributing
 
