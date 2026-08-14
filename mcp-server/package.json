@@ -1,6 +1,6 @@
 {
   "name": "loombridge",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "MCP server + CLI for Loombridge: build and verify Unity games with AI agents. The doneness gate refuses to call a build done on the agent's word.",
   "type": "module",
   "main": "dist/surfaces/index.js",
