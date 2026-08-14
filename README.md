@@ -12,9 +12,7 @@
 
 https://github.com/user-attachments/assets/58ef3db4-726d-4fb5-8902-963283e15881
 
-**Status: 0.1.0, the first public release.** Pre-1.0, so surfaces can still change, with
-deprecation aliases where a rename would break you. [`ROADMAP.md`](ROADMAP.md) states
-direction, not dates.
+Join discord channel to know more: [![Discord](https://img.shields.io/badge/discord-join-5865F2?logo=discord&logoColor=white)](https://discord.gg/dTBpd8Embh)
 
 # Install
 
