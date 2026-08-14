@@ -1,6 +1,6 @@
 # Loombridge
 
-### Agent layer to build and verify games in Unity. It supports recording the gameplay once and replaying it deterministically so you can automate regressions. You can also snapshot game feel and verify tuning drift via replay. It generates reports of visual and feel issues. ###
+### Agent layer to build and verify games in Unity. ###
 
 
 [![CI](https://github.com/Loomtide/loombridge/actions/workflows/ci.yml/badge.svg)](https://github.com/Loomtide/loombridge/actions/workflows/ci.yml)
@@ -9,18 +9,9 @@
 [![Node](https://img.shields.io/badge/node-%3E%3D18-339933?logo=nodedotjs&logoColor=white)](#support-matrix)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
 
-<!-- ═══════════════════════════════════════════════════════════════════
-     VIDEO TRAILER placeholder (60-90s).
-     Storyboard: (1) agent builds a slice live through the bridge in the
-     Unity editor, (2) `loombridge verify` gates it, (3) `loombridge
-     doneness` REFUSES with reasons on screen, (4) fix, re-verify,
-     doneness goes green. The refusal appears BEFORE the green.
-     Embed: [![Loombridge trailer](thumbnail.png)](video-url)
-     ═══════════════════════════════════════════════════════════════════ -->
+https://github.com/user-attachments/assets/58ef3db4-726d-4fb5-8902-963283e15881
 
-## Install
-
-Needs Node >= 18. macOS, Linux, and Windows, in any shell:
+# Install
 
 ```bash
 npm install -g loombridge
@@ -33,159 +24,81 @@ cd /path/to/UnityProject
 loombridge setup           # bridge + MCP registration + (optional) agent surface, then doctor
 ```
 
-`setup` installs the Unity bridge, registers the MCP server in the project's `.mcp.json` (merging
-into whatever servers are already there, and refusing to overwrite a `loombridge` entry it did not
-write), offers the optional slash commands + skills, and finishes with `doctor` so the run ends on
-evidence. It is idempotent, so re-run it any time. Every step is still its own verb if you want
-just one: `install-bridge`, `install-mcp`, `install-agent`, `doctor`.
-
-To update later, run this from anywhere. Inside a Unity project it also reconciles that
-project's bridge, so the CLI and the bridge never drift apart:
+To update later, run this from Unity project:
 
 ```bash
 loombridge update          # add --check to see what would change without installing
 ```
 
-**Connecting an agent by hand** (any client that does not read a project-scoped `.mcp.json`):
-command `loombridge`, args `["mcp"]`.
-
-<details>
-<summary>Install from source / full setup notes</summary>
-
-```bash
-git clone https://github.com/Loomtide/loombridge.git
-cd loombridge/mcp-server
-npm ci && npm run build && npm link          # `loombridge` now on your PATH
-bash ../scripts/loombridge-pack-bridge.sh    # pack the bridge tarball install-bridge ships
+Restart your agent session and it should pick up new commands and MCP
 ```
-
-Full setup, transports, fresh-machine bootstrap: [`Docs/Install.md`](Docs/Install.md).
-Unity Personal and license-less CI: [`Docs/Licensing-and-CI.md`](Docs/Licensing-and-CI.md).
-Optional agent surface (slash commands + skills, committed into your repo):
-`loombridge install-agent --project <p>`.
-</details>
-
-## What is Loombridge?
-
-An AI agent can already build a Unity game. What it cannot do is tell you honestly whether the result is any good, because the same model that wrote the code writes the report card. Loombridge splits those roles:
-
-- **The hands**: a typed MCP tool surface (125+ ops, 14 categories) to construct scenes, write C#, inject real Input System events, and measure motion from the running game. No raw code-eval op, ever.
-- **The judge**: a deterministic CLI that gates every claim against ground truth a human approved once: contracts, frozen hero shots, recorded demonstrations, measured feel baselines.
-- **The rule**: a self-graded "done" is refused. `loombridge doneness` exits green only on a fresh, run-bound verdict whose cited evidence exists on disk and re-derives.
-- **Evidence is produced or observed, never typed**: the CLI drives feel measurements itself and records playability from inside the game loop; a teleported win cannot claim it was played.
-- **A human plays and approves exactly once**; the agent gets the deterministic gates forever after.
-- **Local and quiet**: no telemetry, no cloud requirement, loopback-only bridge.
-
-"Playwright for Unity" is the mechanism. **Provable doneness is the product.**
-
-## The three workflows
-
-| Workflow | You start with | Commands | You get |
-|---|---|---|---|
-| **Build** a new game | An idea (or a design doc) | `plan` → `build` → agent constructs → `verify --slice` → `plan --go` | A game built slice by slice against a contract the agent cannot redefine |
-| **Verify** an existing game | A playable game | `record` → `verify --live` → `approve` | Play once, approve once; deterministic pixel + flow + feel gates forever after |
-| **Certify** it is done | Green gates | `doneness` | A certificate bound to the run, the evidence, and the frozen design target: or a refusal naming exactly why not |
-
-## Build: the supervised loop
-
-<!-- GIF placeholder: `plan` scaffolding + the agent building a slice through the
-     bridge in the editor + `verify --slice` going green + `plan --go`. ~20s. -->
-
-```bash
-loombridge plan --genre platformer-2d --name MyGame   # contract + design target, frozen first
-loombridge build                                      # mints a run and gates preconditions
-# your agent constructs the slice through the MCP bridge
-loombridge capture --slice player-feel                # the CLI produces the evidence itself
-loombridge verify --slice player-feel --strict        # deterministic gates over that evidence
-loombridge plan --go                                  # human checkpoint: approve, next slice
+> claude
+> /loombridge:plan  I want to build a 3D first person sniper shooter. Where player
+                  is static in a location like top of building and we only see
+                  first person sniper gun. Player needs to aim at enemies in far
+                  locations and buildings.  [reference screenshot attached]
 ```
+Every command will tell you what to do next. For above prompt, here is the generated [SniperShooter](https://github.com/Loomtide/SniperShooter)
 
-`plan` refuses to scaffold without an approved Design Target, and `build` refuses without an approved asset manifest: the contract exists before the first line of code. Genre packs ship for `platformer-2d`, `2d-shooter`, `3d-shooter`, `3d-topdown-arena`, and any-genre contracts grade with their coverage stated honestly.
 
-## Verify: record once, replay deterministically
+# What is Loombridge?
 
-<!-- GIF placeholder: a human plays ~15s (`record`), then `verify --live`
-     drives the game by itself and the report shows green flow + pixel rows. -->
+Loombridge is an agentic toolset to build games end to end. 
 
-Two of these four lines need a person. That is the whole loop:
+Good games are not generated by one prompt, they are iterated to achieve an experience. Loombridge has set of tools to plan, build, verify and test the games.
 
-```bash
-loombridge record                                     # A HUMAN: you play; Loombridge watches
-loombridge verify --live                              # drives your demonstration, captures the frames
-loombridge approve                                    # A HUMAN: freeze what that run captured
-loombridge verify --live                              # from now on: one command, exit by worst tier
-```
+## Build flow
 
-`verify --live` replays the trace and writes the run report that `approve` promotes, so there is
-no separate replay step. Step 2 drives your recording even though it has nothing to grade yet:
-it captures the frames and still reports the trace as **not measured**, because capturing is not
-measuring. Re-record a trace later and the same two commands re-anchor it; `approve` refuses a
-run of any other demonstration, so an updated recording can never be frozen against the previous
-one's frames. `loombridge trace replay` still exists as the low-level door when you want the
-replay on its own, along with `trace replay-all`, `trace tolerance`, `trace mask` and
-`trace report`. (`record` and `approve` are the same doors as `trace record` and
-`trace approve`; both spellings work.)
+Just three commands to build the game as per your design. These work with claude, codex or cursor. Can easily be extended to any agents
 
-Replays drive real input through the game (focus-independent, no field pokes) and diff every capture against your approved baseline perceptually. Capture settles are aligned to the bridge's pinned tick loop by default, so a frame lands at the same game time every run; frames a human already approved keep whatever clock they were approved under, and a comparison across two clocks refuses rather than reporting the phase skew as drift. Animated games get honest levers, each human-consented and printed with the hole it opens: bounded pixel tolerances, region masks with a structural reproduced-drift detector, replay pacing, and capture-aligned settles inside a pinned tick loop. A verify that measured nothing refuses (exit 2): it never passes by default.
+- `loombridge:plan` to generate a hero shot as per your initial idea. It generates slices to be executed by build
+- `loombridge:build` executes slices generated by plan.
+- `loombridge:status` tells you where are you in development.
 
-## Doneness: the certificate that cannot be talked into green
+## Verify flow
 
-<!-- GIF placeholder: `doneness` refusing with reasons listed, then (after fixes)
-     the green certificate. The refusal must be on screen before the green. ~15s. -->
+Loombridge allows you to record and verify the game play. You record once and replay indefinitely. No AI agent needed (0 cost). The goal with this is, while you are building the feature. Just record once. It will be saved in .loombridge folder. Later in your CI/CD or in a machine, you can just run loombridge verify and it will tell you if the game still plays the same. 
 
-Verbatim, from an empty scratch project:
+It lets you automate full game play for regression.
 
-```console
-$ loombridge doneness
-[loombridge doneness] NOT done:
-  - phase is `planned`, not `verified-green`
-  - no `currentBuild` in STATE — no build is in flight (run `loombridge build` first)
-  - no verdict at .loombridge/run/reports/build-verdict.json
-; exit 1
-```
+- `cd /path/to/UnityProject` 
+- Keep Unity Project open.
+- `loombridge record` it will start Unity in play mode. Play the flow you want to record
+- Once done, come back to CLI and press enter. Recording is done.
+- `loombridge verify` it re-drives the recording in Unity and captures the frames
+- `loombridge approve` this marks this recording as base for future check.
+- In future, just run `loombridge verify`. It will run the game in Unity and generate report.
 
-Green requires: a verdict whose `runId` matches the in-flight build, `producedAt` on or after the build started, every cited capture present on disk with its recorded sha, every slice re-graded from its own evidence, hero-shot fidelity against the frozen, sha256-pinned design target, and an independent multi-reviewer design review. Nine green gates once met a certificate that still said no, because the design review withheld: that is the product working, and the [156-finding engineering ledger](Docs/Design/TideRunnerDoorOneLedger.md) from proving it live ships in this repo.
+### What pixel matching can and cannot hold
 
-Four invariants keep every gate honest:
+Pixel baselines are for screens that should be identical: menus, HUD, results screens.
+Frames captured mid-animation (particles, transitions, VFX) drift between runs and cannot
+be pixel-anchored today, so a trace that captures them will keep reporting drift that is
+sampling noise rather than a regression. For dynamic gameplay, use the feel snapshot
+(measured kinematics like jump height and run speed) and outcome assertions instead of
+pixels.
 
-- **Refuse on absent, never skip.** A missing bound field refuses the verdict, never skips the check.
-- **Deterministic decides; advisory advises.** Model judgment (VLM review) never enters a deterministic exit code.
-- **Harness fault is not a game defect.** Capture gaps exit `2` in their own tier: never a pass, never a game bug.
-- **Evidence binds to its run.** Files from another run, another editor session, or no provenance at all cannot certify this one.
+This is work in progress to make it as easy as possible and cover more use cases and issues to automate.
 
-## Not another Unity MCP
+## Free asset store
 
-There are more than a dozen Unity MCP servers, including a first-party one. They are actuation layers: move an object, take a screenshot, let the calling model decide subjectively whether it looks right. The hard part of AI-built games is telling a real "done" from a confident hallucination, and that layer exists only here:
+Loombridge comes with a free asset store with CC0 assets. It has 60,000+ free assets. Asset store is built in a way so agents can access it. While building, the agent itself might ask, `do you want to use assets from asset store to get started?`
 
-| Capability | Typical Unity MCP | Loombridge |
-|---|---|---|
-| Create scenes, objects, components, C# scripts | Yes | Yes |
-| Real Input System injection into the running game | Rare | Yes |
-| Deterministic waits instead of sleeps | No | `wait_for()`, never `sleep()` |
-| Measure motion and feel from the running game | No | Jump apex, coyote time, hitstop, cadence |
-| Record gameplay once, replay it, pixel-diff against a baseline | No | `loombridge trace` |
-| Playability observed from inside the game loop | No | A teleported win cannot say "played" |
-| A "done" claim the agent cannot self-grade | No | `loombridge doneness` |
-| Raw code-eval op ("run this C#/shell string") | Common | **Refused by design** |
-| Telemetry | Varies | **None** |
+It is a great way to get started on a project without spending any money or tokens.
 
-## Reference
+LINK: [https://assetstore.loomtide.ai/](https://assetstore.loomtide.ai/)
 
-- **Tool surface**: 125+ typed `unity_*` ops across scene, editor, input, runtime measurement, components, code, animator, UI, assets, packages, capture, observe, and registry introspection. Auto-generated reference: [`mcp-server/TOOLS.md`](mcp-server/TOOLS.md).
-- **Agent surface**: 4 slash commands (`/loombridge:plan|build|verify|status`) and 14 skills of gotcha-level build knowledge, installable into your repo with `loombridge install-agent`.
-- **Architecture**: [`ARCHITECTURE.md`](ARCHITECTURE.md) · **Roadmap**: [`ROADMAP.md`](ROADMAP.md) · **Findings ledger and open backlog**: [`Docs/Design/TideRunnerDoorOneLedger.md`](Docs/Design/TideRunnerDoorOneLedger.md) · **Positioning**: [`Docs/Design/Positioning.md`](Docs/Design/Positioning.md)
-- **Asset catalog (optional)**: a public, read-only hosted catalog (66,000+ records, predominantly CC0), browsable via **Window → Loombridge → Asset Browser** once you point it at a catalog; license and provenance enforced before any import. [`Docs/Assets/PublicCatalogQuickstart.md`](Docs/Assets/PublicCatalogQuickstart.md)
+Roadmap:
+- I am planning to build a simple upload flow where you can also contribute to free to use assets. Let us grow this registry to make game prototyping easy for developers.
 
-## The hosted asset catalog (optional)
+## Game tuning and feel verification
 
-Loomtide runs a public asset catalog you can source art and audio from. It is a convenience, and this section is the honest description of what it is and is not.
+This is in initial stage but loombridge allows you to record snapshot of your configs. Then it replays the game to verify if the game still plays the same as the base you recorded. It is much more than just diffing the snapshot. 
 
-- **Optional.** Nothing in Loombridge requires it. The default asset path is the registry packs committed in `asset-layer/registry/*.json` plus assets generated from your approved hero shot, both of which work with no network and no account. Every gate, verdict, and doneness check behaves identically with the catalog unreachable or never configured. See [`Docs/Assets/AssetPriority.md`](Docs/Assets/AssetPriority.md).
-- **Read-only from this build.** There is no upload, publish, or mutate path here: no verb for it, and no non-GET request anywhere in the catalog client. The authoring tooling lives on the private side of a seam and refuses in this build. That boundary is guarded by tests, not left to good intentions.
-- **Per-asset licensing you can inspect.** Every record carries an SPDX identifier, a license URL, an explicit `requiresAttribution` flag, a `sha256` over the bytes, and its source/provider provenance. Only `trusted-default` records (verified review plus a commercial-use-compatible license plus a checksum that matches) are auto-selected; anything attribution-required or unverified is browseable but needs an explicit human decision. The registry packs committed in this repo (`asset-layer/registry/**`) record **80 assets as `CC0-1.0`**; across the whole of `asset-layer/` that is **85 `CC0-1.0`**, plus one `CC-BY-4.0` and one `LicenseRef-Unknown`, both test fixtures under `asset-layer/catalog-fixtures/`. Those numbers are derived from the tree by a test, and describe what this repo records, not an audit of what the remote serves.
-- **You name the endpoint.** No deployment host is baked into Loombridge. Point the CLI at a catalog with `--catalog-api <baseUrl>` (a search API) or `--catalog <url>` (a shard directory or a `.jsonl` file); with neither set, the catalog layer refuses with a named error rather than reaching for someone's server. `LOOMBRIDGE_ASSET_CATALOG_URL` names the same URL and is read directly: when no `--registry`/`--catalog`/`--catalog-api` flag is passed, `assets registry-plan`/`registry-apply`, `prepare-cli` and `browser-payload` fall back to it, and with it unset they refuse by name. The hosted catalog's base URL is not published at a fixed path, so obtain it from whoever operates the catalog and set it once via `LOOMBRIDGE_ASSET_CATALOG_URL`. It is deliberately not baked in, and it is **not** discoverable from the store page.
+It actually plays the game, check frame delta to check for example if the jump height is still the same as recorded earlier.
 
-Browse candidates in-editor via **Window → Loombridge → Asset Browser** (paste the base URL into the **Catalog** field in its toolbar, or set it once under **Preferences → Loombridge → Asset catalog**; a Unity Editor launched from the Hub does not inherit your shell environment, so the field is the reliable path), or from the CLI: [`Docs/Assets/PublicCatalogQuickstart.md`](Docs/Assets/PublicCatalogQuickstart.md).
+More to come here soon.
+
 
 ## Support matrix
 
