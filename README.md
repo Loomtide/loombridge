@@ -1,18 +1,24 @@
-# Loombridge
+<div align="center">
 
-### Agent layer to build and verify games in Unity. ###
+# Loombridge 🧵
 
+**Agent layer to build and verify games in Unity.**
+
+[Install](#install) · [Build](#build-flow) · [Verify](#verify-flow) · [Free assets](#free-asset-store) · [Roadmap](ROADMAP.md) · [Discord](https://discord.gg/dTBpd8Embh) · [Apache 2.0](LICENSE)
 
 [![CI](https://github.com/Loomtide/loombridge/actions/workflows/ci.yml/badge.svg)](https://github.com/Loomtide/loombridge/actions/workflows/ci.yml)
 [![Unity EditMode](https://github.com/Loomtide/loombridge/actions/workflows/unity-editmode.yml/badge.svg)](https://github.com/Loomtide/loombridge/actions/workflows/unity-editmode.yml)
 [![Unity](https://img.shields.io/badge/unity-2022.3%20LTS%20to%206000.x-black?logo=unity)](#support-matrix)
 [![Node](https://img.shields.io/badge/node-%3E%3D18-339933?logo=nodedotjs&logoColor=white)](#support-matrix)
-[![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
 [![Discord](https://img.shields.io/badge/discord-join-5865F2?logo=discord&logoColor=white)](https://discord.gg/dTBpd8Embh)
+
+</div>
 
 https://github.com/user-attachments/assets/58ef3db4-726d-4fb5-8902-963283e15881
 
-Join discord channel to know more: [![Discord](https://img.shields.io/badge/discord-join-5865F2?logo=discord&logoColor=white)](https://discord.gg/dTBpd8Embh)
+<div align="center"><em>Plan, build and verify.</em></div>
+
+---
 
 # Install
 
