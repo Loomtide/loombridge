@@ -269,32 +269,29 @@ export interface ReplayTrace {
    * uGUI taps still dispatch under either, so a menu→gameplay trace can mix them.
    */
   input: { backend: "ui-events" | "input-system" };
-  /**
-   * THE GAME VIEW RESOLUTION (px) THIS DEMONSTRATION WAS RECORDED AT, read from the live
-   * editor at record time.
+  /*
+   * A TRACE DELIBERATELY DOES NOT RECORD THE GAME VIEW SIZE. A `viewport` field lived here
+   * for one hour and is gone, with its recorder read, its parser branch and its one reader.
    *
-   * WHY A TRACE CARRIES IT AT ALL. Every frame this demonstration will ever be graded
-   * against is a screenshot of the Game view, so the view's SIZE is a term of the pixel
-   * comparison exactly as the pacing and the capture clock are. Nothing recorded it: the
-   * trace named no size, the baseline manifest stamped one only when masks existed, and
-   * resizing the Game view between `approve` and `replay` therefore surfaced as 100% pixel
-   * drift at the GAME tier. The operator was told their game had changed completely and
-   * nothing anywhere pointed at the window edge they had dragged.
+   * IT WAS NOT THE FRAME SIZE, which is the only resolution the pixel gate is about. The
+   * recorder read the Game view WINDOW (`ui.get_screen_rects` →
+   * `Handles.GetMainGameViewSize()`); a capture is the game camera rendered into an
+   * offscreen RenderTexture at the screenshot op's capture width and that view's ASPECT. On
+   * the consumer project this was measured on the window was 1280x720 while every frame, in
+   * every run and every baseline, was 1024x576. The one reader compared those two numbers
+   * and warned about a resize that had not happened, on a healthy setup, every run.
    *
-   * IT IS PROVENANCE, NOT THE GATE. The load-bearing check is at grade time, where the
-   * DECODED capture and the DECODED baseline are measured against each other
-   * (`applyVisualDiff`'s `dimensionsMatch` read). That one cannot be laundered by omitting
-   * a field, because it reads pixels. This field exists so a mismatch can be NAMED before
-   * the replay drives the editor and spends a capture per gesture, and so a re-recording at
-   * a new size is legible on disk afterwards.
+   * WITH THE COMPARISON GONE THE FIELD HAD NO READER AT ALL, which is this repo's most
+   * expensive recurring shape: a machine-written field that reads as wired. Keeping it as
+   * provenance would also have kept a parse-time REFUSAL bound to a field nothing consumed,
+   * and would have left a window size sitting next to frame sizes in operator-facing prose,
+   * inviting the next reader to draw the same wrong inference the code did.
    *
-   * ABSENT IS BACK-COMPATIBLE AND NEVER A REFUSAL. Every trace recorded before this field
-   * existed carries none, and a recording whose editor could not state a viewport carries
-   * none either. Absence means "this demonstration never wrote its size down", which is a
-   * missing NOTE and not a mismatch: it silences the pre-drive line and changes no verdict.
-   * A PRESENT value is validated (two positive integers) rather than coerced.
+   * THE RESOLUTION THAT IS RECORDED is the baseline manifest's `frameWidth`/`frameHeight`,
+   * DECODED from the approved PNGs, and the gate that uses it re-derives both sides from
+   * the decoded frames at grade time (`applyVisualDiff`'s `dimensionsMatch` read). There is
+   * no field to omit and no proxy to trust.
    */
-  viewport?: { width: number; height: number };
   segments: Segment[];
   assertions?: Assertion[];
   /**

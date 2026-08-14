@@ -30,6 +30,32 @@
  * the TIER and the message, which is its own kind of expensive: a correct verdict pointed
  * at the wrong suspect.
  *
+ * ───────────────────────── THE FOLLOW-UP, AND WHY IT IS HERE ─────────────────────────
+ *
+ * The first pass at the above also stamped the RECORD-TIME GAME VIEW SIZE onto the trace
+ * (`ReplayTrace.viewport`) and compared it, before the drive, against the anchor's stamped
+ * frame size. On a healthy consumer project that note fired on EVERY run:
+ *
+ *     this demonstration was recorded at 1280x720 but its approved frames are 1024x576.
+ *     … set the Game view to 1024x576 first, or approve from this run's report to re-anchor
+ *
+ * NOTHING HAD BEEN RESIZED. THE TWO NUMBERS ARE NOT THE SAME MEASUREMENT. The recorder read
+ * the Game view WINDOW (`ui.get_screen_rects` → `Handles.GetMainGameViewSize()`, 1280x720);
+ * a capture is the game camera rendered into an offscreen RenderTexture at the screenshot
+ * op's capture width and that window's ASPECT (`ScreenshotCapture.CaptureCameraToTexture`:
+ * `width = maxWidth; height = round(width / aspect)`), so every frame in every run and every
+ * baseline was 1024x576. The note compared a window against a render target, and the remedy
+ * it printed would have had an operator "fix" a working configuration.
+ *
+ * THE STAMP, ITS PARSER BRANCH AND ITS ONE READER ARE ALL GONE. With the comparison removed
+ * the field had no reader at all, which is this repo's most expensive recurring shape.
+ *
+ * NINE LITMUS-VERIFIED TESTS SHIPPED WITH THAT NOTE AND NONE OF THEM CAUGHT IT, for one
+ * reason: EVERY FIXTURE USED THE SAME NUMBER FOR THE WINDOW SIZE AND THE FRAME SIZE. A
+ * fixture that cannot tell the two apart cannot fail when the code confuses them. So the
+ * fixtures below now hold them APART on purpose (`WINDOW_W`/`WINDOW_H` are never `W`/`H`),
+ * and "the healthy differing-numbers case is silent" is a guard in its own right.
+ *
  * THE FREE-ASPECT DECISION, which is the real design risk. A project on a free-aspect Game
  * view resizes constantly, so a rule that says "any difference is red" turns an honest
  * project permanently red, and a permanently red gate gets relaxed later. The tests below
@@ -135,6 +161,14 @@ function scriptedClient(current: () => Buffer): () => {
     "editor.wait_for": () => ({ data: { waited_ms: 1 } }),
     "editor.play": () => ({ data: { play_mode: "playing" } }),
     "editor.console_logs": () => ({ data: { logs: [] } }),
+    // THE WINDOW, AND IT IS NEVER THE FRAME SIZE. This editor reports a Game view of
+    // WINDOW_W x WINDOW_H while handing back frames of W x H, which is the shape of a real
+    // project (window 1280x720, frames 1024x576: same aspect, different numbers). Every
+    // fixture in the first pass of this file used ONE number for both, which is exactly why
+    // nine LITMUS-verified tests all stayed green while the code compared them.
+    "ui.get_screen_rects": () => ({
+      data: { objects: [], viewport: { width: WINDOW_W, height: WINDOW_H, aspect: WINDOW_W / WINDOW_H } },
+    }),
     "editor.screenshot": () => ({ data: { image_base64: current().toString("base64"), format: "png" } }),
     "replay.settle_and_capture": () => ({
       data: {
@@ -164,8 +198,15 @@ function scriptedClient(current: () => Buffer): () => {
   });
 }
 
-/** A one-capture trace where the verb expects it, optionally declaring a recorded size. */
-async function writeTrace(root: string, viewport?: { width: number; height: number }): Promise<void> {
+/**
+ * A one-capture trace where the verb expects it.
+ *
+ * `recordedWindow` writes a `viewport` key onto the FILE, which is what a trace recorded
+ * during the hour that field existed looks like on disk. Nothing reads it any more, and the
+ * point of being able to write one is to prove that: a legacy key must not be refused, must
+ * not resurrect a comparison, and must not reach any operator-facing sentence.
+ */
+async function writeTrace(root: string, recordedWindow?: { width: number; height: number }): Promise<void> {
   const paths = standardReplayLayout(root);
   await fs.mkdir(paths.replayTraces, { recursive: true });
   await fs.writeFile(
@@ -175,7 +216,7 @@ async function writeTrace(root: string, viewport?: { width: number; height: numb
       id: "demo",
       start: { scene: "Assets/Scenes/Game.unity", reset: "scene-load" },
       input: { backend: "ui-events" },
-      ...(viewport ? { viewport } : {}),
+      ...(recordedWindow ? { viewport: recordedWindow } : {}),
       segments: [{ id: "cap", actions: [], captures: [{ id: "cap", settleMs: 250 }] }],
       outcome: { expected: "success" },
     }),
@@ -223,8 +264,22 @@ async function editManifest(root: string, mutate: (m: Record<string, unknown>) =
   await fs.writeFile(file, `${JSON.stringify(parsed, null, 2)}\n`);
 }
 
+/**
+ * THE FRAME SIZE: what the capture path renders and what both sides of the pixel gate
+ * decode. This is the only resolution the gate is about.
+ */
 const W = 40;
 const H = 24;
+
+/**
+ * THE WINDOW SIZE: what `ui.get_screen_rects` reports and what the recorder briefly stamped
+ * onto traces. DELIBERATELY DIFFERENT NUMBERS FROM `W`/`H`, and deliberately the same
+ * ASPECT, because that is the healthy real-world configuration the deleted note called a
+ * mismatch. Any code that reaches for this as a stand-in for the frame size is wrong, and
+ * with these constants apart it is wrong LOUDLY instead of silently.
+ */
+const WINDOW_W = W * 2;
+const WINDOW_H = H * 2;
 
 // ───────── 1. the reproduction, through the whole door ─────────
 
@@ -283,13 +338,27 @@ test("THE REPRODUCTION: a resized Game view is a HARNESS FAULT that names both r
     assert.equal(report.comparisonsExpected, 1);
     assert.equal(report.comparisonsPerformed, 0);
 
-    // (e) THE OPERATOR IS TOLD WHAT TO DO, with the number they need. Restoring the window
+    // (e) THE OPERATOR IS TOLD WHAT TO DO, with the number they need. Restoring the view
     // leads; re-approving is named second on purpose (it mints an anchor from frames
     // nothing compared).
     assert.match(out, new RegExp(`taken at ${W * 2}x${H}`));
     assert.match(out, new RegExp(`approved baseline is ${W}x${H}`));
-    assert.match(out, new RegExp(`set the Unity Game view back to ${W}x${H}`));
+    assert.match(out, new RegExp(`restore the Game view's ASPECT to the approved frames' \\(${W}x${H}\\)`));
     assert.match(out, /harness fault, not (a game defect|drift)/);
+    // …and the remedy still leads with restoring rather than with re-approving, because an
+    // operator staring at a red gate reaches for the command that makes it green.
+    assert.ok(
+      out.indexOf("restore the Game view's ASPECT") < out.indexOf("trace approve --id demo"),
+      "restoring is named before re-anchoring",
+    );
+
+    // (f) AND THE APPROVED NUMBER IS NAMED AS A FRAME SIZE, NEVER AS A WINDOW SIZE TO TYPE
+    // IN. This is the half of the fix the deleted pre-drive note got backwards: a capture is
+    // the camera rendered at a fixed capture width and the Game view's ASPECT, so the
+    // approved size is a render-target size that any Game view of that shape reproduces.
+    // Telling an operator to set their Game view to it reads as precise and teaches exactly
+    // the confusion that produced the false warning.
+    assert.doesNotMatch(out, /set the (Unity )?Game view (back )?to \d+x\d+/, "the frame size is not a window size");
   } finally {
     await fs.rm(root, { recursive: true, force: true });
   }
@@ -315,6 +384,29 @@ test("THE REPRODUCTION: a resized Game view is a HARNESS FAULT that names both r
  *   That `1` IS the shipped defect: the game-defect tier for a window that was dragged. The
  *   same break also drops three other tests in this file (the non-strict door at 0, the
  *   unstamped anchor at 0, the free-aspect refusal at 0), each recorded below.
+ *
+ * LITMUS for (f), the frame-size-is-not-a-window-size half. BREAK, restore PR #94's remedy
+ * prose (`git checkout c373d08 -- src/capabilities/replay/`), which told the operator to
+ * type the FRAME size into the Game view. OBSERVED, verbatim:
+ *
+ *     ✖ THE REPRODUCTION: a resized Game view is a HARNESS FAULT that names both resolutions, never drift
+ *       AssertionError [ERR_ASSERTION]: The input did not match the regular expression
+ *       /restore the Game view's ASPECT to the approved frames' \(40x24\)/. Input:
+ *
+ *       "…[loombridge trace] the Game view is not the size this anchor was approved at (harness fault,
+ *         not a game defect): 1 capture(s) were taken at 80x24, the approved frames are 40x24. …\n
+ *         [loombridge trace]   set the Unity Game view back to 40x24 and re-run `loombridge trace
+ *         replay --id demo`. …"
+ *
+ *         expected: /restore the Game view's ASPECT to the approved frames' \(40x24\)/,
+ *         operator: 'match'
+ *
+ *   Both halves of the run still name both resolutions there, which is why (f) is a separate
+ *   assertion: the numbers were right and the SENTENCE taught the confusion that produced
+ *   the false pre-drive warning. "Set the Game view to 40x24" happens to work (a capture is
+ *   `maxWidth` wide, so a window at the frame size has the frame's aspect), and that is
+ *   exactly what makes it dangerous prose: it reads as an identity rather than a
+ *   coincidence.
  */
 
 test("…and on the NON-strict door, where the same resize used to sit at the PASS tier", async () => {
@@ -401,8 +493,9 @@ test("approve STAMPS the capture resolution on an unmasked anchor, and announces
  *         operator: 'strictEqual'
  *
  *   The same break also drops the free-aspect test's re-anchor assertion ("approve
- *   re-derives the size, never inherits it": undefined !== 48) and the pre-drive note test,
- *   which has no anchor size left to compare the trace's against.
+ *   re-derives the size, never inherits it": undefined !== 48) and the differing-numbers
+ *   guard in §6, whose fixture asserts the anchor is stamped at the FRAME size before it
+ *   can say anything about the window size being held apart from it.
  */
 
 // ───────── 3. an anchor approved BEFORE the stamp existed still works ─────────
@@ -587,15 +680,15 @@ test("THE FREE-ASPECT WAY FORWARD: restoring the window re-greens the SAME ancho
  *   frames of different sizes share no pixels to have an opinion about.
  */
 
-// ───────── 5. the trace records the size, and the field is not decorative ─────────
+// ───────── 5. a trace records NO resolution, and the recorder does not ask for one ─────────
 
-test("the recorder STAMPS the Game view size on the trace, and the parser preserves it", async () => {
-  // The recorder reads the live viewport after the reset and writes it onto the trace.
+test("the recorder RECORDS NO RESOLUTION: no Game view read, no field on the trace", async () => {
+  // This editor WOULD answer with a Game view size. The guard is that nobody asks it.
   const calls: string[] = [];
   const send: BridgeSend = async (command, params) => {
     calls.push(command);
     const data: Record<string, Record<string, unknown>> = {
-      "ui.get_screen_rects": { viewport: { width: 1920, height: 1080, aspect: 1.777 } },
+      "ui.get_screen_rects": { viewport: { width: WINDOW_W, height: WINDOW_H, aspect: WINDOW_W / WINDOW_H } },
       "input.observe_stop": {
         clicks: [{ tMs: 0, locator: { path: "/HUD/Start" }, button: 0, kind: "ui" }],
         observed: true,
@@ -609,31 +702,66 @@ test("the recorder STAMPS the Game view size on the trace, and the parser preser
     { id: "demo", scene: "Assets/Scenes/Game.unity" },
     { waitForStop: async () => {} },
   );
-  assert.deepEqual(trace.viewport, { width: 1920, height: 1080 });
-  assert.ok(calls.includes("ui.get_screen_rects"), "the size is read from the editor, never guessed");
 
-  // AND IT SURVIVES THE PARSER. `parseTrace` REBUILDS the trace field by field, so a field
-  // it does not name exists on disk and vanishes the moment replay reads the file: a
-  // recorder writing a viewport nothing could read back would be a wired-looking field that
-  // is not wired, which is this repo's most expensive recurring shape.
-  const roundTripped = parseTrace(JSON.parse(JSON.stringify(trace)));
-  assert.deepEqual(roundTripped.viewport, { width: 1920, height: 1080 });
+  // (a) THE ROUND TRIP IS GONE FROM THE RECORDING SPINE. It used to land between the reset
+  // and the observation purely to stamp a number nothing could honestly use, and it spent
+  // that trip on the main thread in the moment before a human starts performing.
+  assert.ok(
+    !calls.includes("ui.get_screen_rects"),
+    "a recording does not read the Game view size: the window is not the frame size",
+  );
 
-  // An absent viewport stays absent (every trace recorded before this field existed).
+  // (b) AND NOTHING LANDS ON THE TRACE. Asserted on the KEYS rather than on the value, so
+  // an explicit `viewport: undefined` (which serialises away and reads as absent) cannot
+  // pass this: the field is gone, not blanked.
+  assert.ok(
+    !Object.keys(trace).includes("viewport"),
+    "the trace states no resolution at all",
+  );
+  assert.doesNotMatch(JSON.stringify(trace), /viewport/, "…and none reaches the file either");
+});
+
+/*
+ * LITMUS. BREAK, `observe-record-live.ts`, put the record-time read and the stamp back,
+ * which is the code that shipped in PR #94:
+ *     +  const viewport = await driver.recordedViewport();
+ *     +  if (viewport !== null) meta = { ...meta, viewport };
+ *   (with `recordedViewport()` restored on `UnityDriver`, `ObserveTraceMeta.viewport`
+ *   restored, and `observedClicksToTrace` spreading it onto the trace again).
+ *   OBSERVED (node --test, against `git checkout c373d08 -- src/capabilities/replay/`, i.e.
+ *   PR #94's code verbatim), verbatim:
+ *
+ *     ✖ the recorder RECORDS NO RESOLUTION: no Game view read, no field on the trace
+ *       AssertionError [ERR_ASSERTION]: a recording does not read the Game view size: the window is not the frame size
+ *
+ *         actual: false,
+ *         expected: true,
+ *         operator: '=='
+ */
+
+test("a LEGACY trace carrying a `viewport` key still parses, and the key is DROPPED rather than honoured", () => {
+  // Traces recorded during the hour `viewport` existed carry the record-time WINDOW size.
+  // They are on disk on real projects, so parsing them must not refuse…
   const legacy = parseTrace({
     schemaVersion: "0.1",
     id: "demo",
     start: { scene: "Assets/Scenes/Game.unity", reset: "scene-load" },
     input: { backend: "ui-events" },
+    viewport: { width: WINDOW_W, height: WINDOW_H },
     segments: [{ id: "s", actions: [] }],
     outcome: { expected: "success" },
   });
-  assert.equal(legacy.viewport, undefined, "a legacy trace parses unchanged");
+  // …and must not carry the number forward, because `parseTrace` REBUILDS the trace field
+  // by field and anything it hands on is something a later reader may reach for. A window
+  // size sitting next to frame sizes is how the false warning happened in the first place.
+  assert.ok(!Object.keys(legacy).includes("viewport"), "the legacy key is dropped, not carried");
 
-  // A PRESENT-BUT-MALFORMED viewport REFUSES rather than being coerced or dropped: a
-  // half-written value would otherwise go on to name resolutions in operator-facing prose.
-  for (const bad of [{ width: 1920 }, { width: "1920", height: 1080 }, { width: 0, height: 1080 }]) {
-    assert.throws(
+  // AND A MALFORMED ONE IS NOT A REFUSAL EITHER. The parser used to validate this field
+  // (two positive integers) and throw otherwise. A parse-time refusal bound to a field
+  // NOTHING CONSUMES is a gate with no subject: it can only ever brick a trace over a value
+  // that changes no verdict. Refusals belong on fields that grade something.
+  for (const bad of [{ width: WINDOW_W }, { width: "1280", height: 720 }, { width: 0, height: 720 }, "1280x720"]) {
+    assert.doesNotThrow(
       () =>
         parseTrace({
           schemaVersion: "0.1",
@@ -644,121 +772,136 @@ test("the recorder STAMPS the Game view size on the trace, and the parser preser
           segments: [{ id: "s", actions: [] }],
           outcome: { expected: "success" },
         }),
-      /viewport\.(width|height) must be a positive integer/,
-      `viewport ${JSON.stringify(bad)} must be refused, not coerced`,
+      `a legacy viewport ${JSON.stringify(bad)} must not brick a trace over a field nothing reads`,
     );
   }
 });
 
 /*
- * LITMUS. BREAK 5a, `parse.ts`, drop the field from the rebuilt trace, which is the exact
- * shape of this repo's recurring defect (a writer writes it, the reader silently discards
- * it, and the field reads as wired):
- *     -    ...(viewport !== undefined ? { viewport } : {}),
- *     +    ...(false && viewport !== undefined ? { viewport } : {}),
- *   OBSERVED, verbatim:
- *     ✖ the recorder STAMPS the Game view size on the trace, and the parser preserves it
- *       AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
- *       + actual - expected
+ * LITMUS. BREAK, `parse.ts`, restore the validating branch PR #94 shipped:
+ *     +  const viewport = parseViewport(root.viewport);
+ *     +  ...(viewport !== undefined ? { viewport } : {}),
+ *   (with `parseViewport` restored.) OBSERVED, verbatim:
  *
- *       + undefined
- *       - {
- *       -   height: 1080,
- *       -   width: 1920
- *       - }
+ *     ✖ a LEGACY trace carrying a `viewport` key still parses, and the key is DROPPED rather than honoured
+ *       AssertionError [ERR_ASSERTION]: the legacy key is dropped, not carried
  *
- *         actual: undefined,
- *         expected: { width: 1920, height: 1080 },
- *         operator: 'deepStrictEqual'
- *   …and the pre-drive note test falls with it, because the replay reads the trace through
- *   this parser and so the recorded size never reaches the comparison.
+ *         actual: false,
+ *         expected: true,
+ *         operator: '=='
  *
- * BREAK 5b, `observe-record-live.ts`, stop reading the live viewport:
- *     -  const viewport = await driver.recordedViewport();
- *     +  const viewport = null as { width: number; height: number } | null;
- *   OBSERVED, verbatim (the same deep-equal failure, one layer earlier):
- *     ✖ the recorder STAMPS the Game view size on the trace, and the parser preserves it
- *       AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
- *         actual: undefined,
- *         expected: { width: 1920, height: 1080 },
- *         operator: 'deepStrictEqual'
+ *   The malformed-viewport half fails on the same restored code from the other direction:
+ *   `parseViewport` throws `viewport.height must be a positive integer` for `{ width: 80 }`,
+ *   i.e. a refusal bound to a field nothing consumes.
  */
 
-// ───────── 6. the mismatch is NAMED BEFORE the editor is driven ─────────
-
-test("a trace recorded at one size against an anchor approved at another says so BEFORE it drives", async () => {
-  const root = await tmpRoot();
-  try {
-    const factory = scriptedClient(() => png(W, H, 10));
-    // Recorded at the anchor's size first, so the anchor gets stamped at WxH…
-    await writeTrace(root, { width: W, height: H });
-    await captured(() => runTrace(["replay", "--id", "demo", "--root", root], { clientFactory: factory }));
-    assert.equal((await captured(() => runTrace(["approve", "--id", "demo", "--root", root]))).value, 0);
-
-    // …then the demonstration is re-recorded at a new window size. The pixel gate cannot
-    // learn this until it decodes a frame, which is a capture per gesture away.
-    await writeTrace(root, { width: W * 3, height: H });
-    const { out } = await captured(() =>
-      runTrace(["replay", "--id", "demo", "--root", root], { clientFactory: factory }),
-    );
-
-    assert.match(out, new RegExp(`recorded at ${W * 3}x${H} but its approved frames are ${W}x${H}`));
-    // BEFORE THE DRIVE, not after: the note has to precede the first capture or it saves
-    // nobody the thirteen frames it exists to save. The replay's own reset is the first
-    // thing the driver does, and the summary is the last thing printed.
-    assert.ok(
-      out.indexOf("recorded at") < out.indexOf("report →"),
-      "the note lands before the run's own output, not in the post-mortem",
-    );
-  } finally {
-    await fs.rm(root, { recursive: true, force: true });
-  }
-});
+// ───────── 6. THE FALSE POSITIVE: the window size is not the frame size ─────────
 
 /*
- * LITMUS. BREAK, `trace.ts` `replayOneTrace`, unwire the pre-drive call from the trace:
- *     -  await announceViewportMismatch(paths, id, trace.viewport);
- *     +  await announceViewportMismatch(paths, id, undefined);
- *   OBSERVED, verbatim (trimmed to the assertion; the full input is the run's own output):
- *     ✖ a trace recorded at one size against an anchor approved at another says so BEFORE it drives
- *       AssertionError [ERR_ASSERTION]: The input did not match the regular expression
- *       /recorded at 120x24 but its approved frames are 40x24/. Input:
- *
- *       "[loombridge trace] capture-aligned replay at 60 fps: …\n" +
- *         '[loombridge trace] the approved baseline for "demo" cannot be trusted at grade time
- *          (harness fault, not a game defect): trace file sha256 mismatch: the baseline was
- *          approved for a different demonstration\n' +
- *         …
- *
- *         expected: /recorded at 120x24 but its approved frames are 40x24/,
- *         operator: 'match'
- *
- *   Note what that captured output also shows, and why the note earns its place: a
- *   re-recorded trace ALSO breaks its anchor's `traceSha256` binding, so the run is refused
- *   anyway. The note is what turns "the baseline was approved for a different
- *   demonstration" into "…and here is the size that changed", before thirteen captures.
- *
- * The vacuity direction is covered by the test below rather than by a comment: a note
- * printed on every run is a note nobody reads.
+ * THE GUARD THAT WOULD HAVE CAUGHT PR #94, and the reason it did not exist: every fixture
+ * in that PR used ONE number for the Game view WINDOW and for the rendered FRAME, so a
+ * comparison between the two was green by construction. This one holds them apart.
  */
+test("A RECORD-TIME WINDOW SIZE THAT DIFFERS FROM THE FRAME SIZE IS HEALTHY: no warning, no fault, exit 0", async () => {
+  // THE FIXTURE'S OWN ASSUMPTION, ASSERTED. If a later edit collapses these onto one
+  // number, this test stops being able to fail for the reason it exists and says so here
+  // rather than by silently passing.
+  assert.notEqual(`${WINDOW_W}x${WINDOW_H}`, `${W}x${H}`, "the window and the frame must be different numbers");
 
-test("a matching recorded size is SILENT: the pre-drive note is not printed on every run", async () => {
   const root = await tmpRoot();
   try {
+    // The live consumer shape, exactly: the editor reports a Game view of WINDOW_W x
+    // WINDOW_H (`scriptedClient`'s `ui.get_screen_rects`), the trace on disk states that
+    // same window size the way a trace recorded during PR #94's hour does, and every frame
+    // the capture path returns is W x H, because a capture is rendered at the screenshot
+    // op's capture width and the view's ASPECT. 1280x720 window, 1024x576 frames.
     const factory = scriptedClient(() => png(W, H, 10));
-    await writeTrace(root, { width: W, height: H });
+    await writeTrace(root, { width: WINDOW_W, height: WINDOW_H });
     await captured(() => runTrace(["replay", "--id", "demo", "--root", root], { clientFactory: factory }));
     assert.equal((await captured(() => runTrace(["approve", "--id", "demo", "--root", root]))).value, 0);
+
+    // THE FIXTURE IS NON-VACUOUS: the anchor really is stamped at the FRAME size while the
+    // trace really does state the WINDOW size, so the two quantities are both present and
+    // are different. A comparison between them has something to be wrong about.
+    const manifest = await readManifest(root);
+    assert.equal(manifest.frameWidth, W, "the anchor is stamped at the frame size");
+    assert.equal(manifest.frameHeight, H);
+    const onDisk = await fs.readFile(
+      path.join(standardReplayLayout(root).replayTraces, "demo.trace.json"),
+      "utf8",
+    );
+    assert.match(onDisk, new RegExp(`"viewport":\\{"width":${WINDOW_W},"height":${WINDOW_H}\\}`));
+
+    // NOTHING WAS RESIZED, so the run is an ordinary green run.
     const { value: exit, out } = await captured(() =>
       runTrace(["replay", "--id", "demo", "--root", root], { clientFactory: factory }),
     );
     assert.equal(exit, 0, out);
-    assert.doesNotMatch(out, /recorded at/, "a note printed on every run is a note nobody reads");
+
+    const report = await readReport(root);
+    assert.equal(report.segments[0]!.captures[0]!.visualStatus, "match", "the frames match, because they do");
+    assert.equal(report.comparisonsPerformed, 1, "the run really graded, rather than being waved through");
+    assert.notEqual(report.visualHarnessFault, true, "a healthy setup is not a harness fault");
+    assert.equal(report.visualHarnessFaultReason, undefined);
+
+    // AND THE OPERATOR IS NOT WARNED ABOUT A RESIZE THAT DID NOT HAPPEN. The window's
+    // numbers must not appear anywhere in the run's output: the only place they could come
+    // from is code treating them as a frame size.
+    assert.doesNotMatch(out, new RegExp(`${WINDOW_W}x${WINDOW_H}`), "the window size is never quoted as a resolution");
+    assert.doesNotMatch(out, /recorded at/, "no pre-drive resolution note fires on a healthy project");
+    assert.doesNotMatch(out, /harness fault/i);
   } finally {
     await fs.rm(root, { recursive: true, force: true });
   }
 });
 
+/*
+ * LITMUS, BY REINTRODUCING THE COMPARISON PR #94 SHIPPED. `trace.ts`, restore
+ * `announceViewportMismatch` and call it from `replayOneTrace` with the trace's recorded
+ * window size (`parse.ts` carrying `viewport` forward again, per BREAK 5 above):
+ *
+ *     +async function announceViewportMismatch(paths, id, recorded) {
+ *     +  if (recorded === undefined) return;
+ *     +  const manifest = await loadTraceBaselineManifest(path.join(paths.replayBaselines, id));
+ *     +  if (manifest === null || isTraceBaselineManifestError(manifest)) return;
+ *     +  const { frameWidth, frameHeight } = manifest;
+ *     +  if (frameWidth === undefined || frameHeight === undefined) return;
+ *     +  if (frameWidth === recorded.width && frameHeight === recorded.height) return;
+ *     +  console.error(
+ *     +    `[loombridge trace] this demonstration was recorded at ${recorded.width}x${recorded.height} but its ` +
+ *     +      `approved frames are ${frameWidth}x${frameHeight}. …`,
+ *     +  );
+ *     +}
+ *     +  await announceViewportMismatch(paths, id, trace.viewport);
+ *
+ *   In practice the whole of PR #94's replay source restores it in one step:
+ *   `git checkout c373d08 -- src/capabilities/replay/`.
+ *
+ *   OBSERVED (node --test, over the real CLI door), verbatim:
+ *
+ *     ✖ A RECORD-TIME WINDOW SIZE THAT DIFFERS FROM THE FRAME SIZE IS HEALTHY: no warning, no fault, exit 0
+ *       AssertionError [ERR_ASSERTION]: the window size is never quoted as a resolution
+ *
+ *         actual: "[loombridge trace] capture-aligned replay at 60 fps: each settle runs inside the
+ *           bridge's pinned tick loop and the frame is taken on the frame the settle completes.\n
+ *           [loombridge trace] this demonstration was recorded at 80x48 but its approved frames are
+ *           40x24. If the Game view is still at the recorded size, the pixel gate will refuse this run
+ *           as a harness fault (frames of different sizes share no pixels); set the Game view to 40x24
+ *           first, or approve from this run's report to re-anchor at the new size.\n
+ *           [loombridge trace] physics steps 5 times every 6 frame(s) at 60 fps (fixedDeltaTime 0.02);
+ *           feel-sensitive traces may differ from the recording\n
+ *           [loombridge trace] demo: PASS\n
+ *           [loombridge trace]   pixel gate: 1 of 1 approved frame(s) compared.\n…",
+ *         expected: /80x48/,
+ *         operator: 'doesNotMatch'
+ *
+ *   THAT IS THE SHIPPED DEFECT, REPRODUCED, and read the two lines together: `demo: PASS`,
+ *   `1 of 1 approved frame(s) compared`, and above them an instruction to go resize a Game
+ *   view that was never wrong. The real gate stayed correctly silent (the frames match,
+ *   because they do); only the note fired. On PR #94's own fixtures that same code was
+ *   silent, because there `recorded.width` and `frameWidth` were the same number by
+ *   construction, which is the whole reason nine LITMUS-verified tests missed it.
+ */
 // ───────── 7. the stamped size is bound to the frames it claims to describe ─────────
 
 test("a stamped resolution that is NOT the size of the approved frames is a harness fault, not a denominator", async () => {

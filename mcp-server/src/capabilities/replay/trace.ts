@@ -996,46 +996,32 @@ export async function resolveAlignedCaptureFps(
   return { fps: explicit };
 }
 
-/**
- * Say, BEFORE the editor is driven, that this demonstration was recorded at one resolution
- * and its anchor was approved at another.
+/*
+ * THERE IS NO PRE-DRIVE RESOLUTION NOTE, AND THE HOLE IT LEFT IS DELIBERATE. A note that
+ * compared the trace's record-time Game view size against the anchor's stamped frame size
+ * lived here for one hour. It fired on a healthy consumer project on EVERY recording, and
+ * the remedy it printed ("set the Game view to 1024x576 first") would have BROKEN a working
+ * configuration.
  *
- * WHAT IT BUYS, exactly. A replay drives the game and takes a frame per gesture, and the
- * pixel gate cannot discover a size mismatch until it decodes the first pair. This note
- * costs one manifest read and lands before any of that, so an operator who re-recorded at a
- * new window size learns it up front instead of after thirteen captures. It is the
- * `resolveReplaySpeed`/`resolveAlignedCaptureFps` precedent: announce here, re-derive the
- * fact at grade time, and never return it as a field a second reader would have to trust.
+ * THE TWO NUMBERS ARE NOT THE SAME MEASUREMENT, which is why the comparison could only ever
+ * be a coincidence. `ui.get_screen_rects` reports the Game view WINDOW size
+ * (`Handles.GetMainGameViewSize()`, 1280x720 on the project this was measured on). The
+ * capture path renders the game camera into an offscreen RenderTexture sized by the
+ * screenshot op's `maxWidth` and the view's ASPECT (`ScreenshotCapture.CaptureGameView` →
+ * `CaptureCameraToTexture`: `width = maxWidth; height = round(width / aspect)`), so the
+ * frames are 1024x576 there and have been in every run and every baseline. Nothing had been
+ * resized; the note was comparing a window against a render target.
  *
- * WHAT IT DOES NOT BUY, stated so nobody mistakes it for the gate. It compares the trace's
- * RECORD-TIME size against the anchor's APPROVE-TIME size, and it therefore cannot see the
- * commonest resize of all: dragging the Game view's edge without re-recording, which leaves
- * both of those numbers untouched and only changes the pixels that come back. That case is
- * caught where it has to be, in `applyVisualDiff`, off the decoded frames. This is a NOTE,
- * never a refusal, and it changes no verdict.
+ * WHAT REPLACED IT IS WHAT WAS ALWAYS DOING THE WORK: `applyVisualDiff` reads
+ * `dimensionsMatch` off the DECODED capture and the DECODED baseline. Both sides are the
+ * same measurement, taken from bytes, so it cannot be fooled by a window and needs no field
+ * to be present. It correctly stayed silent on the run that produced the false warning.
  *
- * ABSENCE ON EITHER SIDE IS SILENCE, not a fault. A trace recorded before `viewport`
- * existed, an anchor approved before the resolution was stamped, or a broken manifest all
- * mean "nobody wrote this down", which is a missing note and not a mismatch.
+ * DO NOT REINTRODUCE A PROXY FOR THE FRAME SIZE. The Game view size is not it, and neither
+ * is any other number available before the first capture is decoded: a replay learns its
+ * own resolution by taking a frame. See `replay-capture-resolution.test.ts`, whose healthy
+ * fixture records a window size that DIFFERS from its frame size for exactly this reason.
  */
-async function announceViewportMismatch(
-  paths: ReplayLayout,
-  id: string,
-  recorded: { width: number; height: number } | undefined,
-): Promise<void> {
-  if (recorded === undefined) return;
-  const manifest = await loadTraceBaselineManifest(path.join(paths.replayBaselines, id));
-  if (manifest === null || isTraceBaselineManifestError(manifest)) return;
-  const { frameWidth, frameHeight } = manifest;
-  if (frameWidth === undefined || frameHeight === undefined) return;
-  if (frameWidth === recorded.width && frameHeight === recorded.height) return;
-  console.error(
-    `[loombridge trace] this demonstration was recorded at ${recorded.width}x${recorded.height} but its approved ` +
-      `frames are ${frameWidth}x${frameHeight}. If the Game view is still at the recorded size, the pixel gate ` +
-      "will refuse this run as a harness fault (frames of different sizes share no pixels); set the Game view " +
-      `to ${frameWidth}x${frameHeight} first, or approve from this run's report to re-anchor at the new size.`,
-  );
-}
 
 async function replayOneTrace(
   paths: ReplayLayout,
@@ -1094,8 +1080,6 @@ async function replayOneTrace(
         "pinned tick loop and the frame is taken on the frame the settle completes.",
     );
   }
-
-  await announceViewportMismatch(paths, id, trace.viewport);
 
   const captureDir = path.join(paths.replayReports, id, "actual");
   const artifact = await runLiveReplay(trace, {
@@ -1728,8 +1712,8 @@ async function runApprove(args: TraceArgs): Promise<number> {
     delete carried.frameHeight;
     console.error(
       `[loombridge trace] note: this approval records no capture resolution (${dims.error}). ` +
-        "The pixel gate still compares the real frames; only the up-front resolution note and the " +
-        "\"restore the Game view to WxH\" remedy are unavailable for this anchor.",
+        "The pixel gate still compares the real frames; only the \"the approved frames are WxH\" half of a " +
+        "later resize refusal is unavailable for this anchor.",
     );
   } else {
     // The unmasked stamp. Same measurement, same bytes, no mask decision riding on it.
@@ -2653,19 +2637,29 @@ export async function applyVisualDiff(
   // state the fact thirteen times over; this states what to do about it, and it leads with
   // RESTORING the Game view rather than with re-approving. That order is the point: an
   // operator staring at a red gate reaches for the command that makes it green, and
-  // re-approving mints a new anchor from frames nothing compared. Restoring the window
-  // costs nothing and keeps the anchor a human already consented to.
+  // re-approving mints a new anchor from frames nothing compared. Restoring the view costs
+  // nothing and keeps the anchor a human already consented to.
+  //
+  // AND IT NAMES THE APPROVED SIZE AS A FRAME SIZE, NEVER AS A WINDOW SIZE TO TYPE IN. A
+  // capture is the game camera rendered into an offscreen RenderTexture at the screenshot
+  // op's capture width and the Game view's ASPECT, so the frames are (say) 1024x576 while
+  // the Game view that produced them is 1280x720: the two numbers are different
+  // measurements and only the aspect connects them. Telling an operator to set their Game
+  // view to the frame size reads as precise and is a coincidence; the aspect is the thing
+  // that actually has to go back.
   if (resizedCaptures.length > 0) {
     const approved = resizedCaptures[0]!.baseline;
     console.error(
-      `[loombridge trace] the Game view is not the size this anchor was approved at (harness fault, not a game ` +
-        `defect): ${resizedCaptures.length} capture(s) were taken at ${resizedCaptures[0]!.actual}, the approved ` +
-        `frames are ${approved}. Nothing was graded, so this run holds no opinion about the pixels.`,
+      `[loombridge trace] this run's frames are not the size this anchor was approved at (harness fault, not a ` +
+        `game defect): ${resizedCaptures.length} capture(s) came back at ${resizedCaptures[0]!.actual}, the ` +
+        `approved frames are ${approved}. Nothing was graded, so this run holds no opinion about the pixels.`,
     );
     console.error(
-      `[loombridge trace]   set the Unity Game view back to ${approved} and re-run \`loombridge trace replay ` +
-        `--id ${id}\`. If the new size is the one you want, \`loombridge trace approve --id ${id}\` re-anchors ` +
-        "at it, which freezes these frames WITHOUT any comparison against the old ones.",
+      `[loombridge trace]   restore the Game view's ASPECT to the approved frames' (${approved}) and re-run ` +
+        `\`loombridge trace replay --id ${id}\`: a capture is rendered at a fixed capture width and the Game ` +
+        `view's aspect, so ${approved} is the FRAME size rather than a window size, and any Game view of that ` +
+        `shape produces it. If the new size is the one you want, \`loombridge trace approve --id ${id}\` ` +
+        "re-anchors at it, which freezes these frames WITHOUT any comparison against the old ones.",
     );
   }
   // SAID OUT LOUD, AND SAID SEPARATELY from the anchor faults above, which have already
@@ -2710,9 +2704,13 @@ export async function applyVisualDiff(
  * be graded against.
  *
  * BOTH RESOLUTIONS ARE IN IT, ALWAYS. The number that matters to the operator is the
- * APPROVED one (it is what they restore the Game view to), and a reason reading "a
+ * APPROVED one (it is the shape they restore the Game view to), and a reason reading "a
  * resolution mismatch" would send them back to the terminal scrollback of the process that
  * wrote the report, which is exactly the gap `visualHarnessFaultReason` exists to close.
+ * Both are FRAME sizes, decoded from the two PNGs, and the sentence says so: a capture is
+ * rendered at a fixed capture width and the Game view's aspect, so the approved size is not
+ * a window size an operator could type into the Game view's resolution field and expect to
+ * mean the same thing.
  *
  * MIXED SIZES WITHIN ONE RUN ARE ENUMERATED rather than summarised by the first pair. It
  * should not be reachable (the editor's Game view does not change mid-replay), but a
@@ -2732,9 +2730,10 @@ function resizedCaptureReason(
           .map((r) => `${r.id}: ${r.actual} vs ${r.baseline}`)
           .join("; ")})`;
   return (
-    `the Game view resolution changed: ${detail}. Frames of different sizes share no pixels, so nothing was ` +
-    `compared and this is a harness fault, not drift. Restore the Game view to ${resized[0]!.baseline} and ` +
-    `re-run, or \`loombridge trace approve --id ${id}\` to re-anchor at the new size`
+    `the capture resolution changed: ${detail}. Frames of different sizes share no pixels, so nothing was ` +
+    `compared and this is a harness fault, not drift. Restore the Game view's aspect to the approved frames' ` +
+    `(${resized[0]!.baseline} is the FRAME size, not a window size) and re-run, or ` +
+    `\`loombridge trace approve --id ${id}\` to re-anchor at the new size`
   );
 }
 
@@ -3646,9 +3645,10 @@ function printUsage(): void {
       "",
       "Exit: 0 pass · 1 game defect: fail/error (or drift with --strict-visual)",
       "      2 harness fault: blocked (undrivable), an unreadable capture/baseline PNG,",
-      "        a Game view resized since approve (frames of different sizes share no",
-      "        pixels, so a resize is never drift), a baseline manifest that cannot be",
-      "        trusted at grade time (including one carrying an over-cap drift tolerance),",
+      "        captures whose resolution differs from the approved frames' (frames of",
+      "        different sizes share no pixels, so a resize is never drift), a baseline",
+      "        manifest that cannot be trusted at grade time (including one carrying an",
+      "        over-cap drift tolerance),",
       "        an unreachable editor, or a usage error. A harness fault is never reported",
       "        as a game defect.",
       "      tolerance/mask: 0 stamped, or (for the read-only `mask --list`) printed: it",
