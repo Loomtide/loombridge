@@ -8,6 +8,7 @@
 [![Unity](https://img.shields.io/badge/unity-2022.3%20LTS%20to%206000.x-black?logo=unity)](#support-matrix)
 [![Node](https://img.shields.io/badge/node-%3E%3D18-339933?logo=nodedotjs&logoColor=white)](#support-matrix)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
+[![Discord](https://img.shields.io/badge/discord-join-5865F2?logo=discord&logoColor=white)](https://discord.gg/dTBpd8Embh)
 
 https://github.com/user-attachments/assets/58ef3db4-726d-4fb5-8902-963283e15881
 
@@ -126,7 +127,10 @@ Loombridge is a local, single-developer editor tool. The agent talks to the MCP 
 
 ## Help and bugs
 
-Something broken, confusing, or missing? [Open an issue](https://github.com/Loomtide/loombridge/issues).
+Questions, ideas, or want to show what you built? Come to
+[Discord](https://discord.gg/dTBpd8Embh).
+
+Something broken or missing? [Open an issue](https://github.com/Loomtide/loombridge/issues).
 The fastest reports include the command you ran and the report it wrote under
 `.loombridge/run/reports/`, since that names what was checked and what was not.
 
