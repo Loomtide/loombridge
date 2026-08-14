@@ -13,7 +13,7 @@ namespace UnityBridge.Core
         // Fallback only — used when the package version can't be resolved (e.g. the
         // bridge is loaded from loose source rather than as a UPM package). Keep it in
         // sync with package.json as a floor; the real value is read from PackageInfo.
-        private const string FallbackPluginVersion = "0.2.0";
+        private const string FallbackPluginVersion = "0.1.0";
         private const int ProtocolVersion = 1;
 
         // The bridge's advertised plugin version. Derived from the RESOLVED package
