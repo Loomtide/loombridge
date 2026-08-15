@@ -131,6 +131,11 @@ It actually plays the game, check frame delta to check for example if the jump h
 
 More to come here soon.
 
+## Games built using Loombridge (open sourced)
+- [Ghost Relay, top-down mobile extraction shooter](https://github.com/Loomtide/GhostRelay)
+- [Kids Adventure, minigames for kids](https://github.com/Loomtide/KidsAdventure)
+- [Sniper Shooter, mobile sniper aim shooter](https://github.com/Loomtide/SniperShooter)
+- [TideRunner, mobile 2D platformer](https://github.com/Loomtide/TideRunner)
 
 ## Support matrix
 
