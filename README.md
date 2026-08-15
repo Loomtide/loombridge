@@ -14,7 +14,7 @@
 
 </div>
 
-https://github.com/user-attachments/assets/58ef3db4-726d-4fb5-8902-963283e15881
+https://github.com/user-attachments/assets/5967774c-7e4c-477c-9756-f47c79fee358
 
 <div align="center"><em>Plan, build and verify.</em></div>
 
