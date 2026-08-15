@@ -171,6 +171,38 @@ export function knownAssetGenres(): string[] {
   return Object.keys(REGISTRY);
 }
 
+/** True when `genre` names a compiled-in (registered) asset genre profile. */
+export function isRegisteredAssetGenre(genre: string): boolean {
+  return Object.prototype.hasOwnProperty.call(REGISTRY, genre);
+}
+
+/**
+ * Build the asset-genre profile for a CONTRACT genre from its promoted role set
+ * (a promoted GenreContract's `artDirection.assetRoles`, carried on the manifest
+ * as `contractRoles` and on `GENRE_PROMOTION.json` as `assetProfile`).
+ *
+ * A contract declares roles but no registry primitives, so the profile has no
+ * `roleSelectionRules`: contract-genre manifests are `generated` mode only, and
+ * draft creation refuses registry/hybrid for them by name rather than drafting
+ * registry slots no selection rule can ever fill.
+ */
+export function contractAssetGenreProfile(
+  id: string,
+  requiredRoles: readonly string[],
+  sliceBindings: readonly { sliceId: string; assetIds: readonly string[] }[] = [],
+): AssetGenreProfile {
+  return {
+    id,
+    requiredRoles: [...requiredRoles],
+    defaultSliceBindings: sliceBindings.map((binding) => ({
+      sliceId: binding.sliceId,
+      assetIds: [...binding.assetIds],
+    })),
+    roleSelectionRules: {},
+    hybridGeneratedRoles: new Set(requiredRoles),
+  };
+}
+
 /**
  * Resolve the asset-genre profile for `genre`. An absent/empty genre falls back
  * to the platformer default for old manifests. A PRESENT but unregistered genre
@@ -184,7 +216,9 @@ export function resolveAssetGenreProfile(genre?: string | null): AssetGenreProfi
     return REGISTRY[genre]!;
   }
   throw new Error(
-    `No asset genre profile is registered for '${genre}'. Known asset genres: ${knownAssetGenres().join(", ")}`,
+    `No asset genre profile is registered for '${genre}'. Known asset genres: ${knownAssetGenres().join(", ")}. ` +
+      "A CONTRACT genre gets its asset profile from the promoted contract instead: declare " +
+      "artDirection.assetRoles in the genre contract and re-run `loombridge plan --brief/--genre-contract`.",
   );
 }
 

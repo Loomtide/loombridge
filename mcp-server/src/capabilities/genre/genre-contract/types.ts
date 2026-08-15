@@ -232,6 +232,12 @@ export interface SliceNode {
   gaps?: string[];
   /** optional content-kind tag, checked against the genre-class allowlist for the bucket. */
   kind?: string;
+  /**
+   * Optional asset roles (from `artDirection.assetRoles`) this slice consumes. Feeds the promoted
+   * asset profile's slice bindings so a contract genre can draft an ASSET_MANIFEST. Every entry
+   * must resolve to a declared `artDirection.assetRoles` role (validator-enforced).
+   */
+  assets?: string[];
 }
 
 /** Field 9 — Slice DAG, split into the two vertical-first buckets. */

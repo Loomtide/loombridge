@@ -18,6 +18,8 @@ import {
   draftSourceForRole,
   knownAssetGenres,
   resolveAssetGenreProfile,
+  contractAssetGenreProfile,
+  type AssetGenreProfile,
   type RequiredAssetRole,
 } from "./asset-genre-profile.js";
 import { isSafeCapturePath } from "../../domain/capture-paths.js";
@@ -165,6 +167,15 @@ export interface AssetManifest {
    * default — so every pre-existing manifest is unchanged.
    */
   genre?: string;
+  /**
+   * REQUIRED when `genre` names a CONTRACT genre (one with no compiled-in profile):
+   * the promoted contract's asset roles, copied from `GENRE_PROMOTION.json`'s
+   * `assetProfile.requiredRoles` at draft time. The validator consumes these as the
+   * manifest's required roles, and `readAssetManifest` refuses a manifest whose
+   * `contractRoles` drift from the promotion on disk. Forbidden for registered or
+   * absent genres, so a registered profile can never be shadowed.
+   */
+  contractRoles?: string[];
   mode: AssetManifestMode;
   status: AssetManifestStatus;
   approvedAt?: string | null;
@@ -181,6 +192,12 @@ export interface CreateDraftAssetManifestArgs {
   registry?: string;
   /** Asset genre id; selects the role/slice/selection profile. Omitted ⇒ platformer. */
   genre?: string;
+  /**
+   * CONTRACT-genre profile (from `GENRE_PROMOTION.json`'s `assetProfile`) for a `genre`
+   * with no compiled-in profile. Ignored for registered genres. Contract genres draft
+   * `generated` mode only; registry/hybrid are refused by name.
+   */
+  contractProfile?: { id: string; requiredRoles: string[]; sliceBindings?: { sliceId: string; assetIds: string[] }[] };
 }
 
 export interface AssetManifestValidationIssue {
@@ -710,7 +727,7 @@ export function validateAssetManifest(
 
   validateKnownKeys(
     input,
-    new Set(["version", "genre", "mode", "status", "approvedAt", "heroShot", "assetSources", "assets", "sliceBindings", "replacementPolicy"]),
+    new Set(["version", "genre", "contractRoles", "mode", "status", "approvedAt", "heroShot", "assetSources", "assets", "sliceBindings", "replacementPolicy"]),
     issues,
     "manifest",
   );
@@ -720,17 +737,45 @@ export function validateAssetManifest(
   }
 
   // An absent genre is the platformer default (back-compat). A PRESENT genre must
-  // be a non-empty string naming a registered asset genre — REFUSE an unknown one
-  // (refuse-don't-skip): the draft path only ever persists a registered profile id,
+  // be a non-empty string naming a registered asset genre, OR a CONTRACT genre
+  // carrying its own `contractRoles` (copied from the promoted contract's
+  // `assetProfile` at draft time; `readAssetManifest` cross-checks them against
+  // `GENRE_PROMOTION.json` on disk). Anything else is REFUSED (refuse-don't-skip):
+  // the draft path only ever persists a registered id or a promoted contract id,
   // so an unrecognized persisted genre is tampering/typo, not a silent fallback.
+  const genreRegistered = isNonEmptyString(input.genre) && knownAssetGenres().includes(input.genre);
+  const contractRolesPresent = input.contractRoles !== undefined;
+  let contractRoles: string[] | null = null;
   if (input.genre !== undefined && !isNonEmptyString(input.genre)) {
     push(issues, "INVALID_FIELD", "genre must be a non-empty string when present.", "genre");
-  } else if (isNonEmptyString(input.genre) && !knownAssetGenres().includes(input.genre)) {
-    push(issues, "UNKNOWN_GENRE", `genre '${input.genre}' is not a registered asset genre.`, "genre");
   }
-  const genreProfile = isNonEmptyString(input.genre) && knownAssetGenres().includes(input.genre)
-    ? resolveAssetGenreProfile(input.genre)
-    : resolveAssetGenreProfile();
+  if (contractRolesPresent) {
+    if (!isNonEmptyStringArray(input.contractRoles)) {
+      push(issues, "INVALID_FIELD", "contractRoles must be a non-empty array of non-empty strings when present.", "contractRoles");
+    } else if (new Set(input.contractRoles).size !== input.contractRoles.length) {
+      push(issues, "INVALID_FIELD", "contractRoles must not contain duplicates.", "contractRoles");
+    } else if (genreRegistered || !isNonEmptyString(input.genre)) {
+      // A registered profile can never be shadowed, and roles without a genre id
+      // would have no promotion to bind to.
+      push(issues, "INVALID_FIELD", "contractRoles is only allowed for a contract genre (a present, unregistered genre id).", "contractRoles");
+    } else {
+      contractRoles = input.contractRoles;
+    }
+  }
+  if (isNonEmptyString(input.genre) && !genreRegistered && !contractRoles) {
+    push(
+      issues,
+      "UNKNOWN_GENRE",
+      `genre '${input.genre}' is not a registered asset genre and the manifest carries no contractRoles. ` +
+        "A contract genre's draft is created by `loombridge plan --asset-mode generated` from the promoted contract's artDirection.assetRoles.",
+      "genre",
+    );
+  }
+  const genreProfile = genreRegistered
+    ? resolveAssetGenreProfile(input.genre as string)
+    : contractRoles
+      ? contractAssetGenreProfile(input.genre as string, contractRoles)
+      : resolveAssetGenreProfile();
 
   const mode = isNonEmptyString(input.mode) && ASSET_MANIFEST_MODES.has(input.mode as AssetManifestMode)
     ? (input.mode as AssetManifestMode)
@@ -779,7 +824,28 @@ export function validateAssetManifest(
 }
 
 export function createDraftAssetManifest(args: CreateDraftAssetManifestArgs): AssetManifest {
-  const genreProfile = resolveAssetGenreProfile(args.genre);
+  const contract = args.contractProfile;
+  const isContractGenre =
+    contract !== undefined &&
+    typeof args.genre === "string" &&
+    args.genre.trim().length > 0 &&
+    !knownAssetGenres().includes(args.genre);
+  if (isContractGenre && contract.id !== args.genre) {
+    throw new Error(
+      `contractProfile id '${contract.id}' does not match genre '${args.genre}'.`,
+    );
+  }
+  if (isContractGenre && args.mode !== "generated") {
+    // A contract declares roles but no registry primitives, so a registry/hybrid
+    // draft would mint registry slots no selection rule can ever fill.
+    throw new Error(
+      `contract genre '${args.genre}' supports --asset-mode generated only: a genre contract declares ` +
+        "asset roles but no registry primitives, so registry/hybrid drafts have nothing to select from.",
+    );
+  }
+  const genreProfile = isContractGenre
+    ? contractAssetGenreProfile(contract.id, contract.requiredRoles, contract.sliceBindings ?? [])
+    : resolveAssetGenreProfile(args.genre);
   const registrySourceId = "registry_selection_needed";
   const generatedSourceId = "generated_set_needed";
   const needsRegistry = args.mode === "registry" || args.mode === "hybrid";
@@ -808,6 +874,9 @@ export function createDraftAssetManifest(args: CreateDraftAssetManifestArgs): As
     version: ASSET_MANIFEST_VERSION,
     // Only persist a genre for a non-default profile so platformer drafts stay byte-identical.
     ...(genreProfile.id !== DEFAULT_ASSET_GENRE ? { genre: genreProfile.id } : {}),
+    // A contract genre carries its promoted roles so the (stateless) validator can
+    // resolve them; readAssetManifest re-binds them to GENRE_PROMOTION.json on disk.
+    ...(isContractGenre ? { contractRoles: [...genreProfile.requiredRoles] } : {}),
     mode: args.mode,
     status: "draft",
     approvedAt: null,
@@ -851,6 +920,90 @@ export function assertValidAssetManifest(
   return input as AssetManifest;
 }
 
+/**
+ * Resolve the asset-genre profile a MANIFEST is governed by: the registered
+ * profile for a registered/absent genre, or the manifest's own `contractRoles`
+ * for a contract genre. Callers that only have the manifest (no project paths)
+ * use this instead of `resolveAssetGenreProfile(manifest.genre)`, which cannot
+ * know a contract genre's roles.
+ */
+export function manifestGenreProfile(manifest: AssetManifest): AssetGenreProfile {
+  if (isNonEmptyString(manifest.genre) && !knownAssetGenres().includes(manifest.genre)) {
+    if (!isNonEmptyStringArray(manifest.contractRoles)) {
+      // Unreachable on a validated manifest; refuse rather than fall back.
+      throw new Error(`manifest genre '${manifest.genre}' is unregistered and carries no contractRoles.`);
+    }
+    return contractAssetGenreProfile(manifest.genre, manifest.contractRoles);
+  }
+  return resolveAssetGenreProfile(manifest.genre);
+}
+
+/**
+ * Read `GENRE_PROMOTION.json`'s promoted `assetProfile` (or null when the file or
+ * the field is absent). Parse failures THROW: a present-but-unreadable promotion
+ * must never silently downgrade a contract manifest to "no promotion".
+ */
+export async function readPromotedAssetProfile(
+  paths: LoombridgePaths,
+): Promise<{ id: string; requiredRoles: string[]; sliceBindings: { sliceId: string; assetIds: string[] }[] } | null> {
+  let raw: string;
+  try {
+    raw = await fs.readFile(paths.genrePromotion, "utf-8");
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
+    throw error;
+  }
+  const report: unknown = JSON.parse(raw);
+  if (!isRecord(report)) throw new Error("GENRE_PROMOTION.json must be an object.");
+  const profile = report.assetProfile;
+  if (profile === undefined) return null;
+  if (!isRecord(profile) || !isNonEmptyString(profile.id) || !isNonEmptyStringArray(profile.requiredRoles)) {
+    throw new Error("GENRE_PROMOTION.json assetProfile must carry an id and non-empty requiredRoles.");
+  }
+  const bindings = profile.sliceBindings === undefined ? [] : profile.sliceBindings;
+  if (
+    !Array.isArray(bindings) ||
+    !bindings.every(
+      (b): b is { sliceId: string; assetIds: string[] } =>
+        isRecord(b) && isNonEmptyString(b.sliceId) && isNonEmptyStringArray(b.assetIds),
+    )
+  ) {
+    throw new Error("GENRE_PROMOTION.json assetProfile.sliceBindings must be {sliceId, assetIds[]}[] when present.");
+  }
+  return { id: profile.id, requiredRoles: [...profile.requiredRoles], sliceBindings: bindings };
+}
+
+/**
+ * REFUSE a contract-genre manifest whose `contractRoles` do not match the promoted
+ * `assetProfile` on disk. The manifest carries the roles so the stateless validator
+ * can resolve them; this path-aware check is what binds those roles back to the
+ * promotion so a hand-edited role set cannot shrink the required-role gate.
+ */
+async function assertContractRolesMatchPromotion(paths: LoombridgePaths, manifest: AssetManifest): Promise<void> {
+  if (!isNonEmptyString(manifest.genre) || knownAssetGenres().includes(manifest.genre)) return;
+  const promoted = await readPromotedAssetProfile(paths);
+  if (!promoted) {
+    throw new Error(
+      `ASSET_MANIFEST.json genre '${manifest.genre}' is a contract genre but ${paths.genrePromotion} ` +
+        "declares no promoted assetProfile. Re-run `loombridge plan --brief/--genre-contract` with " +
+        "artDirection.assetRoles declared.",
+    );
+  }
+  if (promoted.id !== manifest.genre) {
+    throw new Error(
+      `ASSET_MANIFEST.json genre '${manifest.genre}' does not match the promoted assetProfile genre '${promoted.id}'.`,
+    );
+  }
+  const manifestRoles = [...(manifest.contractRoles ?? [])].sort();
+  const promotedRoles = [...promoted.requiredRoles].sort();
+  if (manifestRoles.length !== promotedRoles.length || manifestRoles.some((role, i) => role !== promotedRoles[i])) {
+    throw new Error(
+      "ASSET_MANIFEST.json contractRoles do not match the promoted assetProfile.requiredRoles in " +
+        `${paths.genrePromotion}. Re-create the draft with \`loombridge plan --asset-mode generated --force\`.`,
+    );
+  }
+}
+
 export async function readAssetManifest(paths: LoombridgePaths): Promise<AssetManifest | null> {
   let raw: string;
   try {
@@ -859,7 +1012,9 @@ export async function readAssetManifest(paths: LoombridgePaths): Promise<AssetMa
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
     throw error;
   }
-  return assertValidAssetManifest(JSON.parse(raw));
+  const manifest = assertValidAssetManifest(JSON.parse(raw));
+  await assertContractRolesMatchPromotion(paths, manifest);
+  return manifest;
 }
 
 export async function writeAssetManifest(paths: LoombridgePaths, manifest: AssetManifest): Promise<void> {
