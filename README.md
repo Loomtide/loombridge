@@ -12,11 +12,11 @@
 [![Node](https://img.shields.io/badge/node-%3E%3D18-339933?logo=nodedotjs&logoColor=white)](#support-matrix)
 [![Discord](https://img.shields.io/badge/discord-join-5865F2?logo=discord&logoColor=white)](https://discord.gg/dTBpd8Embh)
 
-<img src="https://github.com/user-attachments/assets/197854b6-7706-4b79-a387-86388e4a4210" alt="Loombridge: plan, build, and verify a Unity game" width="820"/>
+<a href="https://youtu.be/AJ6QtIA-Y3A" target="_blank" rel="noopener noreferrer"><img src="https://github.com/user-attachments/assets/197854b6-7706-4b79-a387-86388e4a4210" alt="Loombridge: plan, build, and verify a Unity game. Watch the full walkthrough." width="820"/></a>
 
 <em>Plan, build and verify.</em>
 
-<a href="https://youtu.be/AJ6QtIA-Y3A"><b>▶ Watch the full walkthrough</b></a>
+<a href="https://youtu.be/AJ6QtIA-Y3A" target="_blank" rel="noopener noreferrer"><b>▶ Watch the full walkthrough</b></a>
 
 </div>
 
@@ -64,17 +64,17 @@ Two doors into one bridge: building needs an agent, verifying deliberately does 
 flowchart TB
   agent["Your coding agent<br/>Claude · Codex · Cursor"]
 
-  subgraph build ["Build flow — agent driven"]
+  subgraph build ["Build flow: agent driven"]
     direction LR
     p["/loombridge:plan<br/>hero shot + slices"] --> b["/loombridge:build<br/>execute slices"] --> s["/loombridge:status"]
   end
 
-  subgraph verify ["Verify flow — deterministic, no AI, zero cost"]
+  subgraph verify ["Verify flow: deterministic, no AI, zero cost"]
     direction LR
     r["loombridge record<br/>play it once"] --> v["loombridge verify<br/>re-drive + capture frames"] --> a["loombridge approve<br/>freeze the baseline"]
   end
 
-  subgraph feel ["Game feel — deterministic"]
+  subgraph feel ["Game feel: deterministic"]
     direction LR
     f1["feel snapshot capture<br/>measure jump height, run speed"] --> f2["verify --snapshot<br/>grade drift vs baseline"]
   end
