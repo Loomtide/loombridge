@@ -12,11 +12,13 @@
 [![Node](https://img.shields.io/badge/node-%3E%3D18-339933?logo=nodedotjs&logoColor=white)](#support-matrix)
 [![Discord](https://img.shields.io/badge/discord-join-5865F2?logo=discord&logoColor=white)](https://discord.gg/dTBpd8Embh)
 
+<img src="https://github.com/user-attachments/assets/197854b6-7706-4b79-a387-86388e4a4210" alt="Loombridge: plan, build, and verify a Unity game" width="820"/>
+
+<em>Plan, build and verify.</em>
+
+<a href="https://youtu.be/AJ6QtIA-Y3A"><b>▶ Watch the full walkthrough</b></a>
+
 </div>
-
-https://github.com/user-attachments/assets/5967774c-7e4c-477c-9756-f47c79fee358
-
-<div align="center"><em>Plan, build and verify.</em></div>
 
 ---
 
