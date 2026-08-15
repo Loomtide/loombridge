@@ -1,6 +1,6 @@
 <div align="center">
 
-# Loombridge 🧵
+# Loombridge <img src="Docs/Brand/loomtide-icon.png" alt="" height="34"/>
 
 **Agent layer to build and verify games in Unity.**
 
