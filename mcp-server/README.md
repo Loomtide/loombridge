@@ -86,6 +86,11 @@ Early stage, but Loombridge can snapshot your configs and then replay the game t
 plays like the baseline you recorded. It is more than diffing the snapshot: it plays the game and
 checks frame deltas, so it can tell you whether the jump height still matches what you recorded.
 
+## Games built using Loombridge (open sourced)
+- [Ghost Relay, top-down mobile extraction shooter](https://github.com/Loomtide/GhostRelay)
+- [Kids Adventure, minigames for kids](https://github.com/Loomtide/KidsAdventure)
+- [Sniper Shooter, mobile sniper aim shooter](https://github.com/Loomtide/SniperShooter)
+
 ## Support matrix
 
 | | Supported |
