@@ -453,6 +453,11 @@
         "kind": {
           "type": "string",
           "description": "Optional content-kind tag. A coreVertical slice may not carry a meta kind, and its kind is counted against verticalSliceBudget.coreVerticalContent."
+        },
+        "assets": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "description": "Optional asset roles (from artDirection.assetRoles) this slice consumes. Feeds the promoted asset profile's slice bindings; every entry must resolve to a declared artDirection.assetRoles role."
         }
       }
     }

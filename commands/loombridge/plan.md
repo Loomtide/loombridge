@@ -221,7 +221,15 @@ so the two agents cannot drift.
    - **Generated:** generate/export assets from the approved hero-shot annotations.
    - **Hybrid:** use an approved registry base and generated/manual missing assets.
 
-   All three remain available. **Recommend the local-registry or generated path first**,
+   All three remain available for a registered pack. **A CONTRACT genre is `generated` mode
+   only**: its roles come from the promoted contract's `artDirection.assetRoles` (carried as
+   `assetProfile` on `GENRE_PROMOTION.json` and as `contractRoles` on the draft manifest), and
+   it declares no registry primitives, so `--asset-mode registry|hybrid` is refused by name. If
+   the contract declares no `assetRoles`, the draft is refused too: add them to the contract
+   (plus per-slice `assets` bindings) and re-run `loombridge plan --brief/--genre-contract
+   --force` (see `Docs/Profiles/GenreContractAuthoring.md` §4b) before choosing the strategy.
+
+   **Recommend the local-registry or generated path first**,
    because it keeps the build reproducible with no cloud dependency; offer the hosted catalog
    as the accelerator it is. Say the recommendation out loud and get approval before recording
    it. Record the choice deterministically:

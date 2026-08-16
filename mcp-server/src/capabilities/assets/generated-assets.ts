@@ -1,16 +1,16 @@
 import {
   assertValidAssetManifest,
+  manifestGenreProfile,
   type AssetManifest,
   type HeroRegion,
   type ManifestGeneratedExport,
-  type RequiredAssetRole,
 } from "./asset-manifest.js";
-import { resolveAssetGenreProfile } from "./asset-genre-profile.js";
 import { createHash } from "node:crypto";
 
 export interface GeneratedAssetAnnotation {
   annotationId: string;
-  role: RequiredAssetRole;
+  /** A role of the manifest's genre profile (validated at plan/apply time, so no literal union). */
+  role: string;
   heroRegion?: HeroRegion;
   requiredOutputs?: string[];
   prompt?: string;
@@ -19,7 +19,7 @@ export interface GeneratedAssetAnnotation {
 
 export interface GeneratedAssetSlot {
   assetId: string;
-  role: RequiredAssetRole;
+  role: string;
   annotationId: string;
   requiredOutputs: string[];
   heroRegion?: HeroRegion;
@@ -138,10 +138,10 @@ function annotationByRole(
   annotations: GeneratedAssetAnnotation[],
   requiredRoles: readonly string[],
 ): {
-  byRole: Map<RequiredAssetRole, GeneratedAssetAnnotation>;
+  byRole: Map<string, GeneratedAssetAnnotation>;
   issues: GeneratedAssetIssue[];
 } {
-  const byRole = new Map<RequiredAssetRole, GeneratedAssetAnnotation>();
+  const byRole = new Map<string, GeneratedAssetAnnotation>();
   const issues: GeneratedAssetIssue[] = [];
   for (const annotation of annotations) {
     if (!requiredRoles.includes(annotation.role)) {
@@ -169,7 +169,7 @@ function sourceIdForGenerated(manifest: AssetManifest, generatedSetId?: string):
   return generatedSetId ?? manifest.assetSources.find((source) => source.kind === "generated-set")?.id ?? null;
 }
 
-function defaultRequiredOutputs(role: RequiredAssetRole): string[] {
+function defaultRequiredOutputs(role: string): string[] {
   if (role === "platform-tiles" || role === "one-way-platform") return ["tileset"];
   if (role === "parallax-background") return ["back", "middle", "front"];
   return ["main"];
@@ -187,7 +187,7 @@ export function buildGeneratedAssetPlan(
   const generatedSetId = sourceIdForGenerated(manifest, options.generatedSetId);
   // Roles are validated against the manifest's asset genre (e.g. 3d-shooter has
   // reticle/impact-vfx), not the platformer default constant.
-  const { byRole, issues } = annotationByRole(annotations, resolveAssetGenreProfile(manifest.genre).requiredRoles);
+  const { byRole, issues } = annotationByRole(annotations, manifestGenreProfile(manifest).requiredRoles);
   if (!generatedSetId) {
     for (const asset of manifest.assets.filter((candidate) => candidate.source === "generated")) {
       issues.push({
@@ -201,7 +201,7 @@ export function buildGeneratedAssetPlan(
 
   const slots: GeneratedAssetSlot[] = [];
   for (const asset of manifest.assets.filter((candidate) => candidate.source === "generated")) {
-    const role = asset.role as RequiredAssetRole;
+    const role = asset.role;
     const annotation = byRole.get(role);
     if (!annotation) {
       issues.push({

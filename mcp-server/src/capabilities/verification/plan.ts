@@ -34,6 +34,7 @@ import { designStatus, exitCodeForDesignReadiness } from "./design.js";
 import {
   ASSET_MANIFEST_MODES,
   createDraftAssetManifest,
+  readPromotedAssetProfile,
   readAssetManifest,
   writeAssetManifest,
   type AssetManifest,
@@ -492,6 +493,11 @@ async function recordAssetStrategyDraft(args: {
   genre: string;
 }): Promise<"created" | "kept"> {
   if (!args.force && (await fileExists(args.paths.assetManifest))) return "kept";
+  // A CONTRACT genre (no compiled-in asset profile) drafts from the promoted
+  // contract's assetProfile on GENRE_PROMOTION.json; absent means the contract
+  // declared no artDirection.assetRoles and the draft is refused by name inside
+  // createDraftAssetManifest / resolveAssetGenreProfile.
+  const promotedProfile = await readPromotedAssetProfile(args.paths);
   const draft = createDraftAssetManifest({
     mode: args.mode,
     heroShot: {
@@ -499,8 +505,9 @@ async function recordAssetStrategyDraft(args: {
       sha256: args.designPngSha256,
     },
     // Draft for the plan's genre so a 3d-shooter plan drafts 3d-shooter roles, not
-    // platformer defaults. An unregistered asset genre resolves to platformer.
+    // platformer defaults.
     genre: args.genre,
+    ...(promotedProfile && promotedProfile.id === args.genre ? { contractProfile: promotedProfile } : {}),
   });
   await writeAssetManifest(args.paths, draft);
   return "created";

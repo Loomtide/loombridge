@@ -142,5 +142,25 @@
       "check": "does aiming feel responsive and fair?",
       "appliesTo": "aiming-feel"
     }
-  ]
+  ],
+  "assetProfile": {
+    "id": "2d-shooter",
+    "requiredRoles": [
+      "player-character",
+      "weapon",
+      "reticle",
+      "player-projectile",
+      "enemy",
+      "arena-floor",
+      "arena-wall",
+      "muzzle-vfx",
+      "hit-vfx",
+      "death-vfx",
+      "health-hud",
+      "ammo-hud",
+      "wave-score-hud",
+      "combat-sfx"
+    ],
+    "sliceBindings": []
+  }
 }

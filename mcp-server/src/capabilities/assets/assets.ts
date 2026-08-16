@@ -34,10 +34,11 @@ import { loadAssetProfile, loadRegistryPack } from "./registry.js";
 import {
   assertValidAssetManifest,
   readAssetManifest,
+  readPromotedAssetProfile,
   writeAssetManifest,
   type AssetManifest,
 } from "./asset-manifest.js";
-import { DEFAULT_ASSET_GENRE, knownAssetGenres, resolveAssetGenreProfile } from "./asset-genre-profile.js";
+import { DEFAULT_ASSET_GENRE, contractAssetGenreProfile, knownAssetGenres, resolveAssetGenreProfile } from "./asset-genre-profile.js";
 import { loombridgePaths } from "../../domain/state.js";
 
 type AssetCommand = "roles" | "registry-plan" | "registry-apply" | "generated-plan" | "generated-apply" | "pack-ingest" | "cover-build" | "discover";
@@ -260,8 +261,9 @@ export async function writeJsonOrStdout(outputPath: string | undefined, value: u
 async function runRoles(parsed: ParsedArgs): Promise<number> {
   let genre = parsed.genre?.trim();
   let source = "--genre";
+  let manifest: AssetManifest | null = null;
   if (!genre) {
-    const manifest = await readAssetManifest(loombridgePaths(parsed.root));
+    manifest = await readAssetManifest(loombridgePaths(parsed.root));
     if (manifest) {
       // An ABSENT genre on a real manifest is not missing information: it IS the platformer
       // default, which is how every other consumer reads it (`resolveAssetGenreProfile(undefined)`).
@@ -278,15 +280,30 @@ async function runRoles(parsed: ParsedArgs): Promise<number> {
     );
     return 2;
   }
+  // A CONTRACT genre resolves through the manifest's own contractRoles (or, before a
+  // manifest exists, the promoted assetProfile on GENRE_PROMOTION.json).
+  let contractProfile: ReturnType<typeof contractAssetGenreProfile> | null = null;
   if (!knownAssetGenres().includes(genre)) {
+    if (manifest && manifest.genre === genre && manifest.contractRoles) {
+      contractProfile = contractAssetGenreProfile(genre, manifest.contractRoles);
+    } else {
+      const promoted = await readPromotedAssetProfile(loombridgePaths(parsed.root));
+      if (promoted && promoted.id === genre) {
+        contractProfile = contractAssetGenreProfile(promoted.id, promoted.requiredRoles, promoted.sliceBindings);
+        source = `${source} + GENRE_PROMOTION.json assetProfile`;
+      }
+    }
+  }
+  if (!knownAssetGenres().includes(genre) && !contractProfile) {
     console.error(
       `[loombridge assets] unknown genre "${genre}" (from ${source}). ` +
-        `Known genres: ${knownAssetGenres().join(", ")}.`,
+        `Known genres: ${knownAssetGenres().join(", ")}. A contract genre needs a promoted ` +
+        `assetProfile: declare artDirection.assetRoles and re-run \`loombridge plan --brief/--genre-contract\`.`,
     );
     return 2;
   }
 
-  const profile = resolveAssetGenreProfile(genre);
+  const profile = contractProfile ?? resolveAssetGenreProfile(genre);
   const lines: string[] = [
     `genre: ${profile.id}   (from ${source})`,
     `required roles: ${profile.requiredRoles.length}`,

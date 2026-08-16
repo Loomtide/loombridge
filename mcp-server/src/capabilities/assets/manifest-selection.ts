@@ -1,11 +1,11 @@
 import {
   assertValidAssetManifest,
+  manifestGenreProfile,
   type AssetManifest,
   type ManifestAsset,
   type ManifestRegistrySelection,
 } from "./asset-manifest.js";
 import {
-  resolveAssetGenreProfile,
   type RoleSelectionRule,
 } from "./asset-genre-profile.js";
 import { assetKindOf } from "./registry.js";
@@ -108,7 +108,7 @@ export interface RegistryHeroShotAsset {
 
 /** The per-role registry-selection rules for a manifest's asset genre. */
 function roleSelectionRulesFor(manifest: AssetManifest): Record<string, RoleSelectionRule> {
-  return resolveAssetGenreProfile(manifest.genre).roleSelectionRules;
+  return manifestGenreProfile(manifest).roleSelectionRules;
 }
 
 function priorityOf(entry: AssetRegistryEntry): number {
@@ -411,7 +411,7 @@ export function buildRegistryHeroShotInputs(manifest: AssetManifest): RegistryHe
     throw new Error("Registry hero shot inputs require an approved asset manifest.");
   }
 
-  return resolveAssetGenreProfile(manifest.genre).requiredRoles.map((role) => {
+  return manifestGenreProfile(manifest).requiredRoles.map((role) => {
     const asset = manifest.assets.find((candidate) => candidate.role === role);
     if (!asset || asset.source !== "registry" || asset.status !== "approved" || !asset.registrySelection || !asset.resolvedPaths?.[0]) {
       throw new Error(`Registry hero shot inputs require approved registry asset role '${role}'.`);

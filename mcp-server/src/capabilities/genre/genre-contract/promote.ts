@@ -54,6 +54,26 @@ export interface GenrePromotionReport {
    * to another genre's criteria.
    */
   fidelityCriteria?: string[];
+  /**
+   * The asset-genre profile derived from the contract's `artDirection.assetRoles` (sanitized) and
+   * each slice's `assets` bindings, so the asset layer can draft an ASSET_MANIFEST for a genre with
+   * no compiled-in profile. Omitted when the contract declares no assetRoles — and an absent
+   * profile is a REFUSAL at `plan --asset-mode`, never a fallback to another genre's roles.
+   */
+  assetProfile?: PromotedAssetGenreProfile;
+}
+
+/** Serialized contract-genre asset profile, carried on `GENRE_PROMOTION.json`. */
+export interface PromotedAssetGenreProfile {
+  /** Equals `sourceGenreId`; the manifest `genre` this profile serves. */
+  id: string;
+  /** Sanitized `artDirection.assetRoles`; the manifest's required roles. */
+  requiredRoles: string[];
+  /**
+   * Slice-to-asset bindings from sliceDag nodes' `assets`, with asset ids minted the
+   * same way a draft manifest mints them (role with `-` swapped for `_`).
+   */
+  sliceBindings: { sliceId: string; assetIds: string[] }[];
 }
 
 export interface GenrePromotionResult {
@@ -112,6 +132,34 @@ function parseAspect(aspect: string | undefined): { w: number; h: number } {
 function sanitizeId(value: string): string {
   const id = value.toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/^-+|-+$/g, "");
   return id || "item";
+}
+
+/**
+ * Derive the contract genre's asset profile: sanitized `artDirection.assetRoles` as the required
+ * roles, and each slice's `assets` (validator-checked against assetRoles) as that slice's asset
+ * bindings. Returns null when the contract declares no assetRoles, which the asset layer treats
+ * as "this contract opted out of the asset-manifest flow" and refuses with a named reason.
+ */
+function buildPromotedAssetProfile(contract: GenreContract): PromotedAssetGenreProfile | null {
+  const requiredRoles = [
+    ...new Set((contract.artDirection.assetRoles ?? []).map((role) => sanitizeId(role))),
+  ];
+  if (requiredRoles.length === 0) return null;
+  const roleSet = new Set(requiredRoles);
+  const sliceBindings = [...contract.sliceDag.coreVertical, ...contract.sliceDag.deferredMeta]
+    .map((slice) => ({
+      sliceId: slice.id,
+      assetIds: [
+        ...new Set(
+          (slice.assets ?? [])
+            .map((role) => sanitizeId(role))
+            .filter((role) => roleSet.has(role))
+            .map((role) => role.replaceAll("-", "_")),
+        ),
+      ],
+    }))
+    .filter((binding) => binding.assetIds.length > 0);
+  return { id: contract.genreId, requiredRoles, sliceBindings };
 }
 
 function regexForRole(role: string): string {
@@ -342,6 +390,7 @@ export function promoteGenreContract(input: unknown, options: GenrePromotionOpti
     slices: promotedCoreSlices,
   });
 
+  const assetProfile = buildPromotedAssetProfile(contract);
   const report: GenrePromotionReport = {
     schemaVersion: GENRE_PROMOTION_REPORT_SCHEMA_VERSION,
     sourceGenreId: contract.genreId,
@@ -372,6 +421,8 @@ export function promoteGenreContract(input: unknown, options: GenrePromotionOpti
     ...(contract.fidelityCriteria && contract.fidelityCriteria.length > 0
       ? { fidelityCriteria: [...contract.fidelityCriteria] }
       : {}),
+    // Absent stays absent so the asset layer refuses rather than drafting roles nobody declared.
+    ...(assetProfile ? { assetProfile } : {}),
   };
 
   return { acceptance: validAcceptance, slices, report, defaults: promotionDefaults(validAcceptance) };

@@ -232,6 +232,14 @@ export function validateGenreContract(input: unknown): GenreContractValidationRe
   if (!isRecord(art) || !isNonEmptyString(art.style)) {
     push("ART_DIRECTION", "artDirection requires a non-empty style", "artDirection");
   }
+  const declaredAssetRoles = new Set<string>();
+  if (isRecord(art) && art.assetRoles !== undefined) {
+    if (!isStringArray(art.assetRoles) || art.assetRoles.some((role) => !isNonEmptyString(role))) {
+      push("ART_ASSET_ROLES", "artDirection.assetRoles must be an array of non-empty strings when present", "artDirection.assetRoles");
+    } else {
+      art.assetRoles.forEach((role) => declaredAssetRoles.add(role));
+    }
+  }
 
   // Field 4 — verticalSliceBudget (R8 backstop)
   const budget = input.verticalSliceBudget;
@@ -419,7 +427,7 @@ export function validateGenreContract(input: unknown): GenreContractValidationRe
   }
 
   // Field 9 — sliceDag (R2/R3/R4/R8)
-  collectSliceDagIssues(input.sliceDag, deferredKinds, budgetCounts, push);
+  collectSliceDagIssues(input.sliceDag, deferredKinds, budgetCounts, declaredAssetRoles, push);
 
   // Field 11 — humanOracleChecks (collect coverage for R9)
   const oracleCovered = new Set<string>();
@@ -493,6 +501,7 @@ function collectSliceDagIssues(
   dag: unknown,
   deferredKinds: ReadonlySet<string>,
   budgetCounts: Record<string, number>,
+  declaredAssetRoles: ReadonlySet<string>,
   push: (code: string, message: string, path: string) => void,
 ): void {
   if (!isRecord(dag) || !Array.isArray(dag.coreVertical) || !Array.isArray(dag.deferredMeta)) {
@@ -560,6 +569,19 @@ function collectSliceDagIssues(
       node.dependsOn.forEach((d) => {
         if (!ids.has(d)) push("SLICE_DEP_UNRESOLVED", `dependsOn "${d}" does not resolve to a slice id`, `${path}.dependsOn`);
       });
+    }
+    // slice.assets resolve to declared artDirection.assetRoles (refuse unknown, never skip:
+    // a binding to a role nobody declared would silently vanish from the promoted asset profile).
+    if (node.assets !== undefined) {
+      if (!isStringArray(node.assets)) {
+        push("SLICE_ASSETS_TYPE", "slice.assets must be a string[]", `${path}.assets`);
+      } else {
+        node.assets.forEach((role) => {
+          if (!declaredAssetRoles.has(role)) {
+            push("SLICE_ASSET_UNKNOWN", `assets role "${role}" is not declared in artDirection.assetRoles`, `${path}.assets`);
+          }
+        });
+      }
     }
   }
 

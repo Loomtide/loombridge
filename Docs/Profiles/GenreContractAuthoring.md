@@ -116,6 +116,35 @@ Every id must be one the review can actually carry (the schema enumerates them),
 your hero shot cannot satisfy makes your own doneness unreachable-green. Drop what does not apply
 to your game; add what does.
 
+### 4b. `artDirection.assetRoles` + slice `assets`: the fields that buy the asset manifest
+
+A contract genre has no compiled-in asset-genre profile (those exist only for registered packs), so
+without these fields `loombridge plan --asset-mode` REFUSES to draft an `ASSET_MANIFEST.json` and
+`build` stays blocked at the asset gate.
+
+Declare the asset roles your game actually reads by, then bind each slice to the roles it consumes:
+
+```json
+"artDirection": { "style": "…", "assetRoles": ["player-pen", "rival-pen", "desk"] },
+"sliceDag": { "coreVertical": [
+  { "id": "scene", "assets": ["desk"], … },
+  { "id": "core-mechanic", "assets": ["player-pen", "rival-pen"], … }
+] }
+```
+
+Promotion derives an `assetProfile` onto `GENRE_PROMOTION.json` (sanitized roles + per-slice
+bindings), and `loombridge plan --asset-mode generated` drafts the manifest from it. The manifest
+carries the roles as `contractRoles`, and `readAssetManifest` refuses a manifest whose roles drift
+from the promotion on disk. Two limits, both deliberate:
+
+- **`generated` mode only.** A contract declares roles but no registry primitives, so registry and
+  hybrid drafts are refused by name; there is nothing a registry selection rule could match.
+- **Every slice `assets` entry must be a declared role.** The validator refuses an unknown one
+  (`SLICE_ASSET_UNKNOWN`) rather than letting a binding silently vanish from the profile.
+
+An absent `assetRoles` stays absent: promotion writes no `assetProfile`, and the asset layer
+refuses with a named reason instead of borrowing another genre's roles.
+
 ### 5. What the scaffold deliberately leaves out
 
 `genre init` omits `productThesis`, `scaleModel`, and `requiredEvidenceClasses`, and it does not
